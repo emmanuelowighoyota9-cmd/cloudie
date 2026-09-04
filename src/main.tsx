@@ -1,0 +1,174 @@
+import "@vly-ai/integrations";
+import { Toaster } from "@/components/ui/sonner";
+import { RequireAuth } from "@/components/RequireAuth";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexReactClient } from "convex/react";
+import React, { StrictMode, useEffect, lazy, Suspense } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import "./index.css";
+
+// Lazy-loaded pages
+const Landing = lazy(() => import("./pages/Landing.tsx"));
+const AuthPage = lazy(() => import("./pages/Auth.tsx"));
+const NotFound = lazy(() => import("./pages/NotFound.tsx"));
+const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
+const Personal = lazy(() => import("./pages/Personal.tsx"));
+const Wallet = lazy(() => import("./pages/Wallet.tsx"));
+const Shipments = lazy(() => import("./pages/Shipments.tsx"));
+const NewShipment = lazy(() => import("./pages/NewShipment.tsx"));
+const ShipmentDetail = lazy(() => import("./pages/ShipmentDetail.tsx"));
+const PublicTracking = lazy(() => import("./pages/PublicTracking.tsx"));
+const Ticketing = lazy(() => import("./pages/Ticketing.tsx"));
+const FlightDocument = lazy(() => import("./pages/FlightDocument.tsx"));
+const HotelDocument = lazy(() => import("./pages/HotelDocument.tsx"));
+const InvoiceDocument = lazy(() => import("./pages/InvoiceDocument.tsx"));
+const CustomsDocument = lazy(() => import("./pages/CustomsDocument.tsx"));
+const BusinessSuite = lazy(() => import("./pages/BusinessSuite.tsx"));
+const NewSite = lazy(() => import("./pages/NewSite.tsx"));
+const Services = lazy(() => import("./pages/Services.tsx"));
+const EmailCampaign = lazy(() => import("./pages/EmailCampaign.tsx"));
+const RenderStudio = lazy(() => import("./pages/RenderStudio.tsx"));
+const AssetsPage = lazy(() => import("./pages/Assets.tsx"));
+const MarketplacePage = lazy(() => import("./pages/Marketplace.tsx"));
+const Referrals = lazy(() => import("./pages/Referrals.tsx"));
+const NotificationsPage = lazy(() => import("./pages/Notifications.tsx"));
+const Settings = lazy(() => import("./pages/Settings.tsx"));
+const AppLayout = lazy(() => import("./components/AppLayout.tsx").then(m => ({ default: m.AppLayout })));
+const Admin = lazy(() => import("./pages/Admin.tsx"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers.tsx"));
+const AdminVendors = lazy(() => import("./pages/AdminVendors.tsx"));
+const AdminTenants = lazy(() => import("./pages/AdminTenants.tsx"));
+const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics.tsx"));
+const AdminAuditLogs = lazy(() => import("./pages/AdminAuditLogs.tsx"));
+const AdminMarketplace = lazy(() => import("./pages/AdminMarketplace.tsx"));
+const AdminShipments = lazy(() => import("./pages/AdminShipments.tsx"));
+const AdminDocuments = lazy(() => import("./pages/AdminDocuments.tsx"));
+const AdminTransactions = lazy(() => import("./pages/AdminTransactions.tsx"));
+const AdminKYC = lazy(() => import("./pages/AdminKYC.tsx"));
+const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
+const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
+
+function RouteLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-pulse text-muted-foreground">Loading...</div>
+    </div>
+  );
+}
+
+class ToolbarErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(err: Error) { console.warn("[VlyToolbar] Caught error:", err.message); }
+  render() { return this.state.hasError ? null : this.props.children; }
+}
+
+class RootErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; message: string }
+> {
+  state = { hasError: false, message: "" };
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, message: error.message || "Unknown error" };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-6">
+          <div className="max-w-lg text-center">
+            <p className="text-sm font-semibold">Runtime error</p>
+            <p className="mt-2 text-xs text-muted-foreground break-words">{this.state.message}</p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+
+function RouteSyncer() {
+  const location = useLocation();
+  useEffect(() => {
+    window.parent.postMessage({ type: "iframe-route-change", path: location.pathname }, "*");
+  }, [location.pathname]);
+  return null;
+}
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <RootErrorBoundary>
+      <ToolbarErrorBoundary>
+        <VlyToolbar />
+      </ToolbarErrorBoundary>
+      <ConvexAuthProvider client={convex}>
+        <ThemeProvider>
+          <BrowserRouter>
+            <RouteSyncer />
+            <Suspense fallback={<RouteLoading />}>
+              <Routes>
+                {/* Public routes */}
+                <Route path="/" element={<Landing />} />
+                <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
+                <Route path="/track/:trackingNumber" element={<PublicTracking />} />
+
+                {/* Authenticated app routes with layout */}
+                <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/personal" element={<Personal />} />
+                  <Route path="/personal/wallet" element={<Wallet />} />
+                  <Route path="/personal/transactions" element={<Wallet />} />
+                  <Route path="/shipments" element={<Shipments />} />
+                  <Route path="/shipments/new" element={<NewShipment />} />
+                  <Route path="/shipments/:id" element={<ShipmentDetail />} />
+                  <Route path="/ticketing" element={<Ticketing />} />
+                  <Route path="/ticketing/flight" element={<FlightDocument />} />
+                  <Route path="/ticketing/hotel" element={<HotelDocument />} />
+                  <Route path="/ticketing/invoice" element={<InvoiceDocument />} />
+                  <Route path="/ticketing/customs" element={<CustomsDocument />} />
+                  <Route path="/business" element={<BusinessSuite />} />
+                  <Route path="/business/sites" element={<BusinessSuite />} />
+                  <Route path="/business/sites/new" element={<NewSite />} />
+                  <Route path="/services" element={<Services />} />
+                  <Route path="/services/email" element={<EmailCampaign />} />
+                  <Route path="/services/render" element={<RenderStudio />} />
+                  <Route path="/services/assets" element={<AssetsPage />} />
+                  <Route path="/marketplace" element={<MarketplacePage />} />
+                  <Route path="/marketplace/orders" element={<MarketplacePage />} />
+                  <Route path="/referrals" element={<Referrals />} />
+                  <Route path="/notifications" element={<NotificationsPage />} />
+                  <Route path="/settings" element={<Settings />} />
+
+                  {/* Admin routes */}
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/admin/users" element={<AdminUsers />} />
+                  <Route path="/admin/vendors" element={<AdminVendors />} />
+                  <Route path="/admin/marketplace" element={<AdminMarketplace />} />
+                  <Route path="/admin/tenants" element={<AdminTenants />} />
+                  <Route path="/admin/kyc" element={<AdminKYC />} />
+                  <Route path="/admin/shipments" element={<AdminShipments />} />
+                  <Route path="/admin/documents" element={<AdminDocuments />} />
+                  <Route path="/admin/transactions" element={<AdminTransactions />} />
+                  <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+                  <Route path="/admin/analytics" element={<AdminAnalytics />} />
+                  <Route path="/admin/infrastructure" element={<AdminInfrastructure />} />
+                  <Route path="/admin/settings" element={<AdminSettings />} />
+                </Route>
+
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+          <Toaster />
+        </ThemeProvider>
+      </ConvexAuthProvider>
+    </RootErrorBoundary>
+  </StrictMode>,
+);
