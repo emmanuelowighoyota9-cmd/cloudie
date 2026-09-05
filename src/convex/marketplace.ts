@@ -7,6 +7,11 @@ export const registerVendor = mutation({
   args: {
     businessName: v.string(),
     description: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    contactPhone: v.optional(v.string()),
+    category: v.optional(v.string()),
+    website: v.optional(v.string()),
+    supportingInfo: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);

@@ -24,6 +24,7 @@ import {
   Settings,
   Coins,
   Menu,
+  Box,
 } from "lucide-react";
 import { useState } from "react";
 import { MobileNav } from "./MobileNav";
@@ -46,7 +47,7 @@ export function Header() {
     : user?.email?.[0]?.toUpperCase() || "U";
 
   return (
-    <header className="notebook-header flex h-14 items-center justify-between border-b border-[var(--nb-rule)] bg-[var(--nb-surface)] px-4">
+    <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800">
       <div className="flex items-center gap-3">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
@@ -62,13 +63,13 @@ export function Header() {
 
       <div className="flex items-center gap-2">
         {/* Points Balance */}
-        <Link to="/personal/wallet">
+        <Link to="/buy-points">
           <Badge
             variant="secondary"
-            className="notebook-badge gap-1.5 px-3 py-1.5 text-sm font-semibold cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/50"
+            className="gap-1.5 px-3 py-1.5 text-sm font-semibold cursor-pointer bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 border-0 rounded-full"
           >
-            <Coins className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-            {pointsBalance != null ? pointsBalance.toLocaleString() : "—"}
+            <Box className="h-3.5 w-3.5" />
+            {pointsBalance != null ? `${pointsBalance.toLocaleString()} pts` : "—"}
           </Badge>
         </Link>
 
@@ -111,7 +112,7 @@ export function Header() {
             <DropdownMenuItem onClick={() => navigate("/personal")}>
               <User className="mr-2 h-4 w-4" /> Profile
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/personal/wallet")}>
+            <DropdownMenuItem onClick={() => navigate("/buy-points")}>
               <Wallet className="mr-2 h-4 w-4" /> Wallet
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/settings")}>

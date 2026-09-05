@@ -43,96 +43,80 @@
 }
 
 /* ═══════════════════════════════════════════════════════
-   NOTEBOOK THEME — Light Mode
-   Paper texture, ruled lines, warm colors, margin accent
+   CLOUDIE DESIGN SYSTEM — Light Mode
+   Blue/Indigo/Slate premium SaaS
    ═══════════════════════════════════════════════════════ */
 :root {
   --radius: 0.625rem;
 
-  /* Notebook paper palette */
-  --background: #faf8f5;
-  --foreground: #2c2520;
-  --card: #fffefb;
-  --card-foreground: #2c2520;
-  --popover: #fffefb;
-  --popover-foreground: #2c2520;
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
   --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #f0ece6;
-  --secondary-foreground: #3d3428;
-  --muted: #f0ece6;
-  --muted-foreground: #78716c;
-  --accent: #f0ece6;
-  --accent-foreground: #3d3428;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #1e293b;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #f1f5f9;
+  --accent-foreground: #1e293b;
   --destructive: #dc2626;
-  --border: #e8e2d8;
-  --input: #e8e2d8;
-  --ring: #93a5cf;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #3b82f6;
   --chart-1: #2563eb;
   --chart-2: #16a34a;
   --chart-3: #d97706;
   --chart-4: #9333ea;
   --chart-5: #e11d48;
-  --sidebar: #f5f0ea;
-  --sidebar-foreground: #2c2520;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
   --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8e2d8;
-  --sidebar-accent-foreground: #2c2520;
-  --sidebar-border: #e0d8cc;
-  --sidebar-ring: #93a5cf;
-
-  /* Notebook-specific tokens */
-  --nb-bg: #faf8f5;
-  --nb-surface: #fffefb;
-  --nb-ink: #2c2520;
-  --nb-rule: #e0d8cc;
-  --nb-margin: #d4a0a0;
-  --nb-accent: #c7d2e8;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #3b82f6;
 }
 
 /* ═══════════════════════════════════════════════════════
-   NOTEBOOK THEME — Dark Mode
+   CLOUDIE DESIGN SYSTEM — Dark Mode
    ═══════════════════════════════════════════════════════ */
 .dark {
-  --background: #1a1816;
-  --foreground: #e8e2d8;
-  --card: #222019;
-  --card-foreground: #e8e2d8;
-  --popover: #222019;
-  --popover-foreground: #e8e2d8;
-  --primary: #60a5fa;
-  --primary-foreground: #1a1816;
-  --secondary: #2a2720;
-  --secondary-foreground: #d4cec4;
-  --muted: #2a2720;
-  --muted-foreground: #9c9488;
-  --accent: #2a2720;
-  --accent-foreground: #d4cec4;
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1e293b;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #e2e8f0;
   --destructive: #f87171;
-  --border: #33302a;
-  --input: #33302a;
-  --ring: #6b82b8;
+  --border: #334155;
+  --input: #334155;
+  --ring: #3b82f6;
   --chart-1: #60a5fa;
   --chart-2: #4ade80;
   --chart-3: #fbbf24;
   --chart-4: #c084fc;
   --chart-5: #fb7185;
-  --sidebar: #222019;
-  --sidebar-foreground: #e8e2d8;
-  --sidebar-primary: #60a5fa;
-  --sidebar-primary-foreground: #1a1816;
-  --sidebar-accent: #2a2720;
-  --sidebar-accent-foreground: #e8e2d8;
-  --sidebar-border: #33302a;
-  --sidebar-ring: #6b82b8;
-
-  --nb-bg: #1a1816;
-  --nb-surface: #222019;
-  --nb-ink: #e8e2d8;
-  --nb-rule: #33302a;
-  --nb-margin: #5c3a3a;
-  --nb-accent: #374151;
+  --sidebar: #1e293b;
+  --sidebar-foreground: #f1f5f9;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #334155;
+  --sidebar-accent-foreground: #f1f5f9;
+  --sidebar-border: #334155;
+  --sidebar-ring: #3b82f6;
 }
 
 @layer base {
@@ -146,92 +130,4 @@
   [role="button"]:not([disabled]) {
     cursor: pointer;
   }
-}
-
-/* ═══════════════════════════════════════════════════════
-   NOTEBOOK UI COMPONENTS
-   Paper texture, ruled lines, handwritten-feel accents
-   ═══════════════════════════════════════════════════════ */
-
-/* Subtle paper grain texture on surfaces */
-.notebook-card {
-  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-  border: 1px solid var(--nb-rule);
-  border-radius: 0.75rem;
-}
-
-.dark .notebook-card {
-  background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100' height='100' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-}
-
-/* Notebook sidebar with ruled background */
-.notebook-sidebar {
-  background-image:
-    url("data:image/svg+xml,%3Csvg width='200' height='400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='400' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
-}
-
-/* Ruled-line effect for header */
-.notebook-header {
-  background-image: repeating-linear-gradient(
-    transparent,
-    transparent 27px,
-    var(--nb-rule) 27px,
-    var(--nb-rule) 28px
-  );
-}
-
-.dark .notebook-header {
-  background-image: repeating-linear-gradient(
-    transparent,
-    transparent 27px,
-    rgba(51, 48, 42, 0.5) 27px,
-    rgba(51, 48, 42, 0.5) 28px
-  );
-}
-
-/* Margin line accent for notebook feeling */
-.notebook-app::before {
-  content: "";
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--nb-margin);
-  opacity: 0.15;
-  z-index: 50;
-  pointer-events: none;
-}
-
-/* Notebook badge style */
-.notebook-badge {
-  border: 1px solid var(--nb-rule);
-  background: var(--nb-bg);
-}
-
-/* Notebook nav items with subtle left border accent */
-.notebook-nav-item {
-  border-left: 2px solid transparent;
-  transition: all 0.15s ease;
-}
-
-.notebook-nav-item:hover {
-  border-left-color: var(--nb-rule);
-}
-
-/* Subtle dot pattern on empty states */
-.notebook-card:has([data-slot="empty"]) {
-  background-image:
-    radial-gradient(circle, var(--nb-rule) 1px, transparent 1px);
-  background-size: 20px 20px;
-}
-
-/* Animate subtle entry for notebook cards */
-@keyframes notebook-fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.notebook-card {
-  animation: notebook-fade-in 0.3s ease-out;
 }

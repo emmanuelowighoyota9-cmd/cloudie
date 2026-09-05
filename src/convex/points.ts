@@ -247,6 +247,58 @@ export const getAllUsers = query({
   },
 });
 
+export const buyPoints = mutation({
+  args: {
+    packageId: v.string(),
+    points: v.number(),
+    amountUsd: v.number(),
+    paymentMethod: v.string(),
+    idempotencyKey: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const key = args.idempotencyKey ?? `buy-${userId}-${args.packageId}-${Date.now()}`;
+    const existing = await ctx.db
+      .query("pointLedger")
+      .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", key))
+      .first();
+    if (existing) return existing._id;
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+
+    const currentBalance = user.pointsBalance ?? 0;
+    const newBalance = currentBalance + args.points;
+
+    await ctx.db.patch(userId, { pointsBalance: newBalance });
+
+    const ledgerId = await ctx.db.insert("pointLedger", {
+      userId,
+      amount: args.points,
+      balanceAfter: newBalance,
+      description: `Points purchase: ${args.points.toLocaleString()} pts ($${args.amountUsd})`,
+      type: "purchase",
+      reference: args.paymentMethod,
+      idempotencyKey: key,
+      metadata: { packageId: args.packageId, amountUsd: args.amountUsd, paymentMethod: args.paymentMethod },
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.insert("notifications", {
+      userId,
+      title: "Points purchased",
+      message: `+${args.points.toLocaleString()} pts — $${args.amountUsd} via ${args.paymentMethod}`,
+      type: "points_credited",
+      isRead: false,
+      createdAt: Date.now(),
+    });
+
+    return ledgerId;
+  },
+});
+
 export const getStats = query({
   args: {},
   handler: async (ctx) => {

@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Outlet } from "react-router";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
-import { cn } from "@/lib/utils";
+import { BottomNav } from "./BottomNav";
 
 export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="notebook-app flex h-screen overflow-hidden bg-[var(--nb-bg)]">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
       {/* Desktop sidebar */}
       <div className="hidden lg:block">
         <Sidebar
@@ -19,12 +19,15 @@ export function AppLayout() {
 
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
           <div className="mx-auto w-full max-w-7xl p-4 md:p-6 lg:p-8">
             <Outlet />
           </div>
         </main>
       </div>
+
+      {/* Mobile bottom nav */}
+      <BottomNav />
     </div>
   );
 }
