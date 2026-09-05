@@ -91,6 +91,7 @@ const schema = defineSchema(
       pointsBalance: v.optional(v.number()),
       referralCode: v.optional(v.string()),
       referredBy: v.optional(v.string()),
+      passwordHash: v.optional(v.string()),
       isSuspended: v.optional(v.boolean()),
       createdAt: v.optional(v.number()),
     })
