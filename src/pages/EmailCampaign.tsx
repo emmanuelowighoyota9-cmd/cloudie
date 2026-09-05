@@ -38,7 +38,7 @@ export default function EmailCampaign() {
       <div className="flex items-center gap-4">
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Email Campaign</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Email Campaign</h1>
           <p className="mt-1 text-sm text-muted-foreground">Compose and send email campaigns. Cost: 10 points per email.</p>
         </div>
       </div>

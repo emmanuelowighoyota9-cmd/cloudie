@@ -54,8 +54,8 @@ export default function NewShipment() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">New Shipment</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Create a new shipment. Cost: 100 points.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">New Shipment</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create a new shipment. Cost: 100 points.</p>
         </div>
       </div>
 

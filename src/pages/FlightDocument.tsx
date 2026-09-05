@@ -46,15 +46,14 @@ export default function FlightDocument() {
       <div className="flex items-center gap-4">
         <Link to="/ticketing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Flight Itinerary</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Generate a professional flight itinerary document. Cost: 150 points.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Flight Itinerary</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Generate a professional flight itinerary document. Cost: 150 points.</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="notebook-card">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Passenger & Flight Details</CardTitle>
+          <CardHeader>              <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500">Passenger & Flight Details</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5"><Label>Passenger Name *</Label><Input required value={form.passengerName} onChange={(e) => update("passengerName", e.target.value)} /></div>

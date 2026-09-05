@@ -25,7 +25,7 @@ export default function PublicTracking() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 py-8">
-        <h1 className="text-xl font-bold text-[var(--nb-ink)] mb-6">Track Shipment</h1>
+        <h1 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Track Shipment</h1>
 
         {tracking === undefined ? (
           <Card className="notebook-card"><CardContent className="p-6 text-center text-muted-foreground animate-pulse">Loading...</CardContent></Card>

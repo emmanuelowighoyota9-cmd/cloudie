@@ -36,6 +36,10 @@ const MarketplacePage = lazy(() => import("./pages/Marketplace.tsx"));
 const Referrals = lazy(() => import("./pages/Referrals.tsx"));
 const NotificationsPage = lazy(() => import("./pages/Notifications.tsx"));
 const Settings = lazy(() => import("./pages/Settings.tsx"));
+const BuyPoints = lazy(() => import("./pages/BuyPoints.tsx"));
+const Orders = lazy(() => import("./pages/Orders.tsx"));
+const Vendor = lazy(() => import("./pages/Vendor.tsx"));
+const Transactions = lazy(() => import("./pages/Transactions.tsx"));
 const AppLayout = lazy(() => import("./components/AppLayout.tsx").then(m => ({ default: m.AppLayout })));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers.tsx"));
@@ -145,6 +149,10 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/referrals" element={<Referrals />} />
                   <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/settings" element={<Settings />} />
+                  <Route path="/buy-points" element={<BuyPoints />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="/vendor" element={<Vendor />} />
+                  <Route path="/transactions" element={<Transactions />} />
 
                   {/* Admin routes */}
                   <Route path="/admin" element={<Admin />} />

@@ -13,8 +13,8 @@ export default function Ticketing() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Ticketing & Documents</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Generate professional document templates for travel and business.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Ticketing & Documents</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Generate professional document templates for travel and business.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

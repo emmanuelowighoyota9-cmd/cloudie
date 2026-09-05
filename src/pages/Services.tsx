@@ -12,8 +12,8 @@ export default function Services() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Services</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Email campaigns, rendering studio, and asset management.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Services</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Email campaigns, rendering studio, and asset management.</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {services.map((s) => (

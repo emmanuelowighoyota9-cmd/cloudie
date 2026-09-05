@@ -33,8 +33,8 @@ export default function HotelDocument() {
       <div className="flex items-center gap-4">
         <Link to="/ticketing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Hotel Reservation</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Generate a hotel reservation confirmation. Cost: 120 points.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Hotel Reservation</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Generate a hotel reservation confirmation. Cost: 120 points.</p>
         </div>
       </div>
 

@@ -41,8 +41,8 @@ export default function ShipmentDetail() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">{shipment.trackingNumber}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Shipment details and tracking timeline</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{shipment.trackingNumber}</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Shipment details and tracking timeline</p>
         </div>
         <Badge className="border-0">{shipment.status.replace(/_/g, " ")}</Badge>
       </div>

@@ -19,7 +19,7 @@ export default function RenderStudio() {
       <div className="flex items-center gap-4">
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Rendering Studio</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Rendering Studio</h1>
           <p className="mt-1 text-sm text-muted-foreground">Create and render images. Cost: 50 points per render.</p>
         </div>
       </div>

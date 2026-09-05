@@ -16,8 +16,8 @@ export default function NotificationsPage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Notifications</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Stay updated on your account activity.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Notifications</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Stay updated on your account activity.</p>
         </div>
         {notifications && notifications.some((n) => !n.isRead) && (
           <Button variant="outline" size="sm" onClick={() => markAllRead()} className="gap-1.5">

@@ -26,12 +26,11 @@ export default function Marketplace() {
     }
   };
 
-  return (
-    <div className="space-y-8">
+  return (      <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Marketplace</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Browse point packages from vendors.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Marketplace</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Browse point packages from vendors.</p>
         </div>
         <div className="flex gap-2">
           <Button variant={view === "products" ? "default" : "outline"} size="sm" onClick={() => setView("products")}>Products</Button>
@@ -56,11 +55,11 @@ export default function Marketplace() {
                 <CardContent className="p-5">
                   {p.imageUrl && <div className="mb-3 h-32 rounded-lg bg-muted overflow-hidden"><img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" /></div>}
                   <Badge variant="outline" className="text-[10px] mb-2">{p.category}</Badge>
-                  <h3 className="font-semibold text-[var(--nb-ink)]">{p.name}</h3>
+                  <h3 className="font-semibold text-slate-900 dark:text-white">{p.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{p.description}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-lg font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1"><Coins className="h-4 w-4" />{p.pointsPrice}</span>
-                    <Button size="sm" onClick={() => handleBuy(p._id, p.name, p.pointsPrice)} disabled={(balance ?? 0) < p.pointsPrice}>Buy</Button>
+                    <Button size="sm" onClick={() => handleBuy(p._id, p.name, p.pointsPrice)} disabled={(balance ?? 0) < p.pointsPrice} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">Buy</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -80,7 +79,7 @@ export default function Marketplace() {
             {orders.map((o) => (
               <Card key={o._id} className="notebook-card">
                 <CardContent className="p-4 flex items-center justify-between">
-                  <div><p className="text-sm font-medium text-[var(--nb-ink)]">Order {o._id.slice(-8)}</p><p className="text-xs text-muted-foreground">{o.totalPoints} pts • {new Date(o.createdAt).toLocaleDateString()}</p></div>
+                  <div>              <p className="text-sm font-medium text-slate-900 dark:text-white">Order {o._id.slice(-8)}</p><p className="text-xs text-muted-foreground">{o.totalPoints} pts • {new Date(o.createdAt).toLocaleDateString()}</p></div>
                   <Badge variant={o.status === "completed" ? "default" : "secondary"}>{o.status}</Badge>
                 </CardContent>
               </Card>

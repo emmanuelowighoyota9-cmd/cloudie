@@ -35,11 +35,11 @@ export default function Shipments() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Shipments</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Track and manage your shipments.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Shipments</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Track and manage your shipments.</p>
         </div>
         <Link to="/shipments/new">
-          <Button className="gap-2">
+          <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
             <Plus className="h-4 w-4" /> New Shipment
           </Button>
         </Link>
@@ -48,7 +48,7 @@ export default function Shipments() {
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Search by tracking number..."
             value={search}
@@ -77,25 +77,12 @@ export default function Shipments() {
       {shipments === undefined ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Card key={i} className="notebook-card">
-              <CardContent className="p-4 animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-lg bg-muted" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3 w-32 bg-muted rounded" />
-                    <div className="h-2 w-48 bg-muted rounded" />
-                  </div>
-                  <div className="h-5 w-20 bg-muted rounded-full" />
-                </div>
-              </CardContent>
-            </Card>
+            <Card key={i}><CardContent className="p-4 animate-pulse"><div className="flex items-center gap-4"><div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-700" /><div className="flex-1 space-y-2"><div className="h-3 w-32 bg-slate-100 dark:bg-slate-700 rounded" /><div className="h-2 w-48 bg-slate-100 dark:bg-slate-700 rounded" /></div><div className="h-5 w-20 bg-slate-100 dark:bg-slate-700 rounded-full" /></div></CardContent></Card>
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <Empty>
-          <EmptyMedia variant="icon">
-            <Package />
-          </EmptyMedia>
+          <EmptyMedia variant="icon"><Package /></EmptyMedia>
           <EmptyHeader>
             <EmptyTitle>No shipments found</EmptyTitle>
             <EmptyDescription>
@@ -107,7 +94,7 @@ export default function Shipments() {
           {!search && filter === "all" && (
             <EmptyContent>
               <Link to="/shipments/new">
-                <Button className="gap-2">
+                <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
                   <Plus className="h-4 w-4" /> Create Shipment
                 </Button>
               </Link>
@@ -118,15 +105,15 @@ export default function Shipments() {
         <div className="space-y-3">
           {filtered.map((s) => (
             <Link key={s._id} to={`/shipments/${s._id}`}>
-              <Card className="notebook-card cursor-pointer transition-colors hover:border-blue-300 dark:hover:border-blue-700">
+              <Card className="transition-colors hover:border-blue-300 dark:hover:border-blue-700">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/50">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30">
                       <Truck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[var(--nb-ink)]">{s.trackingNumber}</p>
-                      <p className="text-xs text-muted-foreground truncate">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{s.trackingNumber}</p>
+                      <p className="text-xs text-slate-400 truncate">
                         {s.recipientName} • {s.recipientCity}, {s.recipientCountry}
                       </p>
                     </div>
@@ -134,7 +121,7 @@ export default function Shipments() {
                       <Badge className={`${statusColors[s.status] ?? ""} border-0 font-medium`}>
                         {s.status.replace(/_/g, " ")}
                       </Badge>
-                      <p className="mt-1 text-[10px] text-muted-foreground">
+                      <p className="mt-1 text-[10px] text-slate-400">
                         {new Date(s.createdAt).toLocaleDateString()}
                       </p>
                     </div>

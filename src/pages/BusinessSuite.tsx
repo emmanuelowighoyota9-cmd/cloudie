@@ -19,8 +19,8 @@ export default function BusinessSuite() {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Business Suite</h1>
-          <p className="mt-1 text-sm text-muted-foreground">White-label tenant portal for banking and investment use cases.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Business Suite</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">White-label tenant portal for banking and investment use cases.</p>
         </div>
         <Link to="/business/sites/new">
           <Button className="gap-2"><Plus className="h-4 w-4" /> Create Site</Button>

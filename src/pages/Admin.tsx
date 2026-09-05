@@ -29,7 +29,7 @@ export default function Admin() {
       <div className="flex items-center gap-3">
         <Shield className="h-6 w-6 text-amber-600 dark:text-amber-400" />
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Admin Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Admin Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Platform overview and management.</p>
         </div>
       </div>

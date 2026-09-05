@@ -39,8 +39,10 @@ export default function Landing() {
       <header className="sticky top-0 z-50 border-b border-[var(--nb-rule)] bg-[var(--nb-surface)]/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <Cloud className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            <span className="text-lg font-bold text-[var(--nb-ink)]">Cloudie</span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600">
+              <Cloud className="h-4 w-4 text-white" />
+            </div>
+            <span className="text-lg font-bold text-slate-900 dark:text-white">Cloudie</span>
           </div>
           <div className="flex items-center gap-2">
             <Link to="/auth">
@@ -55,24 +57,23 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden">
+      {/* Hero */}              <section className="relative overflow-hidden bg-white dark:bg-slate-800">
         <div className="mx-auto max-w-6xl px-4 py-20 md:py-32 text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
           >
-            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--nb-rule)] bg-[var(--nb-surface)] px-4 py-1.5 text-xs font-medium text-muted-foreground mb-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-500 mb-6 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
               <Sparkles className="h-3.5 w-3.5 text-blue-500" />
               All-in-one digital operations platform
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-[var(--nb-ink)] leading-tight">
+            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
               Run your business
               <br />
               on <span className="text-blue-600 dark:text-blue-400">Cloudie</span>
             </h1>
-            <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground leading-relaxed">
+            <p className="mt-6 max-w-2xl mx-auto text-lg text-slate-500 dark:text-slate-400 leading-relaxed">
               Shipments, documents, email campaigns, marketplace, and a unified points ledger — everything you need in one premium platform.
             </p>
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -103,19 +104,18 @@ export default function Landing() {
       </section>
 
       {/* Stats */}
-      <section className="border-y border-[var(--nb-rule)] bg-[var(--nb-surface)]">
+      <section className="border-y border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         <div className="mx-auto max-w-6xl px-4 py-8 grid grid-cols-2 md:grid-cols-4 gap-6">
           {stats.map((s) => (
             <div key={s.label} className="text-center">
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{s.value}</p>
-              <p className="text-sm text-muted-foreground mt-1">{s.label}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{s.label}</p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Features */}
-      <section className="py-20">
+      {/* Features */}            <section className="py-20 bg-slate-50 dark:bg-slate-900/50">
         <div className="mx-auto max-w-6xl px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold tracking-tight text-[var(--nb-ink)]">Everything you need</h2>
@@ -131,7 +131,7 @@ export default function Landing() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * i, duration: 0.4 }}
               >
-                <div className="notebook-card h-full rounded-xl border border-[var(--nb-rule)] bg-[var(--nb-surface)] p-6 transition-colors hover:border-blue-300 dark:hover:border-blue-700">
+                <div className="h-full rounded-xl border border-slate-200 bg-white p-6 transition-colors hover:border-blue-300 dark:border-slate-700 dark:hover:border-blue-700">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-950/50">
                     <f.icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
@@ -144,8 +144,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Points Economy */}
-      <section className="py-20 bg-[var(--nb-surface)] border-y border-[var(--nb-rule)]">
+      {/* Points Economy */}            <section className="py-20 bg-white border-y border-slate-200 dark:bg-slate-800 dark:border-slate-700">
         <div className="mx-auto max-w-6xl px-4">
           <div className="grid gap-12 lg:grid-cols-2 items-center">
             <div>
@@ -176,8 +175,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="py-20">
+      {/* CTA */}            <section className="py-20 bg-slate-50 dark:bg-slate-900/50">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h2 className="text-3xl font-bold tracking-tight text-[var(--nb-ink)]">
             Ready to get started?

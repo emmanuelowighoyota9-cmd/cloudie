@@ -4,7 +4,6 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Coins,
   TrendingUp,
@@ -13,6 +12,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
+import { Plus, Receipt, Store } from "lucide-react";
 import { Link } from "react-router";
 
 export default function Personal() {
@@ -26,8 +26,15 @@ export default function Personal() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Personal Workspace</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Manage your wallet, transactions, and profile.</p>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Personal Workspace</h1>
+          <div className="flex gap-2">
+            <Link to="/buy-points"><Button size="sm" className="gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"><Plus className="h-4 w-4" /> Buy Points</Button></Link>
+            <Link to="/orders"><Button size="sm" variant="outline" className="gap-1.5"><Receipt className="h-4 w-4" /> Orders</Button></Link>
+            <Link to="/vendor"><Button size="sm" variant="outline" className="gap-1.5"><Store className="h-4 w-4" /> Vendor</Button></Link>
+          </div>
+        </div>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage your wallet, transactions, and profile.</p>
       </div>
 
       {/* Balance Cards */}
@@ -39,8 +46,8 @@ export default function Personal() {
                 <Wallet className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Balance</p>
-                <p className="text-2xl font-bold text-[var(--nb-ink)]">{(balance ?? 0).toLocaleString()} pts</p>
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Balance</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{(balance ?? 0).toLocaleString()} pts</p>
               </div>
             </div>
           </CardContent>
@@ -52,7 +59,7 @@ export default function Personal() {
                 <TrendingUp className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Earned</p>
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total Earned</p>
                 <p className="text-2xl font-bold text-green-600">+{totalEarned.toLocaleString()}</p>
               </div>
             </div>
@@ -65,7 +72,7 @@ export default function Personal() {
                 <TrendingDown className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Total Spent</p>
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total Spent</p>
                 <p className="text-2xl font-bold text-amber-600">-{totalSpent.toLocaleString()}</p>
               </div>
             </div>

@@ -16,7 +16,7 @@ export default function Assets() {
       <div className="flex items-center gap-4">
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Asset Manager</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Asset Manager</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {usage !== undefined ? `Storage used: ${(usage / 1024 / 1024).toFixed(2)} MB` : "Manage your digital assets"}
           </p>
