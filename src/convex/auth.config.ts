@@ -10,9 +10,9 @@ const freebuffIssuer =
 
 export default {
   providers: [
-    // Standard Convex Auth provider for this project's own sign-in ("Get
-    // Started" email/guest, see src/convex/auth.ts). The deployment
-    // self-issues JWTs (iss = CONVEX_SITE_URL, no `kid` header) validated
+    // Standard Convex Auth provider for this project's own sign-in
+    // (email + password via the Password provider, see src/convex/auth.ts).
+    // The deployment self-issues JWTs (iss = CONVEX_SITE_URL, no `kid` header) validated
     // via OIDC discovery at `${domain}/.well-known/openid-configuration`,
     // served by auth.addHttpRoutes() in convex/http.ts. Do NOT convert this
     // entry to `type: "customJwt"` — that path rejects tokens without a
