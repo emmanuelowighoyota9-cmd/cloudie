@@ -120,8 +120,13 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}`;
+    // Dedicated admin sign-in: keep the requested path so the admin login
+    // page can return the administrator to where they were headed.
     return (
-      <Navigate to={`/auth?returnTo=${encodeURIComponent(returnTo)}`} replace />
+      <Navigate
+        to={`/admin/login?returnTo=${encodeURIComponent(returnTo)}`}
+        replace
+      />
     );
   }
 

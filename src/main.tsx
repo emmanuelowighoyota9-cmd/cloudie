@@ -13,6 +13,7 @@ import "./index.css";
 // Lazy-loaded pages
 const Landing = lazy(() => import("./pages/Landing.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const Personal = lazy(() => import("./pages/Personal.tsx"));
@@ -128,6 +129,7 @@ createRoot(document.getElementById("root")!).render(
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
+                <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/track/:trackingNumber" element={<PublicTracking />} />
 
                 {/* Authenticated app routes with layout */}
