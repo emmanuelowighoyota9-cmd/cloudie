@@ -19,6 +19,14 @@ export async function requireAdmin(ctx: QueryCtx | MutationCtx) {
   return { adminId, admin };
 }
 
+async function getAdminOrNull(ctx: QueryCtx) {
+  const adminId = await getAuthUserId(ctx);
+  if (!adminId) return null;
+  const admin = await ctx.db.get(adminId);
+  if (!admin || admin.role !== "admin" || admin.isSuspended) return null;
+  return { adminId, admin };
+}
+
 /** Wrap a mutation body with the admin guard and audit-log convenience. */
 export async function auditLog(
   ctx: MutationCtx,
@@ -903,16 +911,19 @@ export const logAdminSession = mutation({
 export const adminBadgeCounts = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
-    const vendors = await ctx.db.query("vendors").withIndex("by_status").collect();
-    const kyc = await ctx.db.query("kycRecords").collect();
-    const disputes = await ctx.db.query("disputes").withIndex("by_status").collect();
+    const admin = await getAdminOrNull(ctx);
+    if (!admin) {
+      return { pendingVendors: 0, pendingKyc: 0, openDisputes: 0, openFlags: 0 };
+    }
+    const vendors = await ctx.db.query("vendors").withIndex("by_status").take(1000);
+    const kyc = await ctx.db.query("kycRecords").take(1000);
+    const disputes = await ctx.db.query("disputes").withIndex("by_status").take(1000);
+    const flags = await ctx.db.query("moderationFlags").withIndex("by_status").take(1000);
     return {
       pendingVendors: vendors.filter((v) => v.status === "pending").length,
       pendingKyc: kyc.filter((k) => k.status === "pending").length,
       openDisputes: disputes.filter((d) => d.status === "open" || d.status === "under_review").length,
-      openFlags: (await ctx.db.query("moderationFlags").withIndex("by_status").collect())
-        .filter((f) => f.status === "open").length,
+      openFlags: flags.filter((f) => f.status === "open").length,
     };
   },
 });
@@ -920,21 +931,22 @@ export const adminBadgeCounts = query({
 export const adminDashboard = query({
   args: {},
   handler: async (ctx) => {
-    await requireAdmin(ctx);
+    const admin = await getAdminOrNull(ctx);
+    if (!admin) return null;
     const now = Date.now();
     const dayAgo = now - 24 * 60 * 60 * 1000;
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
 
-    const users = await ctx.db.query("users").collect();
-    const ledger = await ctx.db.query("pointLedger").withIndex("by_createdAt").collect();
-    const shipments = await ctx.db.query("shipments").withIndex("by_status").collect();
-    const docs = await ctx.db.query("documents").collect();
-    const vendors = await ctx.db.query("vendors").withIndex("by_status").collect();
-    const tenants = await ctx.db.query("tenantSites").collect();
-    const orders = await ctx.db.query("marketplaceOrders").collect();
-    const disputes = await ctx.db.query("disputes").withIndex("by_status").collect();
-    const kyc = await ctx.db.query("kycRecords").collect();
-    const flags = await ctx.db.query("moderationFlags").withIndex("by_status").collect();
+    const users = await ctx.db.query("users").take(1000);
+    const ledger = await ctx.db.query("pointLedger").withIndex("by_createdAt").take(1000);
+    const shipments = await ctx.db.query("shipments").withIndex("by_status").take(1000);
+    const docs = await ctx.db.query("documents").take(1000);
+    const vendors = await ctx.db.query("vendors").withIndex("by_status").take(1000);
+    const tenants = await ctx.db.query("tenantSites").take(1000);
+    const orders = await ctx.db.query("marketplaceOrders").take(1000);
+    const disputes = await ctx.db.query("disputes").withIndex("by_status").take(1000);
+    const kyc = await ctx.db.query("kycRecords").take(1000);
+    const flags = await ctx.db.query("moderationFlags").withIndex("by_status").take(1000);
 
     const minted = ledger.filter((l) => l.amount > 0);
     const burned = ledger.filter((l) => l.amount < 0);

@@ -16,8 +16,11 @@ import {
   UserX,
   Users,
   Zap,
+  ShieldAlert,
 } from "lucide-react";
 import { Link } from "react-router";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 export default function Admin() {
   const data = useQuery(api.adminApi.adminDashboard);
@@ -27,6 +30,30 @@ export default function Admin() {
       <div className="space-y-6">
         <AdminPageHeader title="Admin Dashboard" description="Platform overview and management." />
         <AdminSkeleton rows={4} />
+      </div>
+    );
+  }
+
+  if (data === null) {
+    return (
+      <div className="space-y-6">
+        <AdminPageHeader title="Admin Dashboard" description="Platform overview and management." />
+        <Card className="rounded-xl border-border bg-card shadow-sm">
+          <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold text-foreground">Admin access required</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This console is limited to active admin accounts. Use an admin account or return to the main workspace.
+              </p>
+            </div>
+            <Link to="/dashboard">
+              <Button variant="outline">Back to app</Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
