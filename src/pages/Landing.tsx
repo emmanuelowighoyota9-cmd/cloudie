@@ -17,6 +17,8 @@ import {
   RadioTower,
   Route,
   CircleDollarSign,
+  Plane,
+  ReceiptText,
 } from "lucide-react";
 
 const features = [
@@ -100,6 +102,22 @@ export default function Landing() {
                   <item.icon className="h-4 w-4 text-primary" />
                   <p className="mt-3 text-base font-semibold text-foreground">{item.value}</p>
                   <p className="text-xs text-muted-foreground">{item.label}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 grid max-w-xl gap-3 sm:grid-cols-2">
+              {[
+                { icon: Plane, label: "Travel desk", value: "22 itineraries queued" },
+                { icon: ReceiptText, label: "Document ops", value: "Invoices and customs ready" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center gap-3 rounded-lg border border-border bg-accent/55 p-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-card text-primary">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.value}</p>
+                  </div>
                 </div>
               ))}
             </div>
