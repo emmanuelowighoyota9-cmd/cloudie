@@ -2,44 +2,114 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ClipboardList, Check, X } from "lucide-react";
+import { Check, ClipboardCheck, X } from "lucide-react";
+import { useState } from "react";
+import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, ConfirmDialog, StatCard, fmtDate } from "@/components/admin/shared";
 
 export default function AdminKYC() {
-  const records = useQuery(api.tenants.adminListKyc, {});
+  const kycs = useQuery(api.tenants.adminListKyc, { limit: 300 });
   const review = useMutation(api.tenants.adminKycReview);
 
+  const [action, setAction] = useState<null | { kycId: string; kind: "verified" | "rejected" | "more_information_required"; label: string }>(null);
+
+  const counts = {
+    pending: (kycs ?? []).filter((k) => k.status === "pending").length,
+    underReview: (kycs ?? []).filter((k) => k.status === "under_review").length,
+    verified: (kycs ?? []).filter((k) => k.status === "verified").length,
+    rejected: (kycs ?? []).filter((k) => k.status === "rejected").length,
+  };
+
+  const runAction = async (reason: string) => {
+    if (!action) return;
+    try {
+      await review({ kycId: action.kycId as never, status: action.kind, notes: reason });
+      toast.success(`KYC ${action.kind.replace(/_/g, " ")}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Operation failed");
+      throw e;
+    }
+  };
+
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <ClipboardList className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">KYC Reviews</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Review and manage KYC verification requests.</p>
-        </div>
+    <div className="space-y-6">
+      <AdminPageHeader title="KYC Administration" description="Review identity verification cases. Access is restricted to admins." />
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Pending" value={counts.pending} icon={ClipboardCheck} color="amber" />
+        <StatCard title="Verified" value={counts.verified} icon={Check} color="green" />
+        <StatCard title="Rejected" value={counts.rejected} icon={X} color="red" />
+        <StatCard title="More info needed" value={counts.underReview} icon={ClipboardCheck} color="blue" />
       </div>
-      <div className="space-y-3">
-        {!records ? <p className="text-sm text-muted-foreground animate-pulse text-center py-8">Loading...</p> : records.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">No KYC records.</p>
-        ) : records.map((r) => (
-          <Card key={r._id} className="notebook-card">
-            <CardContent className="p-4 flex items-center gap-4">
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--nb-ink)]">{r.fullName}</p>
-                <p className="text-xs text-muted-foreground">{r.dateOfBirth || "No DOB"} • Submitted {new Date(r.createdAt).toLocaleDateString()}</p>
-              </div>
-              <Badge variant={r.status === "verified" ? "default" : r.status === "rejected" ? "destructive" : "secondary"} className="capitalize">{r.status.replace(/_/g, " ")}</Badge>
-              {r.status === "pending" && (
-                <div className="flex gap-1">
-                  <Button size="sm" variant="outline" onClick={async () => { await review({ kycId: r._id as any, status: "verified" }); toast.success("Verified"); }}><Check className="h-3 w-3" /></Button>
-                  <Button size="sm" variant="outline" onClick={async () => { await review({ kycId: r._id as any, status: "rejected", notes: "Rejected by admin" }); toast.success("Rejected"); }}><X className="h-3 w-3" /></Button>
+
+      {kycs === undefined ? (
+        <AdminSkeleton rows={5} />
+      ) : kycs.length === 0 ? (
+        <AdminEmpty message="No KYC cases yet." hint="Cases appear when tenant owners submit verification." />
+      ) : (
+        <div className="space-y-2">
+          {kycs.map((k) => (
+            <Card key={k._id} className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+              <CardContent className="flex flex-wrap items-center gap-3 p-4">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{k.fullName}</p>
+                  <p className="truncate text-[11px] text-slate-400">
+                    DOB: {k.dateOfBirth || "—"} · Doc: {k.documentUrl ? "attached" : "none"} · {fmtDate(k.createdAt)}
+                  </p>
+                  {k.notes && <p className="mt-1 truncate text-[11px] text-slate-500">Notes: {k.notes}</p>}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <StatusBadge status={k.status} />
+                {k.status !== "verified" && k.status !== "rejected" && (
+                  <div className="flex shrink-0 gap-1">
+                    <Button
+                      size="sm"
+                      className="bg-green-600 text-white hover:bg-green-700"
+                      onClick={() => setAction({ kycId: k._id, kind: "verified", label: "Approve KYC" })}
+                    >
+                      <Check className="mr-1 h-3 w-3" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setAction({ kycId: k._id, kind: "more_information_required", label: "Request info" })}
+                    >
+                      Request info
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-red-600"
+                      onClick={() => setAction({ kycId: k._id, kind: "rejected", label: "Reject KYC" })}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {action && (
+        <ConfirmDialog
+          open
+          onClose={() => setAction(null)}
+          onConfirm={runAction}
+          title={action.label}
+          description={
+            action.kind === "rejected"
+              ? "Rejection requires a reason. The applicant is notified and the decision is audited."
+              : action.kind === "verified"
+                ? "Marks the identity as verified. Audited."
+                : "Requests additional information from the applicant with your notes."
+          }
+          actionLabel={action.kind === "verified" ? "Approve" : action.kind === "rejected" ? "Reject" : "Request"}
+          destructive={action.kind === "rejected"}
+          requireReason
+          minReasonLength={5}
+        />
+      )}
     </div>
   );
 }
