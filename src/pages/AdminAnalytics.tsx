@@ -1,78 +1,119 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart3, Users, Coins, Truck, FileText, ShoppingBag, Mail } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BarChart3 } from "lucide-react";
+import { useState } from "react";
+import { AdminPageHeader, StatCard, AdminSkeleton } from "@/components/admin/shared";
 
-function MetricCard({ label, value, icon: Icon, color }: { label: string; value: number | undefined; icon: React.ComponentType<{ className?: string }>; color: string }) {
-  return (
-    <div className="flex items-center gap-3 p-4 rounded-xl bg-[var(--nb-bg)] border border-[var(--nb-rule)]">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${color}`}><Icon className="h-5 w-5" /></div>
-      <div>
-        <p className="text-xs text-muted-foreground font-medium">{label}</p>
-        {value === undefined ? <Skeleton className="mt-1 h-5 w-12" /> : <p className="text-lg font-bold text-[var(--nb-ink)]">{value.toLocaleString()}</p>}
-      </div>
-    </div>
-  );
-}
+const RANGES = [
+  { days: 1, label: "Today" },
+  { days: 7, label: "7 days" },
+  { days: 30, label: "30 days" },
+  { days: 90, label: "90 days" },
+] as const;
 
 export default function AdminAnalytics() {
-  const analytics = useQuery(api.admin.getAnalytics);
+  const [days, setDays] = useState<1 | 7 | 30 | 90>(30);
+  const data = useQuery(api.adminApi.getAnalyticsRange, { days });
+
+  const buckets = data?.buckets ?? [];
+  const maxVal = Math.max(1, ...buckets.map((b) => Math.max(b.minted, b.burned)));
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center gap-3">
-        <BarChart3 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--nb-ink)]">Analytics</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Platform-wide metrics and insights.</p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Total Users" value={analytics?.totalUsers} icon={Users} color="bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400" />
-        <MetricCard label="Active Users" value={analytics?.activeUsers} icon={Users} color="bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400" />
-        <MetricCard label="Points Minted" value={analytics?.pointsMinted} icon={Coins} color="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400" />
-        <MetricCard label="Points Burned" value={analytics?.pointsBurned} icon={Coins} color="bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400" />
-        <MetricCard label="Points in Circulation" value={analytics?.pointsInCirculation} icon={Coins} color="bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400" />
-        <MetricCard label="Shipments" value={analytics?.totalShipments} icon={Truck} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400" />
-        <MetricCard label="Documents" value={analytics?.totalDocuments} icon={FileText} color="bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400" />
-        <MetricCard label="Marketplace Orders" value={analytics?.totalOrders} icon={ShoppingBag} color="bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400" />
-      </div>
-
-      {/* Last 7 Days */}
-      <Card className="notebook-card">
-        <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Last 7 Days</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="text-center p-4 rounded-xl bg-[var(--nb-bg)] border border-[var(--nb-rule)]">
-              <p className="text-3xl font-bold text-blue-600">{analytics?.last7Days.newUsers ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">New Users</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[var(--nb-bg)] border border-[var(--nb-rule)]">
-              <p className="text-3xl font-bold text-indigo-600">{analytics?.last7Days.shipments ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">Shipments</p>
-            </div>
-            <div className="text-center p-4 rounded-xl bg-[var(--nb-bg)] border border-[var(--nb-rule)]">
-              <p className="text-3xl font-bold text-rose-600">{analytics?.last7Days.documents ?? 0}</p>
-              <p className="text-xs text-muted-foreground mt-1">Documents</p>
-            </div>
+    <div className="space-y-6">
+      <AdminPageHeader
+        title="Analytics"
+        description="Server-side aggregation over points, users, shipments, documents, and orders."
+        actions={
+          <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Time range">
+            {RANGES.map((r) => (
+              <Button
+                key={r.days}
+                size="sm"
+                variant={days === r.days ? "default" : "ghost"}
+                className={`h-7 px-3 text-xs ${days === r.days ? "bg-blue-600 text-white hover:bg-blue-700" : "text-slate-600 dark:text-slate-300"}`}
+                onClick={() => setDays(r.days)}
+              >
+                {r.label}
+              </Button>
+            ))}
           </div>
-        </CardContent>
-      </Card>
+        }
+      />
 
-      {/* Platform Health */}
-      <Card className="notebook-card">
-        <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Platform Overview</CardTitle></CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-center">
-            <div><p className="text-2xl font-bold text-[var(--nb-ink)]">{analytics?.totalVendors ?? 0}</p><p className="text-xs text-muted-foreground">Vendors</p></div>
-            <div><p className="text-2xl font-bold text-[var(--nb-ink)]">{analytics?.approvedVendors ?? 0}</p><p className="text-xs text-muted-foreground">Approved Vendors</p></div>
-            <div><p className="text-2xl font-bold text-[var(--nb-ink)]">{analytics?.totalTenants ?? 0}</p><p className="text-xs text-muted-foreground">Tenant Sites</p></div>
-            <div><p className="text-2xl font-bold text-[var(--nb-ink)]">{analytics?.totalProducts ?? 0}</p><p className="text-xs text-muted-foreground">Products</p></div>
+      {data === undefined ? (
+        <AdminSkeleton rows={6} />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard title="Points minted" value={data.totals.minted} icon={BarChart3} color="green" />
+            <StatCard title="Points burned" value={data.totals.burned} icon={BarChart3} color="red" />
+            <StatCard title="New users" value={data.totals.newUsers} icon={BarChart3} color="blue" />
+            <StatCard title="Active tenants" value={data.totals.activeTenants} icon={BarChart3} color="indigo" />
+            <StatCard title="Shipments" value={data.totals.shipments} icon={BarChart3} color="purple" />
+            <StatCard title="Documents" value={data.totals.documents} icon={BarChart3} color="blue" />
+            <StatCard title="Orders" value={data.totals.orders} icon={BarChart3} color="amber" />
+            <StatCard title="Notifications" value={data.totals.notifications} icon={BarChart3} color="green" />
           </div>
-        </CardContent>
-      </Card>
+
+          <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center gap-4 text-xs text-slate-500">
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500" /> Minted</span>
+                <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-red-400" /> Burned</span>
+              </div>
+              {buckets.length === 0 ? (
+                <p className="py-10 text-center text-sm text-slate-400">No activity in this range.</p>
+              ) : (
+                <div className="flex h-48 items-end gap-[3px] overflow-x-auto" aria-label="Points minted vs burned over time" role="img">
+                  {buckets.map((b, i) => (
+                    <div key={i} className="group relative flex h-full min-w-[6px] flex-1 flex-col justify-end gap-[2px]">
+                      <div
+                        className="w-full rounded-t-sm bg-red-400/80 transition-colors group-hover:bg-red-500"
+                        style={{ height: `${(b.burned / maxVal) * 100}%` }}
+                      />
+                      <div
+                        className="w-full rounded-t-sm bg-blue-500/80 transition-colors group-hover:bg-blue-600"
+                        style={{ height: `${(b.minted / maxVal) * 100}%` }}
+                      />
+                      <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-[10px] text-white shadow group-hover:block">
+                        {b.label}: +{b.minted.toLocaleString()} / −{b.burned.toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {buckets.slice(-8).map((b, i) => (
+              <Card key={i} className="rounded-xl border-slate-200 p-3 shadow-sm dark:border-slate-700">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{b.label}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-slate-500">Users</p>
+                    <p className="font-bold text-slate-900 dark:text-white">{b.users}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Shipments</p>
+                    <p className="font-bold text-slate-900 dark:text-white">{b.shipments}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Documents</p>
+                    <p className="font-bold text-slate-900 dark:text-white">{b.documents}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-500">Orders</p>
+                    <p className="font-bold text-slate-900 dark:text-white">{b.orders}</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

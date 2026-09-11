@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
+import { pointTxTypeValidator } from "./schema";
 import { v } from "convex/values";
 
 export const getBalance = query({
@@ -60,12 +61,12 @@ export const getAdminLedger = query({
   },
 });
 
-export const credit = mutation({
+export const credit = internalMutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
     description: v.string(),
-    type: v.string(),
+    type: pointTxTypeValidator,
     reference: v.optional(v.string()),
     referenceId: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
@@ -97,7 +98,7 @@ export const credit = mutation({
       amount: args.amount,
       balanceAfter: newBalance,
       description: args.description,
-      type: args.type as any,
+      type: args.type,
       reference: args.reference,
       referenceId: args.referenceId,
       idempotencyKey: args.idempotencyKey,
@@ -118,12 +119,12 @@ export const credit = mutation({
   },
 });
 
-export const debit = mutation({
+export const debit = internalMutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
     description: v.string(),
-    type: v.string(),
+    type: pointTxTypeValidator,
     reference: v.optional(v.string()),
     referenceId: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
@@ -159,7 +160,7 @@ export const debit = mutation({
       amount: -args.amount,
       balanceAfter: newBalance,
       description: args.description,
-      type: args.type as any,
+      type: args.type,
       reference: args.reference,
       referenceId: args.referenceId,
       idempotencyKey: args.idempotencyKey,

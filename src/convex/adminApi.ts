@@ -1008,3 +1008,90 @@ export const adminDashboard = query({
     };
   },
 });
+
+/** Move a dispute into review before resolution. Audited. */
+export const markDisputeUnderReview = mutation({
+  args: { disputeId: v.id("disputes") },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const dispute = await ctx.db.get(args.disputeId);
+    if (!dispute) throw new Error("DISPUTE_NOT_FOUND");
+    if (dispute.status !== "open") throw new Error("INVALID_STATUS_TRANSITION");
+    await ctx.db.patch(args.disputeId, { status: "under_review", updatedAt: Date.now() });
+    await auditLog(ctx, adminId, {
+      action: "DISPUTE_UNDER_REVIEW",
+      resource: "dispute",
+      resourceId: args.disputeId,
+      before: { status: dispute.status },
+      after: { status: "under_review" },
+    });
+    return { success: true };
+  },
+});
+
+/**
+ * Server-side time-series aggregation for /admin/analytics.
+ * Returns daily buckets over the trailing `days` window plus totals.
+ */
+export const getAnalyticsRange = query({
+  args: { days: v.union(v.literal(1), v.literal(7), v.literal(30), v.literal(90)) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const now = Date.now();
+    const start = now - args.days * 24 * 60 * 60 * 1000;
+
+    const ledger = await ctx.db.query("pointLedger").withIndex("by_createdAt").collect();
+    const users = await ctx.db.query("users").collect();
+    const shipments = await ctx.db.query("shipments").withIndex("by_createdAt").collect();
+    const docs = await ctx.db.query("documents").collect();
+    const orders = await ctx.db.query("marketplaceOrders").collect();
+    const campaigns = await ctx.db.query("emailCampaigns").collect();
+    const notifications = await ctx.db.query("notifications").collect();
+    const tenants = await ctx.db.query("tenantSites").collect();
+
+    const bucketCount = args.days === 1 ? 24 : args.days;
+    const buckets: {
+      label: string;
+      minted: number;
+      burned: number;
+      users: number;
+      shipments: number;
+      documents: number;
+      orders: number;
+    }[] = [];
+    const bucketMs = ((now - start) / bucketCount) | 0;
+    for (let i = 0; i < bucketCount; i++) {
+      const from = start + i * bucketMs;
+      const to = from + bucketMs;
+      const inBucket = (t: number) => t >= from && t < to;
+      const date = new Date(from);
+      buckets.push({
+        label:
+          args.days === 1
+            ? `${String(date.getHours()).padStart(2, "0")}:00`
+            : `${date.getMonth() + 1}/${date.getDate()}`,
+        minted: ledger.filter((l) => l.amount > 0 && inBucket(l.createdAt)).reduce((s, l) => s + l.amount, 0),
+        burned: ledger.filter((l) => l.amount < 0 && inBucket(l.createdAt)).reduce((s, l) => s + Math.abs(l.amount), 0),
+        users: users.filter((u) => (u.createdAt ?? 0) >= from && (u.createdAt ?? 0) < to).length,
+        shipments: shipments.filter((s) => s.createdAt >= from && s.createdAt < to).length,
+        documents: docs.filter((d) => d.createdAt >= from && d.createdAt < to).length,
+        orders: orders.filter((o) => o.createdAt >= from && o.createdAt < to).length,
+      });
+    }
+
+    return {
+      buckets,
+      totals: {
+        newUsers: users.filter((u) => (u.createdAt ?? 0) >= start).length,
+        shipments: shipments.filter((s) => s.createdAt >= start).length,
+        documents: docs.filter((d) => d.createdAt >= start).length,
+        orders: orders.filter((o) => o.createdAt >= start).length,
+        campaigns: campaigns.filter((c) => c.createdAt >= start).length,
+        notifications: notifications.filter((n) => n.createdAt >= start).length,
+        activeTenants: tenants.filter((t) => t.isActive).length,
+        minted: ledger.filter((l) => l.amount > 0 && l.createdAt >= start).reduce((s, l) => s + l.amount, 0),
+        burned: ledger.filter((l) => l.amount < 0 && l.createdAt >= start).reduce((s, l) => s + Math.abs(l.amount), 0),
+      },
+    };
+  },
+});

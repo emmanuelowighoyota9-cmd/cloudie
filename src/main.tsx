@@ -1,5 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
@@ -162,8 +163,8 @@ createRoot(document.getElementById("root")!).render(
 
                 </Route>
 
-                {/* Admin routes */}
-                <Route path="/admin" element={<AdminLayout />}>
+                {/* Admin routes — server-side authorization re-verified in every admin Convex function */}
+                <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
                   <Route index element={<Admin />} />
                   <Route path="users" element={<AdminUsers />} />
                   <Route path="users/:userId" element={<AdminUserDetail />} />

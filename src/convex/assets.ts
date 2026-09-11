@@ -108,7 +108,7 @@ export const createCampaign = mutation({
       senderName: args.senderName,
       content: args.content,
       recipients: args.recipients,
-      status: status as any,
+      status: status as "scheduled" | "sent",
       scheduledAt: args.scheduledAt,
       sentAt: status === "sent" ? Date.now() : undefined,
       totalRecipients: args.recipients.length,

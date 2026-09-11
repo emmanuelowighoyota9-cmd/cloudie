@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import type { ShipmentStatus } from "./schema";
 
 function generateTrackingNumber(): string {
   const prefix = "CLD";
@@ -185,7 +186,7 @@ export const updateStatus = mutation({
 
     const now = Date.now();
     await ctx.db.patch(args.shipmentId, {
-      status: args.status as any,
+      status: args.status as ShipmentStatus,
       updatedAt: now,
     });
 

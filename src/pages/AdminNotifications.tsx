@@ -1,134 +1,125 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { AdminEmpty, AdminPageHeader, AdminSkeleton, StatusBadge, fmtDate } from "@/components/admin/shared";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, Send } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Bell, Send } from "lucide-react";
+import { useState } from "react";
+import { AdminPageHeader, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 
-const notificationTypes = ["system", "marketplace", "shipment", "points", "document"] as const;
+const TYPES = ["system", "security", "shipment", "wallet", "marketplace_order", "document", "business", "maintenance"] as const;
 
 export default function AdminNotifications() {
+  const history = useQuery(api.adminApi.adminListNotifications, { limit: 200 });
+
+  const send = useMutation(api.adminApi.sendNotification);
+  const [broadcast, setBroadcast] = useState(true);
+  const [type, setType] = useState<string>("system");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [type, setType] = useState<(typeof notificationTypes)[number]>("system");
   const [link, setLink] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const notifications = useQuery(api.adminApi.adminListNotifications, { limit: 100 });
-  const sendNotification = useMutation(api.adminApi.sendNotification);
-
-  const unreadCount = useMemo(() => notifications?.filter((item) => !item.isRead).length ?? 0, [notifications]);
+  const [sending, setSending] = useState(false);
 
   const submit = async () => {
-    if (!title.trim() || !message.trim() || busy) return;
-    setBusy(true);
+    if (title.trim().length < 3 || message.trim().length < 3) return;
+    setSending(true);
     try {
-      const result = await sendNotification({
-        broadcast: true,
-        title: title.trim(),
-        message: message.trim(),
-        type,
-        link: link.trim() || undefined,
-      });
+      const res = await send({ broadcast: true, title: title.trim(), message: message.trim(), type, link: link.trim() || undefined });
+      toast.success(`Announcement delivered to ${res.count} users`);
       setTitle("");
       setMessage("");
       setLink("");
-      toast.success(`Broadcast sent to ${result.count.toLocaleString()} users`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Notification failed");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Send failed");
     } finally {
-      setBusy(false);
+      setSending(false);
     }
   };
+
+  const filtered = history;
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Notifications"
-        description="Broadcast platform updates and review recent notification history."
-        actions={<StatusBadge status={`${unreadCount} unread`} />}
+        title="Notification Center"
+        description="Send system announcements and review delivery history. All sends are audited."
       />
 
-      <Card className="rounded-xl border-border bg-card shadow-sm">
-        <CardContent className="grid gap-4 p-4 lg:grid-cols-[1fr_1fr]">
-          <div className="space-y-2">
-            <Label htmlFor="notification-title">Title</Label>
-            <Input id="notification-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Platform maintenance notice" />
+      <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+        <CardHeader>
+          <CardTitle className="text-base text-slate-900 dark:text-white">New announcement</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Switch id="broadcast" checked={broadcast} onCheckedChange={setBroadcast} />
+            <Label htmlFor="broadcast" className="text-sm text-slate-700 dark:text-slate-300">
+              Broadcast to all active users
+            </Label>
           </div>
-          <div className="grid gap-4 sm:grid-cols-[1fr_1fr]">
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={type} onValueChange={(value) => setType(value as (typeof notificationTypes)[number])}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="notif-type" className="text-xs font-medium text-slate-600 dark:text-slate-400">Type</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger id="notif-type" aria-label="Notification type"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {notificationTypes.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {item}
-                    </SelectItem>
+                  {TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>{t.replace(/_/g, " ")}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="notification-link">Link</Label>
-              <Input id="notification-link" value={link} onChange={(event) => setLink(event.target.value)} placeholder="/dashboard" />
+            <div className="space-y-1.5">
+              <Label htmlFor="notif-link" className="text-xs font-medium text-slate-600 dark:text-slate-400">Optional link</Label>
+              <Input id="notif-link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="/marketplace" />
             </div>
           </div>
-          <div className="space-y-2 lg:col-span-2">
-            <Label htmlFor="notification-message">Message</Label>
-            <Textarea
-              id="notification-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Write a concise update for all active users."
-              rows={4}
-            />
+          <div className="space-y-1.5">
+            <Label htmlFor="notif-title" className="text-xs font-medium text-slate-600 dark:text-slate-400">Title</Label>
+            <Input id="notif-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Scheduled maintenance window" maxLength={120} />
           </div>
-          <div className="lg:col-span-2">
-            <Button className="gap-2" onClick={submit} disabled={busy || !title.trim() || !message.trim()}>
-              <Send className="h-4 w-4" />
-              Send broadcast
-            </Button>
+          <div className="space-y-1.5">
+            <Label htmlFor="notif-message" className="text-xs font-medium text-slate-600 dark:text-slate-400">Message</Label>
+            <Textarea id="notif-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={800} placeholder="Shipment operations will be briefly paused…" />
           </div>
+          <Button onClick={submit} disabled={sending || title.trim().length < 3 || message.trim().length < 3} className="gap-1.5">
+            <Send className="h-3.5 w-3.5" /> {sending ? "Sending…" : "Send announcement"}
+          </Button>
         </CardContent>
       </Card>
 
-      <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Recent notifications</h2>
-        {notifications === undefined ? (
-          <AdminSkeleton rows={5} />
-        ) : notifications.length === 0 ? (
-          <AdminEmpty message="No notifications have been sent." />
-        ) : (
-          <div className="space-y-2">
-            {notifications.map((notification) => (
-              <Card key={notification._id} className="rounded-xl border-border bg-card shadow-sm">
-                <CardContent className="flex items-start gap-3 p-4">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Bell className="h-4 w-4" />
-                  </div>
+      <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-white">
+            <Bell className="h-4 w-4 text-blue-600" /> Delivery history
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {filtered === undefined ? (
+            <AdminSkeleton rows={4} />
+          ) : filtered.length === 0 ? (
+            <AdminEmpty message="No notifications sent yet." />
+          ) : (
+            <div className="max-h-[420px] space-y-1.5 overflow-y-auto">
+              {filtered.map((n) => (
+                <div key={n._id} className="flex items-start gap-3 rounded-lg border border-slate-100 p-3 dark:border-slate-800">
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium text-foreground">{notification.title}</p>
-                      <StatusBadge status={notification.type} />
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">{notification.message}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{fmtDate(notification.createdAt)} · {notification.isRead ? "Read" : "Unread"}</p>
+                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{n.title}</p>
+                    <p className="truncate text-xs text-slate-500">{n.message}</p>
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {n.type.replace(/_/g, " ")} · {fmtDate(n.createdAt)} · {n.isRead ? "read" : "unread"}
+                    </p>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </section>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

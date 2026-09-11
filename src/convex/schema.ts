@@ -1,6 +1,14 @@
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
+import type { VLiteral, Validator } from "convex/values";
+
+/** Typed helper: tuple of v.literal() validators for spreading into v.union(). */
+type LiteralTuple<T extends readonly string[]> = {
+  [K in keyof T]: VLiteral<T[K]>;
+};
+const literals = <T extends readonly string[]>(values: T) =>
+  values.map((s) => v.literal(s)) as unknown as LiteralTuple<T> & Validator<unknown>;
 
 // ─── Roles ───
 export const ROLES = {
@@ -44,6 +52,7 @@ export const POINT_TX_TYPES = [
   "image_rendering",
 ] as const;
 export type PointTxType = (typeof POINT_TX_TYPES)[number];
+export const pointTxTypeValidator = v.union(...literals(POINT_TX_TYPES));
 
 export const DOCUMENT_TYPES = [
   "flight",
@@ -106,7 +115,7 @@ const schema = defineSchema(
       amount: v.number(),
       balanceAfter: v.number(),
       description: v.string(),
-      type: v.union(...POINT_TX_TYPES.map((t) => v.literal(t)) as [any, ...any[]]),
+      type: v.union(...literals(POINT_TX_TYPES)),
       reference: v.optional(v.string()),
       referenceId: v.optional(v.string()),
       idempotencyKey: v.optional(v.string()),
@@ -122,7 +131,7 @@ const schema = defineSchema(
       userId: v.id("users"),
       trackingNumber: v.string(),
       status: v.union(
-        ...SHIPMENT_STATUSES.map((s) => v.literal(s)) as [any, ...any[]],
+        ...literals(SHIPMENT_STATUSES),
       ),
       senderName: v.string(),
       senderPhone: v.string(),
@@ -166,7 +175,7 @@ const schema = defineSchema(
     documents: defineTable({
       userId: v.id("users"),
       type: v.union(
-        ...DOCUMENT_TYPES.map((t) => v.literal(t)) as [any, ...any[]],
+        ...literals(DOCUMENT_TYPES),
       ),
       title: v.string(),
       data: v.any(),
@@ -199,7 +208,7 @@ const schema = defineSchema(
       tenantId: v.id("tenantSites"),
       userId: v.id("users"),
       status: v.union(
-        ...KYC_STATUSES.map((s) => v.literal(s)) as [any, ...any[]],
+        ...literals(KYC_STATUSES),
       ),
       fullName: v.string(),
       dateOfBirth: v.optional(v.string()),
@@ -263,7 +272,7 @@ const schema = defineSchema(
       quantity: v.number(),
       totalPoints: v.number(),
       status: v.union(
-        ...ORDER_STATUSES.map((s) => v.literal(s)) as [any, ...any[]],
+        ...literals(ORDER_STATUSES),
       ),
       createdAt: v.number(),
     }).index("by_buyer", ["buyerId"]).index("by_vendor", ["vendorId"]),
