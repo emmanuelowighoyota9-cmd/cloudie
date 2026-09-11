@@ -1,10 +1,11 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Package, MapPin, Clock, Hash } from "lucide-react";
+import { ArrowLeft, MapPin, Clock, Hash } from "lucide-react";
 import { Link, useParams } from "react-router";
 
 const statusSteps = ["pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
@@ -13,11 +14,11 @@ export default function ShipmentDetail() {
   const { id } = useParams<{ id: string }>();
   const shipment = useQuery(
     api.shipments.get,
-    id ? { id: id as any } : "skip",
+    id ? { id: id as Id<"shipments"> } : "skip",
   );
   const events = useQuery(
     api.shipments.getEvents,
-    id ? { shipmentId: id as any } : "skip",
+    id ? { shipmentId: id as Id<"shipments"> } : "skip",
   );
 
   if (shipment === undefined) {

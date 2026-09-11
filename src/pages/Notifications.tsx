@@ -4,13 +4,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyMedia, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Bell, Check, CheckCheck } from "lucide-react";
-import { useNavigate } from "react-router";
 
 export default function NotificationsPage() {
   const notifications = useQuery(api.notifications.listAll, { limit: 50 });
   const markRead = useMutation(api.notifications.markRead);
   const markAllRead = useMutation(api.notifications.markAllRead);
-  const navigate = useNavigate();
 
   return (
     <div className="space-y-8">

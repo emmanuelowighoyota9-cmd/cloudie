@@ -1,11 +1,11 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { ShoppingBag, Coins, Package } from "lucide-react";
-import { Link } from "react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -16,13 +16,13 @@ export default function Marketplace() {
   const createOrder = useMutation(api.marketplace.createOrder);
   const [view, setView] = useState<"products" | "orders">("products");
 
-  const handleBuy = async (productId: any, name: string, price: number) => {
+  const handleBuy = async (productId: Id<"marketplaceProducts">, name: string, price: number) => {
     if (!confirm(`Purchase "${name}" for ${price} points?`)) return;
     try {
       await createOrder({ productId, quantity: 1 });
       toast.success("Order placed!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to order");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to order");
     }
   };
 

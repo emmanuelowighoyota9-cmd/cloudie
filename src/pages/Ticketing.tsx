@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { FileText, Plane, Building, FileSpreadsheet, ScrollText, ArrowUpRight } from "lucide-react";
+import { Plane, Building, FileSpreadsheet, ScrollText, ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
 
 const docTypes = [

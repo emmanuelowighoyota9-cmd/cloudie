@@ -1,4 +1,3 @@
-import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +8,9 @@ import { toast } from "sonner";
 import { ArrowLeft, Plane } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
-import type { Id } from "@/convex/_generated/dataModel";
 
 export default function FlightDocument() {
   const generate = useMutation(api.documents.generate);
-  const balance = useQuery(api.points.getBalance);
   const docs = useQuery(api.documents.list, { type: "flight", limit: 10 });
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
@@ -34,8 +31,8 @@ export default function FlightDocument() {
         data: form,
       });
       toast.success("Flight itinerary generated!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to generate");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate");
     } finally {
       setLoading(false);
     }

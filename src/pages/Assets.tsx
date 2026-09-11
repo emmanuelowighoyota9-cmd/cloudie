@@ -3,7 +3,7 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
-import { FolderOpen, Upload, File, Image, Trash2 } from "lucide-react";
+import { FolderOpen, Upload, File, Image } from "lucide-react";
 import { Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 

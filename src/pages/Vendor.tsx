@@ -1,4 +1,3 @@
-import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +21,6 @@ const statusConfig: Record<string, { icon: React.ComponentType<{ className?: str
 };
 
 export default function Vendor() {
-  const { user } = useAuth();
   const vendor = useQuery(api.marketplace.getMyVendor);
   const registerVendor = useMutation(api.marketplace.registerVendor);
   const [loading, setLoading] = useState(false);

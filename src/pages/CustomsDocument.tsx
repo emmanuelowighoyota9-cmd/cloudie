@@ -11,7 +11,6 @@ import { Link } from "react-router";
 
 export default function CustomsDocument() {
   const generate = useMutation(api.documents.generate);
-  const docs = useQuery(api.documents.list, { type: "customs", limit: 10 });
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     senderName: "", senderCountry: "", receiverName: "", receiverCountry: "",
@@ -26,7 +25,7 @@ export default function CustomsDocument() {
     try {
       await generate({ type: "customs", title: `Customs - ${form.senderName} to ${form.receiverName}`, data: form });
       toast.success("Customs document generated!");
-    } catch (err: any) { toast.error(err.message || "Failed"); } finally { setLoading(false); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
 
   return (

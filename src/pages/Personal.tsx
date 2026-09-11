@@ -1,8 +1,6 @@
-import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Coins,
@@ -16,7 +14,6 @@ import { Plus, Receipt, Store } from "lucide-react";
 import { Link } from "react-router";
 
 export default function Personal() {
-  const { user } = useAuth();
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 50 });
 

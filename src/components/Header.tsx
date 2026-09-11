@@ -22,7 +22,6 @@ import {
   User,
   Wallet,
   Settings,
-  Coins,
   Menu,
   Box,
 } from "lucide-react";

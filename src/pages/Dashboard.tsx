@@ -4,9 +4,8 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Coins, Package, Users, TrendingUp, TrendingDown, ArrowUpRight, ShoppingBag, Building2, FileText, Layers } from "lucide-react";
+import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers } from "lucide-react";
 import { Link } from "react-router";
-import { useState } from "react";
 
 function MetricCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: React.ComponentType<{ className?: string }>; color: string }) {
   return (
@@ -31,10 +30,8 @@ export default function Dashboard() {
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 100 });
   const shipments = useQuery(api.shipments.list, {});
-  const docs = useQuery(api.documents.list, { limit: 20 });
   const referrals = useQuery(api.referrals.getMyReferrals);
   const orders = useQuery(api.marketplace.getMyOrders);
-  const [search, setSearch] = useState("");
 
   const thisMonth = new Date();
   thisMonth.setDate(1);
@@ -42,7 +39,6 @@ export default function Dashboard() {
 
   const monthlyTransactions = (ledger ?? []).filter((l) => l.createdAt >= thisMonth.getTime()).length;
   const recentTx = (ledger ?? []).slice(0, 5);
-  const recentDocs = (docs ?? []).slice(0, 5);
 
   return (
     <div className="space-y-8">

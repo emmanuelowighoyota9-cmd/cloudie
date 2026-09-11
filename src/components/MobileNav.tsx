@@ -5,7 +5,6 @@ import { Cloud } from "lucide-react";
 import {
   LayoutDashboard,
   ShoppingBag,
-  Package,
   FileText,
   Building2,
   Layers,

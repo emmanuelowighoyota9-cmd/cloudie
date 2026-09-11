@@ -3,8 +3,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Moon, Sun, User, Shield, Bell } from "lucide-react";
-import { toast } from "sonner";
+import { Moon, Sun, User, Shield } from "lucide-react";
 
 export default function Settings() {
   const { user } = useAuth();

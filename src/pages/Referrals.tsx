@@ -12,7 +12,6 @@ import { toast } from "sonner";
 export default function Referrals() {
   const code = useQuery(api.referrals.getMyCode);
   const referrals = useQuery(api.referrals.getMyReferrals);
-  const rewards = useQuery(api.referrals.getMyRewards);
   const ensureCode = useMutation(api.referrals.ensureCode);
   const applyReferral = useMutation(api.referrals.applyReferral);
   const [applyCode, setApplyCode] = useState("");
@@ -21,7 +20,7 @@ export default function Referrals() {
     try {
       await ensureCode();
       toast.success("Referral code generated!");
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
   const handleCopy = () => {
@@ -37,7 +36,7 @@ export default function Referrals() {
       await applyReferral({ code: applyCode.trim() });
       toast.success("Referral applied! You earned 25 points.");
       setApplyCode("");
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); }
   };
 
   return (

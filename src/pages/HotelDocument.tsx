@@ -25,7 +25,7 @@ export default function HotelDocument() {
     try {
       await generate({ type: "hotel", title: `Hotel - ${form.guestName} - ${form.hotel}`, data: form });
       toast.success("Hotel reservation document generated!");
-    } catch (err: any) { toast.error(err.message || "Failed"); } finally { setLoading(false); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
 
   return (

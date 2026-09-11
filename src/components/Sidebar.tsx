@@ -5,7 +5,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   LayoutDashboard,
   ShoppingBag,
-  Package,
   FileText,
   Building2,
   Layers,

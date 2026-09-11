@@ -54,14 +54,6 @@ const NAV = [
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
-type SearchResults = {
-  users: { id: string; label: string; sub: string; points: number }[];
-  shipments: { id: string; label: string; sub: string }[];
-  vendors: { id: string; label: string; sub: string }[];
-  tenants: { id: string; label: string; sub: string }[];
-  orders: { id: string; label: string; sub: string }[];
-};
-
 function GlobalSearch() {
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");

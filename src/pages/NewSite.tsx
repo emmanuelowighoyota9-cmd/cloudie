@@ -1,6 +1,6 @@
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,10 +28,10 @@ export default function NewSite() {
     }
     setLoading(true);
     try {
-      await create(form as any);
+      await create(form);
       toast.success("Site created!");
       navigate("/business");
-    } catch (err: any) { toast.error(err.message || "Failed"); } finally { setLoading(false); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
 
   return (

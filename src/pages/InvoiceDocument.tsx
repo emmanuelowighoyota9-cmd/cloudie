@@ -34,7 +34,7 @@ export default function InvoiceDocument() {
     try {
       await generate({ type: "invoice", title: `Invoice - ${form.invoiceNumber}`, data: { ...form, items, total } });
       toast.success("Invoice generated!");
-    } catch (err: any) { toast.error(err.message || "Failed"); } finally { setLoading(false); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
 
   return (

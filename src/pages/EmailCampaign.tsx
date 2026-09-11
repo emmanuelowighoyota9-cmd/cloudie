@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowLeft, Mail, Send } from "lucide-react";
+import { ArrowLeft, Send } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -30,7 +30,7 @@ export default function EmailCampaign() {
       await createCampaign({ ...form, recipients });
       toast.success("Campaign sent!");
       setForm({ subject: "", senderName: "", content: "", recipientsText: "" });
-    } catch (err: any) { toast.error(err.message || "Failed"); } finally { setLoading(false); }
+    } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
 
   return (

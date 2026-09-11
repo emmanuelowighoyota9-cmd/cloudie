@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, CheckCircle2, CircleDashed, Database, HardDrive, KeyRound, Mail, Bell } from "lucide-react";
-import { AdminPageHeader, AdminSkeleton, StatCard, fmtDate } from "@/components/admin/shared";
+import { AdminPageHeader, AdminSkeleton, StatCard } from "@/components/admin/shared";
 
 type Infra = {
   totalTransactions: number;
@@ -69,7 +69,7 @@ export default function AdminInfrastructure() {
               <p>• Convex hosts the database, auth, and background scheduling — component health above reflects live query availability.</p>
               <p>• Ledger entries are append-only; transaction count grows monotonically.</p>
               <p>• Failed job retries are available from each job's owning workspace; this view surfaces counters, not raw job data.</p>
-              <p className="text-xs text-slate-400">Last refreshed: {fmtDate(Date.now())}</p>
+              <p className="text-xs text-slate-400">Live subscription — values update in real time as the platform changes.</p>
             </CardContent>
           </Card>
         </>

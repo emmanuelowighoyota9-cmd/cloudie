@@ -1,4 +1,3 @@
-import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,7 +14,6 @@ const packages = [
 ];
 
 export default function BuyPoints() {
-  const { user } = useAuth();
   const balance = useQuery(api.points.getBalance);
   const buyPoints = useMutation(api.points.buyPoints);
   const [selectedPkg, setSelectedPkg] = useState<string | null>(null);

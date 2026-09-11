@@ -1,20 +1,18 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Package, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 
 export default function NewShipment() {
-  const { user } = useAuth();
   const createShipment = useMutation(api.shipments.create);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -35,13 +33,13 @@ export default function NewShipment() {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await createShipment(form as any);
+      const result = await createShipment(form);
       toast.success("Shipment created!", {
         description: `Tracking: ${result.trackingNumber}`,
       });
       navigate(`/shipments/${result.shipmentId}`);
-    } catch (error: any) {
-      toast.error(error.message || "Failed to create shipment");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create shipment");
     } finally {
       setLoading(false);
     }
