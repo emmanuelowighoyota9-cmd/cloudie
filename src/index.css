@@ -42,81 +42,84 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-/* ═══════════════════════════════════════════════════════
-   CLOUDIE DESIGN SYSTEM — Light Mode
-   Blue/Indigo/Slate premium SaaS
-   ═══════════════════════════════════════════════════════ */
+/* CLOUDIE DESIGN SYSTEM - Light Mode */
 :root {
   --radius: 0.625rem;
 
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
-  --secondary: #f1f5f9;
-  --secondary-foreground: #1e293b;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --accent: #f1f5f9;
-  --accent-foreground: #1e293b;
-  --destructive: #dc2626;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #3b82f6;
-  --chart-1: #2563eb;
-  --chart-2: #16a34a;
-  --chart-3: #d97706;
-  --chart-4: #9333ea;
-  --chart-5: #e11d48;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2563eb;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f1f5f9;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #e2e8f0;
-  --sidebar-ring: #3b82f6;
+  --background: #f5f3ee;
+  --foreground: #192320;
+  --card: #fffcf6;
+  --card-foreground: #192320;
+  --popover: #fffcf6;
+  --popover-foreground: #192320;
+  --primary: #0f766e;
+  --primary-foreground: #f7fffb;
+  --secondary: #e8e1d2;
+  --secondary-foreground: #26322e;
+  --muted: #ebe4d7;
+  --muted-foreground: #6e746d;
+  --accent: #d7ece5;
+  --accent-foreground: #143a35;
+  --destructive: #b5473f;
+  --border: #ded5c4;
+  --input: #d8ceba;
+  --ring: #0f766e;
+  --chart-1: #0f766e;
+  --chart-2: #568f43;
+  --chart-3: #b7792d;
+  --chart-4: #5f6f52;
+  --chart-5: #9f4d45;
+  --sidebar: #fffcf6;
+  --sidebar-foreground: #192320;
+  --sidebar-primary: #0f766e;
+  --sidebar-primary-foreground: #f7fffb;
+  --sidebar-accent: #e8e1d2;
+  --sidebar-accent-foreground: #192320;
+  --sidebar-border: #ded5c4;
+  --sidebar-ring: #0f766e;
+  --nb-bg: var(--background);
+  --nb-surface: var(--card);
+  --nb-ink: var(--foreground);
+  --nb-rule: var(--border);
 }
 
-/* ═══════════════════════════════════════════════════════
-   CLOUDIE DESIGN SYSTEM — Dark Mode
-   ═══════════════════════════════════════════════════════ */
+/* CLOUDIE DESIGN SYSTEM - Dark Mode */
 .dark {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
-  --card: #1e293b;
-  --card-foreground: #f1f5f9;
-  --popover: #1e293b;
-  --popover-foreground: #f1f5f9;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #1e293b;
-  --secondary-foreground: #e2e8f0;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #1e293b;
-  --accent-foreground: #e2e8f0;
-  --destructive: #f87171;
-  --border: #334155;
-  --input: #334155;
-  --ring: #3b82f6;
-  --chart-1: #60a5fa;
-  --chart-2: #4ade80;
-  --chart-3: #fbbf24;
-  --chart-4: #c084fc;
-  --chart-5: #fb7185;
-  --sidebar: #1e293b;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #334155;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #334155;
-  --sidebar-ring: #3b82f6;
+  --background: #111816;
+  --foreground: #f0eee7;
+  --card: #18211f;
+  --card-foreground: #f0eee7;
+  --popover: #18211f;
+  --popover-foreground: #f0eee7;
+  --primary: #5cc5b7;
+  --primary-foreground: #08201c;
+  --secondary: #28312d;
+  --secondary-foreground: #e8e3d8;
+  --muted: #27302d;
+  --muted-foreground: #a9ada5;
+  --accent: #1f3b36;
+  --accent-foreground: #dff8f1;
+  --destructive: #e47e72;
+  --border: #35413b;
+  --input: #35413b;
+  --ring: #5cc5b7;
+  --chart-1: #5cc5b7;
+  --chart-2: #95c46f;
+  --chart-3: #d69a45;
+  --chart-4: #a2a66b;
+  --chart-5: #e47e72;
+  --sidebar: #18211f;
+  --sidebar-foreground: #f0eee7;
+  --sidebar-primary: #5cc5b7;
+  --sidebar-primary-foreground: #08201c;
+  --sidebar-accent: #28312d;
+  --sidebar-accent-foreground: #f0eee7;
+  --sidebar-border: #35413b;
+  --sidebar-ring: #5cc5b7;
+  --nb-bg: var(--background);
+  --nb-surface: var(--card);
+  --nb-ink: var(--foreground);
+  --nb-rule: var(--border);
 }
 
 @layer base {
