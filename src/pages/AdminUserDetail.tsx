@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowDownRight, ArrowLeft, ArrowUpRight, Coins, Shield } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowUpRight, Coins, KeyRound, Shield, Users } from "lucide-react";
 import { Link } from "react-router";
 import {
   StatusBadge,
@@ -44,7 +44,7 @@ export default function AdminUserDetail() {
     return <AdminEmpty message="User not found." hint="They may have been deleted, or you lack access." />;
   }
 
-  const { user, wallet, ledger, shipments, documents, orders, notifications, audit } = detail;
+  const { user, wallet, ledger, shipments, documents, orders, notifications, audit, sessions, referralsSent, referralsReceived } = detail;
   const status = user.isTerminated ? "terminated" : user.isSuspended ? "suspended" : "active";
 
   const runAction = async (reason: string) => {
@@ -176,6 +176,8 @@ export default function AdminUserDetail() {
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
           <TabsTrigger value="notifications">Notifications ({notifications.length})</TabsTrigger>
+          <TabsTrigger value="security">Security ({sessions.length})</TabsTrigger>
+          <TabsTrigger value="referrals">Referrals ({referralsSent.length + referralsReceived.length})</TabsTrigger>
           <TabsTrigger value="audit">Audit ({audit.length})</TabsTrigger>
         </TabsList>
 
@@ -266,6 +268,76 @@ export default function AdminUserDetail() {
               ))}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-4">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+              <KeyRound className="h-4 w-4 shrink-0 text-blue-600" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-slate-900 dark:text-white">Active sessions</p>
+                <p className="text-[11px] text-slate-400">Non-expired authentication sessions (login events appear in the Audit tab).</p>
+              </div>
+            </div>
+            {sessions.length === 0 ? (
+              <AdminEmpty message="No active sessions." />
+            ) : (
+              <div className="divide-y rounded-xl border border-slate-200 dark:border-slate-700">
+                {sessions.map((s) => (
+                  <div key={s._id} className="flex items-center gap-3 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-xs text-slate-900 dark:text-white">{s._id}</p>
+                      <p className="text-[11px] text-slate-400">Started {fmtDate(s.createdAt)} · expires {fmtDate(s.expiresAt)}</p>
+                    </div>
+                    <StatusBadge status="active" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="referrals" className="mt-4">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-2">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <Users className="h-3.5 w-3.5" /> Referred users ({referralsSent.length})
+              </p>
+              {referralsSent.length === 0 ? (
+                <AdminEmpty message="No referrals sent." />
+              ) : (
+                <div className="divide-y rounded-xl border border-slate-200 dark:border-slate-700">
+                  {referralsSent.map((r) => (
+                    <div key={r._id} className="flex items-center gap-3 p-3">
+                      <Link to={`/admin/users/${r.referredUserId}`} className="min-w-0 flex-1 truncate font-mono text-xs text-blue-600 hover:underline">
+                        {r.referredUserId}
+                      </Link>
+                      <span className="shrink-0 text-xs font-semibold text-green-600">+{r.rewardPoints} pts</span>
+                      <StatusBadge status={r.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Referred by ({referralsReceived.length})</p>
+              {referralsReceived.length === 0 ? (
+                <AdminEmpty message="Not referred by anyone." />
+              ) : (
+                <div className="divide-y rounded-xl border border-slate-200 dark:border-slate-700">
+                  {referralsReceived.map((r) => (
+                    <div key={r._id} className="flex items-center gap-3 p-3">
+                      <Link to={`/admin/users/${r.referrerId}`} className="min-w-0 flex-1 truncate font-mono text-xs text-blue-600 hover:underline">
+                        {r.referrerId}
+                      </Link>
+                      <span className="shrink-0 text-xs font-semibold text-green-600">+25 pts bonus</span>
+                      <StatusBadge status={r.status} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="audit" className="mt-4">

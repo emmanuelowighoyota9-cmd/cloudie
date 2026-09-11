@@ -10,6 +10,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import logo from "@/assets/logo.svg";
 import { Eye, EyeOff, Loader2, Lock, Mail, User } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
@@ -31,6 +33,7 @@ function resolveRedirectAfterAuth(
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const initializeUser = useMutation(api.admin.initializeUser);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(
@@ -82,6 +85,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         password,
         ...(mode === "signUp" ? { name } : {}),
       });
+      // Record the login event and run one-time profile setup (role,
+      // createdAt, referral code, welcome bonus). Failures must not block
+      // navigation, so they are logged rather than surfaced.
+      try {
+        await initializeUser({});
+      } catch (e) {
+        console.warn("initializeUser failed", e);
+      }
       navigate(redirect, { replace: true });
     } catch (err) {
       const message =

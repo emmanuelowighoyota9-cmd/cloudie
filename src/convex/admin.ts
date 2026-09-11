@@ -114,6 +114,129 @@ export const getUserTransactions = query({
   },
 });
 
+// ─── Bootstrap & user initialization ───
+
+/**
+ * Public gate status: does any administrator exist? Returns ONLY a boolean
+ * (no user data) so the client can offer the one-time first-admin claim flow.
+ */
+export const adminExists = query({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").take(1000);
+    return users.some((u) => u.role === "admin");
+  },
+});
+
+const REFERRAL_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function generateReferralCode(): string {
+  let code = "CLOUD-";
+  for (let i = 0; i < 6; i++) {
+    code += REFERRAL_CHARS.charAt(Math.floor(Math.random() * REFERRAL_CHARS.length));
+  }
+  return code;
+}
+
+/**
+ * One-time bootstrap: promote the current user to ADMIN when the platform has
+ * no administrator yet. If ADMIN_SETUP_CODE is set in the environment the
+ * caller must supply it. Always audited; permanently disabled once any admin
+ * exists.
+ */
+export const claimFirstAdmin = mutation({
+  args: { setupCode: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED: sign in first");
+
+    const users = await ctx.db.query("users").take(1000);
+    if (users.some((u) => u.role === "admin")) {
+      throw new Error("FORBIDDEN: an administrator already exists");
+    }
+
+    const expected = process.env.ADMIN_SETUP_CODE;
+    if (expected && args.setupCode !== expected) {
+      throw new Error("INVALID_SETUP_CODE");
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("USER_NOT_FOUND");
+    if (user.isSuspended || user.isTerminated) {
+      throw new Error("FORBIDDEN: account is suspended");
+    }
+
+    await ctx.db.patch(userId, { role: "admin" });
+    await ctx.db.insert("auditLogs", {
+      actorId: userId,
+      actorEmail: user.email,
+      action: "ADMIN_CLAIMED",
+      resource: "user",
+      resourceId: userId,
+      after: { role: "admin" },
+      createdAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
+const WELCOME_BONUS_POINTS = 100;
+
+/**
+ * Called from the auth page after every successful sign-in/sign-up:
+ * - records a login event + last-activity timestamp (security trail)
+ * - one-time profile setup on first sign-in: role, createdAt, referral code
+ *   and a 100-point welcome bonus backed by an immutable ledger entry.
+ * Safe to call repeatedly; the setup block only runs once.
+ */
+export const initializeUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED");
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("USER_NOT_FOUND");
+    const now = Date.now();
+
+    await ctx.db.patch(userId, { lastActiveAt: now });
+    await ctx.db.insert("auditLogs", {
+      actorId: userId,
+      actorEmail: user.email,
+      action: "user_login",
+      resource: "session",
+      createdAt: now,
+    });
+
+    if (user.createdAt !== undefined) return { created: false };
+
+    const balance = user.pointsBalance ?? 0;
+    const newBalance = balance + WELCOME_BONUS_POINTS;
+    await ctx.db.patch(userId, {
+      role: user.role ?? "user",
+      createdAt: now,
+      referralCode: user.referralCode ?? generateReferralCode(),
+      pointsBalance: newBalance,
+    });
+    await ctx.db.insert("pointLedger", {
+      userId,
+      amount: WELCOME_BONUS_POINTS,
+      balanceAfter: newBalance,
+      description: "Welcome bonus",
+      type: "deposit",
+      createdAt: now,
+    });
+    await ctx.db.insert("notifications", {
+      userId,
+      title: "Welcome to Cloudie!",
+      message: `Your workspace is ready. ${WELCOME_BONUS_POINTS} welcome points were added to your wallet.`,
+      type: "system",
+      isRead: false,
+      link: "/wallet",
+      createdAt: now,
+    });
+    return { created: true };
+  },
+});
+
 // ─── Audit Logs ───
 export const getAuditLogs = query({
   args: { limit: v.optional(v.number()), action: v.optional(v.string()) },

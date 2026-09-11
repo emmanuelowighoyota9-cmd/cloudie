@@ -868,6 +868,29 @@ export const adminUserDetail = query({
       .order("desc")
       .take(20);
 
+    // Security: active auth sessions (non-expired), newest first.
+    const now = Date.now();
+    const sessions = (await ctx.db
+      .query("authSessions")
+      .withIndex("userId", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(50))
+      .filter((s) => s.expirationTime > now)
+      .slice(0, 20)
+      .map((s) => ({ _id: s._id, createdAt: s._creationTime, expiresAt: s.expirationTime }));
+
+    // Referral activity in both directions.
+    const referralsSent = await ctx.db
+      .query("referrals")
+      .withIndex("by_referrer", (q) => q.eq("referrerId", args.userId))
+      .order("desc")
+      .take(20);
+    const referralsReceived = await ctx.db
+      .query("referrals")
+      .withIndex("by_referred", (q) => q.eq("referredUserId", args.userId))
+      .order("desc")
+      .take(20);
+
     const allLedger = await ctx.db
       .query("pointLedger")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -884,6 +907,9 @@ export const adminUserDetail = query({
       orders,
       notifications,
       audit,
+      sessions,
+      referralsSent,
+      referralsReceived,
     };
   },
 });
