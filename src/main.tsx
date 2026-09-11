@@ -42,17 +42,24 @@ const Transactions = lazy(() => import("./pages/Transactions.tsx"));
 const AppLayout = lazy(() => import("./components/AppLayout.tsx").then(m => ({ default: m.AppLayout })));
 const Admin = lazy(() => import("./pages/Admin.tsx"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers.tsx"));
+const AdminUserDetail = lazy(() => import("./pages/AdminUserDetail.tsx"));
 const AdminVendors = lazy(() => import("./pages/AdminVendors.tsx"));
+const AdminVendorDetail = lazy(() => import("./pages/AdminVendorDetail.tsx"));
 const AdminTenants = lazy(() => import("./pages/AdminTenants.tsx"));
 const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics.tsx"));
 const AdminAuditLogs = lazy(() => import("./pages/AdminAuditLogs.tsx"));
 const AdminMarketplace = lazy(() => import("./pages/AdminMarketplace.tsx"));
+const AdminOrders = lazy(() => import("./pages/AdminOrders.tsx"));
+const AdminDisputes = lazy(() => import("./pages/AdminDisputes.tsx"));
 const AdminShipments = lazy(() => import("./pages/AdminShipments.tsx"));
 const AdminDocuments = lazy(() => import("./pages/AdminDocuments.tsx"));
 const AdminTransactions = lazy(() => import("./pages/AdminTransactions.tsx"));
 const AdminKYC = lazy(() => import("./pages/AdminKYC.tsx"));
+const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
 const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
+const AdminPricing = lazy(() => import("./pages/AdminPricing.tsx"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
+const AdminLayout = lazy(() => import("./components/admin/AdminLayout.tsx").then(m => ({ default: m.AdminLayout })));
 
 function RouteLoading() {
   return (
@@ -153,20 +160,31 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/vendor" element={<Vendor />} />
                   <Route path="/transactions" element={<Transactions />} />
 
-                  {/* Admin routes */}
-                  <Route path="/admin" element={<Admin />} />
-                  <Route path="/admin/users" element={<AdminUsers />} />
-                  <Route path="/admin/vendors" element={<AdminVendors />} />
-                  <Route path="/admin/marketplace" element={<AdminMarketplace />} />
-                  <Route path="/admin/tenants" element={<AdminTenants />} />
-                  <Route path="/admin/kyc" element={<AdminKYC />} />
-                  <Route path="/admin/shipments" element={<AdminShipments />} />
-                  <Route path="/admin/documents" element={<AdminDocuments />} />
-                  <Route path="/admin/transactions" element={<AdminTransactions />} />
-                  <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
-                  <Route path="/admin/analytics" element={<AdminAnalytics />} />
-                  <Route path="/admin/infrastructure" element={<AdminInfrastructure />} />
-                  <Route path="/admin/settings" element={<AdminSettings />} />
+                </Route>
+
+                {/* Admin routes */}
+                <Route path="/admin" element={<AdminLayout />}>
+                  <Route index element={<Admin />} />
+                  <Route path="users" element={<AdminUsers />} />
+                  <Route path="users/:userId" element={<AdminUserDetail />} />
+                  <Route path="vendors" element={<AdminVendors />} />
+                  <Route path="vendors/:vendorId" element={<AdminVendorDetail />} />
+                  <Route path="marketplace" element={<AdminMarketplace />} />
+                  <Route path="orders" element={<AdminOrders />} />
+                  <Route path="disputes" element={<AdminDisputes />} />
+                  <Route path="transactions" element={<AdminTransactions />} />
+                  <Route path="shipments" element={<AdminShipments />} />
+                  <Route path="documents" element={<AdminDocuments />} />
+                  <Route path="tenants" element={<AdminTenants />} />
+                  <Route path="kyc" element={<AdminKYC />} />
+                  <Route path="notifications" element={<AdminNotifications />} />
+                  <Route path="audit" element={<AdminAuditLogs />} />
+                  <Route path="audit-logs" element={<AdminAuditLogs />} />
+                  <Route path="analytics" element={<AdminAnalytics />} />
+                  <Route path="system-health" element={<AdminInfrastructure />} />
+                  <Route path="infrastructure" element={<AdminInfrastructure />} />
+                  <Route path="pricing" element={<AdminPricing />} />
+                  <Route path="settings" element={<AdminSettings />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

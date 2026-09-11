@@ -220,6 +220,25 @@ export const adminToggleProductActive = mutation({
 
 // ─── Disputes ───────────────────────────────────────────────────────────────
 
+export const adminListDisputes = query({
+  args: {
+    status: v.optional(v.union(v.literal("open"), v.literal("under_review"), v.literal("resolved"), v.literal("closed"))),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const limit = Math.min(args.limit ?? 100, 100);
+    if (args.status) {
+      return await ctx.db
+        .query("disputes")
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .order("desc")
+        .take(limit);
+    }
+    return await ctx.db.query("disputes").order("desc").take(limit);
+  },
+});
+
 export const getDispute = query({
   args: { id: v.id("disputes") },
   handler: async (ctx, args) => {
