@@ -92,10 +92,14 @@ const schema = defineSchema(
       referralCode: v.optional(v.string()),
       referredBy: v.optional(v.string()),
       isSuspended: v.optional(v.boolean()),
+      isTerminated: v.optional(v.boolean()),
+      terminatedAt: v.optional(v.number()),
+      lastActiveAt: v.optional(v.number()),
       createdAt: v.optional(v.number()),
     })
       .index("email", ["email"])
-      .index("referralCode", ["referralCode"]),
+      .index("referralCode", ["referralCode"])
+      .index("by_createdAt", ["createdAt"]),
 
     pointLedger: defineTable({
       userId: v.id("users"),
@@ -111,7 +115,8 @@ const schema = defineSchema(
     })
       .index("by_user", ["userId", "createdAt"])
       .index("by_type", ["type", "createdAt"])
-      .index("by_idempotency", ["idempotencyKey"]),
+      .index("by_idempotency", ["idempotencyKey"])
+      .index("by_createdAt", ["createdAt"]),
 
     shipments: defineTable({
       userId: v.id("users"),
@@ -146,7 +151,8 @@ const schema = defineSchema(
     })
       .index("by_user", ["userId", "createdAt"])
       .index("by_tracking", ["trackingNumber"])
-      .index("by_status", ["status"]),
+      .index("by_status", ["status"])
+      .index("by_createdAt", ["createdAt"]),
 
     shipmentEvents: defineTable({
       shipmentId: v.id("shipments"),
@@ -225,11 +231,17 @@ const schema = defineSchema(
       userId: v.id("users"),
       businessName: v.string(),
       description: v.optional(v.string()),
+      contactEmail: v.optional(v.string()),
+      contactPhone: v.optional(v.string()),
+      category: v.optional(v.string()),
+      website: v.optional(v.string()),
+      supportingInfo: v.optional(v.string()),
       status: v.union(v.literal("pending"), v.literal("approved"), v.literal("suspended"), v.literal("rejected")),
+      statusReason: v.optional(v.string()),
       earnings: v.number(),
       totalSales: v.number(),
       createdAt: v.number(),
-    }).index("by_user", ["userId"]).index("by_status", ["status"]),
+    }).index("by_user", ["userId"]).index("by_status", ["status", "createdAt"]),
 
     marketplaceProducts: defineTable({
       vendorId: v.id("vendors"),
@@ -260,11 +272,24 @@ const schema = defineSchema(
       orderId: v.id("marketplaceOrders"),
       raisedBy: v.id("users"),
       reason: v.string(),
-      status: v.union(v.literal("open"), v.literal("resolved"), v.literal("closed")),
+      priority: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical"))),
+      notes: v.optional(
+        v.array(
+          v.object({
+            authorId: v.id("users"),
+            authorEmail: v.optional(v.string()),
+            text: v.string(),
+            createdAt: v.number(),
+          }),
+        ),
+      ),
+      status: v.union(v.literal("open"), v.literal("under_review"), v.literal("resolved"), v.literal("closed")),
       resolution: v.optional(v.string()),
+      resolvedBy: v.optional(v.id("users")),
+      resolvedAt: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
-    }).index("by_order", ["orderId"]),
+    }).index("by_order", ["orderId"]).index("by_status", ["status", "createdAt"]),
 
     referrals: defineTable({
       referrerId: v.id("users"),
@@ -308,7 +333,7 @@ const schema = defineSchema(
       folder: v.optional(v.string()),
       metadata: v.optional(v.any()),
       createdAt: v.number(),
-    }).index("by_user", ["userId", "createdAt"]),
+    }).index("by_user", ["userId", "createdAt"]).index("by_createdAt", ["createdAt"]),
 
     emailCampaigns: defineTable({
       userId: v.id("users"),
@@ -330,6 +355,46 @@ const schema = defineSchema(
       status: v.union(v.literal("pending"), v.literal("sent"), v.string()),
       sentAt: v.optional(v.number()),
     }).index("by_campaign", ["campaignId"]),
+
+    // ─── Super Admin tables ───
+    pointPricing: defineTable({
+      service: v.string(),
+      workspace: v.string(),
+      pointsCost: v.number(),
+      isActive: v.boolean(),
+      effectiveFrom: v.number(),
+      updatedBy: v.optional(v.id("users")),
+      updatedAt: v.number(),
+    }).index("by_service", ["service"]),
+
+    adminSettings: defineTable({
+      key: v.string(),
+      value: v.any(),
+      category: v.string(),
+      updatedBy: v.optional(v.id("users")),
+      updatedAt: v.number(),
+    }).index("by_key", ["key"]),
+
+    moderationFlags: defineTable({
+      tenantId: v.id("tenantSites"),
+      rule: v.string(),
+      severity: v.union(v.literal("low"), v.literal("medium"), v.literal("high"), v.literal("critical")),
+      status: v.union(v.literal("open"), v.literal("reviewing"), v.literal("resolved"), v.literal("dismissed")),
+      details: v.optional(v.string()),
+      reviewNotes: v.optional(v.string()),
+      reviewedBy: v.optional(v.id("users")),
+      reviewedAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_tenant", ["tenantId"]).index("by_status", ["status", "createdAt"]),
+
+    adminSessions: defineTable({
+      adminId: v.id("users"),
+      action: v.string(),
+      ip: v.optional(v.string()),
+      userAgent: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_admin", ["adminId", "createdAt"]),
   },
   {
     schemaValidation: false,

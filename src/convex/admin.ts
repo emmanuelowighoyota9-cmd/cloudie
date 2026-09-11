@@ -133,6 +133,88 @@ export const getAuditLogs = query({
   },
 });
 
+/** Paginated, filterable audit log for the /admin/audit page. */
+export const getAuditLogsPaged = query({
+  args: {
+    action: v.optional(v.string()),
+    cursor: v.optional(v.string()),
+    pageSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { page: [], isDone: true, continueCursor: "" };
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") return { page: [], isDone: true, continueCursor: "" };
+
+    const builder = ctx.db
+      .query("auditLogs")
+      .withIndex("by_action", (q) =>
+        args.action ? q.eq("action", args.action) : q.gte("action", ""),
+      )
+      .order("desc");
+    const result = await builder.paginate({
+      numItems: args.pageSize ?? 30,
+      cursor: args.cursor ?? null,
+    });
+    return {
+      page: result.page,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+/** Admin list of all marketplace orders. */
+export const adminListOrders = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") return [];
+    return await ctx.db.query("marketplaceOrders").order("desc").take(args.limit ?? 100);
+  },
+});
+
+/**
+ * CSV export data source (admin-only). Returns raw rows for the requested
+ * dataset; the client formats and downloads. Row caps keep memory bounded.
+ */
+export const exportData = query({
+  args: {
+    dataset: v.union(
+      v.literal("users"),
+      v.literal("transactions"),
+      v.literal("orders"),
+      v.literal("shipments"),
+      v.literal("audit"),
+    ),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") return [];
+    const cap = Math.min(args.limit ?? 5000, 5000);
+
+    switch (args.dataset) {
+      case "users":
+        return await ctx.db.query("users").order("desc").take(cap);
+      case "transactions":
+        return await ctx.db.query("pointLedger").order("desc").take(cap);
+      case "orders":
+        return await ctx.db.query("marketplaceOrders").order("desc").take(cap);
+      case "shipments":
+        return await ctx.db.query("shipments").order("desc").take(cap);
+      case "audit":
+        return await ctx.db.query("auditLogs").order("desc").take(cap);
+      default:
+        return [];
+    }
+  },
+});
+
 // ─── Analytics ───
 export const getAnalytics = query({
   args: {},
