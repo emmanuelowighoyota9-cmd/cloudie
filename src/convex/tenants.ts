@@ -119,10 +119,11 @@ export const submitKyc = mutation({
     return await ctx.db.insert("kycRecords", {
       tenantId: args.tenantId,
       userId,
-      status: "pending",
+      status: "submitted",
       fullName: args.fullName,
       dateOfBirth: args.dateOfBirth,
       documentUrl: args.documentUrl,
+      resubmissionCount: 0,
       createdAt: now,
       updatedAt: now,
     });
@@ -209,9 +210,10 @@ export const adminKycReview = mutation({
   args: {
     kycId: v.id("kycRecords"),
     status: v.union(
-      v.literal("verified"),
+      v.literal("approved"),
       v.literal("rejected"),
-      v.literal("more_information_required"),
+      v.literal("resubmission_required"),
+      v.literal("under_review"),
     ),
     notes: v.optional(v.string()),
   },
@@ -224,12 +226,37 @@ export const adminKycReview = mutation({
     const kyc = await ctx.db.get(args.kycId);
     if (!kyc) throw new Error("KYC record not found");
 
+    // Enforce the review state machine: submitted/under_review → outcome
+    const allowed: Record<string, string[]> = {
+      submitted: ["under_review", "approved", "rejected", "resubmission_required"],
+      under_review: ["approved", "rejected", "resubmission_required"],
+      resubmission_required: [], // applicant must resubmit first
+    };
+    if (!allowed[kyc.status]?.includes(args.status)) {
+      throw new Error(`Invalid KYC transition: ${kyc.status} → ${args.status}`);
+    }
+
+    // Rejection requires a reason
+    if (args.status === "rejected" && (!args.notes || args.notes.trim().length < 5)) {
+      throw new Error("A rejection reason of at least 5 characters is required");
+    }
+
     await ctx.db.patch(args.kycId, {
       status: args.status,
       notes: args.notes,
       reviewedBy: userId,
       reviewedAt: Date.now(),
       updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("kycEvents", {
+      kycId: args.kycId,
+      actorId: userId,
+      action: `kyc_${args.status}`,
+      fromStatus: kyc.status,
+      toStatus: args.status,
+      reason: args.notes,
+      createdAt: Date.now(),
     });
 
     await ctx.db.insert("auditLogs", {
@@ -240,6 +267,20 @@ export const adminKycReview = mutation({
       resourceId: args.kycId,
       before: { status: kyc.status },
       after: { status: args.status },
+      createdAt: Date.now(),
+    });
+
+    await ctx.db.insert("notifications", {
+      userId: kyc.userId,
+      title: `KYC ${args.status.replace(/_/g, " ")}`,
+      message:
+        args.status === "approved"
+          ? "Your identity verification was approved."
+          : args.status === "rejected"
+            ? `Your verification was rejected: ${args.notes}`
+            : "Additional information is required for your verification.",
+      type: "kyc_update",
+      isRead: false,
       createdAt: Date.now(),
     });
 
@@ -255,5 +296,66 @@ export const adminListKyc = query({
     const user = await ctx.db.get(userId);
     if (user?.role !== "admin") return [];
     return await ctx.db.query("kycRecords").order("desc").take(args.limit ?? 50);
+  },
+});
+
+/** Applicant resubmits KYC after a resubmission_required decision. Audited. */
+export const resubmitKyc = mutation({
+  args: {
+    kycId: v.id("kycRecords"),
+    fullName: v.string(),
+    dateOfBirth: v.optional(v.string()),
+    documentUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const kyc = await ctx.db.get(args.kycId);
+    if (!kyc) throw new Error("KYC record not found");
+    if (kyc.userId !== userId) throw new Error("Forbidden");
+    if (kyc.status !== "resubmission_required") {
+      throw new Error("Resubmission is not available for this case");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.kycId, {
+      status: "submitted",
+      fullName: args.fullName,
+      dateOfBirth: args.dateOfBirth,
+      documentUrl: args.documentUrl ?? kyc.documentUrl,
+      resubmissionCount: (kyc.resubmissionCount ?? 0) + 1,
+      reviewedBy: undefined,
+      reviewedAt: undefined,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("kycEvents", {
+      kycId: args.kycId,
+      actorId: userId,
+      action: "kyc_resubmitted",
+      fromStatus: "resubmission_required",
+      toStatus: "submitted",
+      createdAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/** KYC audit history — owner or admin. */
+export const kycHistory = query({
+  args: { kycId: v.id("kycRecords") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    const kyc = await ctx.db.get(args.kycId);
+    if (!kyc) return [];
+    if (kyc.userId !== userId && user?.role !== "admin") return [];
+    return await ctx.db
+      .query("kycEvents")
+      .withIndex("by_kyc", (q) => q.eq("kycId", args.kycId))
+      .order("asc")
+      .collect();
   },
 });

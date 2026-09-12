@@ -11,13 +11,14 @@ export default function AdminKYC() {
   const kycs = useQuery(api.tenants.adminListKyc, { limit: 300 });
   const review = useMutation(api.tenants.adminKycReview);
 
-  const [action, setAction] = useState<null | { kycId: string; kind: "verified" | "rejected" | "more_information_required"; label: string }>(null);
+  const [action, setAction] = useState<null | { kycId: string; kind: "approved" | "rejected" | "resubmission_required" | "under_review"; label: string }>(null);
 
   const counts = {
-    pending: (kycs ?? []).filter((k) => k.status === "pending").length,
+    pending: (kycs ?? []).filter((k) => k.status === "submitted").length,
     underReview: (kycs ?? []).filter((k) => k.status === "under_review").length,
-    verified: (kycs ?? []).filter((k) => k.status === "verified").length,
+    approved: (kycs ?? []).filter((k) => k.status === "approved").length,
     rejected: (kycs ?? []).filter((k) => k.status === "rejected").length,
+    resub: (kycs ?? []).filter((k) => k.status === "resubmission_required").length,
   };
 
   const runAction = async (reason: string) => {
@@ -37,7 +38,7 @@ export default function AdminKYC() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="Pending" value={counts.pending} icon={ClipboardCheck} color="amber" />
-        <StatCard title="Verified" value={counts.verified} icon={Check} color="green" />
+        <StatCard title="Approved" value={counts.approved} icon={Check} color="green" />
         <StatCard title="Rejected" value={counts.rejected} icon={X} color="red" />
         <StatCard title="More info needed" value={counts.underReview} icon={ClipboardCheck} color="blue" />
       </div>
@@ -59,19 +60,19 @@ export default function AdminKYC() {
                   {k.notes && <p className="mt-1 truncate text-[11px] text-slate-500">Notes: {k.notes}</p>}
                 </div>
                 <StatusBadge status={k.status} />
-                {k.status !== "verified" && k.status !== "rejected" && (
+                {k.status !== "approved" && k.status !== "rejected" && (
                   <div className="flex shrink-0 gap-1">
                     <Button
                       size="sm"
                       className="bg-green-600 text-white hover:bg-green-700"
-                      onClick={() => setAction({ kycId: k._id, kind: "verified", label: "Approve KYC" })}
+                      onClick={() => setAction({ kycId: k._id, kind: "approved", label: "Approve KYC" })}
                     >
                       <Check className="mr-1 h-3 w-3" /> Approve
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setAction({ kycId: k._id, kind: "more_information_required", label: "Request info" })}
+                      onClick={() => setAction({ kycId: k._id, kind: "resubmission_required", label: "Request resubmission" })}
                     >
                       Request info
                     </Button>
@@ -100,11 +101,13 @@ export default function AdminKYC() {
           description={
             action.kind === "rejected"
               ? "Rejection requires a reason. The applicant is notified and the decision is audited."
-              : action.kind === "verified"
+              : action.kind === "approved"
                 ? "Marks the identity as verified. Audited."
-                : "Requests additional information from the applicant with your notes."
+                : action.kind === "resubmission_required"
+                  ? "Asks the applicant to resubmit with your notes."
+                  : "Moves the case into review."
           }
-          actionLabel={action.kind === "verified" ? "Approve" : action.kind === "rejected" ? "Reject" : "Request"}
+          actionLabel={action.kind === "approved" ? "Approve" : action.kind === "rejected" ? "Reject" : "Continue"}
           destructive={action.kind === "rejected"}
           requireReason
           minReasonLength={5}

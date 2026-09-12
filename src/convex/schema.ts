@@ -63,11 +63,11 @@ export const DOCUMENT_TYPES = [
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
 export const KYC_STATUSES = [
-  "pending",
+  "submitted",
   "under_review",
-  "verified",
+  "approved",
   "rejected",
-  "more_information_required",
+  "resubmission_required",
 ] as const;
 export type KycStatus = (typeof KYC_STATUSES)[number];
 
@@ -270,13 +270,17 @@ const schema = defineSchema(
       ),
       fullName: v.string(),
       dateOfBirth: v.optional(v.string()),
-      documentUrl: v.optional(v.string()),
+      documentUrl: v.optional(v.string()), // legacy field, unused by the new flow
+      storageFileId: v.optional(v.id("storageFiles")),
+      documentName: v.optional(v.string()),
+      resubmissionCount: v.optional(v.number()),
+      rejectionReason: v.optional(v.string()),
       notes: v.optional(v.string()),
       reviewedBy: v.optional(v.id("users")),
       reviewedAt: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
-    }).index("by_tenant", ["tenantId", "createdAt"]),
+    }).index("by_tenant", ["tenantId", "createdAt"]).index("by_user", ["userId", "createdAt"]).index("by_status", ["status"]),
 
     tenantUsers: defineTable({
       tenantId: v.id("tenantSites"),
@@ -608,6 +612,238 @@ const schema = defineSchema(
       notes: v.optional(v.string()),
       createdAt: v.number(),
     }).index("by_shipment", ["shipmentId", "sequence"]),
+
+    // ─── Cloudie-owned storage abstraction ───
+    // Metadata for every file Cloudie stores. Bytes live in the runtime's own
+    // file storage; ALL authorization/ownership flows through this table.
+    storageFiles: defineTable({
+      storageId: v.id("_storage"),
+      ownerId: v.id("users"),
+      tenantId: v.optional(v.id("tenantSites")),
+      kind: v.union(
+        v.literal("kyc_document"),
+        v.literal("pdf_document"),
+        v.literal("image"),
+        v.literal("generic"),
+      ),
+      originalName: v.string(),
+      mimeType: v.string(),
+      sizeBytes: v.number(),
+      path: v.string(),
+      sha256: v.optional(v.string()),
+      isDeleted: v.boolean(),
+      createdAt: v.number(),
+      deletedAt: v.optional(v.number()),
+    })
+      .index("by_owner", ["ownerId", "createdAt"])
+      .index("by_tenant", ["tenantId"])
+      .index("by_storage", ["storageId"]),
+
+    // ─── Document engine: templates → versions → render → stored bytes ───
+    documentTemplates: defineTable({
+      documentType: v.string(),
+      name: v.string(),
+      createdById: v.id("users"),
+      tenantId: v.optional(v.id("tenantSites")),
+      isActive: v.boolean(),
+      currentVersion: v.number(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_type", ["documentType"])
+      .index("by_creator", ["createdById", "createdAt"]),
+
+    documentTemplateVersions: defineTable({
+      templateId: v.id("documentTemplates"),
+      version: v.number(),
+      title: v.string(),
+      blocks: v.any(), // PdfBlock[] structure validated at render time
+      pointsCost: v.number(),
+      createdById: v.id("users"),
+      createdAt: v.number(),
+    })
+      .index("by_template", ["templateId", "version"]),
+
+    renderedDocuments: defineTable({
+      templateVersionId: v.id("documentTemplateVersions"),
+      ownerId: v.id("users"),
+      tenantId: v.optional(v.id("tenantSites")),
+      storageFileId: v.id("storageFiles"),
+      fileName: v.string(),
+      pageCount: v.number(),
+      sizeBytes: v.number(),
+      metadata: v.optional(v.any()),
+      pointsCost: v.number(),
+      createdAt: v.number(),
+    })
+      .index("by_owner", ["ownerId", "createdAt"])
+      .index("by_tenant", ["tenantId"])
+      .index("by_version", ["templateVersionId", "createdAt"]),
+
+    // ─── Cloudie email engine (no third-party SaaS) ───
+    emailMessages: defineTable({
+      to: v.string(),
+      fromName: v.string(),
+      subject: v.string(),
+      textBody: v.string(),
+      templateKey: v.optional(v.string()),
+      userId: v.optional(v.id("users")),
+      campaignId: v.optional(v.id("emailCampaigns")),
+      jobId: v.optional(v.id("cloudieJobs")),
+      status: v.union(
+        v.literal("queued"),
+        v.literal("sending"),
+        v.literal("sent"),
+        v.literal("failed"),
+        v.literal("bounced"),
+        v.literal("blocked_unsubscribed"),
+      ),
+      attempts: v.number(),
+      maxAttempts: v.number(),
+      nextAttemptAt: v.number(),
+      lastError: v.optional(v.string()),
+      providerMessageId: v.optional(v.string()),
+      sentAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_status", ["status", "nextAttemptAt"])
+      .index("by_campaign", ["campaignId"])
+      .index("by_to", ["to", "createdAt"]),
+
+    emailDeliveryLogs: defineTable({
+      messageId: v.id("emailMessages"),
+      event: v.union(
+        v.literal("queued"),
+        v.literal("send_attempt"),
+        v.literal("sent"),
+        v.literal("failed"),
+        v.literal("bounced"),
+        v.literal("blocked_unsubscribed"),
+      ),
+      detail: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_message", ["messageId", "createdAt"]),
+
+    emailUnsubscribes: defineTable({
+      email: v.string(),
+      reason: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_email", ["email"]),
+
+    // ─── Cloudie job system (Postgres-equivalent: Convex-owned DB queue) ───
+    cloudieJobs: defineTable({
+      type: v.string(),
+      payload: v.any(),
+      status: v.union(
+        v.literal("queued"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("dead"),
+      ),
+      attempts: v.number(),
+      maxAttempts: v.number(),
+      runAfter: v.number(),
+      claimedAt: v.optional(v.number()),
+      completedAt: v.optional(v.number()),
+      failedAt: v.optional(v.number()),
+      lastError: v.optional(v.string()),
+      idempotencyKey: v.optional(v.string()),
+      result: v.optional(v.any()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_status", ["status", "runAfter"])
+      .index("by_idempotency", ["idempotencyKey"])
+      .index("by_type", ["type", "createdAt"]),
+
+    // ─── Payments: the ONE intentional external integration (Paystack) ───
+    paymentOrders: defineTable({
+      orderNumber: v.string(),
+      buyerId: v.id("users"),
+      kind: v.union(v.literal("points_package")),
+      packageId: v.string(),
+      points: v.number(),
+      amountSubunit: v.number(), // authoritative server-side amount (cents/kobo)
+      currency: v.string(),
+      status: v.union(
+        v.literal("initialized"),
+        v.literal("pending"),
+        v.literal("paid"),
+        v.literal("failed"),
+        v.literal("abandoned"),
+      ),
+      paystackReference: v.optional(v.string()),
+      accessCode: v.optional(v.string()),
+      authorizationUrl: v.optional(v.string()),
+      verifiedAt: v.optional(v.number()),
+      paidAt: v.optional(v.number()),
+      failureReason: v.optional(v.string()),
+      creditedLedgerId: v.optional(v.id("pointLedger")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_buyer", ["buyerId", "createdAt"])
+      .index("by_reference", ["paystackReference"])
+      .index("by_order", ["orderNumber"]),
+
+    // Webhook event log: idempotency + replay protection
+    paymentWebhookEvents: defineTable({
+      eventId: v.string(),
+      reference: v.string(),
+      channel: v.string(),
+      signatureValid: v.boolean(),
+      processedAt: v.number(),
+      duplicate: v.boolean(),
+    }).index("by_event", ["eventId"]),
+
+    // ─── Crypto provider abstraction (BLOCKED without infra) ───
+    cryptoDeposits: defineTable({
+      userId: v.id("users"),
+      asset: v.string(),
+      address: v.string(),
+      expectedAmount: v.number(),
+      receivedAmount: v.optional(v.number()),
+      confirmations: v.number(),
+      state: v.union(
+        v.literal("awaiting_deposit"),
+        v.literal("confirming"),
+        v.literal("confirmed"),
+        v.literal("failed"),
+      ),
+      txHash: v.optional(v.string()),
+      normalizedEvent: v.optional(v.any()),
+      idempotencyKey: v.optional(v.string()),
+      creditedLedgerId: v.optional(v.id("pointLedger")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_user", ["userId", "createdAt"])
+      .index("by_state", ["state"]),
+
+    // ─── KYC audit history (first-party review workflow) ───
+    kycEvents: defineTable({
+      kycId: v.id("kycRecords"),
+      actorId: v.id("users"),
+      action: v.string(),
+      fromStatus: v.optional(v.string()),
+      toStatus: v.optional(v.string()),
+      reason: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_kyc", ["kycId", "createdAt"]),
+
+    // ─── Notification preferences (Cloudie-owned delivery state) ───
+    notificationPreferences: defineTable({
+      userId: v.id("users"),
+      inApp: v.boolean(),
+      email: v.boolean(),
+      shipmentEvents: v.boolean(),
+      marketplaceEvents: v.boolean(),
+      pointsEvents: v.boolean(),
+      marketing: v.boolean(),
+      updatedAt: v.number(),
+    }).index("by_user", ["userId"]),
   },
   {
     schemaValidation: false,

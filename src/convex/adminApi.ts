@@ -947,7 +947,7 @@ export const adminBadgeCounts = query({
     const flags = await ctx.db.query("moderationFlags").withIndex("by_status").take(1000);
     return {
       pendingVendors: vendors.filter((v) => v.status === "pending").length,
-      pendingKyc: kyc.filter((k) => k.status === "pending").length,
+      pendingKyc: kyc.filter((k) => k.status === "submitted" || k.status === "under_review" || k.status === "resubmission_required").length,
       openDisputes: disputes.filter((d) => d.status === "open" || d.status === "under_review").length,
       openFlags: flags.filter((f) => f.status === "open").length,
     };
@@ -1021,10 +1021,11 @@ export const adminDashboard = query({
         resolved: disputes.filter((d) => d.status === "resolved").length,
       },
       kyc: {
-        pending: kyc.filter((k) => k.status === "pending").length,
+        pending: kyc.filter((k) => k.status === "submitted").length,
         underReview: kyc.filter((k) => k.status === "under_review").length,
-        verified: kyc.filter((k) => k.status === "verified").length,
+        verified: kyc.filter((k) => k.status === "approved").length,
         rejected: kyc.filter((k) => k.status === "rejected").length,
+        resubmissionRequired: kyc.filter((k) => k.status === "resubmission_required").length,
       },
       moderation: { openFlags: flags.filter((f) => f.status === "open").length },
       activity: {
