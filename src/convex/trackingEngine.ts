@@ -58,7 +58,7 @@ export const TRACKING_TRANSITIONS: Record<TrackingStatus, TrackingStatus[]> = {
 };
 
 export function canTransition(from: TrackingStatus, to: TrackingStatus): boolean {
-  return from === to || TRACKING_TRANSITIONS[from]?.includes(to) ?? false;
+  return from === to || (TRACKING_TRANSITIONS[from]?.includes(to) ?? false);
 }
 
 // ─── Progress engine ───

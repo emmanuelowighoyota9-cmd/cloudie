@@ -562,7 +562,8 @@ const schema = defineSchema(
       .index("by_tracking", ["trackingNumber"])
       .index("by_status", ["status"])
       .index("by_createdAt", ["createdAt"])
-      .index("by_sender", ["senderId", "createdAt"]),
+      .index("by_sender", ["senderId", "createdAt"])
+      .searchIndex("search_tracking", { searchField: "trackingNumber" }),
 
     trackingEvents: defineTable({
       shipmentId: v.id("trackingShipments"),
