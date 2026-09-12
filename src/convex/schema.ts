@@ -71,6 +71,64 @@ export const KYC_STATUSES = [
 ] as const;
 export type KycStatus = (typeof KYC_STATUSES)[number];
 
+// ─── Native tracking platform enums (CRESTLINE) ───
+export const TRACKING_STATUSES = [
+  "CREATED",
+  "BOOKED",
+  "PICKED_UP",
+  "PROCESSING",
+  "AT_ORIGIN_FACILITY",
+  "DEPARTED_ORIGIN",
+  "IN_TRANSIT",
+  "ARRIVED_DESTINATION_COUNTRY",
+  "CUSTOMS_CLEARANCE",
+  "CUSTOMS_CLEARED",
+  "AT_DESTINATION_FACILITY",
+  "OUT_FOR_DELIVERY",
+  "DELIVERY_ATTEMPTED",
+  "DELIVERED",
+  "EXCEPTION",
+  "ON_HOLD",
+  "CANCELLED",
+  "RETURNED",
+] as const;
+export type TrackingStatus = (typeof TRACKING_STATUSES)[number];
+export const trackingStatusValidator = v.union(...literals(TRACKING_STATUSES));
+
+export const LOCATION_TYPES = [
+  "country",
+  "state",
+  "city",
+  "warehouse",
+  "airport",
+  "sorting_center",
+  "distribution_center",
+  "customs_facility",
+  "delivery_hub",
+] as const;
+export type LocationType = (typeof LOCATION_TYPES)[number];
+export const locationTypeValidator = v.union(...literals(LOCATION_TYPES));
+
+export const FACILITY_TYPES = [
+  "warehouse",
+  "airport",
+  "sorting_center",
+  "distribution_center",
+  "customs_facility",
+  "delivery_hub",
+] as const;
+export type FacilityType = (typeof FACILITY_TYPES)[number];
+export const facilityTypeValidator = v.union(...literals(FACILITY_TYPES));
+
+export const ROUTE_STOP_STATUSES = [
+  "pending",
+  "arrived",
+  "departed",
+  "skipped",
+] as const;
+export type RouteStopStatus = (typeof ROUTE_STOP_STATUSES)[number];
+export const routeStopStatusValidator = v.union(...literals(ROUTE_STOP_STATUSES));
+
 export const SITE_TYPES = ["bank", "investment"] as const;
 export type SiteType = (typeof SITE_TYPES)[number];
 
@@ -404,6 +462,151 @@ const schema = defineSchema(
       userAgent: v.optional(v.string()),
       createdAt: v.number(),
     }).index("by_admin", ["adminId", "createdAt"]),
+
+    // ─── Native shipment tracking platform (CRESTLINE) ───
+    // Internal location database — populated manually by admins. No geocoding APIs.
+    trackingLocations: defineTable({
+      name: v.string(),
+      type: locationTypeValidator,
+      country: v.string(),
+      countryCode: v.string(),
+      state: v.optional(v.string()),
+      city: v.optional(v.string()),
+      postalCode: v.optional(v.string()),
+      address: v.optional(v.string()),
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
+      timezone: v.optional(v.string()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_type", ["type"])
+      .index("by_country", ["countryCode"])
+      .index("by_active", ["isActive"]),
+
+    trackingFacilities: defineTable({
+      name: v.string(),
+      code: v.string(),
+      type: facilityTypeValidator,
+      locationId: v.id("trackingLocations"),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_code", ["code"])
+      .index("by_location", ["locationId"])
+      .index("by_type", ["type"]),
+
+    trackingCarriers: defineTable({
+      name: v.string(),
+      code: v.string(),
+      logo: v.optional(v.string()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    }).index("by_code", ["code"]),
+
+    trackingServiceTypes: defineTable({
+      name: v.string(),
+      code: v.string(),
+      description: v.string(),
+      estimatedTransitDays: v.number(),
+      isActive: v.boolean(),
+    }).index("by_code", ["code"]),
+
+    // Full tracking-native shipments. The legacy `shipments` table keeps working;
+    // this is the source of truth for the native tracking platform.
+    trackingShipments: defineTable({
+      trackingNumber: v.string(),
+      referenceNumber: v.optional(v.string()),
+      status: trackingStatusValidator,
+      progress: v.number(),
+      carrierId: v.optional(v.id("trackingCarriers")),
+      serviceTypeId: v.optional(v.id("trackingServiceTypes")),
+      serviceTypeName: v.string(),
+      senderId: v.optional(v.id("users")),
+      recipientId: v.optional(v.id("users")),
+      originLocationId: v.optional(v.id("trackingLocations")),
+      destinationLocationId: v.optional(v.id("trackingLocations")),
+      currentLocationId: v.optional(v.id("trackingLocations")),
+      senderName: v.string(),
+      senderPhone: v.string(),
+      senderEmail: v.string(),
+      senderAddress: v.string(),
+      senderCity: v.string(),
+      senderState: v.string(),
+      senderCountry: v.string(),
+      senderPostalCode: v.string(),
+      recipientName: v.string(),
+      recipientPhone: v.string(),
+      recipientEmail: v.string(),
+      recipientAddress: v.string(),
+      recipientCity: v.string(),
+      recipientState: v.string(),
+      recipientCountry: v.string(),
+      recipientPostalCode: v.string(),
+      packageDescription: v.string(),
+      totalWeight: v.number(),
+      weightUnit: v.union(v.literal("kg"), v.literal("lb")),
+      dimensions: v.optional(v.string()),
+      declaredValue: v.optional(v.number()),
+      currency: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      estimatedDelivery: v.optional(v.number()),
+      actualDelivery: v.optional(v.number()),
+      shippedAt: v.optional(v.number()),
+      deliveredAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_tracking", ["trackingNumber"])
+      .index("by_status", ["status"])
+      .index("by_createdAt", ["createdAt"])
+      .index("by_sender", ["senderId", "createdAt"]),
+
+    trackingEvents: defineTable({
+      shipmentId: v.id("trackingShipments"),
+      status: v.string(),
+      title: v.string(),
+      description: v.string(),
+      locationId: v.optional(v.id("trackingLocations")),
+      locationLabel: v.optional(v.string()),
+      facilityId: v.optional(v.id("trackingFacilities")),
+      eventTimestamp: v.number(),
+      timezone: v.optional(v.string()),
+      latitude: v.optional(v.number()),
+      longitude: v.optional(v.number()),
+      isPublic: v.boolean(),
+      createdBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+    }).index("by_shipment", ["shipmentId", "eventTimestamp"]),
+
+    trackingPackages: defineTable({
+      shipmentId: v.id("trackingShipments"),
+      packageNumber: v.number(),
+      trackingNumber: v.string(),
+      description: v.string(),
+      packageType: v.string(),
+      weight: v.number(),
+      dimensions: v.optional(v.string()),
+      quantity: v.number(),
+      barcodeData: v.string(),
+      qrData: v.string(),
+      createdAt: v.number(),
+    }).index("by_shipment", ["shipmentId", "packageNumber"]),
+
+    trackingRouteStops: defineTable({
+      shipmentId: v.id("trackingShipments"),
+      locationId: v.optional(v.id("trackingLocations")),
+      facilityId: v.optional(v.id("trackingFacilities")),
+      label: v.string(),
+      sequence: v.number(),
+      status: routeStopStatusValidator,
+      arrivalAt: v.optional(v.number()),
+      departureAt: v.optional(v.number()),
+      notes: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_shipment", ["shipmentId", "sequence"]),
   },
   {
     schemaValidation: false,
