@@ -54,6 +54,9 @@ const AdminMarketplace = lazy(() => import("./pages/AdminMarketplace.tsx"));
 const AdminOrders = lazy(() => import("./pages/AdminOrders.tsx"));
 const AdminDisputes = lazy(() => import("./pages/AdminDisputes.tsx"));
 const AdminShipments = lazy(() => import("./pages/AdminShipments.tsx"));
+const AdminCreateShipment = lazy(() => import("./pages/AdminCreateShipment.tsx"));
+const AdminShipmentDetail = lazy(() => import("./pages/AdminShipmentDetail.tsx"));
+const AdminLocations = lazy(() => import("./pages/AdminLocations.tsx"));
 const AdminDocuments = lazy(() => import("./pages/AdminDocuments.tsx"));
 const AdminTransactions = lazy(() => import("./pages/AdminTransactions.tsx"));
 const AdminKYC = lazy(() => import("./pages/AdminKYC.tsx"));
@@ -131,6 +134,8 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/track/:trackingNumber" element={<PublicTracking />} />
+                <Route path="/tracking" element={<PublicTracking />} />
+                <Route path="/tracking/:trackingNumber" element={<PublicTracking />} />
 
                 {/* Authenticated app routes with layout */}
                 <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
@@ -177,6 +182,10 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="disputes" element={<AdminDisputes />} />
                   <Route path="transactions" element={<AdminTransactions />} />
                   <Route path="shipments" element={<AdminShipments />} />
+                  <Route path="shipments/create" element={<AdminCreateShipment />} />
+                  <Route path="shipments/:shipmentId" element={<AdminShipmentDetail />} />
+                  <Route path="locations" element={<AdminLocations tab="locations" />} />
+                  <Route path="facilities" element={<AdminLocations tab="facilities" />} />
                   <Route path="documents" element={<AdminDocuments />} />
                   <Route path="tenants" element={<AdminTenants />} />
                   <Route path="kyc" element={<AdminKYC />} />
