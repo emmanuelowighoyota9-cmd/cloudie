@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 100 });
-  const shipments = useQuery(api.shipments.list, {});
+  const shipments = useQuery(api.trackingUser.myShipments, {});
   const referrals = useQuery(api.referrals.getMyReferrals);
   const orders = useQuery(api.marketplace.getMyOrders);
 

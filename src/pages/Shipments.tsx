@@ -9,19 +9,10 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Package, Plus, Search, Truck } from "lucide-react";
 import { Link } from "react-router";
 import { useState } from "react";
-
-const statusColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300",
-  picked_up: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
-  in_transit: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300",
-  out_for_delivery: "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300",
-  delivered: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  failed: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-900/50 dark:text-gray-300",
-};
+import { statusBadgeClass, statusLabel } from "@/lib/trackingUi";
 
 export default function Shipments() {
-  const shipments = useQuery(api.shipments.list, {});
+  const shipments = useQuery(api.trackingUser.myShipments, {});
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
@@ -62,13 +53,14 @@ export default function Shipments() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="picked_up">Picked Up</SelectItem>
-            <SelectItem value="in_transit">In Transit</SelectItem>
-            <SelectItem value="out_for_delivery">Out for Delivery</SelectItem>
-            <SelectItem value="delivered">Delivered</SelectItem>
-            <SelectItem value="failed">Failed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="CREATED">Created</SelectItem>
+            <SelectItem value="BOOKED">Booked</SelectItem>
+            <SelectItem value="PICKED_UP">Picked Up</SelectItem>
+            <SelectItem value="IN_TRANSIT">In Transit</SelectItem>
+            <SelectItem value="OUT_FOR_DELIVERY">Out for Delivery</SelectItem>
+            <SelectItem value="DELIVERED">Delivered</SelectItem>
+            <SelectItem value="EXCEPTION">Exception</SelectItem>
+            <SelectItem value="CANCELLED">Cancelled</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -81,49 +73,70 @@ export default function Shipments() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <Empty>
-          <EmptyMedia variant="icon"><Package /></EmptyMedia>
-          <EmptyHeader>
-            <EmptyTitle>No shipments found</EmptyTitle>
-            <EmptyDescription>
-              {search || filter !== "all"
-                ? "Try adjusting your filters."
-                : "Create your first shipment to get started. Each shipment costs 100 points."}
-            </EmptyDescription>
-          </EmptyHeader>
-          {!search && filter === "all" && (
-            <EmptyContent>
-              <Link to="/shipments/new">
-                <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                  <Plus className="h-4 w-4" /> Create Shipment
-                </Button>
-              </Link>
-            </EmptyContent>
-          )}
-        </Empty>
+        <Card>
+          <CardContent className="p-0">
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Package />
+                </EmptyMedia>
+                <EmptyTitle>No shipments found</EmptyTitle>
+                <EmptyDescription>
+                  {search || filter !== "all"
+                    ? "Try adjusting your search or filter."
+                    : "Create your first shipment to start tracking it in real time."}
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Link to="/shipments/new">
+                  <Button className="gap-2"><Plus className="h-4 w-4" /> New Shipment</Button>
+                </Link>
+              </EmptyContent>
+            </Empty>
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-3">
           {filtered.map((s) => (
-            <Link key={s._id} to={`/shipments/${s._id}`}>
-              <Card className="transition-colors hover:border-blue-300 dark:hover:border-blue-700">
+            <Link key={s._id} to={`/shipments/${s._id}`} className="block">
+              <Card className="group transition-all hover:border-blue-300 hover:shadow-md dark:hover:border-blue-700">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30">
                       <Truck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{s.trackingNumber}</p>
-                      <p className="text-xs text-slate-400 truncate">
-                        {s.recipientName} • {s.recipientCity}, {s.recipientCountry}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-mono text-sm font-semibold text-slate-900 dark:text-white">{s.trackingNumber}</p>
+                        <Badge className={`border-0 px-2 py-0.5 text-[10px] font-semibold ${statusBadgeClass(s.status)}`}>
+                          {statusLabel(s.status)}
+                        </Badge>
+                        {s.role === "recipient" && (
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-800">
+                            Incoming
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
+                        {s.senderName} → {s.recipientName}
+                        {s.recipientCity ? ` · ${s.recipientCity}, ${s.recipientCountry}` : ""}
+                        {` · ${s.serviceTypeName}`}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <Badge className={`${statusColors[s.status] ?? ""} border-0 font-medium`}>
-                        {s.status.replace(/_/g, " ")}
-                      </Badge>
-                      <p className="mt-1 text-[10px] text-slate-400">
-                        {new Date(s.createdAt).toLocaleDateString()}
-                      </p>
+                    <div className="hidden w-32 sm:block">
+                      <div className="flex items-center justify-end text-[10px] text-slate-400">
+                        {s.deliveredAt
+                          ? `Delivered`
+                          : s.estimatedDelivery
+                            ? `ETA ${new Date(s.estimatedDelivery).toLocaleDateString()}`
+                            : ""}
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                        <div
+                          className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                          style={{ width: `${s.progress}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardContent>

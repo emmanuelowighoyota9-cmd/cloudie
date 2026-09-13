@@ -567,6 +567,7 @@ const schema = defineSchema(
       .index("by_status", ["status"])
       .index("by_createdAt", ["createdAt"])
       .index("by_sender", ["senderId", "createdAt"])
+      .index("by_recipient", ["recipientId", "createdAt"])
       .searchIndex("search_tracking", { searchField: "trackingNumber" }),
 
     trackingEvents: defineTable({

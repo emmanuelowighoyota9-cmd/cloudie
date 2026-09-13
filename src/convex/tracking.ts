@@ -163,7 +163,7 @@ export const STATUS_EVENT_TITLES: Record<TrackingStatus, string> = {
 };
 
 /** Applies a validated status change: shipment patch + event + ETA/progress + audit. */
-async function applyStatusChange(
+export async function applyStatusChange(
   ctx: MutationCtx,
   actorId: Id<"users">,
   shipment: Doc<"trackingShipments">,
@@ -243,7 +243,8 @@ type PartyInput = {
   postalCode: string;
 };
 
-async function createShipmentCore(
+/** Shared creation core: tracking number, ETA, event, packages, route, audit. */
+export async function createShipmentCore(
   ctx: MutationCtx,
   actorId: Id<"users">,
   input: {
@@ -333,10 +334,24 @@ async function createShipmentCore(
   });
 
   // Packages: barcode encodes the tracking number, QR encodes the public URL path.
-  for (let i = 0; i < (input.packages?.length ?? 0); i++) {
-    const p = input.packages![i];
+  // Every shipment must be scannable — fall back to a single default package
+  // built from the shipment-level data when none is provided.
+  const packagesToCreate =
+    input.packages && input.packages.length > 0
+      ? input.packages
+      : [
+          {
+            description: input.packageDescription,
+            packageType: "parcel",
+            weight: input.totalWeight,
+            dimensions: input.dimensions,
+            quantity: 1,
+          },
+        ];
+  for (let i = 0; i < packagesToCreate.length; i++) {
+    const p = packagesToCreate[i];
     const packageTracking =
-      (input.packages?.length ?? 0) > 1 ? `${tn}-P${i + 1}` : tn;
+      packagesToCreate.length > 1 ? `${tn}-P${i + 1}` : tn;
     await ctx.db.insert("trackingPackages", {
       shipmentId,
       packageNumber: i + 1,

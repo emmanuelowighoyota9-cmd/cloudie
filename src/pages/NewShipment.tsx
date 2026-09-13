@@ -1,5 +1,4 @@
-import { useAuth } from "@/hooks/use-auth";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,30 +11,52 @@ import { Package, ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 
+type Party = {
+  name: string; phone: string; email: string; address: string;
+  city: string; state: string; country: string; postalCode: string;
+};
+
+const emptyParty = (): Party => ({
+  name: "", phone: "", email: "", address: "", city: "", state: "", country: "", postalCode: "",
+});
+
 export default function NewShipment() {
-  const createShipment = useMutation(api.shipments.create);
+  const createShipment = useMutation(api.trackingUser.createMyShipment);
+  const serviceTypes = useQuery(api.trackingQueries.listServiceTypes);
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState({
-    senderName: "", senderPhone: "", senderEmail: "", senderAddress: "",
-    senderCity: "", senderState: "", senderCountry: "", senderPostalCode: "",
-    recipientName: "", recipientPhone: "", recipientEmail: "", recipientAddress: "",
-    recipientCity: "", recipientState: "", recipientCountry: "", recipientPostalCode: "",
-    packageDescription: "", weight: 0, dimensions: "", serviceType: "standard",
-    notes: "",
+  const [sender, setSender] = useState<Party>(emptyParty);
+  const [recipient, setRecipient] = useState<Party>(emptyParty);
+  const [pkg, setPkg] = useState({
+    packageDescription: "", weight: 0, dimensions: "", serviceTypeId: "", notes: "",
   });
 
-  const update = (field: string, value: string | number) =>
-    setForm((prev) => ({ ...prev, [field]: value }));
+  const updateParty = (
+    which: "sender" | "recipient",
+    field: keyof Party,
+    value: string,
+  ) => {
+    if (which === "sender") setSender((p) => ({ ...p, [field]: value }));
+    else setRecipient((p) => ({ ...p, [field]: value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await createShipment(form);
+      const result = await createShipment({
+        sender,
+        recipient,
+        packageDescription: pkg.packageDescription,
+        totalWeight: pkg.weight,
+        weightUnit: "kg",
+        dimensions: pkg.dimensions || undefined,
+        serviceTypeId: (pkg.serviceTypeId || undefined) as never,
+        notes: pkg.notes || undefined,
+      });
       toast.success("Shipment created!", {
-        description: `Tracking: ${result.trackingNumber}`,
+        description: `Tracking: ${result.trackingNumber} · 100 points debited`,
       });
       navigate(`/shipments/${result.shipmentId}`);
     } catch (error) {
@@ -45,6 +66,22 @@ export default function NewShipment() {
     }
   };
 
+  const partyFields = (
+    which: "sender" | "recipient",
+    p: Party,
+  ) => (
+    <CardContent className="grid gap-4 sm:grid-cols-2">
+      <div className="space-y-1.5"><Label>Full Name *</Label><Input required value={p.name} onChange={(e) => updateParty(which, "name", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>Phone *</Label><Input required value={p.phone} onChange={(e) => updateParty(which, "phone", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>Email *</Label><Input required type="email" value={p.email} onChange={(e) => updateParty(which, "email", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>Address *</Label><Input required value={p.address} onChange={(e) => updateParty(which, "address", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>City *</Label><Input required value={p.city} onChange={(e) => updateParty(which, "city", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>State *</Label><Input required value={p.state} onChange={(e) => updateParty(which, "state", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>Country *</Label><Input required value={p.country} onChange={(e) => updateParty(which, "country", e.target.value)} /></div>
+      <div className="space-y-1.5"><Label>Postal Code *</Label><Input required value={p.postalCode} onChange={(e) => updateParty(which, "postalCode", e.target.value)} /></div>
+    </CardContent>
+  );
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
@@ -53,65 +90,46 @@ export default function NewShipment() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">New Shipment</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create a new shipment. Cost: 100 points.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create a new tracked shipment. Cost: 100 points.</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Sender */}
         <Card className="notebook-card">
           <CardHeader>
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Sender Information</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label>Full Name *</Label><Input required value={form.senderName} onChange={(e) => update("senderName", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Phone *</Label><Input required value={form.senderPhone} onChange={(e) => update("senderPhone", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Email *</Label><Input required type="email" value={form.senderEmail} onChange={(e) => update("senderEmail", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Address *</Label><Input required value={form.senderAddress} onChange={(e) => update("senderAddress", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>City *</Label><Input required value={form.senderCity} onChange={(e) => update("senderCity", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>State *</Label><Input required value={form.senderState} onChange={(e) => update("senderState", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Country *</Label><Input required value={form.senderCountry} onChange={(e) => update("senderCountry", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Postal Code *</Label><Input required value={form.senderPostalCode} onChange={(e) => update("senderPostalCode", e.target.value)} /></div>
-          </CardContent>
+          {partyFields("sender", sender)}
         </Card>
 
-        {/* Recipient */}
         <Card className="notebook-card">
           <CardHeader>
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recipient Information</CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5"><Label>Full Name *</Label><Input required value={form.recipientName} onChange={(e) => update("recipientName", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Phone *</Label><Input required value={form.recipientPhone} onChange={(e) => update("recipientPhone", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Email *</Label><Input required type="email" value={form.recipientEmail} onChange={(e) => update("recipientEmail", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Address *</Label><Input required value={form.recipientAddress} onChange={(e) => update("recipientAddress", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>City *</Label><Input required value={form.recipientCity} onChange={(e) => update("recipientCity", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>State *</Label><Input required value={form.recipientState} onChange={(e) => update("recipientState", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Country *</Label><Input required value={form.recipientCountry} onChange={(e) => update("recipientCountry", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Postal Code *</Label><Input required value={form.recipientPostalCode} onChange={(e) => update("recipientPostalCode", e.target.value)} /></div>
-          </CardContent>
+          {partyFields("recipient", recipient)}
         </Card>
 
-        {/* Package */}
         <Card className="notebook-card">
           <CardHeader>
             <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Package Details</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2"><Label>Package Description *</Label><Input required value={form.packageDescription} onChange={(e) => update("packageDescription", e.target.value)} /></div>
-            <div className="space-y-1.5"><Label>Weight (kg) *</Label><Input required type="number" min="0.1" step="0.1" value={form.weight || ""} onChange={(e) => update("weight", parseFloat(e.target.value) || 0)} /></div>
-            <div className="space-y-1.5"><Label>Dimensions</Label><Input placeholder="L×W×H cm" value={form.dimensions} onChange={(e) => update("dimensions", e.target.value)} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Package Description *</Label><Input required value={pkg.packageDescription} onChange={(e) => setPkg((p) => ({ ...p, packageDescription: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Weight (kg) *</Label><Input required type="number" min="0.1" step="0.1" value={pkg.weight || ""} onChange={(e) => setPkg((p) => ({ ...p, weight: parseFloat(e.target.value) || 0 }))} /></div>
+            <div className="space-y-1.5"><Label>Dimensions</Label><Input placeholder="L×W×H cm" value={pkg.dimensions} onChange={(e) => setPkg((p) => ({ ...p, dimensions: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Service Type *</Label>
-              <Select value={form.serviceType} onValueChange={(v) => update("serviceType", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+              <Select value={pkg.serviceTypeId} onValueChange={(v) => setPkg((p) => ({ ...p, serviceTypeId: v }))}>
+                <SelectTrigger><SelectValue placeholder={serviceTypes === undefined ? "Loading…" : "Select a service"} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="standard">Standard</SelectItem>
-                  <SelectItem value="express">Express</SelectItem>
-                  <SelectItem value="overnight">Overnight</SelectItem>
+                  {(serviceTypes ?? []).filter((s) => s.isActive).map((s) => (
+                    <SelectItem key={s._id} value={s._id}>
+                      {s.name} ({s.estimatedTransitDays} days)
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5"><Label>Notes</Label><Textarea value={form.notes} onChange={(e) => update("notes", e.target.value)} rows={2} /></div>
+            <div className="space-y-1.5"><Label>Notes</Label><Textarea value={pkg.notes} onChange={(e) => setPkg((p) => ({ ...p, notes: e.target.value }))} rows={2} /></div>
           </CardContent>
         </Card>
 
