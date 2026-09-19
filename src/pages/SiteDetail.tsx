@@ -5,9 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -26,33 +24,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowDownLeft,
+  ArrowUpRight,
   Building2,
   CreditCard,
+  Eye,
+  EyeOff,
   Landmark,
+  Plus,
   ShieldCheck,
+  Settings,
   TrendingUp,
   Users,
   Wallet,
-  Settings,
-  Plus,
-  Trash2,
+  FileText,
   Lock,
   Unlock,
   CheckCircle,
   XCircle,
   Clock,
-  FileText,
+  PiggyBank,
+  Briefcase,
+  Send,
+  Receipt,
+  Trash2,
+  ChevronRight,
+  DollarSign,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
 function fmtDate(ts: number | undefined) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function fmtDateTime(ts: number | undefined) {
@@ -61,114 +66,92 @@ function fmtDateTime(ts: number | undefined) {
 }
 
 function fmtCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(amount);
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(amount);
+}
+
+function maskAccount(num: string) {
+  return `••••${num.slice(-4)}`;
 }
 
 function kycStatusBadge(status: string) {
   switch (status) {
-    case "approved":
-      return "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300";
-    case "rejected":
-      return "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300";
-    case "submitted":
-    case "under_review":
-      return "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300";
-    case "resubmission_required":
-      return "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300";
-    default:
-      return "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+    case "approved": return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+    case "rejected": return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+    case "submitted": case "under_review": return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+    case "resubmission_required": return "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300";
+    default: return "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
   }
 }
 
+const ACCOUNT_ICONS: Record<string, typeof Landmark> = {
+  checking: Landmark,
+  savings: PiggyBank,
+  credit: CreditCard,
+};
+
+const ACCOUNT_COLORS: Record<string, string> = {
+  checking: "from-[#003087] to-[#0050a0]",
+  savings: "from-[#00695c] to-[#00897b]",
+  credit: "from-[#b71c1c] to-[#c62828]",
+};
+
 export default function SiteDetail() {
   const { siteId } = useParams<{ siteId: string }>();
-  const site = useQuery(
-    api.tenants.get,
-    siteId ? { id: siteId as Id<"tenantSites"> } : "skip",
-  );
-  const kycRecords = useQuery(
-    api.tenants.listKyc,
-    siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip",
-  );
-  const ledger = useQuery(
-    api.tenants.getTenantLedger,
-    siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip",
-  );
-  const tenantUsers = useQuery(
-    api.tenants.listTenantUsers,
-    siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip",
-  );
+  const site = useQuery(api.tenants.get, siteId ? { id: siteId as Id<"tenantSites"> } : "skip");
+  const accounts = useQuery(api.tenants.listAccounts, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
+  const ledger = useQuery(api.tenants.getTenantLedger, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
+  const kycRecords = useQuery(api.tenants.listKyc, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
+  const tenantUsers = useQuery(api.tenants.listTenantUsers, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
 
   const updateSite = useMutation(api.tenants.update);
   const toggleActive = useMutation(api.tenants.toggleActive);
   const submitKyc = useMutation(api.tenants.submitKyc);
   const addUser = useMutation(api.tenants.addTenantUser);
   const removeUser = useMutation(api.tenants.removeTenantUser);
-  const credit = useMutation(api.tenants.creditDemoAccount);
-  const debit = useMutation(api.tenants.debitDemoAccount);
+  const createAccount = useMutation(api.tenants.createAccount);
+  const depositMutation = useMutation(api.tenants.depositToAccount);
+  const withdrawMutation = useMutation(api.tenants.withdrawFromAccount);
 
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("accounts");
+  const [showBalances, setShowBalances] = useState(true);
+  const [createAcctOpen, setCreateAcctOpen] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<string>("");
   const [kycOpen, setKycOpen] = useState(false);
-  const [kycForm, setKycForm] = useState({ fullName: "", dateOfBirth: "" });
   const [addUserOpen, setAddUserOpen] = useState(false);
-  const [addUserEmail, setAddUserEmail] = useState("");
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-  const [ledgerForm, setLedgerForm] = useState({
-    userId: "",
-    amount: "",
-    description: "",
-    type: "credit" as "credit" | "debit",
-  });
-  const [settings, setSettings] = useState({
-    siteName: "",
-    contactEmail: "",
-    contactPhone: "",
-    primaryColor: "",
-    accentColor: "",
-  });
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsTab, setSettingsTab] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  if (site === undefined) {
-    return (
-      <div className="space-y-4">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-40 animate-pulse rounded-xl bg-muted" />
-      </div>
-    );
-  }
+  const [newAcct, setNewAcct] = useState({ accountType: "checking" as "checking" | "savings" | "credit", name: "", initialBalance: "" });
+  const [depositAmt, setDepositAmt] = useState("");
+  const [depositDesc, setDepositDesc] = useState("");
+  const [withdrawAmt, setWithdrawAmt] = useState("");
+  const [withdrawDesc, setWithdrawDesc] = useState("");
+  const [kycForm, setKycForm] = useState({ fullName: "", dateOfBirth: "" });
+  const [addUserEmail, setAddUserEmail] = useState("");
+  const [settingsForm, setSettingsForm] = useState({ siteName: "", contactEmail: "", contactPhone: "", primaryColor: "", accentColor: "" });
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
+  if (site === undefined) {
+    return <div className="space-y-4">{[1, 2, 3].map((i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-muted" />)}</div>;
+  }
   if (!site) {
     return (
       <div className="py-16 text-center">
         <Building2 className="mx-auto h-10 w-10 text-slate-300" />
-        <p className="mt-3 text-sm text-slate-500">Site not found or not yours.</p>
-        <Link to="/business">
-          <Button variant="ghost" className="mt-4 gap-2">
-            <ArrowLeft className="h-4 w-4" /> Back to sites
-          </Button>
-        </Link>
+        <p className="mt-3 text-sm text-slate-500">Site not found.</p>
+        <Link to="/business"><Button variant="ghost" className="mt-4 gap-2"><ArrowLeft className="h-4 w-4" /> Back</Button></Link>
       </div>
     );
   }
 
-  // Compute balance from ledger.
-  const balance =
-    ledger?.reduce((sum, e) => sum + e.amount, 0) ?? 0;
-  const totalCredits =
-    ledger?.filter((e) => e.amount > 0).reduce((sum, e) => sum + e.amount, 0) ?? 0;
-  const totalDebits =
-    ledger?.filter((e) => e.amount < 0).reduce((sum, e) => sum + Math.abs(e.amount), 0) ?? 0;
+  const totalBalance = accounts?.filter((a) => a.isActive).reduce((s, a) => s + a.balance, 0) ?? 0;
   const latestKyc = kycRecords?.[0] ?? null;
 
-  // Load settings when first switching tab.
-  if (tab === "settings" && !settingsLoaded) {
+  if (tab === "settings" && !settingsLoaded && site) {
     setSettingsLoaded(true);
-    setSettings({
+    setSettingsForm({
       siteName: site.siteName,
       contactEmail: site.contactEmail ?? "",
       contactPhone: site.contactPhone ?? "",
@@ -177,59 +160,56 @@ export default function SiteDetail() {
     });
   }
 
-  const saveSettings = async () => {
+  const handleCreateAccount = async () => {
+    if (!newAcct.name.trim()) { toast.error("Account name is required"); return; }
     setBusy(true);
     try {
-      await updateSite({
+      // Use first tenant user or owner as account holder.
+      const holderId = tenantUsers?.[0]?.userId ?? site.ownerId;
+      await createAccount({
         tenantId: site._id,
-        siteName: settings.siteName || undefined,
-        contactEmail: settings.contactEmail || undefined,
-        contactPhone: settings.contactPhone || undefined,
-        branding: {
-          primaryColor: settings.primaryColor || undefined,
-          accentColor: settings.accentColor || undefined,
-        },
+        userId: holderId,
+        accountType: newAcct.accountType,
+        name: newAcct.name.trim(),
+        initialBalance: newAcct.initialBalance ? Number(newAcct.initialBalance) : 0,
       });
-      toast.success("Settings saved");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to save");
-    } finally {
-      setBusy(false);
-    }
+      toast.success("Account opened");
+      setCreateAcctOpen(false);
+      setNewAcct({ accountType: "checking", name: "", initialBalance: "" });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
   };
 
-  const handleToggleActive = async () => {
+  const handleDeposit = async () => {
+    if (!selectedAccount || !depositAmt) return;
     setBusy(true);
     try {
-      await toggleActive({ tenantId: site._id });
-      toast.success(site.isActive ? "Site locked" : "Site activated");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
+      await depositMutation({ tenantId: site._id, accountId: selectedAccount as Id<"tenantAccounts">, amount: Number(depositAmt), description: depositDesc || undefined });
+      toast.success("Deposit successful");
+      setDepositOpen(false); setDepositAmt(""); setDepositDesc(""); setSelectedAccount("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const handleWithdraw = async () => {
+    if (!selectedAccount || !withdrawAmt) return;
+    setBusy(true);
+    try {
+      await withdrawMutation({ tenantId: site._id, accountId: selectedAccount as Id<"tenantAccounts">, amount: Number(withdrawAmt), description: withdrawDesc || undefined });
+      toast.success("Withdrawal processed");
+      setWithdrawOpen(false); setWithdrawAmt(""); setWithdrawDesc(""); setSelectedAccount("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
   };
 
   const handleSubmitKyc = async () => {
-    if (!kycForm.fullName.trim()) {
-      toast.error("Full name is required");
-      return;
-    }
+    if (!kycForm.fullName.trim()) { toast.error("Full name required"); return; }
     setBusy(true);
     try {
-      await submitKyc({
-        tenantId: site._id,
-        fullName: kycForm.fullName.trim(),
-        dateOfBirth: kycForm.dateOfBirth || undefined,
-      });
-      toast.success("KYC submitted for review");
-      setKycOpen(false);
-      setKycForm({ fullName: "", dateOfBirth: "" });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
+      await submitKyc({ tenantId: site._id, fullName: kycForm.fullName.trim(), dateOfBirth: kycForm.dateOfBirth || undefined });
+      toast.success("KYC submitted"); setKycOpen(false); setKycForm({ fullName: "", dateOfBirth: "" });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
   };
 
   const handleAddUser = async () => {
@@ -237,498 +217,468 @@ export default function SiteDetail() {
     setBusy(true);
     try {
       await addUser({ tenantId: site._id, email: addUserEmail.trim() });
-      toast.success("User added to site");
-      setAddUserOpen(false);
-      setAddUserEmail("");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
+      toast.success("Member added"); setAddUserOpen(false); setAddUserEmail("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
   };
 
-  const handleRemoveUser = async (membershipId: Id<"tenantUsers">) => {
-    try {
-      await removeUser({ tenantId: site._id, membershipId });
-      toast.success("User removed");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    }
-  };
-
-  const handleLedgerEntry = async () => {
-    if (!ledgerForm.userId || !ledgerForm.amount) {
-      toast.error("User and amount are required");
-      return;
-    }
+  const handleSaveSettings = async () => {
     setBusy(true);
     try {
-      const args = {
-        tenantId: site._id,
-        userId: ledgerForm.userId as Id<"users">,
-        amount: Number(ledgerForm.amount),
-        description: ledgerForm.description || undefined,
-      };
-      if (ledgerForm.type === "credit") {
-        await credit(args);
-      } else {
-        await debit(args);
-      }
-      toast.success(`${ledgerForm.type === "credit" ? "Credited" : "Debited"} successfully`);
-      setLedgerOpen(false);
-      setLedgerForm({ userId: "", amount: "", description: "", type: "credit" });
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
-    } finally {
-      setBusy(false);
-    }
+      await updateSite({ tenantId: site._id, siteName: settingsForm.siteName || undefined, contactEmail: settingsForm.contactEmail || undefined, contactPhone: settingsForm.contactPhone || undefined, branding: { primaryColor: settingsForm.primaryColor || undefined, accentColor: settingsForm.accentColor || undefined } });
+      toast.success("Settings saved");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
   };
 
   const SiteIcon = site.siteType === "bank" ? Landmark : TrendingUp;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center gap-4">
-        <Link to="/business">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50">
-          <SiteIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-bold text-slate-900 dark:text-white">
-            {site.siteName}
-          </h1>
-          <p className="text-xs text-slate-500">
-            {site.subdomain}.cloudie.app ·{" "}
-            <span className="capitalize">{site.siteType}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={site.isActive ? "default" : "destructive"} className="text-xs">
-            {site.isActive ? "Active" : "Locked"}
-          </Badge>
+    <div className="min-h-screen bg-[#f5f5f5]">
+      {/* ── Chase-style navy header ── */}
+      <div className="bg-[#003087] text-white">
+        <div className="mx-auto max-w-5xl px-4 sm:px-6">
+          {/* Top bar */}
+          <div className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-3">
+              <Link to="/business" className="text-white/70 hover:text-white transition-colors">
+                <ArrowLeft className="h-5 w-5" />
+              </Link>
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/15">
+                  <SiteIcon className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold leading-none">{site.siteName}</p>
+                  <p className="text-[10px] text-white/60">{site.subdomain}.cloudie.app</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant={site.isActive ? "secondary" : "destructive"} className="text-[10px] bg-white/15 text-white border-0">
+                {site.isActive ? "Active" : "Locked"}
+              </Badge>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10 h-8 w-8" onClick={() => setShowBalances(!showBalances)}>
+                {showBalances ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+
+          {/* Balance hero */}
+          <div className="pb-6 pt-2">
+            <p className="text-xs font-medium text-white/60 uppercase tracking-wider">Total Balance</p>
+            <p className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">
+              {showBalances ? fmtCurrency(totalBalance) : "••••••"}
+            </p>
+            <p className="mt-1 text-xs text-white/50">
+              {accounts?.filter((a) => a.isActive).length ?? 0} active account{(accounts?.filter((a) => a.isActive).length ?? 0) !== 1 ? "s" : ""}
+            </p>
+          </div>
+
+          {/* Quick actions row */}
+          <div className="flex gap-3 pb-5 overflow-x-auto">
+            {[
+              { icon: ArrowDownLeft, label: "Deposit", color: "bg-emerald-500", action: () => { if (accounts?.length) { setSelectedAccount(accounts[0]._id); setDepositOpen(true); } else toast.error("Create an account first"); } },
+              { icon: Send, label: "Transfer", color: "bg-blue-400", action: () => toast.info("Transfers coming soon") },
+              { icon: Receipt, label: "Statements", color: "bg-purple-500", action: () => setTab("overview") },
+              { icon: ShieldCheck, label: "Verify ID", color: "bg-amber-500", action: () => setTab("kyc") },
+              { icon: Settings, label: "Settings", color: "bg-slate-400", action: () => { setTab("settings"); setSettingsLoaded(false); } },
+            ].map((a) => (
+              <button
+                key={a.label}
+                onClick={a.action}
+                className="flex shrink-0 flex-col items-center gap-1.5 group"
+              >
+                <div className={`flex h-12 w-12 items-center justify-center rounded-full ${a.color} text-white shadow-lg group-hover:scale-105 transition-transform`}>
+                  <a.icon className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] font-medium text-white/80">{a.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="w-full sm:w-auto">
-          <TabsTrigger value="overview" className="gap-1.5">
-            <Building2 className="h-3.5 w-3.5" /> Overview
-          </TabsTrigger>
-          <TabsTrigger value="accounts" className="gap-1.5">
-            <Wallet className="h-3.5 w-3.5" /> Accounts
-          </TabsTrigger>
-          <TabsTrigger value="kyc" className="gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5" /> KYC
-          </TabsTrigger>
-          <TabsTrigger value="users" className="gap-1.5">
-            <Users className="h-3.5 w-3.5" /> Users
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-1.5">
-            <Settings className="h-3.5 w-3.5" /> Settings
-          </TabsTrigger>
-        </TabsList>
+      {/* ── Content area ── */}
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-6">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="bg-white dark:bg-slate-900 shadow-sm mb-6 w-full sm:w-auto">
+            <TabsTrigger value="accounts" className="gap-1.5 data-[state=active]:bg-[#003087] data-[state=active]:text-white">
+              <Wallet className="h-3.5 w-3.5" /> Accounts
+            </TabsTrigger>
+            <TabsTrigger value="overview" className="gap-1.5 data-[state=active]:bg-[#003087] data-[state=active]:text-white">
+              <Activity className="h-3.5 w-3.5" /> Activity
+            </TabsTrigger>
+            <TabsTrigger value="kyc" className="gap-1.5 data-[state=active]:bg-[#003087] data-[state=active]:text-white">
+              <ShieldCheck className="h-3.5 w-3.5" /> KYC
+            </TabsTrigger>
+            <TabsTrigger value="users" className="gap-1.5 data-[state=active]:bg-[#003087] data-[state=active]:text-white">
+              <Users className="h-3.5 w-3.5" /> Users
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1.5 data-[state=active]:bg-[#003087] data-[state=active]:text-white">
+              <Settings className="h-3.5 w-3.5" /> Settings
+            </TabsTrigger>
+          </TabsList>
 
-        {/* ── Overview Tab ── */}
-        <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-slate-400">Account Balance</p>
-                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
-                  {fmtCurrency(balance)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-slate-400">Total Credits</p>
-                <p className="mt-1 text-2xl font-bold text-green-600">
-                  +{fmtCurrency(totalCredits)}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-slate-400">Total Debits</p>
-                <p className="mt-1 text-2xl font-bold text-red-600">
-                  -{fmtCurrency(totalDebits)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Site Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              {[
-                ["Type", site.siteType === "bank" ? "Banking Portal" : "Investment Portal"],
-                ["Subdomain", `${site.subdomain}.cloudie.app`],
-                ["Status", site.isActive ? "Active" : "Locked"],
-                ["Renewal Date", fmtDate(site.renewalDate)],
-                ["Contact Email", site.contactEmail || "—"],
-                ["Contact Phone", site.contactPhone || "—"],
-                ["Members", `${tenantUsers?.length ?? 0} users`],
-                ["Created", fmtDate(site.createdAt)],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-                  <span className="text-slate-400">{k}</span>
-                  <span className="font-medium text-slate-700 dark:text-slate-200">{v}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleToggleActive} disabled={busy}>
-              {site.isActive ? (
-                <><Lock className="mr-1.5 h-3.5 w-3.5" /> Lock Site</>
-              ) : (
-                <><Unlock className="mr-1.5 h-3.5 w-3.5" /> Activate</>
-              )}
-            </Button>
-          </div>
-        </TabsContent>
-
-        {/* ── Accounts Tab (banking/investment dashboard) ── */}
-        <TabsContent value="accounts" className="space-y-4">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="text-base">
-                {site.siteType === "bank" ? "Banking" : "Investment"} Accounts
-              </CardTitle>
-              <Button size="sm" onClick={() => setLedgerOpen(true)}>
-                <CreditCard className="mr-1.5 h-3.5 w-3.5" /> New Transaction
+          {/* ════════════ ACCOUNTS TAB ════════════ */}
+          <TabsContent value="accounts" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">Your Accounts</h2>
+              <Button size="sm" className="bg-[#003087] hover:bg-[#002060] text-white gap-1.5" onClick={() => setCreateAcctOpen(true)}>
+                <Plus className="h-3.5 w-3.5" /> Open Account
               </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Account summary cards */}
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-4 dark:border-slate-700 dark:from-blue-950/30 dark:to-indigo-950/30">
-                  <div className="flex items-center gap-2">
-                    <Wallet className="h-4 w-4 text-blue-600" />
-                    <p className="text-xs font-medium text-blue-600">Total Balance</p>
-                  </div>
-                  <p className="mt-2 text-xl font-bold text-slate-900 dark:text-white">
-                    {fmtCurrency(balance)}
-                  </p>
-                  <p className="text-[10px] text-slate-400">Across all accounts</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <p className="text-xs font-medium text-green-600">Credits</p>
-                  </div>
-                  <p className="mt-2 text-xl font-bold text-green-600">
-                    +{fmtCurrency(totalCredits)}
-                  </p>
-                  <p className="text-[10px] text-slate-400">{ledger?.filter((e) => e.amount > 0).length ?? 0} transactions</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-red-600" />
-                    <p className="text-xs font-medium text-red-600">Debits</p>
-                  </div>
-                  <p className="mt-2 text-xl font-bold text-red-600">
-                    -{fmtCurrency(totalDebits)}
-                  </p>
-                  <p className="text-[10px] text-slate-400">{ledger?.filter((e) => e.amount < 0).length ?? 0} transactions</p>
-                </div>
-              </div>
+            </div>
 
-              {/* Recent transactions */}
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Recent Transactions
-                </p>
+            {!accounts || accounts.length === 0 ? (
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-12 text-center">
+                  <Landmark className="mx-auto h-12 w-12 text-slate-300" />
+                  <p className="mt-3 text-sm font-medium text-slate-600">No accounts yet</p>
+                  <p className="mt-1 text-xs text-slate-400">Open your first account to start managing funds.</p>
+                  <Button size="sm" className="mt-4 bg-[#003087] hover:bg-[#002060] text-white" onClick={() => setCreateAcctOpen(true)}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Open Account
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {accounts.map((acct) => {
+                  const Icon = ACCOUNT_ICONS[acct.accountType] || Landmark;
+                  return (
+                    <div key={acct._id} className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${ACCOUNT_COLORS[acct.accountType]} p-5 text-white shadow-lg`}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 backdrop-blur-sm">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <Badge variant="secondary" className="text-[10px] bg-white/15 text-white border-0 capitalize">
+                          {acct.accountType}
+                        </Badge>
+                      </div>
+                      <p className="mt-4 text-sm font-medium text-white/80">{acct.name}</p>
+                      <p className="mt-1 text-2xl font-bold tracking-tight">
+                        {showBalances ? fmtCurrency(acct.balance) : "••••••"}
+                      </p>
+                      <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-3">
+                        <p className="font-mono text-[11px] text-white/60">
+                          {maskAccount(acct.accountNumber)}
+                        </p>
+                        {!acct.isActive && (
+                          <span className="text-[10px] font-medium text-red-300">CLOSED</span>
+                        )}
+                      </div>
+                      {acct.isActive && (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => { setSelectedAccount(acct._id); setDepositOpen(true); }}
+                            className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-white/15 py-1.5 text-[11px] font-medium hover:bg-white/25 transition-colors"
+                          >
+                            <ArrowDownLeft className="h-3 w-3" /> Deposit
+                          </button>
+                          <button
+                            onClick={() => { setSelectedAccount(acct._id); setWithdrawOpen(true); }}
+                            className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-white/15 py-1.5 text-[11px] font-medium hover:bg-white/25 transition-colors"
+                          >
+                            <ArrowUpRight className="h-3 w-3" /> Withdraw
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ════════════ ACTIVITY / OVERVIEW TAB ════════════ */}
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#003087]/10">
+                      <DollarSign className="h-5 w-5 text-[#003087]" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-slate-400">Total Balance</p>
+                      <p className="text-lg font-bold text-slate-900 dark:text-white">{fmtCurrency(totalBalance)}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50">
+                      <ArrowDownLeft className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-slate-400">Total Deposits</p>
+                      <p className="text-lg font-bold text-emerald-600">
+                        +{fmtCurrency(ledger?.filter((e) => e.amount > 0).reduce((s, e) => s + e.amount, 0) ?? 0)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="border-0 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50">
+                      <ArrowUpRight className="h-5 w-5 text-red-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-slate-400">Total Withdrawals</p>
+                      <p className="text-lg font-bold text-red-600">
+                        -{fmtCurrency(ledger?.filter((e) => e.amount < 0).reduce((s, e) => s + Math.abs(e.amount), 0) ?? 0)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Recent Transactions</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
                 {!ledger || ledger.length === 0 ? (
-                  <p className="py-6 text-center text-sm text-slate-400">
-                    No transactions yet. Create a credit or debit entry to get started.
-                  </p>
+                  <div className="p-8 text-center text-sm text-slate-400">
+                    <Receipt className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+                    No transactions yet
+                  </div>
                 ) : (
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {ledger.slice(0, 20).map((entry) => (
-                      <div key={entry._id} className="flex items-center justify-between py-2.5 text-sm">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-slate-700 dark:text-slate-200">
-                            {entry.description}
-                          </p>
-                          <p className="text-[11px] text-slate-400">
-                            {entry.type} · {fmtDateTime(entry.createdAt)}
-                          </p>
+                    {ledger.slice(0, 15).map((entry) => (
+                      <div key={entry._id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${entry.amount >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}`}>
+                          {entry.amount >= 0 ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                         </div>
-                        <span
-                          className={`ml-3 text-sm font-semibold ${
-                            entry.amount >= 0 ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {entry.amount >= 0 ? "+" : ""}
-                          {fmtCurrency(entry.amount)}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{entry.description}</p>
+                          <p className="text-[11px] text-slate-400">{entry.type} · {fmtDate(entry.createdAt)}</p>
+                        </div>
+                        <span className={`text-sm font-semibold ${entry.amount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {entry.amount >= 0 ? "+" : ""}{fmtCurrency(entry.amount)}
                         </span>
                       </div>
                     ))}
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* ── KYC Tab ── */}
-        <TabsContent value="kyc" className="space-y-4">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="text-base">Identity Verification (KYC)</CardTitle>
-              <Button
-                size="sm"
-                onClick={() => setKycOpen(true)}
-                disabled={latestKyc?.status === "submitted" || latestKyc?.status === "under_review"}
-              >
-                <FileText className="mr-1.5 h-3.5 w-3.5" />
-                {latestKyc?.status === "resubmission_required"
-                  ? "Resubmit"
-                  : latestKyc
-                    ? "Submit New"
-                    : "Submit KYC"}
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Current KYC status */}
-              {latestKyc ? (
-                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${kycStatusBadge(latestKyc.status)}`}
-                    >
-                      {latestKyc.status === "approved" ? (
-                        <CheckCircle className="h-3 w-3" />
-                      ) : latestKyc.status === "rejected" ? (
-                        <XCircle className="h-3 w-3" />
-                      ) : (
-                        <Clock className="h-3 w-3" />
-                      )}
-                      {latestKyc.status.replace(/_/g, " ")}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      Submitted {fmtDateTime(latestKyc.createdAt)}
-                    </span>
-                  </div>
-                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
-                    <div>
-                      <span className="text-slate-400">Full Name</span>
-                      <p className="font-medium text-slate-700 dark:text-slate-200">{latestKyc.fullName}</p>
+          {/* ════════════ KYC TAB ════════════ */}
+          <TabsContent value="kyc" className="space-y-4">
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="flex-row items-center justify-between pb-3">
+                <CardTitle className="text-base">Identity Verification</CardTitle>
+                <Button size="sm" className="bg-[#003087] hover:bg-[#002060] text-white" onClick={() => setKycOpen(true)} disabled={latestKyc?.status === "submitted" || latestKyc?.status === "under_review"}>
+                  <FileText className="mr-1.5 h-3.5 w-3.5" />
+                  {latestKyc?.status === "resubmission_required" ? "Resubmit" : "Submit KYC"}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {latestKyc ? (
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${kycStatusBadge(latestKyc.status)}`}>
+                        {latestKyc.status === "approved" ? <CheckCircle className="h-3 w-3" /> : latestKyc.status === "rejected" ? <XCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                        {latestKyc.status.replace(/_/g, " ")}
+                      </span>
+                      <span className="text-xs text-slate-400">Submitted {fmtDateTime(latestKyc.createdAt)}</span>
                     </div>
-                    {latestKyc.dateOfBirth && (
-                      <div>
-                        <span className="text-slate-400">Date of Birth</span>
-                        <p className="font-medium text-slate-700 dark:text-slate-200">{latestKyc.dateOfBirth}</p>
-                      </div>
-                    )}
-                    {latestKyc.notes && (
-                      <div className="sm:col-span-2">
-                        <span className="text-slate-400">Reviewer Notes</span>
-                        <p className="font-medium text-slate-700 dark:text-slate-200">{latestKyc.notes}</p>
-                      </div>
+                    <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                      <div><span className="text-slate-400">Name</span><p className="font-medium">{latestKyc.fullName}</p></div>
+                      {latestKyc.dateOfBirth && <div><span className="text-slate-400">DOB</span><p className="font-medium">{latestKyc.dateOfBirth}</p></div>}
+                      {latestKyc.notes && <div className="sm:col-span-2"><span className="text-slate-400">Notes</span><p className="font-medium">{latestKyc.notes}</p></div>}
+                    </div>
+                    {latestKyc.status === "resubmission_required" && (
+                      <p className="mt-3 rounded-lg bg-orange-50 p-3 text-xs text-orange-700 dark:bg-orange-900/20">Additional information required. Please resubmit.</p>
                     )}
                   </div>
-                  {latestKyc.status === "resubmission_required" && (
-                    <p className="mt-3 rounded-lg bg-orange-50 p-3 text-xs text-orange-700 dark:bg-orange-900/20 dark:text-orange-300">
-                      Additional information is required. Please resubmit with updated documents.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-sm text-slate-400">
-                  <ShieldCheck className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-                  No KYC submitted yet. Submit your identity to unlock full platform features.
-                </div>
-              )}
+                ) : (
+                  <div className="py-10 text-center text-sm text-slate-400">
+                    <ShieldCheck className="mx-auto mb-2 h-10 w-10 text-slate-300" />
+                    Submit your identity to unlock full features.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {/* KYC History */}
-              {kycRecords && kycRecords.length > 1 && (
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                    KYC History
-                  </p>
+          {/* ════════════ USERS TAB ════════════ */}
+          <TabsContent value="users" className="space-y-4">
+            <Card className="border-0 shadow-sm">
+              <CardHeader className="flex-row items-center justify-between pb-3">
+                <CardTitle className="text-base">Site Members</CardTitle>
+                <Button size="sm" className="bg-[#003087] hover:bg-[#002060] text-white" onClick={() => setAddUserOpen(true)} disabled={!site.isActive}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {!tenantUsers || tenantUsers.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-slate-400">No members yet.</p>
+                ) : (
                   <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {kycRecords.map((r) => (
-                      <div key={r._id} className="flex items-center justify-between py-2 text-xs">
-                        <div>
-                          <span className={`rounded-full px-2 py-0.5 font-medium ${kycStatusBadge(r.status)}`}>
-                            {r.status.replace(/_/g, " ")}
-                          </span>
-                          <span className="ml-2 text-slate-400">{fmtDateTime(r.createdAt)}</span>
+                    {tenantUsers.map((u) => (
+                      <div key={u._id} className="flex items-center justify-between py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#003087]/10 text-[#003087] text-sm font-bold">
+                            {(u.name ?? u.email ?? "?")[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{u.name || u.email}</p>
+                            <p className="text-[11px] text-slate-400">{u.email} · {u.role}</p>
+                          </div>
                         </div>
-                        {r.resubmissionCount ? (
-                          <span className="text-slate-400">#{r.resubmissionCount + 1}</span>
-                        ) : null}
+                        <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600" onClick={async () => { try { await removeUser({ tenantId: site._id, membershipId: u._id }); toast.success("Removed"); } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); } }}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* ── Users Tab ── */}
-        <TabsContent value="users" className="space-y-4">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <CardTitle className="text-base">Site Members</CardTitle>
-              <Button size="sm" onClick={() => setAddUserOpen(true)} disabled={!site.isActive}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Member
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {!tenantUsers || tenantUsers.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-400">
-                  No members yet. Add users to give them access to this portal.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {tenantUsers.map((u) => (
-                    <div key={u._id} className="flex items-center justify-between py-3">
-                      <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                          {u.name || u.email}
-                        </p>
-                        <p className="text-[11px] text-slate-400">
-                          {u.email} · {u.role} · joined {fmtDate(u.createdAt)}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-500 hover:text-red-700"
-                        onClick={() => handleRemoveUser(u._id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+          {/* ════════════ SETTINGS TAB ════════════ */}
+          <TabsContent value="settings" className="space-y-4">
+            <Card className="border-0 shadow-sm">
+              <CardHeader><CardTitle className="text-base">Site Settings</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5"><Label className="text-xs text-slate-500">Site Name</Label><Input value={settingsForm.siteName} onChange={(e) => setSettingsForm({ ...settingsForm, siteName: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs text-slate-500">Subdomain</Label><Input disabled value={`${site.subdomain}.cloudie.app`} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs text-slate-500">Contact Email</Label><Input type="email" value={settingsForm.contactEmail} onChange={(e) => setSettingsForm({ ...settingsForm, contactEmail: e.target.value })} /></div>
+                  <div className="space-y-1.5"><Label className="text-xs text-slate-500">Contact Phone</Label><Input value={settingsForm.contactPhone} onChange={(e) => setSettingsForm({ ...settingsForm, contactPhone: e.target.value })} /></div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-500">Primary Color</Label>
+                    <div className="flex gap-2">
+                      <input type="color" value={settingsForm.primaryColor || "#003087"} onChange={(e) => setSettingsForm({ ...settingsForm, primaryColor: e.target.value })} className="h-9 w-9 cursor-pointer rounded border" />
+                      <Input value={settingsForm.primaryColor} onChange={(e) => setSettingsForm({ ...settingsForm, primaryColor: e.target.value })} placeholder="#003087" />
                     </div>
-                  ))}
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-slate-500">Accent Color</Label>
+                    <div className="flex gap-2">
+                      <input type="color" value={settingsForm.accentColor || "#0050a0"} onChange={(e) => setSettingsForm({ ...settingsForm, accentColor: e.target.value })} className="h-9 w-9 cursor-pointer rounded border" />
+                      <Input value={settingsForm.accentColor} onChange={(e) => setSettingsForm({ ...settingsForm, accentColor: e.target.value })} placeholder="#0050a0" />
+                    </div>
+                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div>
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{site.isActive ? "Site is active" : "Site is locked"}</p>
+                    <p className="text-[11px] text-slate-400">{site.isActive ? "Deactivate to show a maintenance page." : "Reactivate to restore access."}</p>
+                  </div>
+                  <Button variant={site.isActive ? "destructive" : "default"} size="sm" onClick={async () => { try { await toggleActive({ tenantId: site._id }); toast.success(site.isActive ? "Site locked" : "Site activated"); } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); } }}>
+                    {site.isActive ? <><Lock className="mr-1.5 h-3.5 w-3.5" /> Lock</> : <><Unlock className="mr-1.5 h-3.5 w-3.5" /> Activate</>}
+                  </Button>
+                </div>
+                <div className="flex justify-end">
+                  <Button className="bg-[#003087] hover:bg-[#002060] text-white" onClick={handleSaveSettings} disabled={busy}>{busy ? "Saving…" : "Save Settings"}</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
 
-        {/* ── Settings Tab ── */}
-        <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Site Settings</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-500">Site Name</Label>
-                  <Input
-                    value={settings.siteName}
-                    onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-500">Subdomain</Label>
-                  <Input disabled value={`${site.subdomain}.cloudie.app`} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-500">Contact Email</Label>
-                  <Input
-                    type="email"
-                    value={settings.contactEmail}
-                    onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-500">Contact Phone</Label>
-                  <Input
-                    value={settings.contactPhone}
-                    onChange={(e) => setSettings({ ...settings, contactPhone: e.target.value })}
-                  />
-                </div>
+      {/* ── Create Account Dialog ── */}
+      <Dialog open={createAcctOpen} onOpenChange={setCreateAcctOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Open New Account</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Account Type</Label>
+              <Select value={newAcct.accountType} onValueChange={(v) => setNewAcct({ ...newAcct, accountType: v as "checking" | "savings" | "credit" })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking"><span className="flex items-center gap-2"><Landmark className="h-3.5 w-3.5" /> Checking</span></SelectItem>
+                  <SelectItem value="savings"><span className="flex items-center gap-2"><PiggyBank className="h-3.5 w-3.5" /> Savings</span></SelectItem>
+                  <SelectItem value="credit"><span className="flex items-center gap-2"><CreditCard className="h-3.5 w-3.5" /> Credit</span></SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Account Name *</Label><Input value={newAcct.name} onChange={(e) => setNewAcct({ ...newAcct, name: e.target.value })} placeholder="e.g. Primary Checking" /></div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Initial Deposit</Label><Input type="number" min="0" step="0.01" value={newAcct.initialBalance} onChange={(e) => setNewAcct({ ...newAcct, initialBalance: e.target.value })} placeholder="0.00" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateAcctOpen(false)}>Cancel</Button>
+            <Button className="bg-[#003087] hover:bg-[#002060] text-white" onClick={handleCreateAccount} disabled={busy || !newAcct.name.trim()}>{busy ? "Opening…" : "Open Account"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Deposit Dialog ── */}
+      <Dialog open={depositOpen} onOpenChange={setDepositOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Make a Deposit</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {!selectedAccount && accounts && accounts.filter((a) => a.isActive).length > 0 && (
+              <div className="space-y-1.5"><Label className="text-xs text-slate-500">To Account</Label>
+                <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                  <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.filter((a) => a.isActive).map((a) => (
+                      <SelectItem key={a._id} value={a._id}>{a.name} ({maskAccount(a.accountNumber)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-500">Primary Color</Label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={settings.primaryColor || "#2563eb"}
-                      onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-                      className="h-9 w-9 cursor-pointer rounded border"
-                    />
-                    <Input
-                      value={settings.primaryColor}
-                      onChange={(e) => setSettings({ ...settings, primaryColor: e.target.value })}
-                      placeholder="#2563eb"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-500">Accent Color</Label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={settings.accentColor || "#6366f1"}
-                      onChange={(e) => setSettings({ ...settings, accentColor: e.target.value })}
-                      className="h-9 w-9 cursor-pointer rounded border"
-                    />
-                    <Input
-                      value={settings.accentColor}
-                      onChange={(e) => setSettings({ ...settings, accentColor: e.target.value })}
-                      placeholder="#6366f1"
-                    />
-                  </div>
-                </div>
+            )}
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Amount *</Label><Input type="number" min="0.01" step="0.01" value={depositAmt} onChange={(e) => setDepositAmt(e.target.value)} placeholder="0.00" autoFocus /></div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Description</Label><Input value={depositDesc} onChange={(e) => setDepositDesc(e.target.value)} placeholder="e.g. Opening deposit" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDepositOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleDeposit} disabled={busy || !depositAmt || !selectedAccount}>{busy ? "Depositing…" : "Deposit"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Withdraw Dialog ── */}
+      <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Make a Withdrawal</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {!selectedAccount && accounts && accounts.filter((a) => a.isActive).length > 0 && (
+              <div className="space-y-1.5"><Label className="text-xs text-slate-500">From Account</Label>
+                <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                  <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
+                  <SelectContent>
+                    {accounts.filter((a) => a.isActive).map((a) => (
+                      <SelectItem key={a._id} value={a._id}>{a.name} ({fmtCurrency(a.balance)})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="flex justify-end">
-                <Button onClick={saveSettings} disabled={busy}>
-                  {busy ? "Saving…" : "Save Settings"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            )}
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Amount *</Label><Input type="number" min="0.01" step="0.01" value={withdrawAmt} onChange={(e) => setWithdrawAmt(e.target.value)} placeholder="0.00" autoFocus /></div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Description</Label><Input value={withdrawDesc} onChange={(e) => setWithdrawDesc(e.target.value)} placeholder="e.g. ATM withdrawal" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWithdrawOpen(false)}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleWithdraw} disabled={busy || !withdrawAmt || !selectedAccount}>{busy ? "Processing…" : "Withdraw"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── KYC Dialog ── */}
       <Dialog open={kycOpen} onOpenChange={setKycOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {latestKyc?.status === "resubmission_required" ? "Resubmit KYC" : "Submit KYC"}
-            </DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>{latestKyc?.status === "resubmission_required" ? "Resubmit KYC" : "Submit Identity Verification"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-500">Full Legal Name *</Label>
-              <Input
-                value={kycForm.fullName}
-                onChange={(e) => setKycForm({ ...kycForm, fullName: e.target.value })}
-                placeholder="John Doe"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-500">Date of Birth</Label>
-              <Input
-                type="date"
-                value={kycForm.dateOfBirth}
-                onChange={(e) => setKycForm({ ...kycForm, dateOfBirth: e.target.value })}
-              />
-            </div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Full Legal Name *</Label><Input value={kycForm.fullName} onChange={(e) => setKycForm({ ...kycForm, fullName: e.target.value })} placeholder="John Doe" /></div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Date of Birth</Label><Input type="date" value={kycForm.dateOfBirth} onChange={(e) => setKycForm({ ...kycForm, dateOfBirth: e.target.value })} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setKycOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmitKyc} disabled={busy || !kycForm.fullName.trim()}>
-              {busy ? "Submitting…" : "Submit"}
-            </Button>
+            <Button className="bg-[#003087] hover:bg-[#002060] text-white" onClick={handleSubmitKyc} disabled={busy || !kycForm.fullName.trim()}>{busy ? "Submitting…" : "Submit"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -736,80 +686,11 @@ export default function SiteDetail() {
       {/* ── Add User Dialog ── */}
       <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add Site Member</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-slate-500">User Email *</Label>
-            <Input
-              type="email"
-              value={addUserEmail}
-              onChange={(e) => setAddUserEmail(e.target.value)}
-              placeholder="user@example.com"
-            />
-          </div>
+          <DialogHeader><DialogTitle>Add Site Member</DialogTitle></DialogHeader>
+          <div className="space-y-1.5"><Label className="text-xs text-slate-500">Email *</Label><Input type="email" value={addUserEmail} onChange={(e) => setAddUserEmail(e.target.value)} placeholder="user@example.com" autoFocus /></div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddUserOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddUser} disabled={busy || !addUserEmail.trim()}>
-              {busy ? "Adding…" : "Add Member"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Ledger Entry Dialog ── */}
-      <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Transaction</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-500">Type</Label>
-              <Select
-                value={ledgerForm.type}
-                onValueChange={(v) => setLedgerForm({ ...ledgerForm, type: v as "credit" | "debit" })}
-              >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="credit">Credit (deposit)</SelectItem>
-                  <SelectItem value="debit">Debit (withdrawal)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-500">User ID *</Label>
-              <Input
-                value={ledgerForm.userId}
-                onChange={(e) => setLedgerForm({ ...ledgerForm, userId: e.target.value })}
-                placeholder="User ID from the Users tab"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-500">Amount *</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={ledgerForm.amount}
-                onChange={(e) => setLedgerForm({ ...ledgerForm, amount: e.target.value })}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-500">Description</Label>
-              <Input
-                value={ledgerForm.description}
-                onChange={(e) => setLedgerForm({ ...ledgerForm, description: e.target.value })}
-                placeholder="Account opening deposit"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLedgerOpen(false)}>Cancel</Button>
-            <Button onClick={handleLedgerEntry} disabled={busy || !ledgerForm.userId || !ledgerForm.amount}>
-              {busy ? "Processing…" : "Submit"}
-            </Button>
+            <Button className="bg-[#003087] hover:bg-[#002060] text-white" onClick={handleAddUser} disabled={busy || !addUserEmail.trim()}>{busy ? "Adding…" : "Add Member"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

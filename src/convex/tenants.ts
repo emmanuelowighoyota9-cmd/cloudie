@@ -342,6 +342,170 @@ export const resubmitKyc = mutation({
   },
 });
 
+// ─── Tenant Accounts ───────────────────────────────────────────────────────
+
+export const listAccounts = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return [];
+    return await ctx.db
+      .query("tenantAccounts")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const createAccount = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    userId: v.id("users"),
+    accountType: v.union(v.literal("checking"), v.literal("savings"), v.literal("credit")),
+    name: v.string(),
+    initialBalance: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    if (!tenant.isActive) throw new Error("Site is locked");
+
+    // Generate realistic account/routing numbers.
+    const acctNum = `${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+    const routingNum = `${Math.floor(100000000 + Math.random() * 900000000)}`;
+    const now = Date.now();
+
+    return await ctx.db.insert("tenantAccounts", {
+      tenantId: args.tenantId,
+      userId: args.userId,
+      accountType: args.accountType,
+      name: args.name,
+      balance: args.initialBalance ?? 0,
+      accountNumber: acctNum,
+      routingNumber: routingNum,
+      currency: "USD",
+      isActive: true,
+      createdAt: now,
+    });
+  },
+});
+
+export const closeAccount = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    accountId: v.id("tenantAccounts"),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.tenantId !== args.tenantId) throw new Error("Account not found");
+    await ctx.db.patch(args.accountId, { isActive: false });
+    return { success: true };
+  },
+});
+
+export const depositToAccount = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    accountId: v.id("tenantAccounts"),
+    amount: v.number(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.tenantId !== args.tenantId) throw new Error("Account not found");
+    if (!account.isActive) throw new Error("Account is closed");
+
+    const depositAmount = Math.abs(args.amount);
+    const newBalance = account.balance + depositAmount;
+    await ctx.db.patch(args.accountId, { balance: newBalance });
+    const now = Date.now();
+
+    await ctx.db.insert("tenantLedger", {
+      tenantId: args.tenantId,
+      userId: account.userId,
+      amount: depositAmount,
+      description: args.description || `Deposit to ${account.name}`,
+      type: "deposit",
+      createdAt: now,
+    });
+
+    await ctx.db.insert("notifications", {
+      userId: account.userId,
+      title: "Deposit received",
+      message: `${fmtCurrency(depositAmount)} deposited to ${account.name}. New balance: ${fmtCurrency(newBalance)}.`,
+      type: "wallet",
+      isRead: false,
+      link: "/business",
+      createdAt: now,
+    });
+
+    return { newBalance };
+  },
+});
+
+export const withdrawFromAccount = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    accountId: v.id("tenantAccounts"),
+    amount: v.number(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const account = await ctx.db.get(args.accountId);
+    if (!account || account.tenantId !== args.tenantId) throw new Error("Account not found");
+    if (!account.isActive) throw new Error("Account is closed");
+
+    const withdrawAmount = Math.abs(args.amount);
+    if (account.accountType !== "credit" && account.balance < withdrawAmount) {
+      throw new Error("Insufficient funds");
+    }
+    const newBalance = account.balance - withdrawAmount;
+    await ctx.db.patch(args.accountId, { balance: newBalance });
+    const now = Date.now();
+
+    await ctx.db.insert("tenantLedger", {
+      tenantId: args.tenantId,
+      userId: account.userId,
+      amount: -withdrawAmount,
+      description: args.description || `Withdrawal from ${account.name}`,
+      type: "withdrawal",
+      createdAt: now,
+    });
+
+    await ctx.db.insert("notifications", {
+      userId: account.userId,
+      title: "Withdrawal processed",
+      message: `${fmtCurrency(withdrawAmount)} withdrawn from ${account.name}. New balance: ${fmtCurrency(newBalance)}.`,
+      type: "wallet",
+      isRead: false,
+      link: "/business",
+      createdAt: now,
+    });
+
+    return { newBalance };
+  },
+});
+
+function fmtCurrency(n: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+}
+
 // ─── Tenant Users ──────────────────────────────────────────────────────────
 
 export const listTenantUsers = query({

@@ -298,6 +298,21 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_tenant", ["tenantId", "createdAt"]),
 
+    tenantAccounts: defineTable({
+      tenantId: v.id("tenantSites"),
+      userId: v.id("users"),
+      accountType: v.union(v.literal("checking"), v.literal("savings"), v.literal("credit")),
+      name: v.string(),
+      balance: v.number(),
+      accountNumber: v.string(),
+      routingNumber: v.optional(v.string()),
+      currency: v.optional(v.string()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    })
+      .index("by_tenant", ["tenantId", "createdAt"])
+      .index("by_tenant_and_user", ["tenantId", "userId"]),
+
     vendors: defineTable({
       userId: v.id("users"),
       businessName: v.string(),
