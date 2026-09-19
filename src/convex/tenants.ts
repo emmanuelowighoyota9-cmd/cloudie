@@ -699,3 +699,450 @@ export const kycHistory = query({
       .collect();
   },
 });
+
+// ─── Public tenant site access (generated banking website) ─────────────────
+
+/** Public: get tenant site info by ID (no auth required — used by the generated site). */
+export const publicGet = query({
+  args: { id: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const tenant = await ctx.db.get(args.id);
+    if (!tenant) return null;
+    return {
+      _id: tenant._id,
+      siteName: tenant.siteName,
+      subdomain: tenant.subdomain,
+      siteType: tenant.siteType,
+      isActive: tenant.isActive,
+      branding: tenant.branding,
+      contactEmail: tenant.contactEmail,
+      contactPhone: tenant.contactPhone,
+      createdAt: tenant.createdAt,
+    };
+  },
+});
+
+/** Public: list active accounts for a tenant site (for stats display). */
+export const publicStats = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || !tenant.isActive) return null;
+    const accounts = await ctx.db
+      .query("tenantAccounts")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
+    const activeAccounts = accounts.filter((a) => a.isActive);
+    return {
+      totalAccounts: activeAccounts.length,
+      totalBalance: activeAccounts.reduce((s, a) => s + a.balance, 0),
+      checking: activeAccounts.filter((a) => a.accountType === "checking").length,
+      savings: activeAccounts.filter((a) => a.accountType === "savings").length,
+      credit: activeAccounts.filter((a) => a.accountType === "credit").length,
+    };
+  },
+});
+
+// ─── Customer access (tenant members) ────────────────────────────────────
+
+/** Check if the current user is a member of this tenant. */
+async function requireTenantMember(ctx: { db: any; auth: any }, tenantId: string) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("Authentication required");
+  const membership = await ctx.db
+    .query("tenantUsers")
+    .withIndex("by_tenant", (q: any) => q.eq("tenantId", tenantId))
+    .collect();
+  const isMember = membership.some((m: any) => m.userId === userId);
+  const tenant = await ctx.db.get(tenantId);
+  if (!tenant) throw new Error("Site not found");
+  return { userId, isOwner: tenant.ownerId === userId, isMember: isMember || tenant.ownerId === userId, tenant };
+}
+
+/** Customer: list my accounts for this tenant. */
+export const myAccounts = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const { userId, isMember } = await requireTenantMember(ctx, args.tenantId);
+    if (!isMember) return [];
+    return await ctx.db
+      .query("tenantAccounts")
+      .withIndex("by_tenant_and_user", (q) => q.eq("tenantId", args.tenantId).eq("userId", userId))
+      .order("desc")
+      .collect();
+  },
+});
+
+/** Customer: list my transactions for this tenant. */
+export const myTransactions = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const { userId, isMember } = await requireTenantMember(ctx, args.tenantId);
+    if (!isMember) return [];
+    return await ctx.db
+      .query("tenantLedger")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect()
+      .then((rows) => rows.filter((r) => r.userId === userId).sort((a, b) => b.createdAt - a.createdAt));
+  },
+});
+
+/** Customer: submit KYC for this tenant. */
+export const customerSubmitKyc = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    fullName: v.string(),
+    dateOfBirth: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { userId, isMember } = await requireTenantMember(ctx, args.tenantId);
+    if (!isMember) throw new Error("Not a member of this site");
+    const now = Date.now();
+    return await ctx.db.insert("kycRecords", {
+      tenantId: args.tenantId,
+      userId,
+      status: "submitted",
+      fullName: args.fullName,
+      dateOfBirth: args.dateOfBirth,
+      resubmissionCount: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+/** Customer: list my KYC for this tenant. */
+export const myKyc = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const { userId, isMember } = await requireTenantMember(ctx, args.tenantId);
+    if (!isMember) return [];
+    return await ctx.db
+      .query("kycRecords")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect()
+      .then((rows) => rows.filter((r) => r.userId === userId).sort((a, b) => b.createdAt - a.createdAt));
+  },
+});
+
+/** Customer: get my notifications for this tenant. */
+export const myNotifications = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const { userId, isMember } = await requireTenantMember(ctx, args.tenantId);
+    if (!isMember) return [];
+    return await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", userId).eq("isRead", false).gt("createdAt", Date.now() - 30 * 24 * 60 * 60 * 1000))
+      .order("desc")
+      .take(50);
+  },
+});
+
+// ─── Bank Admin (site owner only) ────────────────────────────────────────
+
+/** Bank admin: get dashboard stats. */
+export const adminGetStats = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return null;
+
+    const [accounts, customers, kyc, ledger] = await Promise.all([
+      ctx.db.query("tenantAccounts").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      ctx.db.query("tenantUsers").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      ctx.db.query("kycRecords").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+      ctx.db.query("tenantLedger").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).collect(),
+    ]);
+
+    const activeAccounts = accounts.filter((a) => a.isActive);
+    const pendingKyc = kyc.filter((k) => k.status === "submitted" || k.status === "under_review");
+    const totalDeposits = ledger.filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0);
+    const totalWithdrawals = ledger.filter((l) => l.amount < 0).reduce((s, l) => s + Math.abs(l.amount), 0);
+
+    return {
+      totalCustomers: customers.length,
+      totalAccounts: activeAccounts.length,
+      totalBalance: activeAccounts.reduce((s, a) => s + a.balance, 0),
+      pendingKyc: pendingKyc.length,
+      totalTransactions: ledger.length,
+      totalDeposits,
+      totalWithdrawals,
+      totalChecking: activeAccounts.filter((a) => a.accountType === "checking").length,
+      totalSavings: activeAccounts.filter((a) => a.accountType === "savings").length,
+      totalCredit: activeAccounts.filter((a) => a.accountType === "credit").length,
+    };
+  },
+});
+
+/** Bank admin: list all customers with details. */
+export const adminListCustomers = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return [];
+
+    const memberships = await ctx.db
+      .query("tenantUsers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
+
+    const results = await Promise.all(
+      memberships.map(async (m) => {
+        const user = await ctx.db.get(m.userId);
+        const accounts = await ctx.db
+          .query("tenantAccounts")
+          .withIndex("by_tenant_and_user", (q) => q.eq("tenantId", args.tenantId).eq("userId", m.userId))
+          .collect();
+        const kyc = await ctx.db
+          .query("kycRecords")
+          .withIndex("by_user", (q) => q.eq("userId", m.userId))
+          .collect();
+        const latestKyc = kyc.filter((k) => k.tenantId === args.tenantId).sort((a, b) => b.createdAt - a.createdAt)[0];
+        const ledger = await ctx.db
+          .query("tenantLedger")
+          .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+          .collect();
+        const userTransactions = ledger.filter((l) => l.userId === m.userId);
+
+        return {
+          _id: m._id,
+          userId: m.userId,
+          role: m.role,
+          name: user?.name ?? null,
+          email: user?.email ?? null,
+          joinedAt: m.createdAt,
+          accountCount: accounts.filter((a) => a.isActive).length,
+          totalBalance: accounts.filter((a) => a.isActive).reduce((s, a) => s + a.balance, 0),
+          kycStatus: latestKyc?.status ?? "not_submitted",
+          transactionCount: userTransactions.length,
+        };
+      })
+    );
+
+    return results;
+  },
+});
+
+/** Bank admin: get a specific customer's full details. */
+export const adminGetCustomer = query({
+  args: { tenantId: v.id("tenantSites"), userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const adminId = await getAuthUserId(ctx);
+    if (!adminId) return null;
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== adminId) return null;
+
+    const user = await ctx.db.get(args.userId);
+    if (!user) return null;
+
+    const accounts = await ctx.db
+      .query("tenantAccounts")
+      .withIndex("by_tenant_and_user", (q) => q.eq("tenantId", args.tenantId).eq("userId", args.userId))
+      .collect();
+
+    const ledger = await ctx.db
+      .query("tenantLedger")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect()
+      .then((rows) => rows.filter((r) => r.userId === args.userId).sort((a, b) => b.createdAt - a.createdAt));
+
+    const kyc = await ctx.db
+      .query("kycRecords")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect()
+      .then((rows) => rows.filter((r) => r.tenantId === args.tenantId).sort((a, b) => b.createdAt - a.createdAt));
+
+    return {
+      user: { _id: user._id, name: user.name, email: user.email, createdAt: user.createdAt },
+      accounts,
+      transactions: ledger,
+      kyc,
+    };
+  },
+});
+
+/** Bank admin: add customer by email. */
+export const adminAddCustomer = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    email: v.string(),
+    role: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    if (!tenant.isActive) throw new Error("Site is locked");
+
+    const target = await ctx.db
+      .query("users")
+      .filter((q) => q.eq("email", args.email))
+      .first();
+    if (!target) throw new Error(`No user found with email ${args.email}`);
+
+    const existing = await ctx.db
+      .query("tenantUsers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
+    if (existing.some((r) => r.userId === target._id)) {
+      throw new Error("User is already a member");
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("tenantUsers", {
+      tenantId: args.tenantId,
+      userId: target._id,
+      role: args.role || "customer",
+      createdAt: now,
+    });
+
+    await ctx.db.insert("notifications", {
+      userId: target._id,
+      title: `Welcome to ${tenant.siteName}`,
+      message: `You have been added as a customer to ${tenant.siteName}. Log in to access your accounts.`,
+      type: "business",
+      isRead: false,
+      link: `/site/${args.tenantId}`,
+      createdAt: now,
+    });
+
+    await ctx.db.insert("auditLogs", {
+      actorId: ownerId,
+      action: "tenant_customer_added",
+      resource: "tenantSite",
+      resourceId: args.tenantId,
+      after: { email: args.email, role: args.role || "customer" },
+      createdAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/** Bank admin: remove customer. */
+export const adminRemoveCustomer = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    membershipId: v.id("tenantUsers"),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const membership = await ctx.db.get(args.membershipId);
+    if (!membership || membership.tenantId !== args.tenantId) throw new Error("Membership not found");
+    await ctx.db.delete(args.membershipId);
+    return { success: true };
+  },
+});
+
+/** Bank admin: review customer KYC. */
+export const adminReviewCustomerKyc = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    kycId: v.id("kycRecords"),
+    status: v.union(
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("resubmission_required"),
+      v.literal("under_review"),
+    ),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const kyc = await ctx.db.get(args.kycId);
+    if (!kyc || kyc.tenantId !== args.tenantId) throw new Error("KYC record not found");
+
+    const now = Date.now();
+    await ctx.db.patch(args.kycId, {
+      status: args.status,
+      notes: args.notes,
+      reviewedBy: ownerId,
+      reviewedAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("kycEvents", {
+      kycId: args.kycId,
+      actorId: ownerId,
+      action: `kyc_${args.status}`,
+      fromStatus: kyc.status,
+      toStatus: args.status,
+      reason: args.notes,
+      createdAt: now,
+    });
+
+    await ctx.db.insert("notifications", {
+      userId: kyc.userId,
+      title: `KYC ${args.status.replace(/_/g, " ")}`,
+      message: args.status === "approved"
+        ? `Your identity verification at ${tenant.siteName} was approved.`
+        : args.status === "rejected"
+          ? `Your verification at ${tenant.siteName} was rejected: ${args.notes}`
+          : `Additional information is required for your verification at ${tenant.siteName}.`,
+      type: "business",
+      isRead: false,
+      link: `/site/${args.tenantId}`,
+      createdAt: now,
+    });
+
+    return { success: true };
+  },
+});
+
+/** Bank admin: list all transactions for the tenant. */
+export const adminListTransactions = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return [];
+    const ledger = await ctx.db
+      .query("tenantLedger")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .order("desc")
+      .take(200);
+    const enriched = await Promise.all(
+      ledger.map(async (l) => {
+        const user = await ctx.db.get(l.userId);
+        return { ...l, userName: user?.name ?? user?.email ?? "Unknown" };
+      })
+    );
+    return enriched;
+  },
+});
+
+/** Bank admin: list all KYC records for the tenant. */
+export const adminListKycRecords = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return [];
+    const records = await ctx.db
+      .query("kycRecords")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .order("desc")
+      .take(100);
+    const enriched = await Promise.all(
+      records.map(async (r) => {
+        const user = await ctx.db.get(r.userId);
+        return { ...r, userName: user?.name ?? user?.email ?? "Unknown" };
+      })
+    );
+    return enriched;
+  },
+});

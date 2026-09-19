@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty";
-import { Building2, Plus, ArrowUpRight, Landmark, TrendingUp } from "lucide-react";
+import { Building2, Plus, ArrowUpRight, Landmark, TrendingUp, Globe, Shield } from "lucide-react";
 import { Link } from "react-router";
 
 const siteTypeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -49,26 +49,34 @@ export default function BusinessSuite() {
           {sites.map((site) => {
             const Icon = siteTypeIcons[site.siteType] || Building2;
             return (
-              <Link key={site._id} to={`/business/sites/${site._id}`}>
-                <Card className="notebook-card cursor-pointer transition-colors hover:border-blue-300 dark:hover:border-blue-700 h-full">
+              <Card key={site._id} className="notebook-card h-full">
                   <CardContent className="p-5">
-                    <div className="flex items-start justify-between">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50">
-                        <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <Link to={`/business/sites/${site._id}`} className="block">
+                      <div className="flex items-start justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950/50">
+                          <Icon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
                       </div>
-                      <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <h3 className="mt-3 font-semibold text-[var(--nb-ink)]">{site.siteName}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">{site.subdomain}.cloudie.app</p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <Badge variant={site.isActive ? "default" : "secondary"} className="text-[10px]">
-                        {site.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                      <Badge variant="outline" className="text-[10px] capitalize">{site.siteType}</Badge>
+                      <h3 className="mt-3 font-semibold text-[var(--nb-ink)]">{site.siteName}</h3>
+                      <p className="text-xs text-muted-foreground mt-1">{site.subdomain}.cloudie.app</p>
+                      <div className="mt-3 flex items-center gap-2">
+                        <Badge variant={site.isActive ? "default" : "secondary"} className="text-[10px]">
+                          {site.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] capitalize">{site.siteType}</Badge>
+                      </div>
+                    </Link>
+                    <div className="mt-4 flex gap-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                      <Link to={`/site/${site._id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                        <Globe className="h-3 w-3" /> Banking Site
+                      </Link>
+                      <Link to={`/site/${site._id}/admin`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
+                        <Shield className="h-3 w-3" /> Admin Panel
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
             );
           })}
         </div>

@@ -22,6 +22,13 @@ const Shipments = lazy(() => import("./pages/Shipments.tsx"));
 const NewShipment = lazy(() => import("./pages/NewShipment.tsx"));
 const ShipmentDetail = lazy(() => import("./pages/ShipmentDetail.tsx"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking.tsx"));
+const SiteLanding = lazy(() => import("./pages/site/SiteLanding.tsx"));
+const SiteAuth = lazy(() => import("./pages/site/SiteAuth.tsx"));
+const SiteDashboard = lazy(() => import("./pages/site/SiteDashboard.tsx"));
+const SiteAccounts = lazy(() => import("./pages/site/SiteAccounts.tsx"));
+const SiteTransactions = lazy(() => import("./pages/site/SiteTransactions.tsx"));
+const SiteKyc = lazy(() => import("./pages/site/SiteKyc.tsx"));
+const SiteAdmin = lazy(() => import("./pages/site/SiteAdmin.tsx"));
 const Ticketing = lazy(() => import("./pages/Ticketing.tsx"));
 const FlightDocument = lazy(() => import("./pages/FlightDocument.tsx"));
 const HotelDocument = lazy(() => import("./pages/HotelDocument.tsx"));
@@ -146,6 +153,20 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/track/:trackingNumber" element={<PublicTracking />} />
                 <Route path="/tracking" element={<PublicTracking />} />
                 <Route path="/tracking/:trackingNumber" element={<PublicTracking />} />
+
+                {/* Generated tenant banking site (public) */}
+                <Route path="/site/:siteId" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
+                <Route path="/site/:siteId/about" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
+                <Route path="/site/:siteId/services" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
+                <Route path="/site/:siteId/contact" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
+                <Route path="/site/:siteId/login" element={<React.Suspense fallback={<RouteLoading />}><SiteAuth /></React.Suspense>} />
+                <Route path="/site/:siteId/signup" element={<React.Suspense fallback={<RouteLoading />}><SiteAuth /></React.Suspense>} />
+                <Route path="/site/:siteId/dashboard" element={<React.Suspense fallback={<RouteLoading />}><SiteDashboard /></React.Suspense>} />
+                <Route path="/site/:siteId/accounts" element={<React.Suspense fallback={<RouteLoading />}><SiteAccounts /></React.Suspense>} />
+                <Route path="/site/:siteId/transactions" element={<React.Suspense fallback={<RouteLoading />}><SiteTransactions /></React.Suspense>} />
+                <Route path="/site/:siteId/kyc" element={<React.Suspense fallback={<RouteLoading />}><SiteKyc /></React.Suspense>} />
+                <Route path="/site/:siteId/notifications" element={<React.Suspense fallback={<RouteLoading />}><SiteDashboard /></React.Suspense>} />
+                <Route path="/site/:siteId/admin" element={<React.Suspense fallback={<RouteLoading />}><SiteAdmin /></React.Suspense>} />
 
                 {/* Authenticated app routes with layout */}
                 <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
