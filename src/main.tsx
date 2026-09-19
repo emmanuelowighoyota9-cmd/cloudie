@@ -23,12 +23,16 @@ const NewShipment = lazy(() => import("./pages/NewShipment.tsx"));
 const ShipmentDetail = lazy(() => import("./pages/ShipmentDetail.tsx"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking.tsx"));
 const SiteLanding = lazy(() => import("./pages/site/SiteLanding.tsx"));
+const SiteBanking = lazy(() => import("./pages/site/SiteBanking.tsx"));
 const SiteAuth = lazy(() => import("./pages/site/SiteAuth.tsx"));
 const SiteDashboard = lazy(() => import("./pages/site/SiteDashboard.tsx"));
 const SiteAccounts = lazy(() => import("./pages/site/SiteAccounts.tsx"));
 const SiteTransactions = lazy(() => import("./pages/site/SiteTransactions.tsx"));
 const SiteKyc = lazy(() => import("./pages/site/SiteKyc.tsx"));
 const SiteAdmin = lazy(() => import("./pages/site/SiteAdmin.tsx"));
+const AdminBankingTenants = lazy(() => import("./pages/AdminBankingTenants.tsx"));
+const AdminBankingCreateTenant = lazy(() => import("./pages/AdminBankingCreateTenant.tsx"));
+const AdminBankingTenantDetail = lazy(() => import("./pages/AdminBankingTenantDetail.tsx"));
 const Ticketing = lazy(() => import("./pages/Ticketing.tsx"));
 const FlightDocument = lazy(() => import("./pages/FlightDocument.tsx"));
 const HotelDocument = lazy(() => import("./pages/HotelDocument.tsx"));
@@ -154,8 +158,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/tracking" element={<PublicTracking />} />
                 <Route path="/tracking/:trackingNumber" element={<PublicTracking />} />
 
-                {/* Generated tenant banking site (public) */}
+                {/* Generated tenant banking site (public) — canonical = /site/:siteId/banking (full portal) */}
                 <Route path="/site/:siteId" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
+                <Route path="/site/:siteId/banking" element={<React.Suspense fallback={<RouteLoading />}><SiteBanking /></React.Suspense>} />
                 <Route path="/site/:siteId/about" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
                 <Route path="/site/:siteId/services" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
                 <Route path="/site/:siteId/contact" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
@@ -167,6 +172,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/site/:siteId/kyc" element={<React.Suspense fallback={<RouteLoading />}><SiteKyc /></React.Suspense>} />
                 <Route path="/site/:siteId/notifications" element={<React.Suspense fallback={<RouteLoading />}><SiteDashboard /></React.Suspense>} />
                 <Route path="/site/:siteId/admin" element={<React.Suspense fallback={<RouteLoading />}><SiteAdmin /></React.Suspense>} />
+                <Route path="/:tenant/banking" element={<React.Suspense fallback={<RouteLoading />}><SiteBanking /></React.Suspense>} />
 
                 {/* Authenticated app routes with layout */}
                 <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
@@ -220,6 +226,9 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="facilities" element={<AdminLocations tab="facilities" />} />
                   <Route path="documents" element={<AdminDocuments />} />
                   <Route path="tenants" element={<AdminTenants />} />
+                  <Route path="tenants/new" element={<AdminBankingCreateTenant />} />
+                  <Route path="tenants/banking" element={<AdminBankingTenants />} />
+                  <Route path="tenants/:tenantId/banking" element={<AdminBankingTenantDetail />} />
                   <Route path="kyc" element={<AdminKYC />} />
                   <Route path="notifications" element={<AdminNotifications />} />
                   <Route path="audit" element={<AdminAuditLogs />} />

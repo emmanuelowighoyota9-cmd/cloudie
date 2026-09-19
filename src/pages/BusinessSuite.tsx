@@ -67,9 +67,9 @@ export default function BusinessSuite() {
                         <Badge variant="outline" className="text-[10px] capitalize">{site.siteType}</Badge>
                       </div>
                     </Link>
-                    <div className="mt-4 flex gap-3 border-t border-slate-100 dark:border-slate-800 pt-3">
-                      <Link to={`/site/${site._id}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors">
-                        <Globe className="h-3 w-3" /> Banking Site
+                    <div className="mt-4 flex gap-3 flex-wrap border-t border-slate-100 dark:border-slate-800 pt-3">
+                      <Link to={`/site/${site._id}/banking`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                        <Globe className="h-3 w-3" /> Banking portal
                       </Link>
                       <Link to={`/site/${site._id}/admin`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-700 transition-colors">
                         <Shield className="h-3 w-3" /> Admin Panel

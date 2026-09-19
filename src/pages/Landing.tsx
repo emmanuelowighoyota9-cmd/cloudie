@@ -27,9 +27,11 @@ import {
   MapPin,
   QrCode,
   Truck,
+  Landmark,
 } from "lucide-react";
 
 const features = [
+  { icon: Landmark, title: "Banking Tenants", desc: "Provision islands like Crestline Capital — ledger-backed accounts, deposits, transfers, KYC & statements." },
   { icon: Package, title: "Shipment Management", desc: "Create, track, and manage shipments with real-time status updates and public tracking." },
   { icon: FileText, title: "Document Generation", desc: "Generate flight itineraries, hotel reservations, invoices, and customs documents." },
   { icon: Building2, title: "Business Suite", desc: "White-label tenant portal for banking and investment platforms with KYC." },
@@ -69,9 +71,11 @@ export default function Landing() {
               <Cloud className="h-4 w-4" />
             </div>
             <span className="text-lg font-bold text-foreground">Cloudie</span>
-          </div>
-          <div className="flex items-center gap-2">
+          </div>            <div className="flex items-center gap-2">
             <PwaInstallButton />
+            <Link to="/admin/tenants/banking">
+              <Button variant="ghost" size="sm">Banking tenants</Button>
+            </Link>
             <Link to="/auth">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
@@ -117,6 +121,10 @@ export default function Landing() {
                 Track
               </Button>
             </form>
+            <div className="mt-3 flex gap-2">
+              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm">Logistics suite</Button></Link>
+              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="bg-slate-900 text-white border-slate-900">Business banking</Button></Link>
+            </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Link to="/auth">
                 <Button size="lg" className="w-full gap-2 px-8 sm:w-auto">

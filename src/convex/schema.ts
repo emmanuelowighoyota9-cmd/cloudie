@@ -244,8 +244,20 @@ const schema = defineSchema(
     tenantSites: defineTable({
       ownerId: v.id("users"),
       siteName: v.string(),
+      displayName: v.optional(v.string()),
+      slug: v.optional(v.string()),
       subdomain: v.string(),
       siteType: v.union(v.literal("bank"), v.literal("investment")),
+      currency: v.optional(v.string()), // e.g. USD, GBP, EUR
+      country: v.optional(v.string()),
+      timezone: v.optional(v.string()),
+      supportEmail: v.optional(v.string()),
+      supportPhone: v.optional(v.string()),
+      plan: v.optional(v.string()),
+      // lifecycle: active | suspended | disabled | draft | archived
+      lifecycleStatus: v.optional(v.string()),
+      // banking feature toggles (inherit from tenantSite config)
+      bankingEnabled: v.optional(v.boolean()),
       isActive: v.boolean(),
       renewalDate: v.optional(v.number()),
       branding: v.optional(
@@ -260,7 +272,8 @@ const schema = defineSchema(
       createdAt: v.number(),
     })
       .index("by_owner", ["ownerId"])
-      .index("by_subdomain", ["subdomain"]),
+      .index("by_subdomain", ["subdomain"])
+      .index("by_slug", ["slug", "siteType"]),
 
     kycRecords: defineTable({
       tenantId: v.id("tenantSites"),
@@ -298,6 +311,164 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_tenant", ["tenantId", "createdAt"]),
 
+    // ─── Banking engine: beneficiaries, deposits, withdrawals, transfers, double-entry posts ───
+    bankingBeneficiaries: defineTable({
+      tenantId: v.id("tenantSites"),
+      ownerUserId: v.id("users"),
+      nickname: v.string(),
+      accountNumber: v.string(),
+      accountHolderName: v.optional(v.string()),
+      accountType: v.optional(v.string()),
+      isExternal: v.boolean(),
+      // external bank details (opaque, not required for internal transfers)
+      bankName: v.optional(v.string()),
+      routingNumber: v.optional(v.string()),
+      swiftCode: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_tenant_owner", ["tenantId", "ownerUserId", "createdAt"])
+      .index("by_owner", ["ownerUserId"])
+      .index("by_tenant", ["tenantId"]),
+
+    bankingDeposits: defineTable({
+      tenantId: v.id("tenantSites"),
+      userId: v.id("users"),
+      accountId: v.optional(v.id("tenantAccounts")),
+      reference: v.string(),
+      amountMinor: v.number(), // minor units (e.g. cents)
+      currency: v.string(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("cancelled"),
+        v.literal("reversed"),
+      ),
+      method: v.string(),
+      description: v.optional(v.string()),
+      idempotencyKey: v.optional(v.string()),
+      reconciledLedgerGroupId: v.optional(v.string()),
+      createdAt: v.number(),
+      completedAt: v.optional(v.number()),
+    })
+      .index("by_tenant", ["tenantId", "createdAt"])
+      .index("by_user", ["userId", "createdAt"])
+      .index("by_reference", ["reference"])
+      .index("by_idempotency", ["idempotencyKey"]),
+
+    bankingWithdrawals: defineTable({
+      tenantId: v.id("tenantSites"),
+      userId: v.id("users"),
+      accountId: v.id("tenantAccounts"),
+      reference: v.string(),
+      amountMinor: v.number(),
+      feeMinor: v.number(),
+      totalDebitMinor: v.number(), // = amountMinor + feeMinor
+      currency: v.string(),
+      destination: v.optional(v.string()),
+      method: v.optional(v.string()),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("cancelled"),
+        v.literal("reversed"),
+      ),
+      description: v.optional(v.string()),
+      idempotencyKey: v.optional(v.string()),
+      ledgerGroupId: v.optional(v.string()),
+      createdAt: v.number(),
+      completedAt: v.optional(v.number()),
+    })
+      .index("by_tenant", ["tenantId", "createdAt"])
+      .index("by_user", ["userId", "createdAt"])
+      .index("by_account", ["accountId", "createdAt"])
+      .index("by_reference", ["reference"])
+      .index("by_idempotency", ["idempotencyKey"]),
+
+    bankingTransfers: defineTable({
+      tenantId: v.id("tenantSites"),
+      initiatorUserId: v.id("users"),
+      sourceAccountId: v.id("tenantAccounts"),
+      destType: v.union(
+        v.literal("internal_account"),
+        v.literal("beneficiary"),
+        v.literal("external"),
+      ),
+      destAccountId: v.optional(v.id("tenantAccounts")),
+      beneficiaryId: v.optional(v.id("bankingBeneficiaries")),
+      reference: v.string(),
+      amountMinor: v.number(),
+      feeMinor: v.number(),
+      totalDebitMinor: v.number(),
+      currency: v.string(),
+      // fee/limit snapshot at transaction time (historical explainability)
+      feeSnapshot: v.optional(v.any()),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("cancelled"),
+        v.literal("reversed"),
+      ),
+      description: v.optional(v.string()),
+      idempotencyKey: v.optional(v.string()),
+      ledgerGroupId: v.optional(v.string()),
+      createdAt: v.number(),
+      completedAt: v.optional(v.number()),
+    })
+      .index("by_tenant", ["tenantId", "createdAt"])
+      .index("by_source_account", ["sourceAccountId", "createdAt"])
+      .index("by_reference", ["reference"])
+      .index("by_idempotency", ["idempotencyKey"]),
+
+    // Double-entry ledger posts: every financial op is a group of balanced entries.
+    bankingLedgerEntries: defineTable({
+      tenantId: v.id("tenantSites"),
+      groupId: v.string(), // journal / transaction group id
+      relatedKind: v.union(
+        v.literal("transfer"),
+        v.literal("deposit"),
+        v.literal("withdrawal"),
+        v.literal("fee"),
+        v.literal("reversal"),
+        v.literal("adjustment"),
+      ),
+      relatedId: v.string(), // _id of the source entity (transfer/deposit/…)
+      accountId: v.optional(v.id("tenantAccounts")),
+      userId: v.optional(v.id("users")),
+      // one of (debitMinor, creditMinor) is > 0; invariants: group debits == group credits.
+      debitMinor: v.number(),
+      creditMinor: v.number(),
+      currency: v.string(),
+      description: v.string(),
+      idempotencyKey: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_tenant", ["tenantId", "createdAt"])
+      .index("by_group", ["groupId", "createdAt"])
+      .index("by_account", ["accountId", "createdAt"])
+      .index("by_user", ["userId", "createdAt"])
+      .index("by_idempotency", ["idempotencyKey"]),
+
+    // Fee/limit config per tenant (audited; snapshot per TXN)
+    bankingFeeConfig: defineTable({
+      tenantId: v.id("tenantSites"),
+      transferFeeMinor: v.number(),
+      withdrawalFeeMinor: v.number(),
+      depositFeeMinor: v.optional(v.number()),
+      dailyTransferLimitMinor: v.optional(v.number()),
+      dailyWithdrawalLimitMinor: v.optional(v.number()),
+      perTransactionLimitMinor: v.optional(v.number()),
+      minTransactionMinor: v.optional(v.number()),
+      currency: v.string(),
+      updatedBy: v.optional(v.id("users")),
+      updatedAt: v.number(),
+    }).index("by_tenant", ["tenantId"]),
+
     tenantAccounts: defineTable({
       tenantId: v.id("tenantSites"),
       userId: v.id("users"),
@@ -308,10 +479,53 @@ const schema = defineSchema(
       routingNumber: v.optional(v.string()),
       currency: v.optional(v.string()),
       isActive: v.boolean(),
+      status: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("active"),
+          v.literal("frozen"),
+          v.literal("suspended"),
+          v.literal("closed"),
+        ),
+      ),
+      balanceMinor: v.optional(v.number()), // authoritative integer cents
+      availableBalanceMinor: v.optional(v.number()),
+      ledgerBalanceMinor: v.optional(v.number()),
       createdAt: v.number(),
     })
       .index("by_tenant", ["tenantId", "createdAt"])
-      .index("by_tenant_and_user", ["tenantId", "userId"]),
+      .index("by_tenant_and_user", ["tenantId", "userId"])
+      .index("by_account_number", ["accountNumber"]),
+
+    bankingTemplates: defineTable({
+      name: v.string(),
+      bankName: v.string(),
+      displayName: v.string(),
+      slug: v.optional(v.string()),
+      currency: v.string(),
+      country: v.optional(v.string()),
+      timezone: v.optional(v.string()),
+      supportEmail: v.optional(v.string()),
+      supportPhone: v.optional(v.string()),
+      plan: v.optional(v.string()),
+      primaryColor: v.optional(v.string()),
+      accentColor: v.optional(v.string()),
+      features: v.object({
+        customerPortal: v.boolean(),
+        accounts: v.boolean(),
+        transfers: v.boolean(),
+        deposits: v.boolean(),
+        withdrawals: v.boolean(),
+        kyc: v.boolean(),
+        statements: v.boolean(),
+        notifications: v.boolean(),
+        auditLogging: v.boolean(),
+        realtime: v.boolean(),
+      }),
+      createdBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }).index("by_name", ["name"]).index("by_slug", ["slug"]),
 
     vendors: defineTable({
       userId: v.id("users"),
@@ -849,6 +1063,17 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_kyc", ["kycId", "createdAt"]),
 
+    // ─── Banking finance: richer lifecycle on deposits/withdrawals (extra fields) ───
+    bankingApiKeys: defineTable({
+      tenantId: v.id("tenantSites"),
+      scope: v.string(),
+      keyHash: v.string(),
+      isRevoked: v.boolean(),
+      createdBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      revokedAt: v.optional(v.number()),
+    }).index("by_tenant", ["tenantId"]),
+
     // ─── Notification preferences (Cloudie-owned delivery state) ───
     notificationPreferences: defineTable({
       userId: v.id("users"),
@@ -860,6 +1085,18 @@ const schema = defineSchema(
       marketing: v.boolean(),
       updatedAt: v.number(),
     }).index("by_user", ["userId"]),
+
+    bankingIdempotency: defineTable({
+      key: v.string(),
+      kind: v.string(),
+      tenantId: v.optional(v.id("tenantSites")),
+      actorId: v.optional(v.id("users")),
+      resultType: v.optional(v.string()),
+      resultId: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_key", ["key"])
+      .index("by_tenant_and_kind", ["tenantId", "kind", "createdAt"]),
   },
   {
     schemaValidation: false,
