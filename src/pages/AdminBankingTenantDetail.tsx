@@ -4,7 +4,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ShieldCheck, Activity, Users, CreditCard, ArrowDownLeft, ArrowUpRight, Lock, Unlock, Pause, FileText, DollarSign, Landmark, AlertTriangle, Paintbrush } from "lucide-react";
+import { ShieldCheck, Activity, Users, CreditCard, Lock, Unlock, Pause, FileText, DollarSign, Landmark, Paintbrush, Settings2 } from "lucide-react";
 
 function Money({ minor, currency = "USD" }: { minor: number; currency?: string }) {
   const sym = currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency + " ";
@@ -99,7 +99,10 @@ export default function AdminBankingTenantDetail() {
           <div className="text-sm text-slate-500 mt-1">{(tenant as any).displayName ?? tenant.siteName} · {(tenant as any).subdomain}.g0ki.com · {(tenant as any).country} {(tenant as any).plan ? `· ${ (tenant as any).plan}` : ""}</div>
           <div className="text-xs text-slate-400 mt-2 flex items-center gap-2"><DollarSign className="h-3 w-3" /> Fee config snapshot is stored per transaction; historical transactions remain explainable after fee changes.</div>
         </div>
-        <Link to="/admin/tenants/new" className="text-sm text-slate-500 hover:text-slate-900 underline">New banking tenant</Link>
+        <div className="flex items-center gap-2">
+          <Link to={`/admin/tenants/${id}/banking/settings`} className="text-xs rounded-full bg-slate-900 text-white px-3 py-1.5 font-semibold">Banking settings</Link>
+          <Link to="/admin/tenants/new" className="text-sm text-slate-500 hover:text-slate-900 underline">New banking tenant</Link>
+        </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">

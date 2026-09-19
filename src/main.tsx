@@ -33,6 +33,7 @@ const SiteAdmin = lazy(() => import("./pages/site/SiteAdmin.tsx"));
 const AdminBankingTenants = lazy(() => import("./pages/AdminBankingTenants.tsx"));
 const AdminBankingCreateTenant = lazy(() => import("./pages/AdminBankingCreateTenant.tsx"));
 const AdminBankingTenantDetail = lazy(() => import("./pages/AdminBankingTenantDetail.tsx"));
+const AdminBankingTenantSettings = lazy(() => import("./pages/AdminBankingTenantSettings.tsx"));
 const Ticketing = lazy(() => import("./pages/Ticketing.tsx"));
 const FlightDocument = lazy(() => import("./pages/FlightDocument.tsx"));
 const HotelDocument = lazy(() => import("./pages/HotelDocument.tsx"));
@@ -229,6 +230,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="tenants/new" element={<AdminBankingCreateTenant />} />
                   <Route path="tenants/banking" element={<AdminBankingTenants />} />
                   <Route path="tenants/:tenantId/banking" element={<AdminBankingTenantDetail />} />
+                  <Route path="tenants/:tenantId/banking/settings" element={<AdminBankingTenantSettings />} />
                   <Route path="kyc" element={<AdminKYC />} />
                   <Route path="notifications" element={<AdminNotifications />} />
                   <Route path="audit" element={<AdminAuditLogs />} />

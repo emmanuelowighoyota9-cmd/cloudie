@@ -97,6 +97,99 @@ export const ensureCrestlineTemplate = internalMutation({
   },
 });
 
+/** Super Admin: generic tenant creation for all 5 tenant types from /admin/tenants/new. */
+export const createAdminTenant = mutation({
+  args: {
+    siteType: v.union(v.literal("bank"), v.literal("logistics"), v.literal("ticketing"), v.literal("business"), v.literal("services"), v.literal("investment")),
+    tenantName: v.string(),
+    displayName: v.optional(v.string()),
+    slug: v.optional(v.string()),
+    subdomain: v.string(),
+    currency: v.optional(v.string()),
+    country: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    contactEmail: v.string(),
+    contactPhone: v.optional(v.string()),
+    supportEmail: v.optional(v.string()),
+    supportPhone: v.optional(v.string()),
+    plan: v.optional(v.string()),
+    lifecycleStatus: v.optional(v.string()),
+    primaryColor: v.optional(v.string()),
+    accentColor: v.optional(v.string()),
+    templateSlug: v.optional(v.string()),
+    bankingFeatures: v.optional(v.object({
+      customerPortal: v.boolean(),
+      accounts: v.boolean(),
+      transfers: v.boolean(),
+      deposits: v.boolean(),
+      withdrawals: v.boolean(),
+      kyc: v.boolean(),
+      statements: v.boolean(),
+      notifications: v.boolean(),
+      auditLogging: v.boolean(),
+      realtime: v.boolean(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const { adminId, admin } = await requireAdmin(ctx);
+    const now = Date.now();
+    const siteType = (args.siteType ?? "bank") as string;
+    const isBanking = siteType === "bank";
+    const currency = (args.currency ?? (isBanking ? "USD" : "USD")).toString().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) throw new Error("INVALID_CURRENCY: 3-letter ISO code");
+    const sub = args.subdomain.trim().toLowerCase();
+    if (!/^[a-z][a-z0-9-]{2,60}$/.test(sub)) throw new Error("INVALID_SUBDOMAIN: 3-60 chars, lowercase, hyphens only");
+    if (args.plan && !VALID_PLANS.includes(args.plan as any)) throw new Error(`INVALID_PLAN: ${VALID_PLANS.join("|")}`);
+    const status = args.lifecycleStatus ?? "active";
+    if (!VALID_LIFECYCLE.includes(status as any)) throw new Error(`INVALID_LIFECYCLE: ${VALID_LIFECYCLE.join("|")}`);
+    const existingSub = await ctx.db.query("tenantSites").withIndex("by_subdomain", q => q.eq("subdomain", sub)).first();
+    if (existingSub) throw new Error("DUPLICATE_DOMAIN_SUBDOMAIN");
+    if (args.slug) {
+      const slug = args.slug.trim().toLowerCase();
+      const existingSlug = await ctx.db.query("tenantSites").withIndex("by_slug", q => q.eq("slug", slug).eq("siteType", siteType as any)).first();
+      if (existingSlug) throw new Error("DUPLICATE_SLUG");
+    }
+    const isActive = !["disabled", "suspended", "archived", "draft"].includes(status);
+    const row: Record<string, unknown> = {
+      ownerId: adminId,
+      siteName: args.tenantName.trim(),
+      displayName: (args.displayName ?? args.tenantName).trim(),
+      slug: args.slug?.trim().toLowerCase() || sub,
+      subdomain: sub,
+      siteType: siteType as any,
+      currency,
+      country: args.country?.trim(),
+      timezone: args.timezone?.trim(),
+      supportEmail: (args.supportEmail ?? args.contactEmail).trim(),
+      supportPhone: (args.supportPhone ?? args.contactPhone ?? "").trim(),
+      plan: (args.plan ?? (isBanking ? "enterprise" : "starter")).toString(),
+      lifecycleStatus: status,
+      bankingEnabled: isBanking ? true : false,
+      isActive,
+      renewalDate: now + 365 * 24 * 3600 * 1000,
+      branding: { primaryColor: args.primaryColor, accentColor: args.accentColor },
+      contactEmail: args.contactEmail.trim(),
+      contactPhone: args.contactPhone?.trim(),
+      createdAt: now,
+    };
+    const tenantId = await ctx.db.insert("tenantSites", row as any);
+    await toAudit(ctx as MutationCtx, adminId, admin.email, isBanking ? "BANKING_TENANT_CREATED" : "TENANT_CREATED", "tenantSite", tenantId, null, row);
+    if (isBanking) {
+      await ctx.db.insert("bankingFeeConfig", { tenantId, transferFeeMinor: 0, withdrawalFeeMinor: 0, currency, updatedBy: adminId, updatedAt: now });
+      if (args.bankingFeatures) {
+        // store feature flags as template-like record linked to tenant for explainability
+        await ctx.db.insert("auditLogs", { actorId: adminId, actorEmail: admin.email, action: "BANKING_FEATURES_CONFIGURED", resource: "tenantSite", resourceId: tenantId, after: args.bankingFeatures, createdAt: now });
+      }
+      if (args.templateSlug) {
+        const tpl = await ctx.db.query("bankingTemplates").withIndex("by_slug", q => q.eq("slug", args.templateSlug!)).first();
+        if (tpl) await ctx.db.patch(tenantId, { branding: { primaryColor: tpl.primaryColor, accentColor: tpl.accentColor } } as any);
+      }
+    }
+    const suffix = isBanking ? "/banking" : "";
+    return { id: tenantId, subdomain: sub, siteType, suffix };
+  },
+});
+
 /** Super Admin: create banking tenant (full form from /admin/tenants/new). */
 export const createBankingTenant = mutation({
   args: {

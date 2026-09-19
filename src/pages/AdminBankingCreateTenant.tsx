@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-import { Building2, Landmark, ShieldCheck, Globe, Settings2, DollarSign, Check, Paintbrush, AlertTriangle } from "lucide-react";
+import {
+  Building2, Landmark, ShieldCheck, Globe, Settings2, DollarSign,
+  Check, Paintbrush, AlertTriangle, Truck, Ticket, Briefcase, Wrench, ChevronDown,
+} from "lucide-react";
 
 function Field({ label, children, hint, required }: { label: string; children: React.ReactNode; hint?: string; required?: boolean }) {
   return (
@@ -18,12 +21,26 @@ function Field({ label, children, hint, required }: { label: string; children: R
 const PLAN_OPTIONS = ["free", "starter", "pro", "enterprise"] as const;
 const STATUS_OPTIONS = ["draft", "active", "suspended", "disabled", "archived"] as const;
 const CURRENCY_OPTIONS = ["USD", "GBP", "EUR", "NGN", "JPY", "CAD", "AUD"] as const;
+type TenantKind = "bank" | "logistics" | "ticketing" | "business" | "services";
+
+const TYPE_META: Record<TenantKind, { label: string; desc: string; icon: React.ComponentType<{ className?: string }> }>= {
+  logistics: { label: "Logistics", desc: "Shipments, tracking, facilities", icon: Truck },
+  ticketing: { label: "Ticketing", desc: "Documents & reservations", icon: Ticket },
+  business: { label: "Business Suite", desc: "White-label tenant sites", icon: Briefcase },
+  services: { label: "Services", desc: "Email campaigns, rendering", icon: Wrench },
+  bank: { label: "Banking", desc: "Ledger, accounts, transfers, KYC", icon: Landmark },
+};
 
 export default function AdminBankingCreateTenant() {
   const nav = useNavigate();
   const templates = useQuery(api.bankingTenant.listTemplates);
-  const create = useMutation(api.bankingTenant.createBankingTenant);
+  const createBanking = useMutation(api.bankingTenant.createBankingTenant);
+  const createAny = useMutation(api.bankingTenant.createAdminTenant);
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<TenantKind>("bank");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Banking defaults (Crestline preset, configurable before provisioning)
   const [f, setF] = useState({
     templateSlug: "crestline-capital",
     bankName: "Crestline Capital",
@@ -41,10 +58,20 @@ export default function AdminBankingCreateTenant() {
     lifecycleStatus: "active" as string,
     primaryColor: "#0f172a",
     accentColor: "#0ea5e9",
-    bankingFeatureTogglesNote: true,
+    features: {
+      customerPortal: true, accounts: true, transfers: true, deposits: true,
+      withdrawals: true, kyc: true, statements: true, notifications: true,
+      auditLogging: true, realtime: true,
+    } as Record<string, boolean>,
   });
 
-  // sync from selected template
+  // Non-banking quick fields
+  const [simple, setSimple] = useState({
+    tenantName: "", subdomain: "", slug: "", plan: "starter" as string,
+    contactEmail: "", lifecycleStatus: "active" as string,
+  });
+
+  // Hydrate banking defaults from template when one is selected
   useEffect(() => {
     if (!templates) return;
     const tpl: any = templates.find((t: any) => (t.slug ?? "") === f.templateSlug);
@@ -60,34 +87,55 @@ export default function AdminBankingCreateTenant() {
       primaryColor: tpl.primaryColor ?? prev.primaryColor,
       accentColor: tpl.accentColor ?? prev.accentColor,
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [templates?.length, f.templateSlug]);
 
   const set = (k: string, v: string) => setF(prev => ({ ...prev, [k]: v } as any));
+  const isBanking = kind === "bank";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      const r = await create({
-        bankName: f.bankName,
-        displayName: f.displayName || undefined,
-        slug: f.slug || undefined,
-        subdomain: f.subdomain,
-        currency: f.currency,
-        country: f.country || undefined,
-        timezone: f.timezone || undefined,
-        contactEmail: f.contactEmail,
-        contactPhone: f.contactPhone || undefined,
-        supportEmail: f.supportEmail || undefined,
-        supportPhone: f.supportPhone || undefined,
-        plan: f.plan || undefined,
-        lifecycleStatus: f.lifecycleStatus || undefined,
-        primaryColor: f.primaryColor || undefined,
-        accentColor: f.accentColor || undefined,
-        templateSlug: f.templateSlug || undefined,
-      });
-      toast.success(`Tenant created: ${f.bankName} (${r.subdomain})`);
-      nav(`/admin/tenants/${r.id}/banking`);
+      if (isBanking) {
+        const r = await createBanking({
+          bankName: f.bankName,
+          displayName: f.displayName || undefined,
+          slug: f.slug || undefined,
+          subdomain: f.subdomain,
+          currency: f.currency,
+          country: f.country || undefined,
+          timezone: f.timezone || undefined,
+          contactEmail: f.contactEmail,
+          contactPhone: f.contactPhone || undefined,
+          supportEmail: f.supportEmail || undefined,
+          supportPhone: f.supportPhone || undefined,
+          plan: f.plan || undefined,
+          lifecycleStatus: f.lifecycleStatus || undefined,
+          primaryColor: f.primaryColor || undefined,
+          accentColor: f.accentColor || undefined,
+          templateSlug: f.templateSlug || undefined,
+        });
+        toast.success(`Banking tenant created: ${f.bankName} (${r.subdomain})`);
+        nav(`/admin/tenants/${r.id}/banking`);
+      } else {
+        const name = simple.tenantName.trim();
+        const sub = simple.subdomain.trim().toLowerCase();
+        if (!name) { toast.error("Provide a tenant name"); return; }
+        if (!sub) { toast.error("Provide a subdomain"); return; }
+        const r: any = await createAny({
+          siteType: kind,
+          tenantName: name,
+          slug: simple.slug || undefined,
+          subdomain: sub,
+          currency: "USD",
+          contactEmail: simple.contactEmail || f.contactEmail,
+          plan: simple.plan || undefined,
+          lifecycleStatus: simple.lifecycleStatus || undefined,
+        } as any);
+        toast.success(`${TYPE_META[kind].label} tenant created: ${name} (${r.subdomain})`);
+        nav(r?.suffix ? `/admin/tenants/${r.id}${r.suffix}` : "/admin/tenants");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally { setBusy(false); }
@@ -96,8 +144,8 @@ export default function AdminBankingCreateTenant() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2"><Landmark className="h-6 w-6" /> New Banking Tenant</h1>
-        <p className="text-sm text-slate-500">Create and provision a new banking tenant such as Crestline Capital. Banking template is configurable before provisioning.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2"><Landmark className="h-6 w-6" /> New Tenant</h1>
+        <p className="text-sm text-slate-500">Create and provision a tenant — select type first, then configure it. Banking (Crestline Capital) defaults to USD and is fully configurable before provisioning.</p>
       </div>
 
       {!templates ? (
@@ -105,75 +153,127 @@ export default function AdminBankingCreateTenant() {
       ) : null}
 
       <form onSubmit={submit} className="space-y-6">
-        {/* Template selector */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Paintbrush className="h-4 w-4 text-sky-500" /> Template & core</div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Template" required>
-              <select value={f.templateSlug} onChange={e => set(e.target.value as any, "templateSlug")} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">
-                {(templates ?? []).map((t: any) => <option key={t._id} value={t.slug ?? t.name}>{t.name}</option>)}
-                {!templates?.length && <option value="crestline-capital">Crestline Capital Banking Template</option>}
-              </select>
-            </Field>
-            <Field label="Tenant Status" required>
-              <select value={f.lifecycleStatus} onChange={e => set(e.target.value, "lifecycleStatus")} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">
-                {STATUS_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </Field>
+        {/* Tenant type selector — required by spec */}
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+          <div className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2"><Building2 className="h-4 w-4" /> Tenant type</div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {(["logistics", "ticketing", "business", "services", "bank"] as TenantKind[]).map(k => {
+              const meta = TYPE_META[k];
+              const active = kind === k;
+              const Icon = meta.icon;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setKind(k)}
+                  className={`rounded-xl border p-3 text-left transition ${active ? "border-slate-900 bg-slate-900 text-white dark:bg-white dark:text-slate-900" : "border-slate-200 bg-white hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700"}`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <div className="text-sm font-semibold mt-1">{meta.label}</div>
+                  <div className={`text-[11px] ${active ? "opacity-80" : "text-slate-500"}`}>{meta.desc}</div>
+                </button>
+              );
+            })}
           </div>
-          <div className="text-xs text-slate-500"><Check className="inline h-3 w-3 text-emerald-500" /> Default template: Crestline Capital Banking Template — tenant isolation, ledger-backed balances, double-entry accounting enabled by construction.</div>
+          {isBanking && <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 flex items-center gap-2"><Check className="h-4 w-4" /> Banking enables ledger-backed balances, double-entry accounting, account lifecycle, fee snapshot, idempotency, and tenant isolation by construction.</div>}
         </div>
 
-        {/* Naming + domain */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Building2 className="h-4 w-4 text-slate-400" /> Naming & public domain</div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Bank / tenant name" required><input required value={f.bankName} onChange={e => set("bankName", e.target.value)} placeholder="Crestline Capital" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Display name" hint="Customer-facing brand name. Defaults to bank name."><input value={f.displayName} onChange={e => set("displayName", e.target.value)} placeholder="Crestline Capital" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Tenant slug" hint="Lowercase, hyphens only. Unique within banking type."><input value={f.slug} onChange={e => set("slug", e.target.value.toLowerCase())} placeholder="crestline-capital" pattern="[a-z0-9-]+" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Public subdomain" required hint="e.g. crestline-capitalfive.g0ki.com — validated server-side; duplicates rejected."><div className="flex items-stretch gap-2"><input required value={f.subdomain} onChange={e => set("subdomain", e.target.value.toLowerCase())} placeholder="crestline-capitalfive" className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /><span className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-mono dark:bg-slate-800">.g0ki.com</span></div></Field>
-          </div>
-        </div>
+        {isBanking ? (
+          <>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Paintbrush className="h-4 w-4 text-sky-500" /> Template & core</div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Template" required>
+                  <select value={f.templateSlug} onChange={e => setF(p => ({ ...p, templateSlug: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">
+                    {(templates ?? []).map((t: any) => <option key={t._id} value={t.slug ?? t.name}>{t.name}</option>)}
+                    {!templates?.length && <option value="crestline-capital">Crestline Capital Banking Template</option>}
+                  </select>
+                </Field>
+                <Field label="Tenant Status" required>
+                  <select value={f.lifecycleStatus} onChange={e => set("lifecycleStatus", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">
+                    {STATUS_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="text-xs text-slate-500"><Check className="inline h-3 w-3 text-emerald-500" /> Default template: Crestline Capital Banking Template — USD ($), Active, enterprise.</div>
+            </div>
 
-        {/* Banking config */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><DollarSign className="h-4 w-4 text-emerald-600" /> Banking configuration</div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="Default currency" required><select value={f.currency} onChange={e => set("currency", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"><option value="">Select currency</option>{CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
-            <Field label="Country / Region"><input value={f.country} onChange={e => set("country", e.target.value)} placeholder="United States" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Timezone"><input value={f.timezone} onChange={e => set("timezone", e.target.value)} placeholder="America/New_York" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Plan" required><select value={f.plan} onChange={e => set("plan", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">{PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
-            <div />
-          </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3"><ShieldCheck className="h-4 w-4" /> Banking features (customer portal, accounts, transfers, deposits, withdrawals, KYC, statements, notifications, audit, realtime) are enabled via template — configurable per tenant by adjusting template/tenant config.</div>
-        </div>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Building2 className="h-4 w-4 text-slate-400" /> Naming & public domain</div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Bank / tenant name" required><input required value={f.bankName} onChange={e => set("bankName", e.target.value)} placeholder="Crestline Capital" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Display name" hint="Customer-facing brand. Defaults to bank name."><input value={f.displayName} onChange={e => set("displayName", e.target.value)} placeholder="Crestline Capital" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Tenant slug" hint="Lowercase, hyphens only. Unique within banking type."><input value={f.slug} onChange={e => set("slug", e.target.value.toLowerCase())} placeholder="crestline-capital" pattern="[a-z0-9-]+" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Public subdomain" required hint="e.g. crestline-capitalfive.g0ki.com — validated server-side; duplicates rejected."><div className="flex items-stretch gap-2"><input required value={f.subdomain} onChange={e => set("subdomain", e.target.value.toLowerCase())} placeholder="crestline-capitalfive" className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /><span className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-mono dark:bg-slate-800">.g0ki.com</span></div></Field>
+              </div>
+            </div>
 
-        {/* Contacts */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Globe className="h-4 w-4 text-sky-600" /> Contacts & support</div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Contact email" required><input required type="email" value={f.contactEmail} onChange={e => set("contactEmail", e.target.value)} placeholder="admin@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Contact phone"><input value={f.contactPhone} onChange={e => set("contactPhone", e.target.value)} placeholder="+1 (…)" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Support email"><input value={f.supportEmail} onChange={e => set("supportEmail", e.target.value)} placeholder="support@… " className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Support phone"><input value={f.supportPhone} onChange={e => set("supportPhone", e.target.value)} placeholder="+1 (800) …" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-          </div>
-        </div>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><DollarSign className="h-4 w-4 text-emerald-600" /> Banking configuration</div>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <Field label="Default currency" required><select value={f.currency} onChange={e => set("currency", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"><option value="">Select currency</option>{CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}</select></Field>
+                <Field label="Country / Region"><input value={f.country} onChange={e => set("country", e.target.value)} placeholder="United States" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Timezone"><input value={f.timezone} onChange={e => set("timezone", e.target.value)} placeholder="America/New_York" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Plan" required><select value={f.plan} onChange={e => set("plan", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">{PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
+                <div />
+              </div>
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3"><ShieldCheck className="h-4 w-4" /> Banking features are enabled via template — configurable per tenant before or after provisioning (see banking/settings).</div>
+            </div>
 
-        {/* Branding */}
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Settings2 className="h-4 w-4 text-slate-400" /> Branding</div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Primary color"><input value={f.primaryColor} onChange={e => set("primaryColor", e.target.value)} placeholder="#0f172a" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
-            <Field label="Accent color"><input value={f.accentColor} onChange={e => set("accentColor", e.target.value)} placeholder="#0ea5e9" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Globe className="h-4 w-4 text-sky-600" /> Contacts & support</div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Contact email" required><input required type="email" value={f.contactEmail} onChange={e => set("contactEmail", e.target.value)} placeholder="admin@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Contact phone"><input value={f.contactPhone} onChange={e => set("contactPhone", e.target.value)} placeholder="+1 (…)" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Support email"><input value={f.supportEmail} onChange={e => set("supportEmail", e.target.value)} placeholder="support@… " className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Support phone"><input value={f.supportPhone} onChange={e => set("supportPhone", e.target.value)} placeholder="+1 (800) …" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Settings2 className="h-4 w-4 text-slate-400" /> Branding</div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Field label="Primary color"><input value={f.primaryColor} onChange={e => set("primaryColor", e.target.value)} placeholder="#0f172a" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Accent color"><input value={f.accentColor} onChange={e => set("accentColor", e.target.value)} placeholder="#0ea5e9" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+              </div>
+            </div>
+
+            <div>
+              <button type="button" onClick={() => setShowAdvanced(v => !v)} className="text-xs text-slate-500 inline-flex items-center gap-1 underline">
+                Advanced — banking feature toggles <ChevronDown className={`h-3 w-3 transition ${showAdvanced ? "rotate-180" : ""}`} />
+              </button>
+              {showAdvanced && (
+                <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {Object.entries(f.features).map(([k, val]) => (
+                    <label key={k} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs dark:bg-slate-800 dark:border-slate-700">
+                      <input type="checkbox" checked={!!val} onChange={e => setF(p => ({ ...p, features: { ...p.features, [k]: e.target.checked } }))} />
+                      {k}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+            <div className="text-sm font-semibold text-slate-900 dark:text-white">{TYPE_META[kind].label} tenant</div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Tenant name" required><input required value={simple.tenantName} onChange={e => setSimple(p => ({ ...p, tenantName: e.target.value }))} placeholder={TYPE_META[kind].label + " tenant"} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+              <Field label="Slug"><input value={simple.slug} onChange={e => setSimple(p => ({ ...p, slug: e.target.value.toLowerCase() }))} placeholder="e.g. my-tenant" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+              <Field label="Subdomain" required hint={".g0ki.com"}><div className="flex gap-2"><input required value={simple.subdomain} onChange={e => setSimple(p => ({ ...p, subdomain: e.target.value.toLowerCase() }))} placeholder="my-tenant" className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /><span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs font-mono dark:bg-slate-800">.g0ki.com</span></div></Field>
+              <Field label="Contact email" required><input type="email" required value={simple.contactEmail} onChange={e => setSimple(p => ({ ...p, contactEmail: e.target.value }))} placeholder="admin@example.com" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+              <Field label="Plan"><select value={simple.plan} onChange={e => setSimple(p => ({ ...p, plan: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">{PLAN_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
+              <Field label="Status"><select value={simple.lifecycleStatus} onChange={e => setSimple(p => ({ ...p, lifecycleStatus: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">{STATUS_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}</select></Field>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <div className="text-xs text-slate-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Duplicate slugs, subdomains, account numbers, and references are rejected server-side.</div>
           <button disabled={busy} type="submit" className="rounded-xl bg-slate-900 text-white px-6 py-2.5 text-sm font-semibold disabled:opacity-50 shadow-sm hover:bg-slate-800">
-            {busy ? "Creating…" : "Create banking tenant"}
+            {busy ? "Creating…" : isBanking ? "Create banking tenant" : `Create ${TYPE_META[kind].label} tenant`}
           </button>
         </div>
       </form>

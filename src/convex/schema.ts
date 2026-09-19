@@ -129,7 +129,7 @@ export const ROUTE_STOP_STATUSES = [
 export type RouteStopStatus = (typeof ROUTE_STOP_STATUSES)[number];
 export const routeStopStatusValidator = v.union(...literals(ROUTE_STOP_STATUSES));
 
-export const SITE_TYPES = ["bank", "investment"] as const;
+export const SITE_TYPES = ["bank", "investment", "logistics", "ticketing", "business", "services"] as const;
 export type SiteType = (typeof SITE_TYPES)[number];
 
 export const ORDER_STATUSES = [
@@ -247,7 +247,7 @@ const schema = defineSchema(
       displayName: v.optional(v.string()),
       slug: v.optional(v.string()),
       subdomain: v.string(),
-      siteType: v.union(v.literal("bank"), v.literal("investment")),
+      siteType: v.union(v.literal("bank"), v.literal("investment"), v.literal("logistics"), v.literal("ticketing"), v.literal("business"), v.literal("services")),
       currency: v.optional(v.string()), // e.g. USD, GBP, EUR
       country: v.optional(v.string()),
       timezone: v.optional(v.string()),

@@ -15,7 +15,7 @@ export default function NewSite() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
-    siteName: "", subdomain: "", siteType: "bank" as "bank" | "investment",
+    siteName: "", subdomain: "", siteType: "bank" as "bank" | "investment" | "logistics" | "ticketing" | "business" | "services",
     contactEmail: "", contactPhone: "",
   });
   const update = (field: string, value: string) => setForm((p) => ({ ...p, [field]: value }));
@@ -53,8 +53,12 @@ export default function NewSite() {
               <Select value={form.siteType} onValueChange={(v) => update("siteType", v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="bank">Bank</SelectItem>
+                    <SelectItem value="bank">Bank</SelectItem>
                   <SelectItem value="investment">Investment</SelectItem>
+                  <SelectItem value="logistics">Logistics</SelectItem>
+                  <SelectItem value="ticketing">Ticketing</SelectItem>
+                  <SelectItem value="business">Business Suite</SelectItem>
+                  <SelectItem value="services">Services</SelectItem>
                 </SelectContent>
               </Select>
             </div>

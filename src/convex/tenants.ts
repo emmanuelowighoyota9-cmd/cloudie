@@ -6,7 +6,7 @@ export const create = mutation({
   args: {
     siteName: v.string(),
     subdomain: v.string(),
-    siteType: v.union(v.literal("bank"), v.literal("investment")),
+    siteType: v.union(v.literal("bank"), v.literal("investment"), v.literal("logistics"), v.literal("ticketing"), v.literal("business"), v.literal("services")),
     contactEmail: v.optional(v.string()),
     contactPhone: v.optional(v.string()),
   },
