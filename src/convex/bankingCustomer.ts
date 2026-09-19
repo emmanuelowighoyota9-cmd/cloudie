@@ -139,10 +139,28 @@ export const publicTenant = query({
     const t = await ctx.db.get(args.tenantId);
     if (!t || t.siteType !== "bank") return null;
     const status = (t as any).lifecycleStatus ?? (t.isActive ? "active" : "disabled");
-    if (["disabled", "suspended", "archived", "draft"].includes(status)) {
-      return { _id: t._id, siteName: t.siteName, displayName: (t as any).displayName, subdomain: t.subdomain, currency: (t as any).currency ?? "USD", status, branding: (t as any).branding };
-    }
-    return { _id: t._id, siteName: t.siteName, displayName: (t as any).displayName, subdomain: t.subdomain, currency: (t as any).currency ?? "USD", status, branding: (t as any).branding };
+    const isAvailable = t.isActive && status === "active";
+    return { _id: t._id, siteName: t.siteName, displayName: (t as any).displayName, subdomain: t.subdomain, currency: (t as any).currency ?? "USD", status, isAvailable, branding: (t as any).branding };
+  },
+});
+
+/** Self-signup: join a banking tenant as a customer (creates tenantUsers row). */
+export const joinTenant = mutation({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const { userId } = await requireAuth(ctx as MutationCtx);
+    const tenant = await getTenant(args.tenantId, ctx);
+    const status = (tenant.lifecycleStatus ?? (tenant.isActive ? "active" : "disabled")) as string;
+    const isAvailable = tenant.isActive && status === "active";
+    if (!isAvailable) throw new Error(`TENANT_UNAVAILABLE: tenant is ${status}`);
+    if (tenant.ownerId === userId) return { alreadyMember: true, isOwner: true };
+    const existing = await ctx.db.query("tenantUsers").withIndex("by_tenant", (q: any) => q.eq("tenantId", args.tenantId)).collect();
+    if (existing.some((r: any) => r.userId === userId)) return { alreadyMember: true };
+    const now = Date.now();
+    const id = await ctx.db.insert("tenantUsers", { tenantId: args.tenantId, userId, role: "customer", createdAt: now });
+    await audit(ctx as MutationCtx, userId, "TENANT_JOINED_SELF", "tenantSite", args.tenantId, null, { role: "customer" });
+    await ctx.db.insert("notifications", { userId, title: `Joined ${tenant.siteName}`, message: `You are now a customer of ${tenant.siteName} (${tenant.subdomain}.g0ki.com).`, type: "banking.joined", isRead: false, link: `/site/${args.tenantId}/banking`, createdAt: now } as any);
+    return { id, joined: true };
   },
 });
 

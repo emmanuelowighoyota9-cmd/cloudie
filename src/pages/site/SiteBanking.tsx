@@ -18,6 +18,7 @@ export default function SiteBanking() {
   const id = siteId as Id<"tenantSites">;
   const publicT = useQuery(api.bankingCustomer.publicTenant, { tenantId: id });
   const member = useQuery(api.bankingCustomer.memberTenant, { tenantId: id });
+  const joinMutation = useMutation(api.bankingCustomer.joinTenant);
   const accounts = useQuery(api.bankingCustomer.memberAccounts, { tenantId: id });
   const history = useQuery(api.bankingCustomer.bankingHistory, { tenantId: id, limit: 50 });
   const bens = useQuery(api.bankingCustomer.listBeneficiaries, { tenantId: id });
@@ -67,10 +68,12 @@ export default function SiteBanking() {
           <ShieldCheck className="h-10 w-10 text-slate-400 mx-auto" />
           <h1 className="text-xl font-bold mt-3">{publicT.siteName}</h1>
           <p className="text-sm text-slate-500 mt-2">Banking portal is tenant-scoped. Sign in and join this tenant to continue. Branched from the existing Convex auth — no third-party auth introduced.</p>
-          <div className="mt-4 flex gap-2 justify-center">
-            <Link to="/auth" className="rounded-xl bg-slate-900 text-white px-5 py-2 text-sm font-semibold">Sign in</Link>
+          <div className="mt-4 flex gap-2 justify-center flex-wrap">
+            <Link to={`/auth?returnTo=/site/${id}/banking`} className="rounded-xl bg-slate-900 text-white px-5 py-2 text-sm font-semibold">Sign in</Link>
+            <button onClick={async () => { setBusy(true); try { await joinMutation({ tenantId: id }); toast.success(`Joined ${publicT.siteName}`); } catch (e) { const msg = e instanceof Error ? e.message : String(e); if (msg.includes("TENANT_UNAVAILABLE")) toast.error("This tenant is unavailable (paused/disabled)."); else toast.error(msg); } finally { setBusy(false); } }} disabled={busy || !bankingUp} className="rounded-xl border border-slate-900 bg-white px-5 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50">Join as customer</button>
             <Link to={`/business/sites/${id}`} className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold">View in Business Suite</Link>
           </div>
+          {!bankingUp && <div className="mt-3 text-xs text-amber-600">This tenant is {lifecycle} — joining and transactions are temporarily disabled. Historical records remain preserved.</div>}
         </div>
       </div>
     );

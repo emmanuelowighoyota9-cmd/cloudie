@@ -16,13 +16,27 @@ export default function SiteLanding() {
   if (site === undefined) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
   }
-  if (!site || !site.isActive) {
+  if (!site) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <Landmark className="mx-auto h-12 w-12 text-gray-300" />
-          <h1 className="mt-4 text-xl font-bold text-gray-900">{site?.siteName || "Site"}</h1>
-          <p className="mt-2 text-gray-500">This site is currently unavailable.</p>
+          <h1 className="mt-4 text-xl font-bold text-gray-900">Site not found</h1>
+          <p className="mt-2 text-gray-500">No tenant is provisioned for this site.</p>
+        </div>
+      </div>
+    );
+  }
+  const lifecycleSite = (site as any).lifecycleStatus;
+  const isUnavailableSite = !site.isActive || (lifecycleSite && lifecycleSite !== "active");
+  if (isUnavailableSite) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center bg-slate-50 px-4 py-10">
+        <div className="max-w-xl w-full rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Lock className="h-5 w-5" /></div>
+          <h1 className="mt-3 text-xl font-bold">{site.siteName} is {lifecycleSite ?? "unavailable"}</h1>
+          <p className="mt-2 text-sm text-slate-600">Frontend routes for this tenant are temporarily suspended from public traffic. Backend API processing is paused. All ledger history and user state remain preserved for restoration.</p>
+          <p className="mt-3 text-xs text-slate-400">{site.subdomain ? `${site.subdomain}.g0ki.com` : ""} · {lifecycleSite ?? ""}</p>
         </div>
       </div>
     );

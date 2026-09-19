@@ -34,6 +34,9 @@ const AdminBankingTenants = lazy(() => import("./pages/AdminBankingTenants.tsx")
 const AdminBankingCreateTenant = lazy(() => import("./pages/AdminBankingCreateTenant.tsx"));
 const AdminBankingTenantDetail = lazy(() => import("./pages/AdminBankingTenantDetail.tsx"));
 const AdminBankingTenantSettings = lazy(() => import("./pages/AdminBankingTenantSettings.tsx"));
+const TenantBankingHost = lazy(() => import("./pages/TenantBankingHost.tsx"));
+const TenantGateLazy = lazy(() => import("./components/tenant/TenantGate.tsx").then(m => ({ default: m.TenantGate })));
+
 const Ticketing = lazy(() => import("./pages/Ticketing.tsx"));
 const FlightDocument = lazy(() => import("./pages/FlightDocument.tsx"));
 const HotelDocument = lazy(() => import("./pages/HotelDocument.tsx"));
@@ -150,6 +153,7 @@ createRoot(document.getElementById("root")!).render(
           <BrowserRouter>
             <RouteSyncer />
             <Suspense fallback={<RouteLoading />}>
+              <TenantGateLazy>
               <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
@@ -158,6 +162,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/track/:trackingNumber" element={<PublicTracking />} />
                 <Route path="/tracking" element={<PublicTracking />} />
                 <Route path="/tracking/:trackingNumber" element={<PublicTracking />} />
+
+                {/* Tenant banking via wildcard subdomain — *.g0ki.com/banking (dynamic tenant context) */}
+                <Route path="/banking" element={<React.Suspense fallback={<RouteLoading />}><TenantBankingHost /></React.Suspense>} />
 
                 {/* Generated tenant banking site (public) — canonical = /site/:siteId/banking (full portal) */}
                 <Route path="/site/:siteId" element={<React.Suspense fallback={<RouteLoading />}><SiteLanding /></React.Suspense>} />
@@ -174,6 +181,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/site/:siteId/notifications" element={<React.Suspense fallback={<RouteLoading />}><SiteDashboard /></React.Suspense>} />
                 <Route path="/site/:siteId/admin" element={<React.Suspense fallback={<RouteLoading />}><SiteAdmin /></React.Suspense>} />
                 <Route path="/:tenant/banking" element={<React.Suspense fallback={<RouteLoading />}><SiteBanking /></React.Suspense>} />
+                <Route path="/t/:subdomain/banking" element={<React.Suspense fallback={<RouteLoading />}><TenantBankingHost /></React.Suspense>} />
 
                 {/* Authenticated app routes with layout */}
                 <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
@@ -244,6 +252,7 @@ createRoot(document.getElementById("root")!).render(
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </TenantGateLazy>
             </Suspense>
           </BrowserRouter>
           <Toaster />
