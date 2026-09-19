@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { QrCodeSvg, BarcodeSvg } from "./Codes";
+import { trackingUrl } from "@/lib/trackingUi";
 
 export type LabelShipment = {
   trackingNumber: string;
@@ -150,7 +151,7 @@ export function ShippingLabel({
         {/* Barcode + QR */}
         <div className="flex items-center justify-between gap-3 py-3">
           <BarcodeSvg value={shipment.trackingNumber} height={56} moduleWidth={2} />
-          <QrCodeSvg value={`/tracking/${shipment.trackingNumber}`} size={76} ecl="medium" />
+          <QrCodeSvg value={trackingUrl(shipment.trackingNumber)} size={76} ecl="medium" />
         </div>
 
         {/* Addresses */}

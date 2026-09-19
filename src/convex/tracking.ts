@@ -259,6 +259,7 @@ export async function createShipmentCore(
     declaredValue?: number;
     currency?: string;
     serviceTypeId?: Id<"trackingServiceTypes">;
+    carrierId?: Id<"trackingCarriers">;
     referenceNumber?: string;
     notes?: string;
     originLocationId?: Id<"trackingLocations">;
@@ -289,6 +290,7 @@ export async function createShipmentCore(
     progress: progressForStatus("CREATED"),
     serviceTypeId: service._id,
     serviceTypeName: service.name,
+    carrierId: input.carrierId,
     senderId: input.senderId,
     recipientId: input.recipientId,
     originLocationId: input.originLocationId,
@@ -431,6 +433,7 @@ export const adminCreateShipment = mutation({
     declaredValue: v.optional(v.number()),
     currency: v.optional(v.string()),
     serviceTypeId: v.optional(v.id("trackingServiceTypes")),
+    carrierId: v.optional(v.id("trackingCarriers")),
     referenceNumber: v.optional(v.string()),
     notes: v.optional(v.string()),
     originLocationId: v.optional(v.id("trackingLocations")),

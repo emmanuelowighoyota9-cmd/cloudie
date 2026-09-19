@@ -65,7 +65,7 @@ export const myShipmentDetail = query({
     if (!s) return null;
     if (s.senderId !== userId && s.recipientId !== userId) return null; // IDOR guard
 
-    const [events, origin, destination, current] = await Promise.all([
+    const [events, origin, destination, current, routeStops] = await Promise.all([
       ctx.db
         .query("trackingEvents")
         .withIndex("by_shipment", (q) => q.eq("shipmentId", args.id))
@@ -74,7 +74,15 @@ export const myShipmentDetail = query({
       s.originLocationId ? ctx.db.get(s.originLocationId) : null,
       s.destinationLocationId ? ctx.db.get(s.destinationLocationId) : null,
       s.currentLocationId ? ctx.db.get(s.currentLocationId) : null,
+      ctx.db
+        .query("trackingRouteStops")
+        .withIndex("by_shipment", (q) => q.eq("shipmentId", args.id))
+        .order("asc")
+        .take(50),
     ]);
+    const stopLocations = await Promise.all(
+      routeStops.map((r) => (r.locationId ? ctx.db.get(r.locationId) : null)),
+    );
     return {
       shipment: {
         _id: s._id,
@@ -108,6 +116,15 @@ export const myShipmentDetail = query({
         current: current
           ? { name: current.name, city: current.city, country: current.country }
           : null,
+        stops: routeStops.map((r, i) => ({
+          label: r.label,
+          city: stopLocations[i]?.city ?? null,
+          country: stopLocations[i]?.country ?? null,
+          sequence: r.sequence,
+          status: r.status,
+          arrivalAt: r.arrivalAt,
+          departureAt: r.departureAt,
+        })),
       },
       events: events
         .filter((e) => e.isPublic)

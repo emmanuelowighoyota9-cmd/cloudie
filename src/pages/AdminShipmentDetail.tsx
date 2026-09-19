@@ -33,7 +33,7 @@ import {
 import { RouteViz } from "@/components/tracking/RouteViz";
 import { ShippingLabel } from "@/components/tracking/ShippingLabel";
 import { QrCodeSvg, BarcodeSvg } from "@/components/tracking/Codes";
-import { TRACKING_STATUSES, statusBadgeClass, statusLabel } from "@/lib/trackingUi";
+import { TRACKING_STATUSES, statusBadgeClass, statusLabel, trackingUrl } from "@/lib/trackingUi";
 
 export default function AdminShipmentDetail() {
   const { shipmentId } = useParams<{ shipmentId: string }>();
@@ -450,7 +450,7 @@ export default function AdminShipmentDetail() {
             <CardContent className="space-y-3">
               <div className="flex items-center justify-around rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700">
                 <BarcodeSvg value={s.trackingNumber} height={48} moduleWidth={1.5} />
-                <QrCodeSvg value={`/tracking/${s.trackingNumber}`} size={72} />
+                <QrCodeSvg value={trackingUrl(s.trackingNumber)} size={72} />
               </div>
               <p className="text-center text-[10px] text-slate-400">
                 QR points to the public tracking page for this shipment.

@@ -7,7 +7,7 @@ import { Cloud, Clock, MapPin, Package, PackageSearch, ShieldCheck } from "lucid
 import { Link, useParams } from "react-router";
 import { RouteViz } from "@/components/tracking/RouteViz";
 import { QrCodeSvg } from "@/components/tracking/Codes";
-import { statusBadgeClass, statusLabel } from "@/lib/trackingUi";
+import { statusBadgeClass, statusLabel, trackingUrl } from "@/lib/trackingUi";
 
 function TrackingSearch() {
   return (
@@ -216,7 +216,7 @@ export default function PublicTracking() {
             {/* Share QR */}
             <Card className="rounded-xl border-slate-200 dark:border-slate-800">
               <CardContent className="flex items-center gap-4 p-5">
-                <QrCodeSvg value={`/tracking/${tracking.trackingNumber}`} size={88} />
+                <QrCodeSvg value={trackingUrl(tracking.trackingNumber)} size={88} />
                 <div className="text-xs text-slate-500">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Share this tracking page</p>
                   <p className="mt-1">Scan the QR code to open this shipment's public tracking page on any device.</p>

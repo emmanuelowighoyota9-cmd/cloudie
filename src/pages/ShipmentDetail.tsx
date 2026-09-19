@@ -7,7 +7,7 @@ import { ArrowLeft, Clock, MapPin, Package, ShieldCheck } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { RouteViz } from "@/components/tracking/RouteViz";
 import { QrCodeSvg } from "@/components/tracking/Codes";
-import { statusBadgeClass, statusLabel } from "@/lib/trackingUi";
+import { statusBadgeClass, statusLabel, trackingUrl } from "@/lib/trackingUi";
 
 export default function ShipmentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -124,7 +124,7 @@ export default function ShipmentDetail() {
                   : detail.route.current.name
                 : null
             }
-            stops={[]}
+            stops={detail.route.stops}
           />
         </CardContent>
       </Card>
@@ -171,7 +171,7 @@ export default function ShipmentDetail() {
       {/* Share QR */}
       <Card className="rounded-xl border-slate-200 dark:border-slate-800">
         <CardContent className="flex items-center gap-4 p-5">
-          <QrCodeSvg value={`/tracking/${s.trackingNumber}`} size={88} />
+          <QrCodeSvg value={trackingUrl(s.trackingNumber)} size={88} />
           <div className="text-xs text-slate-500">
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Share tracking page</p>
             <p className="mt-1">Recipients can follow this shipment on the public tracking page.</p>

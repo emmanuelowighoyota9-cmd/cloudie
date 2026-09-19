@@ -110,6 +110,7 @@ export default function AdminCreateShipment() {
         declaredValue: declaredValue ? Number(declaredValue) : undefined,
         currency: currency || undefined,
         serviceTypeId: serviceTypeId ? (serviceTypeId as never) : undefined,
+        carrierId: carrierId ? (carrierId as never) : undefined,
         referenceNumber: referenceNumber.trim() || undefined,
         notes: notes.trim() || undefined,
         originLocationId: originLocationId ? (originLocationId as never) : undefined,
@@ -295,13 +296,7 @@ export default function AdminCreateShipment() {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-slate-500">Carrier</Label>
-                <Select
-                  value={carrierId || undefined}
-                  onValueChange={(v) => {
-                    setCarrierId(v);
-                    toast.message("Carrier will be assigned", { description: "Assign it on the shipment detail page after creation." });
-                  }}
-                >
+                <Select value={carrierId || undefined} onValueChange={setCarrierId}>
                   <SelectTrigger><SelectValue placeholder={carriers ? "Select carrier" : "Loading…"} /></SelectTrigger>
                   <SelectContent>
                     {(carriers ?? []).map((c) => (

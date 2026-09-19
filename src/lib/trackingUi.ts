@@ -54,6 +54,18 @@ export function statusBadgeClass(status: string): string {
   }
 }
 
+/**
+ * Absolute public tracking URL for a tracking number. QRs encode this so a
+ * scanned code opens the real page rather than a relative path.
+ */
+export function trackingUrl(trackingNumber: string): string {
+  const path = `/tracking/${encodeURIComponent(trackingNumber)}`;
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}${path}`;
+  }
+  return path;
+}
+
 /** Formats a location label consistently: "City, Country" or the raw name. */
 export function locationLabel(loc: { name: string; city?: string | null; country?: string | null } | null | undefined): string {
   if (!loc) return "—";
