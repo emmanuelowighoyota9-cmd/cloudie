@@ -270,3 +270,111 @@ When using convex, make sure:
 - This includes importing generated files like `@/convex/_generated/server`, `@/convex/_generated/api`
 - Remember to import functions like useQuery, useMutation, useAction, etc. from `convex/react`
 - NEVER have return type validators.
+
+---
+
+# Cloudie Operations Platform
+
+Cloudie is a modular, multi-tenant operations platform: a single app containing five
+workspaces (Personal, Shipments, Ticketing, Business, Services) organised around one
+unified **points ledger**, plus a full super-admin console and a first-party shipment
+tracking engine.
+
+## Stack (this deployment)
+
+| Concern | Implementation |
+| --- | --- |
+| UI | React 19 + Vite, React Router, Tailwind v4, shadcn/ui, Framer Motion |
+| Backend | Convex — database, realtime subscriptions, server functions, file storage, scheduler, queues |
+| Auth | Convex Auth (scrypt password hashing, session tokens, server-side role checks) |
+| Documents | Generated in-app (`src/lib/pdf.ts`) — no external PDF service |
+| QR / barcode | Native encoders in `src/lib/qr.ts` and `src/lib/barcode.ts` (offline, no packages, no APIs) |
+| Tracking | Native engine in `src/convex/trackingEngine.ts` — status machine, progress, ETA, tracking numbers |
+| PWA | `public/manifest.webmanifest` + `public/sw.js` (offline fallback, static caching) |
+
+Convex replaces the conventional Postgres/Prisma/Redis tier: the database, realtime
+channel, queue (`cloudieJobs`), and object storage are all platform-native, so there is
+no separate migration pipeline to run.
+
+## Core subsystems
+
+- **Points ledger** (`src/convex/points.ts`) — immutable ledger rows, atomic credit/debit,
+  idempotency keys, balance-after snapshots, admin adjustments with mandatory reasons.
+- **Pricing engine** (`pointPricing` table + `src/pages/AdminPricing.tsx`) — every service
+  cost is configurable by admins instead of hardcoded.
+- **Shipments & tracking** — 18-status state machine, route stops, packages, timeline
+  events, ETA, public privacy-filtered tracking at `/track/:trackingNumber`.
+- **Document engine** — templates → versions → rendered PDFs stored via the
+  `storageFiles` abstraction (`src/convex/documents.ts`).
+- **Business Suite** — white-label tenant sites, tenant-scoped ledgers, KYC workflow with
+  full event history, tenant isolation enforced server-side.
+- **Marketplace** — vendors, products, orders, escrow-style order lifecycle, disputes.
+- **Services** — email campaign composer with an in-app delivery queue and logs, plus an
+  asset/image render studio.
+- **Admin console** — users, vendors, orders, disputes, transactions, shipments,
+  documents, tenants, KYC, notifications, audit logs, analytics, system health, pricing,
+  and settings. Every admin function calls `requireAdmin(ctx)` server-side.
+
+## Commands
+
+```bash
+bun install                 # install dependencies
+bun dev                     # start the Vite dev server
+bun convex dev --once       # push Convex functions + regenerate types (non-interactive)
+bun tsc -b --noEmit         # typecheck
+bun test                    # run unit tests (Bun's built-in runner)
+bun run lint                # eslint
+```
+
+## Health check
+
+The Convex HTTP router exposes a shallow, credential-free health endpoint:
+
+```
+GET  <CONVEX_SITE_URL>/health
+GET  <CONVEX_SITE_URL>/api/health
+```
+
+Response: `{ status, service, database, queue: { queued, failed }, timestamp }`. It
+returns `503` with `status: "degraded"` if the database cannot be read, and never exposes
+internal URLs, secrets, or stack traces.
+
+## Environment variables
+
+Required (injected by the platform): `VITE_CONVEX_URL`, `CONVEX_DEPLOYMENT`,
+`CONVEX_SITE_URL`. Auth keys (`JWT_PRIVATE_KEY`, `JWKS`) are generated and rotated by the
+system — never edit or display them; regenerate through the platform if auth breaks.
+
+**Every core feature works with no third-party credentials.** Optional providers (external
+email delivery, payment callbacks, crypto deposit monitoring) are abstractions — add the
+key in the project's Keys tab and the feature begins using it. Where a provider is not
+configured, the code returns a clear configuration error rather than faking success.
+
+## Admin access
+
+The super-admin console lives at `/admin` and has its own sign-in at `/admin/login`.
+Authorization is enforced in the Convex functions themselves (`requireAdmin`), so the UI
+guards are convenience only. To provision the first admin, use the one-shot seeding flow in
+`src/convex/adminSeed.ts` — it is gated by a server-side token that must be set, used, and
+then removed, and it creates the account through Convex Auth's own hashing path.
+
+Seeding reference data (carriers and service types) is idempotent:
+
+```bash
+bunx convex run tracking:seedTrackingDefaults '{}'
+```
+
+## Testing
+
+Unit tests live in `tests/` and run with Bun's built-in runner (`bun test`) — no extra
+dependency. They cover the tracking state machine, progress anchors, ETA rules, tracking
+number format/uniqueness, plus structural validation of the native QR encoder and Code 128
+barcode generator (finder patterns, quiet zones, check-digit widths, determinism).
+
+## PWA
+
+The app is installable. `public/sw.js` serves an offline fallback for navigations and
+caches same-origin static assets with stale-while-revalidate. It deliberately never caches
+Convex/API traffic or authenticated JSON, so offline caching cannot leak data between
+accounts. The service worker registers in production builds only, so development previews
+never serve stale bundles.

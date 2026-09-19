@@ -109,6 +109,15 @@ class RootErrorBoundary extends React.Component<
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+// Register the Cloudie service worker (offline fallback + static asset caching).
+// Production only: in development the managed dev server serves assets directly
+// and a service worker would risk serving stale bundles to the preview.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  });
+}
+
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {

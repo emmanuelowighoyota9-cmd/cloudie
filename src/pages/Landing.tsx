@@ -1,6 +1,10 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPrompt";
+import { toast } from "sonner";
 import {
   Cloud,
   Package,
@@ -19,6 +23,10 @@ import {
   CircleDollarSign,
   Plane,
   ReceiptText,
+  Search,
+  MapPin,
+  QrCode,
+  Truck,
 } from "lucide-react";
 
 const features = [
@@ -38,6 +46,19 @@ const stats = [
 ];
 
 export default function Landing() {
+  const navigate = useNavigate();
+  const [trackingNumber, setTrackingNumber] = useState("");
+
+  const handleTrack = (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = trackingNumber.trim();
+    if (!value) {
+      toast.error("Enter a tracking number to continue");
+      return;
+    }
+    navigate(`/track/${encodeURIComponent(value)}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
@@ -50,6 +71,7 @@ export default function Landing() {
             <span className="text-lg font-bold text-foreground">Cloudie</span>
           </div>
           <div className="flex items-center gap-2">
+            <PwaInstallButton />
             <Link to="/auth">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
@@ -82,14 +104,27 @@ export default function Landing() {
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
               Shipments, travel documents, email campaigns, marketplace orders, and a unified points ledger stay connected inside one operational command center.
             </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <form onSubmit={handleTrack} className="mt-8 flex max-w-md flex-col gap-2 sm:flex-row">
+              <Input
+                value={trackingNumber}
+                onChange={(e) => setTrackingNumber(e.target.value)}
+                placeholder="Track a shipment · e.g. TRK-nGkx2V20260210"
+                aria-label="Tracking number"
+                className="h-11 flex-1"
+              />
+              <Button type="submit" size="lg" className="gap-2">
+                <Search className="h-4 w-4" />
+                Track
+              </Button>
+            </form>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Link to="/auth">
-                <Button size="lg" className="gap-2 px-8">
+                <Button size="lg" className="w-full gap-2 px-8 sm:w-auto">
                   Start for Free <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
               <Link to="/auth">
-                <Button variant="outline" size="lg">Sign In</Button>
+                <Button variant="outline" size="lg" className="w-full sm:w-auto">Sign In</Button>
               </Link>
             </div>
             <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
@@ -257,8 +292,73 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* Native tracking platform */}
       <section className="bg-background py-20">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1fr]">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
+                <MapPin className="h-3.5 w-3.5 text-primary" />
+                Native tracking — no third-party services
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground">
+                Self-contained shipment tracking
+              </h2>
+              <p className="mt-4 leading-relaxed text-muted-foreground">
+                Cloudie generates tracking numbers, routes, timelines, QR codes,
+                barcodes, and printable labels entirely inside the platform — with a
+                privacy-filtered public tracking page anyone can open.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link to="/tracking">
+                  <Button variant="outline" className="gap-2">
+                    <Truck className="h-4 w-4" />
+                    Open public tracking
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking</p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">TRK-nGkx2V20260210</p>
+                </div>
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">In transit</span>
+              </div>
+              <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+                <div className="h-full w-1/2 rounded-full bg-primary" />
+              </div>
+              <div className="mt-6 space-y-4">
+                {[
+                  { icon: MapPin, title: "Damascus, Syria", meta: "Departed origin facility" },
+                  { icon: Truck, title: "Aberdeen, United Kingdom", meta: "Current location" },
+                  { icon: Package, title: "Houston, United States", meta: "Destination · ETA Feb 12" },
+                ].map((stop) => (
+                  <div key={stop.title} className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+                      <stop.icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">{stop.title}</p>
+                      <p className="truncate text-xs text-muted-foreground">{stop.meta}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-5 flex items-center gap-2 rounded-lg border border-border bg-background p-3">
+                <QrCode className="h-4 w-4 text-primary" />
+                <p className="text-xs text-muted-foreground">
+                  QR, Code 128 barcode, and print-ready labels generated in-app
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="border-t border-border bg-card py-20">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
             Ready to get started?
@@ -273,6 +373,8 @@ export default function Landing() {
           </Link>
         </div>
       </section>
+
+      <PwaInstallBanner />
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-8">
