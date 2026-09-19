@@ -342,6 +342,182 @@ export const resubmitKyc = mutation({
   },
 });
 
+// ─── Tenant Users ──────────────────────────────────────────────────────────
+
+export const listTenantUsers = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return [];
+    const rows = await ctx.db
+      .query("tenantUsers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
+    const users = await Promise.all(rows.map((r) => ctx.db.get(r.userId)));
+    return rows.map((r, i) => ({
+      _id: r._id,
+      userId: r.userId,
+      role: r.role,
+      createdAt: r.createdAt,
+      email: users[i]?.email ?? null,
+      name: users[i]?.name ?? null,
+    }));
+  },
+});
+
+export const addTenantUser = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    email: v.string(),
+    role: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    if (!tenant.isActive) throw new Error("Site is locked");
+
+    // Find user by email (index not available, scan users).
+    const target = await ctx.db
+      .query("users")
+      .filter((q) => q.eq("email", args.email))
+      .first();
+    if (!target) throw new Error(`No user found with email ${args.email}`);
+
+    const existing = await ctx.db
+      .query("tenantUsers")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .collect();
+    if (existing.some((r) => r.userId === target._id)) {
+      throw new Error("User is already a member of this site");
+    }
+
+    const now = Date.now();
+    return await ctx.db.insert("tenantUsers", {
+      tenantId: args.tenantId,
+      userId: target._id,
+      role: args.role || "member",
+      createdAt: now,
+    });
+  },
+});
+
+export const removeTenantUser = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    membershipId: v.id("tenantUsers"),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const membership = await ctx.db.get(args.membershipId);
+    if (!membership || membership.tenantId !== args.tenantId) throw new Error("Membership not found");
+    await ctx.db.delete(args.membershipId);
+    return { success: true };
+  },
+});
+
+// ─── Tenant Ledger ──────────────────────────────────────────────────────────
+
+export const addLedgerEntry = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    userId: v.id("users"),
+    amount: v.number(),
+    description: v.string(),
+    type: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const now = Date.now();
+    return await ctx.db.insert("tenantLedger", {
+      tenantId: args.tenantId,
+      userId: args.userId,
+      amount: args.amount,
+      description: args.description,
+      type: args.type,
+      createdAt: now,
+    });
+  },
+});
+
+export const creditDemoAccount = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    userId: v.id("users"),
+    amount: v.number(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const now = Date.now();
+    await ctx.db.insert("tenantLedger", {
+      tenantId: args.tenantId,
+      userId: args.userId,
+      amount: Math.abs(args.amount),
+      description: args.description || "Account credit",
+      type: "credit",
+      createdAt: now,
+    });
+    // Notify the target user.
+    await ctx.db.insert("notifications", {
+      userId: args.userId,
+      title: "Account credited",
+      message: `Your ${tenant.siteType} account at ${tenant.siteName} was credited with ${Math.abs(args.amount)}.`,
+      type: "wallet",
+      isRead: false,
+      link: "/business",
+      createdAt: now,
+    });
+    return { success: true };
+  },
+});
+
+export const debitDemoAccount = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    userId: v.id("users"),
+    amount: v.number(),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ownerId = await getAuthUserId(ctx);
+    if (!ownerId) throw new Error("Unauthorized");
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const now = Date.now();
+    await ctx.db.insert("tenantLedger", {
+      tenantId: args.tenantId,
+      userId: args.userId,
+      amount: -Math.abs(args.amount),
+      description: args.description || "Account debit",
+      type: "debit",
+      createdAt: now,
+    });
+    await ctx.db.insert("notifications", {
+      userId: args.userId,
+      title: "Account debited",
+      message: `Your ${tenant.siteType} account at ${tenant.siteName} was debited with ${Math.abs(args.amount)}.`,
+      type: "wallet",
+      isRead: false,
+      link: "/business",
+      createdAt: now,
+    });
+    return { success: true };
+  },
+});
+
 /** KYC audit history — owner or admin. */
 export const kycHistory = query({
   args: { kycId: v.id("kycRecords") },

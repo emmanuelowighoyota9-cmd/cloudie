@@ -29,6 +29,7 @@ const InvoiceDocument = lazy(() => import("./pages/InvoiceDocument.tsx"));
 const CustomsDocument = lazy(() => import("./pages/CustomsDocument.tsx"));
 const BusinessSuite = lazy(() => import("./pages/BusinessSuite.tsx"));
 const NewSite = lazy(() => import("./pages/NewSite.tsx"));
+const SiteDetail = lazy(() => import("./pages/SiteDetail.tsx"));
 const Services = lazy(() => import("./pages/Services.tsx"));
 const EmailCampaign = lazy(() => import("./pages/EmailCampaign.tsx"));
 const RenderStudio = lazy(() => import("./pages/RenderStudio.tsx"));
@@ -163,6 +164,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/business" element={<BusinessSuite />} />
                   <Route path="/business/sites" element={<BusinessSuite />} />
                   <Route path="/business/sites/new" element={<NewSite />} />
+                  <Route path="/business/sites/:siteId" element={<SiteDetail />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/services/email" element={<EmailCampaign />} />
                   <Route path="/services/render" element={<RenderStudio />} />
