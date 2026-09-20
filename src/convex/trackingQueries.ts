@@ -108,10 +108,22 @@ export const publicTracking = query({
       carrierName: carrier?.name ?? null,
       serviceName: service?.name ?? shipment.serviceTypeName,
       origin: origin
-        ? { label: origin.name, city: origin.city, country: origin.country }
+        ? {
+            label: origin.name,
+            city: origin.city,
+            country: origin.country,
+            latitude: origin.latitude,
+            longitude: origin.longitude,
+          }
         : null,
       destination: destination
-        ? { label: destination.name, city: destination.city, country: destination.country }
+        ? {
+            label: destination.name,
+            city: destination.city,
+            country: destination.country,
+            latitude: destination.latitude,
+            longitude: destination.longitude,
+          }
         : null,
       currentLocation: current
         ? {
@@ -142,6 +154,8 @@ export const publicTracking = query({
           locationLabel: e.locationLabel,
           eventTimestamp: e.eventTimestamp,
           timezone: e.timezone,
+          latitude: e.latitude,
+          longitude: e.longitude,
         };
       }),
       route: routeStops.map((s, i) => {
@@ -154,6 +168,8 @@ export const publicTracking = query({
           status: s.status,
           arrivalAt: s.arrivalAt,
           departureAt: s.departureAt,
+          latitude: loc?.latitude ?? null,
+          longitude: loc?.longitude ?? null,
         };
       }),
     };
