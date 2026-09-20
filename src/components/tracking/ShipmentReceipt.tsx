@@ -55,6 +55,14 @@ function fmtDateTime(ts: number) {
   });
 }
 
+function statusColor(status: string) {
+  const s = status.toUpperCase();
+  if (s === "DELIVERED") return "bg-emerald-100 text-emerald-800 border-emerald-300";
+  if (s.includes("TRANSIT") || s === "IN_TRANSIT") return "bg-blue-100 text-blue-800 border-blue-300";
+  if (s.includes("CANCEL") || s === "CANCELLED") return "bg-red-100 text-red-800 border-red-300";
+  return "bg-[#f0faf9] text-[#0f766e] border-[#0f766e]/20";
+}
+
 export function ShipmentReceipt({ shipment }: { shipment: ReceiptShipment }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -95,127 +103,153 @@ export function ShipmentReceipt({ shipment }: { shipment: ReceiptShipment }) {
 
       <div
         ref={ref}
-        className="mx-auto w-full max-w-[700px] rounded-md border-2 border-black bg-white p-6 text-black"
+        className="mx-auto w-full max-w-[750px] bg-white text-gray-900 rounded-xl overflow-hidden shadow-lg shadow-black/5"
+        style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}
       >
-        {/* Header */}
-        <div className="flex items-start justify-between border-b-2 border-black pb-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-              <span className="text-white text-lg font-black">C</span>
+        {/* ── Branded Header ── */}
+        <div className="bg-[#0f766e] text-white px-8 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/15 backdrop-blur rounded-lg flex items-center justify-center">
+                <span className="text-white text-lg font-extrabold">C</span>
+              </div>
+              <div>
+                <p className="text-lg font-extrabold tracking-tight leading-tight">CLOUDIE</p>
+                <p className="text-[9px] uppercase tracking-[0.35em] text-white/50">Global Logistics</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xl font-black tracking-tight">CLOUDIE</p>
-              <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Global Logistics</p>
+            <div className="text-right">
+              <div className="inline-block px-3 py-1 bg-white/10 rounded text-[9px] font-bold uppercase tracking-[0.2em] text-white/80">
+                Shipment Receipt
+              </div>
+              <p className="text-[10px] text-white/50 mt-2">{fmtDateTime(shipment.createdAt)}</p>
             </div>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Shipment Receipt</p>
-            <p className="text-xs text-gray-500 mt-1">{fmtDateTime(shipment.createdAt)}</p>
           </div>
         </div>
 
-        {/* Tracking + Status */}
-        <div className="flex items-center justify-between mb-4">
+        {/* ── Tracking + Status Bar ── */}
+        <div className="mx-8 mt-5 flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Tracking Number</p>
-            <p className="text-lg font-mono font-black">{shipment.trackingNumber}</p>
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Tracking Number</p>
+            <p className="text-xl font-extrabold text-[#0f766e] font-mono tracking-wider mt-0.5">{shipment.trackingNumber}</p>
           </div>
-          <div className="text-right">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Status</p>
-            <p className="text-sm font-bold mt-0.5">{shipment.status.replace(/_/g, " ")}</p>
-          </div>
-        </div>
-
-        {/* Barcode + QR */}
-        <div className="flex items-center justify-between gap-4 py-3 border-t border-b border-gray-200">
-          <BarcodeSvg value={shipment.trackingNumber} height={48} moduleWidth={1.5} />
-          <QrCodeSvg value={trackingUrl(shipment.trackingNumber)} size={64} />
-        </div>
-
-        {/* Addresses */}
-        <div className="grid grid-cols-2 gap-4 my-4">
-          <div className="p-3 bg-gray-50 rounded-lg">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Sender</p>
-            <p className="text-sm font-bold mt-1">{shipment.senderName}</p>
-            <p className="text-xs text-gray-600">{shipment.senderAddress}</p>
-            <p className="text-xs text-gray-600">{[shipment.senderCity, shipment.senderState].filter(Boolean).join(", ")} {shipment.senderPostalCode}</p>
-            <p className="text-xs text-gray-600">{shipment.senderCountry}</p>
-            <p className="text-[10px] text-gray-400 mt-1">{shipment.senderEmail} · {shipment.senderPhone}</p>
-          </div>
-          <div className="p-3 bg-gray-50 rounded-lg border-l-4 border-black">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Recipient</p>
-            <p className="text-sm font-bold mt-1">{shipment.recipientName}</p>
-            <p className="text-xs text-gray-600">{shipment.recipientAddress}</p>
-            <p className="text-xs text-gray-600">{[shipment.recipientCity, shipment.recipientState].filter(Boolean).join(", ")} {shipment.recipientPostalCode}</p>
-            <p className="text-xs text-gray-600">{shipment.recipientCountry}</p>
-            <p className="text-[10px] text-gray-400 mt-1">{shipment.recipientEmail} · {shipment.recipientPhone}</p>
+          <div className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${statusColor(shipment.status)}`}>
+            {shipment.status.replace(/_/g, " ")}
           </div>
         </div>
 
-        {/* Shipment details */}
-        <div className="grid grid-cols-4 gap-3 my-4">
+        {/* ── Barcode + QR ── */}
+        <div className="mx-8 mt-4 flex items-center justify-between gap-4 py-3 border-t border-b border-gray-100">
+          <BarcodeSvg value={shipment.trackingNumber} height={44} moduleWidth={1.5} />
+          <QrCodeSvg value={trackingUrl(shipment.trackingNumber)} size={60} />
+        </div>
+
+        {/* ── Sender / Recipient ── */}
+        <div className="mx-8 mt-5 grid grid-cols-2 gap-4">
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-gray-50 px-4 py-1.5 border-b border-gray-200">
+              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Ship From</p>
+            </div>
+            <div className="p-4">
+              <p className="text-sm font-bold text-gray-900">{shipment.senderName}</p>
+              <p className="text-xs text-gray-500 mt-1">{shipment.senderAddress}</p>
+              <p className="text-xs text-gray-500">{[shipment.senderCity, shipment.senderState].filter(Boolean).join(", ")} {shipment.senderPostalCode}</p>
+              <p className="text-xs text-gray-500">{shipment.senderCountry}</p>
+              {(shipment.senderEmail || shipment.senderPhone) && (
+                <p className="text-[10px] text-gray-400 mt-2">{shipment.senderEmail} · {shipment.senderPhone}</p>
+              )}
+            </div>
+          </div>
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="bg-[#0f766e] px-4 py-1.5">
+              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/80">Ship To</p>
+            </div>
+            <div className="p-4 bg-[#f0faf9]/50">
+              <p className="text-sm font-bold text-gray-900">{shipment.recipientName}</p>
+              <p className="text-xs text-gray-500 mt-1">{shipment.recipientAddress}</p>
+              <p className="text-xs text-gray-500">{[shipment.recipientCity, shipment.recipientState].filter(Boolean).join(", ")} {shipment.recipientPostalCode}</p>
+              <p className="text-xs text-gray-500">{shipment.recipientCountry}</p>
+              {(shipment.recipientEmail || shipment.recipientPhone) && (
+                <p className="text-[10px] text-gray-400 mt-2">{shipment.recipientEmail} · {shipment.recipientPhone}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Shipment Details Grid ── */}
+        <div className="mx-8 mt-5 grid grid-cols-4 gap-3">
           {[
-            ["Service", shipment.serviceTypeName ?? "Standard"],
-            ["Carrier", shipment.carrierName ?? "—"],
-            ["Weight", `${shipment.totalWeight} ${shipment.weightUnit}`],
-            ["Dimensions", shipment.dimensions ?? "—"],
-          ].map(([label, value]) => (
-            <div key={label} className="p-2 bg-gray-50 rounded text-center">
-              <p className="text-[9px] uppercase tracking-widest text-gray-500">{label}</p>
-              <p className="text-xs font-bold mt-0.5">{value}</p>
+            { label: "Service", value: shipment.serviceTypeName ?? "Standard" },
+            { label: "Carrier", value: shipment.carrierName ?? "—" },
+            { label: "Weight", value: `${shipment.totalWeight} ${shipment.weightUnit}` },
+            { label: "Dimensions", value: shipment.dimensions ?? "—" },
+          ].map((item) => (
+            <div key={item.label} className="p-3 bg-gray-50 rounded-lg text-center border border-gray-100">
+              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">{item.label}</p>
+              <p className="text-xs font-bold text-gray-900 mt-0.5">{item.value}</p>
             </div>
           ))}
         </div>
 
-        {/* Package */}
-        <div className="border-t border-gray-200 pt-3 my-3">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-1">Package</p>
-          <p className="text-sm font-medium">{shipment.packageDescription}</p>
+        {/* ── Package ── */}
+        <div className="mx-8 mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">Package Description</p>
+          <p className="text-sm font-medium text-gray-900">{shipment.packageDescription}</p>
         </div>
 
-        {/* Delivery info */}
-        <div className="grid grid-cols-2 gap-4 my-4 p-3 border border-gray-200 rounded-lg">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Estimated Delivery</p>
-            <p className="text-sm font-bold mt-0.5">
+        {/* ── Delivery + Value ── */}
+        <div className="mx-8 mt-4 grid grid-cols-2 gap-4">
+          <div className="p-4 border border-gray-200 rounded-lg">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">Estimated Delivery</p>
+            <p className="text-sm font-bold text-gray-900">
               {shipment.estimatedDelivery ? fmtDate(shipment.estimatedDelivery) : "Pending"}
             </p>
+            {shipment.deliveredAt && (
+              <div className="mt-2 pt-2 border-t border-gray-100">
+                <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-0.5">Delivered On</p>
+                <p className="text-xs font-bold text-emerald-700">{fmtDateTime(shipment.deliveredAt)}</p>
+              </div>
+            )}
           </div>
-          {shipment.deliveredAt && (
-            <div>
-              <p className="text-[10px] uppercase tracking-widest text-gray-500">Delivered On</p>
-              <p className="text-sm font-bold mt-0.5">{fmtDateTime(shipment.deliveredAt)}</p>
+          {subtotal > 0 && (
+            <div className="p-4 bg-[#f0faf9] rounded-lg border border-[#0f766e]/10">
+              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#0f766e]/60 mb-1">Declared Value</p>
+              <p className="text-lg font-extrabold text-[#0f766e]">{shipment.currency ?? "$"} {subtotal.toFixed(2)}</p>
             </div>
           )}
         </div>
 
-        {/* Cost summary */}
-        {subtotal > 0 && (
-          <div className="border-t border-gray-200 pt-3 my-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Declared Value</span>
-              <span className="font-bold">{shipment.currency ?? "$"} {subtotal.toFixed(2)}</span>
+        {/* ── Reference / Notes ── */}
+        {(shipment.referenceNumber || shipment.notes) && (
+          <div className="mx-8 mt-4 space-y-1">
+            {shipment.referenceNumber && (
+              <p className="text-[10px] text-gray-500">
+                <span className="font-bold">Reference:</span> {shipment.referenceNumber}
+              </p>
+            )}
+            {shipment.notes && (
+              <p className="text-[10px] text-gray-500">
+                <span className="font-bold">Notes:</span> {shipment.notes}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── Footer ── */}
+        <div className="mx-8 mt-6 mb-6 pt-4 border-t border-gray-200">
+          <p className="text-[9px] text-gray-400 text-center leading-relaxed">
+            This receipt confirms your shipment has been registered in the Cloudie Global Logistics tracking system.
+            <br />Track your shipment at cloudie.com/tracking/{shipment.trackingNumber}
+          </p>
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+            <p className="text-[9px] text-gray-400">Generated on {fmtDateTime(Date.now())}</p>
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 bg-[#0f766e]/10 rounded flex items-center justify-center">
+                <span className="text-[#0f766e] text-[7px] font-bold">C</span>
+              </div>
+              <p className="text-[9px] text-gray-400">cloudie.com</p>
             </div>
           </div>
-        )}
-
-        {/* Reference */}
-        {shipment.referenceNumber && (
-          <div className="text-xs text-gray-500 mt-2">
-            <span className="font-bold">Reference:</span> {shipment.referenceNumber}
-          </div>
-        )}
-        {shipment.notes && (
-          <div className="text-xs text-gray-500 mt-1">
-            <span className="font-bold">Notes:</span> {shipment.notes}
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="mt-6 pt-3 border-t-2 border-black text-[10px] text-gray-500">
-          <p>This receipt confirms that your shipment has been registered in the Cloudie Global Logistics tracking system.</p>
-          <p className="mt-1">Track at: cloudie.com/tracking/{shipment.trackingNumber}</p>
-          <p className="mt-1">Generated on {fmtDateTime(Date.now())}</p>
         </div>
       </div>
     </motion.div>

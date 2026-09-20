@@ -33,305 +33,532 @@ function fmtCurrency(amount: unknown, currency = "USD") {
   if (isNaN(n)) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
 }
+function shortDate(iso: string) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch { return iso; }
+}
+function dayOfWeek(iso: string) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  } catch { return ""; }
+}
+function timeOnly(iso: string) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+  } catch { return iso; }
+}
 
-/* ─── document layouts ─── */
-
+/* ═══════════════════════════════════════════════════════════════════════════════
+   FLIGHT ITINERARY — Modern airline e-ticket / boarding-pass inspired layout
+   ═══════════════════════════════════════════════════════════════════════════════ */
 function FlightDocumentLayout({ data, title }: { data: Record<string, unknown>; title: string }) {
+  const dep = S(data.departure) || "—";
+  const arr = S(data.arrival) || "—";
+  const depCode = dep.substring(0, 3).toUpperCase();
+  const arrCode = arr.substring(0, 3).toUpperCase();
+
   return (
-    <div className="bg-white text-black p-8 max-w-[800px] mx-auto">
-      <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
+    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+      {/* ── Branded Header Bar ── */}
+      <div className="bg-[#0f766e] text-white px-8 py-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg font-black">C</span>
+          <div className="w-9 h-9 bg-white/20 backdrop-blur rounded-lg flex items-center justify-center">
+            <span className="text-white text-base font-extrabold">C</span>
           </div>
           <div>
-            <p className="text-xl font-black tracking-tight">CLOUDIE</p>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Global Logistics & Travel</p>
+            <p className="text-lg font-extrabold tracking-tight leading-tight">CLOUDIE</p>
+            <p className="text-[9px] uppercase tracking-[0.35em] text-white/60">Global Logistics & Travel</p>
           </div>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Flight Itinerary</p>
-          <p className="text-sm font-bold mt-1">{title}</p>
+          <p className="text-[9px] font-semibold uppercase tracking-[0.25em] text-white/70">E-Ticket Itinerary</p>
+          <p className="text-xs font-bold mt-0.5">{title}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Passenger</h3>
-          <p className="text-lg font-bold">{S(data.passengerName) || "—"}</p>
-        </div>
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Booking Reference</h3>
-          <p className="text-lg font-mono font-bold">{S(data.bookingRef) || "—"}</p>
-        </div>
-      </div>
-
-      <div className="border-2 border-black rounded-lg p-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="text-center flex-1">
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Departure</p>
-            <p className="text-2xl font-black mt-1">{S(data.departure) || "—"}</p>
-            {!!data.departureDate && <p className="text-sm mt-1">{fmtDateTime(S(data.departureDate))}</p>}
+      {/* ── Routing Box ── */}
+      <div className="mx-8 mt-6 border border-gray-200 rounded-xl overflow-hidden">
+        <div className="flex items-stretch">
+          {/* Departure */}
+          <div className="flex-1 px-6 py-5 bg-gray-50/80">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">From</p>
+            <p className="text-2xl font-extrabold text-gray-900 leading-none">{depCode}</p>
+            <p className="text-xs font-medium text-gray-600 mt-1">{dep}</p>
+            {!!data.departureDate && (
+              <div className="mt-2">
+                <p className="text-[10px] text-gray-400">{dayOfWeek(S(data.departureDate))} {shortDate(S(data.departureDate))}</p>
+                <p className="text-sm font-bold text-gray-900">{timeOnly(S(data.departureDate))}</p>
+              </div>
+            )}
           </div>
-          <div className="flex-1 flex flex-col items-center px-4">
-            <div className="w-full border-t-2 border-dashed border-gray-300 relative">
-              <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-white px-2">✈</span>
+
+          {/* Center connector */}
+          <div className="relative flex flex-col items-center justify-center px-4 bg-white">
+            <div className="w-8 h-8 rounded-full bg-[#0f766e]/10 flex items-center justify-center mb-1">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0f766e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
+              </svg>
             </div>
-            <p className="text-xs font-bold mt-1">{S(data.flightNumber) || "—"}</p>
+            <div className="w-24 border-t border-dashed border-gray-300" />
+            <p className="text-[10px] font-bold text-[#0f766e] mt-1">{S(data.flightNumber) || "—"}</p>
           </div>
-          <div className="text-center flex-1">
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Arrival</p>
-            <p className="text-2xl font-black mt-1">{S(data.arrival) || "—"}</p>
-            {!!data.arrivalDate && <p className="text-sm mt-1">{fmtDateTime(S(data.arrivalDate))}</p>}
+
+          {/* Arrival */}
+          <div className="flex-1 px-6 py-5 bg-gray-50/80 text-right">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">To</p>
+            <p className="text-2xl font-extrabold text-gray-900 leading-none">{arrCode}</p>
+            <p className="text-xs font-medium text-gray-600 mt-1">{arr}</p>
+            {!!data.arrivalDate && (
+              <div className="mt-2">
+                <p className="text-[10px] text-gray-400">{dayOfWeek(S(data.arrivalDate))} {shortDate(S(data.arrivalDate))}</p>
+                <p className="text-sm font-bold text-gray-900">{timeOnly(S(data.arrivalDate))}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dashed tear-line */}
+        <div className="relative h-0">
+          <div className="absolute left-0 right-0 border-t border-dashed border-gray-300" />
+          <div className="absolute -left-3 -top-2 w-5 h-5 bg-white rounded-full" />
+          <div className="absolute -right-3 -top-2 w-5 h-5 bg-white rounded-full" />
+        </div>
+
+        {/* Passenger & Booking Row */}
+        <div className="grid grid-cols-4 divide-x divide-gray-200">
+          <div className="px-4 py-3">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Passenger</p>
+            <p className="text-xs font-bold text-gray-900 mt-0.5 truncate">{S(data.passengerName) || "—"}</p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Booking Ref</p>
+            <p className="text-xs font-bold text-[#0f766e] mt-0.5 font-mono">{S(data.bookingRef) || "—"}</p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Seat</p>
+            <p className="text-xs font-bold text-gray-900 mt-0.5">{S(data.seat) || "—"} · {S(data.cabin) || "Economy"}</p>
+          </div>
+          <div className="px-4 py-3">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Baggage</p>
+            <p className="text-xs font-bold text-gray-900 mt-0.5">{data.baggage ? `${S(data.baggage)} bag(s)` : "—"}</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      {/* ── Flight Details Grid ── */}
+      <div className="mx-8 mt-5 grid grid-cols-3 gap-4">
         {[
-          ["Airline", S(data.airline)],
-          ["Cabin", S(data.cabin)],
-          ["Seat", S(data.seat)],
-          ["Baggage", data.baggage ? `${S(data.baggage)} bag(s)` : "—"],
-        ].map(([label, value]) => (
-          <div key={label} className="text-center p-3 bg-gray-50 rounded-lg">
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">{label}</p>
-            <p className="text-sm font-bold mt-1">{value || "—"}</p>
+          { label: "Airline", value: S(data.airline) || "—" },
+          { label: "Flight No.", value: S(data.flightNumber) || "—" },
+          { label: "Cabin Class", value: S(data.cabin) || "Economy" },
+        ].map((item) => (
+          <div key={item.label} className="px-4 py-3 bg-[#f0faf9] rounded-lg border border-[#0f766e]/10">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">{item.label}</p>
+            <p className="text-sm font-bold text-gray-900 mt-0.5">{item.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="border-t-2 border-black pt-4 text-[10px] text-gray-500">
-        <p>This document is generated by Cloudie Global Logistics. This is not a confirmed ticket — it is an itinerary record.</p>
-        <p className="mt-1">Generated on {fmtDateTime(new Date().toISOString())}</p>
+      {/* ── Important Notice ── */}
+      <div className="mx-8 mt-5 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">Important Notice</p>
+        <p className="text-[11px] leading-relaxed text-amber-800">
+          This document is generated by Cloudie Global Logistics as an itinerary record. It is not a confirmed airline ticket.
+          Please verify all details with the carrier directly before travel. Present this document at check-in along with valid identification.
+        </p>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="mx-8 mt-5 mb-6 flex items-center justify-between pt-4 border-t border-gray-200">
+        <p className="text-[9px] text-gray-400">Generated on {fmtDateTime(new Date().toISOString())}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#0f766e]/10 rounded flex items-center justify-center">
+            <span className="text-[#0f766e] text-[8px] font-bold">C</span>
+          </div>
+          <p className="text-[9px] text-gray-400">cloudie.com</p>
+        </div>
       </div>
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   HOTEL RESERVATION — Elegant property-branded confirmation
+   ═══════════════════════════════════════════════════════════════════════════════ */
 function HotelDocumentLayout({ data, title }: { data: Record<string, unknown>; title: string }) {
+  const nights = data.checkIn && data.checkOut
+    ? Math.max(1, Math.round((new Date(S(data.checkOut)).getTime() - new Date(S(data.checkIn)).getTime()) / 86400000))
+    : 0;
+
   return (
-    <div className="bg-white text-black p-8 max-w-[800px] mx-auto">
-      <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg font-black">C</span>
+    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+      {/* ── Elegant Header ── */}
+      <div className="relative bg-gradient-to-r from-[#0f766e] to-[#115e59] text-white px-8 py-7">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/15 backdrop-blur rounded-lg flex items-center justify-center">
+              <span className="text-white text-lg font-extrabold">C</span>
+            </div>
+            <div>
+              <p className="text-lg font-extrabold tracking-tight leading-tight">CLOUDIE</p>
+              <p className="text-[9px] uppercase tracking-[0.35em] text-white/50">Hospitality & Travel</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xl font-black tracking-tight">CLOUDIE</p>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Hotel Reservation</p>
+          <div className="text-right">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-white/60">Reservation Confirmation</p>
+            <p className="text-xs font-bold mt-0.5">{title}</p>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Reservation</p>
-          <p className="text-sm font-bold mt-1">{title}</p>
+        {/* Decorative line */}
+        <div className="absolute bottom-0 left-8 right-8 h-px bg-white/20" />
+      </div>
+
+      {/* ── Confirmation Number Badge ── */}
+      <div className="mx-8 -mt-0 relative z-10">
+        <div className="inline-flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-5 py-3 shadow-sm mt-5">
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400">Confirmation #</p>
+          <p className="text-lg font-extrabold text-[#0f766e] font-mono tracking-wider">{S(data.confirmationNumber) || "PENDING"}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Guest</h3>
-          <p className="text-lg font-bold">{S(data.guestName) || "—"}</p>
+      {/* ── Guest & Property ── */}
+      <div className="mx-8 mt-5 grid grid-cols-2 gap-4">
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">Guest Name</p>
+          <p className="text-sm font-bold text-gray-900">{S(data.guestName) || "—"}</p>
+          <p className="text-[10px] text-gray-400 mt-1">{S(data.guests) || "1"} guest(s)</p>
         </div>
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Confirmation</h3>
-          <p className="text-lg font-mono font-bold">{S(data.confirmationNumber) || "—"}</p>
-        </div>
-      </div>
-
-      <div className="border-2 border-black rounded-lg p-4 mb-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Property</h3>
-        <p className="text-xl font-black">{S(data.hotel) || "—"}</p>
-        {!!data.address && <p className="text-sm text-gray-600 mt-1">{S(data.address)}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="p-4 border border-black rounded-lg text-center">
-          <p className="text-[10px] uppercase tracking-widest text-gray-500">Check-in</p>
-          <p className="text-lg font-bold mt-1">{data.checkIn ? fmtDate(S(data.checkIn)) : "—"}</p>
-          <p className="text-xs text-gray-500">3:00 PM</p>
-        </div>
-        <div className="p-4 border border-black rounded-lg text-center">
-          <p className="text-[10px] uppercase tracking-widest text-gray-500">Check-out</p>
-          <p className="text-lg font-bold mt-1">{data.checkOut ? fmtDate(S(data.checkOut)) : "—"}</p>
-          <p className="text-xs text-gray-500">11:00 AM</p>
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">Room Type</p>
+          <p className="text-sm font-bold text-gray-900">{S(data.roomType) || "Standard"}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {[
-          ["Room Type", S(data.roomType)],
-          ["Guests", S(data.guests)],
-          ["Nights", data.checkIn && data.checkOut
-            ? String(Math.max(1, Math.round((new Date(S(data.checkOut)).getTime() - new Date(S(data.checkIn)).getTime()) / 86400000)))
-            : "—"],
-        ].map(([label, value]) => (
-          <div key={label} className="text-center p-3 bg-gray-50 rounded-lg">
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">{label}</p>
-            <p className="text-sm font-bold mt-1">{value || "—"}</p>
+      {/* ── Property Card ── */}
+      <div className="mx-8 mt-4 p-5 bg-[#f0faf9] rounded-xl border border-[#0f766e]/10">
+        <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#0f766e]/60 mb-1">Property</p>
+        <p className="text-xl font-extrabold text-gray-900">{S(data.hotel) || "—"}</p>
+        {!!data.address && <p className="text-xs text-gray-500 mt-1">{S(data.address)}</p>}
+      </div>
+
+      {/* ── Check-in / Check-out Cards ── */}
+      <div className="mx-8 mt-5 grid grid-cols-2 gap-4">
+        <div className="relative p-5 bg-white border-2 border-[#0f766e] rounded-xl text-center overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-[#0f766e]" />
+          <p className="text-[8px] font-bold uppercase tracking-[0.25em] text-[#0f766e]/70 mb-1">Check-in</p>
+          <p className="text-xl font-extrabold text-gray-900">{data.checkIn ? fmtDate(S(data.checkIn)) : "—"}</p>
+          <p className="text-[10px] text-gray-400 mt-1">From 3:00 PM</p>
+        </div>
+        <div className="relative p-5 bg-white border-2 border-gray-200 rounded-xl text-center overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gray-300" />
+          <p className="text-[8px] font-bold uppercase tracking-[0.25em] text-gray-400 mb-1">Check-out</p>
+          <p className="text-xl font-extrabold text-gray-900">{data.checkOut ? fmtDate(S(data.checkOut)) : "—"}</p>
+          <p className="text-[10px] text-gray-400 mt-1">Before 11:00 AM</p>
+        </div>
+      </div>
+
+      {/* ── Stay Summary ── */}
+      <div className="mx-8 mt-5 flex items-center justify-center gap-6 py-4 bg-gray-50 rounded-lg border border-gray-100">
+        <div className="text-center">
+          <p className="text-2xl font-extrabold text-[#0f766e]">{nights || "—"}</p>
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mt-0.5">Night{nights !== 1 ? "s" : ""}</p>
+        </div>
+        <div className="w-px h-8 bg-gray-200" />
+        <div className="text-center">
+          <p className="text-2xl font-extrabold text-gray-900">{S(data.guests) || "1"}</p>
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-400 mt-0.5">Guests</p>
+        </div>
+      </div>
+
+      {/* ── Policies ── */}
+      <div className="mx-8 mt-5 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700 mb-1">Booking Policies</p>
+        <ul className="text-[11px] leading-relaxed text-blue-800 space-y-0.5">
+          <li>• Check-in: 3:00 PM — Check-out: 11:00 AM</li>
+          <li>• Valid photo ID required at check-in</li>
+          <li>• Free cancellation up to 24 hours before check-in</li>
+          <li>• This reservation is generated by Cloudie Global Logistics</li>
+        </ul>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="mx-8 mt-5 mb-6 flex items-center justify-between pt-4 border-t border-gray-200">
+        <p className="text-[9px] text-gray-400">Generated on {fmtDateTime(new Date().toISOString())}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#0f766e]/10 rounded flex items-center justify-center">
+            <span className="text-[#0f766e] text-[8px] font-bold">C</span>
           </div>
-        ))}
-      </div>
-
-      <div className="border-t-2 border-black pt-4 text-[10px] text-gray-500">
-        <p>This reservation confirmation is generated by Cloudie Global Logistics. Please verify all details with the property directly.</p>
-        <p className="mt-1">Generated on {fmtDateTime(new Date().toISOString())}</p>
+          <p className="text-[9px] text-gray-400">cloudie.com</p>
+        </div>
       </div>
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COMMERCIAL INVOICE — Professional business document
+   ═══════════════════════════════════════════════════════════════════════════════ */
 function InvoiceDocumentLayout({ data, title }: { data: Record<string, unknown>; title: string }) {
   const items = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
   const currency = S(data.currency) || "USD";
   const tax = parseFloat(S(data.tax) || "0");
   const shipping = parseFloat(S(data.shipping) || "0");
-  const total = parseFloat(S(data.total) || "0");
+  const subtotal = items.reduce((sum, item) => sum + (Number(item.quantity ?? 0)) * (Number(item.unitPrice ?? 0)), 0);
+  const total = subtotal + tax + shipping;
 
   return (
-    <div className="bg-white text-black p-8 max-w-[800px] mx-auto">
-      <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg font-black">C</span>
-          </div>
-          <div>
-            <p className="text-xl font-black tracking-tight">CLOUDIE</p>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Commercial Invoice</p>
+    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+      {/* ── Header ── */}
+      <div className="flex items-stretch">
+        <div className="flex-1 bg-[#0f766e] text-white px-8 py-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/15 backdrop-blur rounded-lg flex items-center justify-center">
+              <span className="text-white text-lg font-extrabold">C</span>
+            </div>
+            <div>
+              <p className="text-lg font-extrabold tracking-tight leading-tight">CLOUDIE</p>
+              <p className="text-[9px] uppercase tracking-[0.35em] text-white/50">Global Logistics</p>
+            </div>
           </div>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Invoice</p>
-          <p className="text-lg font-mono font-bold">{S(data.invoiceNumber) || "—"}</p>
+        <div className="bg-gray-900 text-white px-8 py-6 flex flex-col justify-center items-end min-w-[200px]">
+          <p className="text-[9px] uppercase tracking-[0.25em] text-white/50 font-semibold">Commercial Invoice</p>
+          <p className="text-xl font-extrabold mt-1">{S(data.invoiceNumber) || "—"}</p>
+          <p className="text-[10px] text-white/60 mt-1">{fmtDate(new Date().toISOString())}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Seller</h3>
-          <p className="font-bold">{S(data.seller) || "—"}</p>
+      {/* ── Seller / Buyer ── */}
+      <div className="mx-8 mt-6 grid grid-cols-2 gap-5">
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#0f766e] mb-1.5">Sold By</p>
+          <p className="text-sm font-bold text-gray-900">{S(data.seller) || "—"}</p>
         </div>
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Buyer</h3>
-          <p className="font-bold">{S(data.buyer) || "—"}</p>
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#0f766e] mb-1.5">Sold To</p>
+          <p className="text-sm font-bold text-gray-900">{S(data.buyer) || "—"}</p>
         </div>
       </div>
 
-      <table className="w-full text-sm mb-6 border-collapse">
-        <thead>
-          <tr className="bg-gray-100 border border-black">
-            <th className="text-left px-3 py-2 font-bold text-xs uppercase tracking-wider">Description</th>
-            <th className="text-right px-3 py-2 font-bold text-xs uppercase tracking-wider w-16">Qty</th>
-            <th className="text-right px-3 py-2 font-bold text-xs uppercase tracking-wider w-28">Unit Price</th>
-            <th className="text-right px-3 py-2 font-bold text-xs uppercase tracking-wider w-28">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item, i) => (
-            <tr key={i} className="border border-black">
-              <td className="px-3 py-2">{S(item.description) || "—"}</td>
-              <td className="text-right px-3 py-2">{String(item.quantity ?? "")}</td>
-              <td className="text-right px-3 py-2">{fmtCurrency(item.unitPrice, currency)}</td>
-              <td className="text-right px-3 py-2 font-bold">{fmtCurrency((Number(item.quantity ?? 0)) * (Number(item.unitPrice ?? 0)), currency)}</td>
+      {/* ── Line Items Table ── */}
+      <div className="mx-8 mt-5">
+        <table className="w-full text-sm" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
+          <thead>
+            <tr className="bg-[#0f766e]">
+              <th className="text-left px-4 py-2.5 text-[9px] font-bold uppercase tracking-[0.2em] text-white rounded-tl-lg">Description</th>
+              <th className="text-center px-3 py-2.5 text-[9px] font-bold uppercase tracking-[0.2em] text-white w-16">Qty</th>
+              <th className="text-right px-3 py-2.5 text-[9px] font-bold uppercase tracking-[0.2em] text-white w-28">Unit Price</th>
+              <th className="text-right px-4 py-2.5 text-[9px] font-bold uppercase tracking-[0.2em] text-white w-28 rounded-tr-lg">Amount</th>
             </tr>
-          ))}
-          {items.length === 0 && (
-            <tr className="border border-black"><td colSpan={4} className="text-center py-4 text-gray-400">No items</td></tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item, i) => (
+              <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/50"}>
+                <td className="px-4 py-2.5 text-xs font-medium border-b border-gray-100">{S(item.description) || "—"}</td>
+                <td className="text-center px-3 py-2.5 text-xs border-b border-gray-100">{String(item.quantity ?? "")}</td>
+                <td className="text-right px-3 py-2.5 text-xs border-b border-gray-100">{fmtCurrency(item.unitPrice, currency)}</td>
+                <td className="text-right px-4 py-2.5 text-xs font-bold border-b border-gray-100">{fmtCurrency((Number(item.quantity ?? 0)) * (Number(item.unitPrice ?? 0)), currency)}</td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr><td colSpan={4} className="text-center py-6 text-gray-400 text-xs border-b border-gray-100">No line items</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      <div className="flex justify-end">
-        <div className="w-64 space-y-1 text-sm">
-          <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{fmtCurrency(total - tax - shipping, currency)}</span></div>
-          {tax > 0 && <div className="flex justify-between"><span className="text-gray-500">Tax</span><span>{fmtCurrency(tax, currency)}</span></div>}
-          {shipping > 0 && <div className="flex justify-between"><span className="text-gray-500">Shipping</span><span>{fmtCurrency(shipping, currency)}</span></div>}
-          <div className="flex justify-between border-t-2 border-black pt-2 font-black text-lg"><span>Total</span><span>{fmtCurrency(total, currency)}</span></div>
+      {/* ── Totals ── */}
+      <div className="mx-8 mt-4 flex justify-end">
+        <div className="w-72">
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between px-3 py-1.5">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="font-medium">{fmtCurrency(subtotal, currency)}</span>
+            </div>
+            {tax > 0 && (
+              <div className="flex justify-between px-3 py-1.5 bg-gray-50 rounded">
+                <span className="text-gray-500">Tax</span>
+                <span className="font-medium">{fmtCurrency(tax, currency)}</span>
+              </div>
+            )}
+            {shipping > 0 && (
+              <div className="flex justify-between px-3 py-1.5">
+                <span className="text-gray-500">Shipping & Handling</span>
+                <span className="font-medium">{fmtCurrency(shipping, currency)}</span>
+              </div>
+            )}
+          </div>
+          <div className="mt-2 flex justify-between items-center bg-[#0f766e] text-white px-4 py-3 rounded-lg">
+            <span className="text-xs font-bold uppercase tracking-wider">Total Due</span>
+            <span className="text-lg font-extrabold">{fmtCurrency(total, currency)}</span>
+          </div>
         </div>
       </div>
 
-      <div className="mt-8 border-t-2 border-black pt-4 text-[10px] text-gray-500">
-        <p>Generated by Cloudie Global Logistics. All amounts are in {currency}.</p>
-        <p className="mt-1">Generated on {fmtDateTime(new Date().toISOString())}</p>
+      {/* ── Payment Terms ── */}
+      <div className="mx-8 mt-5 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600 mb-1">Payment Terms</p>
+        <p className="text-[11px] leading-relaxed text-gray-600">
+          Payment is due within 30 days of invoice date. All amounts are in {currency}. Late payments may incur a 1.5% monthly finance charge.
+        </p>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="mx-8 mt-5 mb-6 pt-4 border-t border-gray-200">
+        <div className="flex items-center justify-between">
+          <p className="text-[9px] text-gray-400">Generated on {fmtDateTime(new Date().toISOString())}</p>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-[#0f766e]/10 rounded flex items-center justify-center">
+              <span className="text-[#0f766e] text-[8px] font-bold">C</span>
+            </div>
+            <p className="text-[9px] text-gray-400">cloudie.com</p>
+          </div>
+        </div>
+        <p className="text-[9px] text-gray-400 mt-2 text-center">This invoice is generated by Cloudie Global Logistics. Retain for your records.</p>
       </div>
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CUSTOMS DECLARATION — Official government-form inspired layout
+   ═══════════════════════════════════════════════════════════════════════════════ */
 function CustomsDocumentLayout({ data, title }: { data: Record<string, unknown>; title: string }) {
   return (
-    <div className="bg-white text-black p-8 max-w-[800px] mx-auto">
-      <div className="flex items-center justify-between border-b-2 border-black pb-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
-            <span className="text-white text-lg font-black">C</span>
+    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+      {/* ── Official Header ── */}
+      <div className="bg-gray-900 text-white px-8 py-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/15 rounded-lg flex items-center justify-center">
+              <span className="text-white text-lg font-extrabold">C</span>
+            </div>
+            <div>
+              <p className="text-lg font-extrabold tracking-tight leading-tight">CLOUDIE</p>
+              <p className="text-[9px] uppercase tracking-[0.35em] text-white/50">International Shipping</p>
+            </div>
           </div>
-          <div>
-            <p className="text-xl font-black tracking-tight">CLOUDIE</p>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-gray-500">Customs Declaration</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Declaration</p>
-          <p className="text-sm font-bold mt-1">{title}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-6 mb-6">
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Sender</h3>
-          <p className="font-bold">{S(data.senderName) || "—"}</p>
-          <p className="text-sm text-gray-600">{S(data.senderCountry) || "—"}</p>
-        </div>
-        <div className="p-4 bg-gray-50 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Receiver</h3>
-          <p className="font-bold">{S(data.receiverName) || "—"}</p>
-          <p className="text-sm text-gray-600">{S(data.receiverCountry) || "—"}</p>
-        </div>
-      </div>
-
-      <div className="border-2 border-black rounded-lg p-4 mb-6">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-3">Package Details</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Description</p>
-            <p className="font-bold mt-1">{S(data.packageDescription) || "—"}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Commodity</p>
-            <p className="font-bold mt-1">{S(data.commodity) || "—"}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Declared Value</p>
-            <p className="font-bold mt-1">{data.value ? fmtCurrency(data.value) : "—"}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Weight</p>
-            <p className="font-bold mt-1">{data.weight ? `${S(data.weight)} kg` : "—"}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-widest text-gray-500">Country of Origin</p>
-            <p className="font-bold mt-1">{S(data.countryOfOrigin) || "—"}</p>
+          <div className="text-right">
+            <div className="inline-block px-3 py-1 bg-white/10 rounded text-[9px] font-bold uppercase tracking-[0.2em] text-white/80">
+              Customs Declaration
+            </div>
+            <p className="text-[10px] text-white/50 mt-2">{title}</p>
           </div>
         </div>
       </div>
 
-      {!!data.declarationInfo && (
-        <div className="mb-6 p-4 border border-gray-300 rounded-lg">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-2">Additional Declaration</h3>
-          <p className="text-sm">{S(data.declarationInfo)}</p>
-        </div>
-      )}
+      {/* ── Yellow declaration bar ── */}
+      <div className="mx-8 mt-5 px-4 py-2.5 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+          ⚠ Official Customs Declaration — All information must be accurate
+        </p>
+      </div>
 
-      <div className="border-t-2 border-black pt-4 text-[10px] text-gray-500">
-        <p>This customs declaration is generated by Cloudie Global Logistics. Verify accuracy before shipment.</p>
-        <p className="mt-1">Generated on {fmtDateTime(new Date().toISOString())}</p>
+      {/* ── Shipper / Consignee ── */}
+      <div className="mx-8 mt-5 grid grid-cols-2 gap-4">
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="bg-[#0f766e] text-white px-4 py-1.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em]">Shipper / Exporter</p>
+          </div>
+          <div className="p-4">
+            <p className="text-sm font-bold text-gray-900">{S(data.senderName) || "—"}</p>
+            <p className="text-xs text-gray-500 mt-1">{S(data.senderCountry) || "—"}</p>
+          </div>
+        </div>
+        <div className="border border-gray-200 rounded-lg overflow-hidden">
+          <div className="bg-[#0f766e] text-white px-4 py-1.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em]">Consignee / Importer</p>
+          </div>
+          <div className="p-4">
+            <p className="text-sm font-bold text-gray-900">{S(data.receiverName) || "—"}</p>
+            <p className="text-xs text-gray-500 mt-1">{S(data.receiverCountry) || "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Package Information ── */}
+      <div className="mx-8 mt-5 border border-gray-200 rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-gray-600">Package Information</p>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          <div className="p-4">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Description</p>
+            <p className="text-xs font-bold text-gray-900 mt-1">{S(data.packageDescription) || "—"}</p>
+          </div>
+          <div className="p-4">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Commodity / HS Code</p>
+            <p className="text-xs font-bold text-gray-900 mt-1">{S(data.commodity) || "—"}</p>
+          </div>
+          <div className="p-4">
+            <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Country of Origin</p>
+            <p className="text-xs font-bold text-gray-900 mt-1">{S(data.countryOfOrigin) || "—"}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Value & Weight ── */}
+      <div className="mx-8 mt-4 grid grid-cols-2 gap-4">
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Declared Value</p>
+          <p className="text-xl font-extrabold text-[#0f766e] mt-1">{data.value ? fmtCurrency(data.value) : "—"}</p>
+        </div>
+        <div className="p-4 bg-gray-50 rounded-lg border border-gray-100 text-center">
+          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-gray-400">Gross Weight</p>
+          <p className="text-xl font-extrabold text-gray-900 mt-1">{data.weight ? `${S(data.weight)} kg` : "—"}</p>
+        </div>
+      </div>
+
+      {/* ── Declaration ── */}
+      <div className="mx-8 mt-5 border-2 border-gray-900 rounded-lg overflow-hidden">
+        <div className="bg-gray-900 text-white px-4 py-2">
+          <p className="text-[9px] font-bold uppercase tracking-[0.2em]">Declaration</p>
+        </div>
+        <div className="p-4">
+          <p className="text-[11px] leading-relaxed text-gray-700">
+            I hereby declare that the information provided in this customs declaration is true and correct.
+            The contents of this package are accurately described and the declared values represent the true
+            commercial value of the goods. I understand that making a false or fraudulent declaration is a
+            criminal offense.
+          </p>
+          {!!data.declarationInfo && (
+            <div className="mt-3 p-3 bg-gray-50 rounded border border-gray-200">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 mb-1">Additional Information</p>
+              <p className="text-xs text-gray-700">{S(data.declarationInfo)}</p>
+            </div>
+          )}
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="border-b border-gray-300 pb-1">
+              <p className="text-[9px] text-gray-400">Authorized Signature</p>
+            </div>
+            <div className="border-b border-gray-300 pb-1">
+              <p className="text-[9px] text-gray-400">Date: {fmtDate(new Date().toISOString())}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="mx-8 mt-5 mb-6 pt-4 border-t border-gray-200 flex items-center justify-between">
+        <p className="text-[9px] text-gray-400">Generated on {fmtDateTime(new Date().toISOString())}</p>
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#0f766e]/10 rounded flex items-center justify-center">
+            <span className="text-[#0f766e] text-[8px] font-bold">C</span>
+          </div>
+          <p className="text-[9px] text-gray-400">cloudie.com</p>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ─── main viewer ─── */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MAIN VIEWER
+   ═══════════════════════════════════════════════════════════════════════════════ */
 export type DocumentType = "flight" | "hotel" | "invoice" | "customs";
 
 const TYPE_LABELS: Record<DocumentType, string> = {
@@ -405,13 +632,13 @@ export function DocumentViewer({
       </div>
 
       {/* Document preview */}
-      <div className="rounded-xl border border-border overflow-hidden shadow-sm">
+      <div className="rounded-xl border border-border overflow-hidden shadow-lg shadow-black/5">
         <div ref={contentRef}>
           {docType === "flight" && <FlightDocumentLayout data={doc.data} title={doc.title} />}
           {docType === "hotel" && <HotelDocumentLayout data={doc.data} title={doc.title} />}
           {docType === "invoice" && <InvoiceDocumentLayout data={doc.data} title={doc.title} />}
           {docType === "customs" && <CustomsDocumentLayout data={doc.data} title={doc.title} />}
-          {!["flight", "hotel", "invoice", "customs"].includes(docType) && (
+          {![ "flight", "hotel", "invoice", "customs"].includes(docType) && (
             <div className="p-12 text-center text-gray-400">
               <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
               <p className="text-sm">No preview available for this document type.</p>

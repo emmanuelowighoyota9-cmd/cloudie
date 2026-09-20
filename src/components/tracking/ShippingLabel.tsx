@@ -40,41 +40,9 @@ export type LabelPackage = {
   quantity: number;
 };
 
-function AddressBlock({
-  heading,
-  name,
-  address,
-  city,
-  state,
-  country,
-  postalCode,
-  accent,
-}: {
-  heading: string;
-  name: string;
-  address: string;
-  city: string;
-  state: string;
-  country: string;
-  postalCode: string;
-  accent: string;
-}) {
-  return (
-    <div className="min-w-0">
-      <p className={`text-[10px] font-bold uppercase tracking-widest ${accent}`}>{heading}</p>
-      <p className="mt-1 truncate text-[13px] font-bold text-black">{name}</p>
-      <p className="text-[11px] leading-tight text-black">{address}</p>
-      <p className="text-[11px] leading-tight text-black">
-        {[city, state].filter(Boolean).join(", ")} {postalCode} — {country}
-      </p>
-    </div>
-  );
-}
-
 /**
- * Native shipping label — pure DOM/SVG rendered from the application's own
- * database. Print uses the browser; Download rasterizes the DOM via the
- * already-bundled snapdom utility (no external service, works offline).
+ * Native shipping label — modern branded waybill design.
+ * Print uses the browser; Download rasterizes via snapdom (no external service).
  */
 export function ShippingLabel({
   shipment,
@@ -116,7 +84,7 @@ export function ShippingLabel({
         <Button size="sm" variant="outline" onClick={print}>
           <Printer className="mr-1.5 h-4 w-4" /> Print label
         </Button>
-        <Button size="sm" variant="outline" onClick={download}>
+        <Button size="sm" onClick={download}>
           <Download className="mr-1.5 h-4 w-4" /> Download label
         </Button>
       </div>
@@ -124,96 +92,96 @@ export function ShippingLabel({
       <div
         ref={labelRef}
         id="shipping-label"
-        className="mx-auto w-full max-w-[420px] rounded-md border-2 border-black bg-white p-4 text-black"
+        className="mx-auto w-full max-w-[420px] bg-white rounded-xl overflow-hidden shadow-lg shadow-black/5 text-gray-900"
+        style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}
       >
-        {/* Header: brand + tracking */}
-        <div className="flex items-start justify-between border-b-2 border-black pb-2">
+        {/* ── Header ── */}
+        <div className="bg-[#0f766e] text-white px-5 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-black">
-              <span className="text-[13px] font-black text-white">C</span>
+            <div className="w-7 h-7 bg-white/15 rounded-md flex items-center justify-center">
+              <span className="text-white text-xs font-extrabold">C</span>
             </div>
             <div>
-              <p className="text-sm font-black leading-none tracking-tight">CLOUDIE</p>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.25em] text-black">
-                Global Logistics
-              </p>
+              <p className="text-sm font-extrabold tracking-tight leading-none">CLOUDIE</p>
+              <p className="text-[7px] uppercase tracking-[0.3em] text-white/50">Global Logistics</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[8px] font-bold uppercase tracking-widest">Tracking #</p>
-            <p className="font-mono text-[12px] font-bold">{shipment.trackingNumber}</p>
-            {shipment.referenceNumber && (
-              <p className="text-[9px] text-black">Ref: {shipment.referenceNumber}</p>
-            )}
+            <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-white/60">Shipping Label</p>
           </div>
         </div>
 
-        {/* Barcode + QR */}
-        <div className="flex items-center justify-between gap-3 py-3">
-          <BarcodeSvg value={shipment.trackingNumber} height={56} moduleWidth={2} />
-          <QrCodeSvg value={trackingUrl(shipment.trackingNumber)} size={76} ecl="medium" />
+        {/* ── Tracking Bar ── */}
+        <div className="mx-5 mt-3 flex items-center justify-between bg-gray-50 rounded-lg px-4 py-2 border border-gray-100">
+          <div>
+            <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-gray-400">Tracking #</p>
+            <p className="text-sm font-extrabold text-[#0f766e] font-mono">{shipment.trackingNumber}</p>
+          </div>
+          {shipment.referenceNumber && (
+            <div className="text-right">
+              <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-gray-400">Ref #</p>
+              <p className="text-xs font-bold text-gray-700 font-mono">{shipment.referenceNumber}</p>
+            </div>
+          )}
         </div>
 
-        {/* Addresses */}
-        <div className="grid grid-cols-2 gap-3 border-t border-black pt-2">
-          <AddressBlock
-            heading="From (Sender)"
-            name={shipment.senderName}
-            address={shipment.senderAddress}
-            city={shipment.senderCity}
-            state={shipment.senderState}
-            country={shipment.senderCountry}
-            postalCode={shipment.senderPostalCode}
-            accent="text-slate-500"
-          />
-          <div className="border-l border-dashed border-black pl-3">
-            <AddressBlock
-              heading="To (Recipient)"
-              name={shipment.recipientName}
-              address={shipment.recipientAddress}
-              city={shipment.recipientCity}
-              state={shipment.recipientState}
-              country={shipment.recipientCountry}
-              postalCode={shipment.recipientPostalCode}
-              accent="text-blue-700"
-            />
-          </div>
+        {/* ── Barcode + QR ── */}
+        <div className="mx-5 mt-3 flex items-center justify-between gap-3 py-2 border-t border-b border-gray-100">
+          <BarcodeSvg value={shipment.trackingNumber} height={50} moduleWidth={2} />
+          <QrCodeSvg value={trackingUrl(shipment.trackingNumber)} size={64} ecl="medium" />
         </div>
 
-        {/* Service / route / package meta */}
-        <div className="mt-2 grid grid-cols-3 gap-2 border-t border-black pt-2 text-[10px]">
-          <div>
-            <p className="font-bold uppercase tracking-widest text-slate-500">Service</p>
-            <p className="font-semibold">{shipment.serviceTypeName ?? "Standard"}</p>
-          </div>
-          <div>
-            <p className="font-bold uppercase tracking-widest text-slate-500">Route</p>
-            <p className="font-semibold">{originLabel} → {destinationLabel}</p>
-          </div>
-          <div>
-            <p className="font-bold uppercase tracking-widest text-slate-500">Weight</p>
-            <p className="font-semibold">
-              {shipment.totalWeight} {shipment.weightUnit}
+        {/* ── From / To ── */}
+        <div className="mx-5 mt-3 grid grid-cols-2 gap-3">
+          <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+            <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-1">From</p>
+            <p className="text-[11px] font-bold text-gray-900 leading-tight">{shipment.senderName}</p>
+            <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{shipment.senderAddress}</p>
+            <p className="text-[10px] text-gray-500 leading-tight">
+              {[shipment.senderCity, shipment.senderState].filter(Boolean).join(", ")} {shipment.senderPostalCode}
             </p>
+            <p className="text-[10px] text-gray-500 leading-tight">{shipment.senderCountry}</p>
+          </div>
+          <div className="p-3 bg-[#f0faf9] rounded-lg border border-[#0f766e]/10">
+            <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-[#0f766e]/60 mb-1">To</p>
+            <p className="text-[11px] font-bold text-gray-900 leading-tight">{shipment.recipientName}</p>
+            <p className="text-[10px] text-gray-500 leading-tight mt-0.5">{shipment.recipientAddress}</p>
+            <p className="text-[10px] text-gray-500 leading-tight">
+              {[shipment.recipientCity, shipment.recipientState].filter(Boolean).join(", ")} {shipment.recipientPostalCode}
+            </p>
+            <p className="text-[10px] text-gray-500 leading-tight">{shipment.recipientCountry}</p>
           </div>
         </div>
 
-        {/* Package row */}
+        {/* ── Service / Route / Weight ── */}
+        <div className="mx-5 mt-3 grid grid-cols-3 gap-2">
+          {[
+            { label: "Service", value: shipment.serviceTypeName ?? "Standard" },
+            { label: "Route", value: `${originLabel} → ${destinationLabel}` },
+            { label: "Weight", value: `${shipment.totalWeight} ${shipment.weightUnit}` },
+          ].map((item) => (
+            <div key={item.label} className="p-2 bg-gray-50 rounded text-center border border-gray-100">
+              <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-gray-400">{item.label}</p>
+              <p className="text-[10px] font-bold text-gray-900 mt-0.5">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Package row ── */}
         {pkg && (
-          <div className="mt-2 flex items-center justify-between border-t border-black pt-2 text-[10px]">
+          <div className="mx-5 mt-3 mb-4 flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100">
             <div>
-              <p className="font-bold uppercase tracking-widest text-slate-500">
-                Package {pkg.packageNumber}
-                {packages.length > 1 ? ` of ${packages.length}` : ""}
+              <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-gray-400">
+                Package {pkg.packageNumber}{packages.length > 1 ? ` of ${packages.length}` : ""}
               </p>
-              <p className="font-semibold">
+              <p className="text-[10px] font-semibold text-gray-900 mt-0.5">
                 {pkg.description} · {pkg.packageType} · {pkg.weight} {shipment.weightUnit}
                 {pkg.dimensions ? ` · ${pkg.dimensions}` : ""}
               </p>
             </div>
             <div className="text-right">
-              <p className="font-bold uppercase tracking-widest text-slate-500">Ship date</p>
-              <p className="font-semibold">{new Date(shipment.createdAt).toLocaleDateString()}</p>
+              <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-gray-400">Ship date</p>
+              <p className="text-[10px] font-semibold text-gray-900 mt-0.5">{new Date(shipment.createdAt).toLocaleDateString()}</p>
             </div>
           </div>
         )}
