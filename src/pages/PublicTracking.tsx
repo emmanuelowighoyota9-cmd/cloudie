@@ -13,11 +13,13 @@ import {
   Factory,
   Landmark,
   MapPin,
+  Moon,
   Package,
   PackageCheck,
   PackageSearch,
   Plane,
   ShieldCheck,
+  Sun,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -25,6 +27,7 @@ import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import { RouteMap, type RouteMapStop } from "@/components/tracking/RouteMap";
 import { QrCodeSvg } from "@/components/tracking/Codes";
+import { useTheme } from "@/components/ThemeProvider";
 import { statusBadgeClass, statusLabel, trackingUrl } from "@/lib/trackingUi";
 
 // ─── Milestones ──────────────────────────────────────────────────────────────
@@ -85,6 +88,28 @@ function fmtDay(ts: number) {
   if (d.toDateString() === today.toDateString()) return "Today";
   if (d.toDateString() === yest.toDateString()) return "Yesterday";
   return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+
+// ─── Theme toggle ────────────────────────────────────────────────────────────
+
+/**
+ * Public pages are reachable signed-out, so the toggle reads/writes the same
+ * `cloudie-theme` preference as the rest of the app via ThemeProvider.
+ */
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  const next = theme === "light" ? "Dark" : "Light";
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggle}
+      aria-label={`Switch to ${next.toLowerCase()} theme`}
+      title={`Switch to ${next.toLowerCase()} theme`}
+    >
+      {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+    </Button>
+  );
 }
 
 // ─── Search screen ───────────────────────────────────────────────────────────
@@ -242,24 +267,27 @@ export default function PublicTracking() {
               Cloudie<span className="text-muted-foreground"> Tracking</span>
             </span>
           </Link>
-          {trackingNumber ? (
-            <form
-              className="hidden flex-1 items-center gap-2 sm:flex md:max-w-sm"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const data = new FormData(e.currentTarget);
-                const tn = String(data.get("tn") ?? "").trim();
-                if (tn) window.location.href = `/tracking/${encodeURIComponent(tn)}`;
-              }}
-            >
-              <Input name="tn" placeholder="Track another number" className="h-9" />
-              <Button type="submit" size="sm" variant="outline" className="h-9">
-                Track
-              </Button>
-            </form>
-          ) : (
-            <span className="text-xs text-muted-foreground">Live shipment visibility</span>
-          )}
+          <div className="flex min-w-0 items-center gap-1.5">
+            {trackingNumber ? (
+              <form
+                className="hidden min-w-0 flex-1 items-center gap-2 sm:flex md:max-w-sm"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const data = new FormData(e.currentTarget);
+                  const tn = String(data.get("tn") ?? "").trim();
+                  if (tn) window.location.href = `/tracking/${encodeURIComponent(tn)}`;
+                }}
+              >
+                <Input name="tn" placeholder="Track another number" className="h-9" />
+                <Button type="submit" size="sm" variant="outline" className="h-9">
+                  Track
+                </Button>
+              </form>
+            ) : (
+              <span className="hidden text-xs text-muted-foreground sm:inline">Live shipment visibility</span>
+            )}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
 
