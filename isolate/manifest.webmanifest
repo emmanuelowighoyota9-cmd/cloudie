@@ -1,17 +1,50 @@
 {
-  "name": "freebuff.com application",
-  "short_name": "freebuff.com",
-  "description": "freebuff.com application",
+  "name": "Cloudie Operations Platform",
+  "short_name": "Cloudie",
+  "description": "Cloudie is a modular operations platform: shipments with native tracking, document generation, business tenants, marketplace, and a unified points ledger.",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#f5f3ee",
+  "theme_color": "#0f766e",
+  "categories": ["business", "productivity", "utilities"],
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "/app-icon.svg",
       "sizes": "any",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Track a shipment",
+      "short_name": "Track",
+      "url": "/tracking",
+      "description": "Look up a shipment by tracking number"
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Open the Cloudie dashboard"
+    },
+    {
+      "name": "Create shipment",
+      "short_name": "Ship",
+      "url": "/shipments/new",
+      "description": "Create a new shipment"
     }
   ]
 }
