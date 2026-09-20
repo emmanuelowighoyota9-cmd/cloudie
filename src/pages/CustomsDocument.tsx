@@ -5,13 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowLeft, ScrollText } from "lucide-react";
+import { ArrowLeft, ScrollText, Eye } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { DocumentViewer } from "@/components/documents/DocumentViewer";
 
 export default function CustomsDocument() {
   const generate = useMutation(api.documents.generate);
   const [loading, setLoading] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<unknown>(null);
   const [form, setForm] = useState({
     senderName: "", senderCountry: "", receiverName: "", receiverCountry: "",
     packageDescription: "", commodity: "", value: "", countryOfOrigin: "", weight: "",
@@ -23,23 +25,31 @@ export default function CustomsDocument() {
     e.preventDefault();
     setLoading(true);
     try {
-      await generate({ type: "customs", title: `Customs - ${form.senderName} to ${form.receiverName}`, data: form });
+      const docId = await generate({ type: "customs", title: `Customs - ${form.senderName} to ${form.receiverName}`, data: form });
       toast.success("Customs document generated!");
+      setSelectedDoc({
+        _id: docId, type: "customs", title: `Customs - ${form.senderName} to ${form.receiverName}`,
+        data: { ...form }, pointsCost: 100, createdAt: Date.now(),
+      });
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
+
+  if (selectedDoc) {
+    return <DocumentViewer document={selectedDoc as never} onBack={() => setSelectedDoc(null)} />;
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
         <Link to="/ticketing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Customs Declaration</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Generate a customs declaration document. Cost: 100 points.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Customs Declaration</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Generate a customs declaration document. Cost: 100 points.</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="notebook-card">
+        <Card className="border-border">
           <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Sender & Receiver</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5"><Label>Sender Name *</Label><Input required value={form.senderName} onChange={(e) => update("senderName", e.target.value)} /></div>
@@ -49,7 +59,7 @@ export default function CustomsDocument() {
           </CardContent>
         </Card>
 
-        <Card className="notebook-card">
+        <Card className="border-border">
           <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Package & Commodity</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2"><Label>Package Description *</Label><Input required value={form.packageDescription} onChange={(e) => update("packageDescription", e.target.value)} /></div>

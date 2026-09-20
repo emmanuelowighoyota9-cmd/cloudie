@@ -3,7 +3,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Clock, MapPin, Package, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Clock, MapPin, Package, ShieldCheck, RefreshCw } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { RouteViz } from "@/components/tracking/RouteViz";
 import { QrCodeSvg } from "@/components/tracking/Codes";
@@ -52,6 +52,11 @@ export default function ShipmentDetail() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Link to={`/shipments/${id}/updates`}>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" /> View Updates
+            </Button>
+          </Link>
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusBadgeClass(s.status)}`}>
             {statusLabel(s.status)}
           </span>

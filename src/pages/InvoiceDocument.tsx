@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowLeft, FileSpreadsheet, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, FileSpreadsheet, Plus, Trash2, Eye } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { DocumentViewer } from "@/components/documents/DocumentViewer";
 
 interface InvoiceItem { description: string; quantity: number; unitPrice: number; }
 
@@ -15,6 +16,7 @@ export default function InvoiceDocument() {
   const generate = useMutation(api.documents.generate);
   const docs = useQuery(api.documents.list, { type: "invoice", limit: 10 });
   const [loading, setLoading] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<unknown>(null);
   const [form, setForm] = useState({
     seller: "", buyer: "", invoiceNumber: "", currency: "USD", tax: "0", shipping: "0",
   });
@@ -32,23 +34,31 @@ export default function InvoiceDocument() {
     e.preventDefault();
     setLoading(true);
     try {
-      await generate({ type: "invoice", title: `Invoice - ${form.invoiceNumber}`, data: { ...form, items, total } });
+      const docId = await generate({ type: "invoice", title: `Invoice - ${form.invoiceNumber}`, data: { ...form, items, total } });
       toast.success("Invoice generated!");
+      setSelectedDoc({
+        _id: docId, type: "invoice", title: `Invoice - ${form.invoiceNumber}`,
+        data: { ...form, items, total }, pointsCost: 80, createdAt: Date.now(),
+      });
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };
+
+  if (selectedDoc) {
+    return <DocumentViewer document={selectedDoc as never} onBack={() => setSelectedDoc(null)} />;
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-4">
         <Link to="/ticketing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Commercial Invoice</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Generate a commercial invoice. Cost: 80 points.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Commercial Invoice</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Generate a commercial invoice. Cost: 80 points.</p>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="notebook-card">
+        <Card className="border-border">
           <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Invoice Details</CardTitle></CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5"><Label>Seller *</Label><Input required value={form.seller} onChange={(e) => update("seller", e.target.value)} /></div>
@@ -60,7 +70,7 @@ export default function InvoiceDocument() {
           </CardContent>
         </Card>
 
-        <Card className="notebook-card">
+        <Card className="border-border">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Line Items</CardTitle>
@@ -73,10 +83,10 @@ export default function InvoiceDocument() {
                 <div className="flex-1 space-y-1"><Label className="text-xs">Description</Label><Input required value={item.description} onChange={(e) => updateItem(i, "description", e.target.value)} /></div>
                 <div className="w-20 space-y-1"><Label className="text-xs">Qty</Label><Input required type="number" min="1" value={item.quantity} onChange={(e) => updateItem(i, "quantity", parseInt(e.target.value) || 1)} /></div>
                 <div className="w-28 space-y-1"><Label className="text-xs">Unit Price</Label><Input required type="number" min="0" step="0.01" value={item.unitPrice || ""} onChange={(e) => updateItem(i, "unitPrice", parseFloat(e.target.value) || 0)} /></div>
-                {items.length > 1 && <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-red-500" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4" /></Button>}
+                {items.length > 1 && <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0 text-destructive" onClick={() => removeItem(i)}><Trash2 className="h-4 w-4" /></Button>}
               </div>
             ))}
-            <div className="flex justify-end pt-2 text-sm font-semibold text-[var(--nb-ink)]">Total: {form.currency} {total.toFixed(2)}</div>
+            <div className="flex justify-end pt-2 text-sm font-semibold text-foreground">Total: {form.currency} {total.toFixed(2)}</div>
           </CardContent>
         </Card>
 
@@ -88,7 +98,7 @@ export default function InvoiceDocument() {
         </div>
       </form>
 
-      <Card className="notebook-card">
+      <Card className="border-border">
         <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Previous Invoices</CardTitle></CardHeader>
         <CardContent>
           {!docs ? <p className="text-sm text-muted-foreground animate-pulse">Loading...</p> : docs.length === 0 ? (
@@ -96,8 +106,14 @@ export default function InvoiceDocument() {
           ) : (
             <div className="space-y-2">
               {docs.map((doc) => (
-                <div key={doc._id} className="flex items-center justify-between p-3 rounded-lg hover:bg-[var(--nb-ink)]/5">
-                  <div><p className="text-sm font-medium text-[var(--nb-ink)]">{doc.title}</p><p className="text-xs text-muted-foreground">{new Date(doc.createdAt).toLocaleDateString()} • {doc.pointsCost} pts</p></div>
+                <div key={doc._id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{doc.title}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(doc.createdAt).toLocaleDateString()} · {doc.pointsCost} pts</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedDoc(doc)} className="shrink-0">
+                    <Eye className="h-4 w-4 mr-1" /> View
+                  </Button>
                 </div>
               ))}
             </div>
