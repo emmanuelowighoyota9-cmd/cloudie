@@ -133,6 +133,132 @@ export const getPublicPricing = query({
   },
 });
 
+/**
+ * Canonical service catalog. These are the platform's baseline billable
+ * services (all executed natively — no external provider is involved).
+ * Admins may override the cost of any entry; new services can be added too.
+ */
+const DEFAULT_PRICING: { service: string; workspace: string; pointsCost: number }[] = [
+  { service: "shipment_create", workspace: "shipments", pointsCost: 50 },
+  { service: "shipment_tracking_update", workspace: "shipments", pointsCost: 5 },
+  { service: "flight_pdf", workspace: "ticketing", pointsCost: 25 },
+  { service: "hotel_pdf", workspace: "ticketing", pointsCost: 25 },
+  { service: "commercial_invoice", workspace: "ticketing", pointsCost: 20 },
+  { service: "customs_document", workspace: "ticketing", pointsCost: 20 },
+  { service: "email_per_recipient", workspace: "services", pointsCost: 10 },
+  { service: "image_render", workspace: "services", pointsCost: 15 },
+  { service: "tenant_site_create", workspace: "business", pointsCost: 250 },
+  { service: "marketplace_purchase_fee", workspace: "platform", pointsCost: 0 },
+];
+
+/**
+ * Idempotently insert any missing catalog services with their baseline cost.
+ * Existing rows are never modified, so an admin's overrides are preserved.
+ */
+export const seedDefaultPricing = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { adminId } = await requireAdmin(ctx);
+    const now = Date.now();
+    let created = 0;
+    for (const entry of DEFAULT_PRICING) {
+      const existing = await ctx.db
+        .query("pointPricing")
+        .withIndex("by_service", (q) => q.eq("service", entry.service))
+        .first();
+      if (existing) continue;
+      await ctx.db.insert("pointPricing", {
+        service: entry.service,
+        workspace: entry.workspace,
+        pointsCost: entry.pointsCost,
+        isActive: false,
+        effectiveFrom: now,
+        updatedBy: adminId,
+        updatedAt: now,
+      });
+      created++;
+    }
+    if (created > 0) {
+      await auditLog(ctx, adminId, {
+        action: "PRICING_SEEDED",
+        resource: "pointPricing",
+        after: { created },
+        reason: "Seeded default pricing catalog",
+      });
+    }
+    return { created };
+  },
+});
+
+/**
+ * Apply multiple pricing changes atomically in a single mutation. Each entry
+ * is validated server-side before anything is written, then one summary audit
+ * record is produced for the whole batch.
+ */
+export const bulkUpsertPricing = mutation({
+  args: {
+    entries: v.array(
+      v.object({
+        service: v.string(),
+        workspace: v.string(),
+        pointsCost: v.number(),
+        isActive: v.boolean(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    if (args.entries.length === 0) return { updated: 0 };
+    if (args.entries.length > 100) throw new Error("TOO_MANY_ENTRIES");
+
+    // Validate everything up-front so a bad entry cannot leave a partial write.
+    for (const entry of args.entries) {
+      if (!entry.service.trim()) throw new Error("INVALID_SERVICE");
+      if (!Number.isFinite(entry.pointsCost) || entry.pointsCost < 0) {
+        throw new Error(`INVALID_COST:${entry.service}`);
+      }
+    }
+
+    const now = Date.now();
+    let updated = 0;
+    for (const entry of args.entries) {
+      const service = entry.service.trim();
+      const existing = await ctx.db
+        .query("pointPricing")
+        .withIndex("by_service", (q) => q.eq("service", service))
+        .first();
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          pointsCost: entry.pointsCost,
+          isActive: entry.isActive,
+          workspace: entry.workspace,
+          updatedBy: adminId,
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.insert("pointPricing", {
+          service,
+          workspace: entry.workspace,
+          pointsCost: entry.pointsCost,
+          isActive: entry.isActive,
+          effectiveFrom: now,
+          updatedBy: adminId,
+          updatedAt: now,
+        });
+      }
+      updated++;
+    }
+
+    await auditLog(ctx, adminId, {
+      action: "PRICING_BULK_UPDATED",
+      resource: "pointPricing",
+      after: { count: updated, services: args.entries.map((e) => e.service) },
+      reason: `Bulk pricing update across ${updated} service(s)`,
+    });
+    return { updated };
+  },
+});
+
 // ─── Admin Settings ─────────────────────────────────────────────────────────
 
 const SECRET_KEY_FRAGMENTS = ["secret", "password", "token", "api_key", "apikey", "credential"];
