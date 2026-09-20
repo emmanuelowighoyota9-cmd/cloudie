@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { classifyTenantParam } from "@/lib/tenantParam";
 import { ShieldCheck, Landmark, CreditCard, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, Wallet, Plus, Users, FileText, Bell, DollarSign, Check } from "lucide-react";
 
 function Money({ minor, currency = "USD" }: { minor: number; currency?: string }) {
@@ -14,15 +15,27 @@ function Money({ minor, currency = "USD" }: { minor: number; currency?: string }
 function fmtDate(ms?: number) { return ms ? new Date(ms).toLocaleString() : "—"; }
 
 export default function SiteBanking() {
-  const { siteId } = useParams<{ siteId: string }>();
-  const id = siteId as Id<"tenantSites">;
-  const publicT = useQuery(api.bankingCustomer.publicTenant, { tenantId: id });
-  const member = useQuery(api.bankingCustomer.memberTenant, { tenantId: id });
+  // Two entry routes resolve to the same portal:
+  //   /site/:siteId/banking  → Convex tenant id
+  //   /:tenant/banking       → tenant subdomain (resolved server-side against the authoritative mapping)
+  const params = useParams<{ siteId?: string; tenant?: string }>();
+  const rawParam = (params.siteId ?? params.tenant ?? "").trim();
+  const paramKind = classifyTenantParam(rawParam);
+  const isId = paramKind === "id";
+  // A slug resolves against the authoritative server-side tenant/domain mapping —
+  // never treated as a client-asserted tenant id.
+  const bySubdomain = useQuery(
+    api.tenantResolver.resolveBySubdomain,
+    paramKind === "subdomain" ? { subdomain: rawParam } : "skip",
+  );
+  const id = (isId ? rawParam : bySubdomain?.tenantId) as Id<"tenantSites"> | undefined;
+  const publicT = useQuery(api.bankingCustomer.publicTenant, id ? { tenantId: id } : "skip");
+  const member = useQuery(api.bankingCustomer.memberTenant, id ? { tenantId: id } : "skip");
   const joinMutation = useMutation(api.bankingCustomer.joinTenant);
-  const accounts = useQuery(api.bankingCustomer.memberAccounts, { tenantId: id });
-  const history = useQuery(api.bankingCustomer.bankingHistory, { tenantId: id, limit: 50 });
-  const bens = useQuery(api.bankingCustomer.listBeneficiaries, { tenantId: id });
-  const onboard = useQuery(api.bankingCustomer.onboardingMe, { tenantId: id });
+  const accounts = useQuery(api.bankingCustomer.memberAccounts, id ? { tenantId: id } : "skip");
+  const history = useQuery(api.bankingCustomer.bankingHistory, id ? { tenantId: id, limit: 50 } : "skip");
+  const bens = useQuery(api.bankingCustomer.listBeneficiaries, id ? { tenantId: id } : "skip");
+  const onboard = useQuery(api.bankingCustomer.onboardingMe, id ? { tenantId: id } : "skip");
   const [tab, setTab] = useState<"overview" | "accounts" | "transfers" | "beneficiaries" | "statements">("overview");
   const [busy, setBusy] = useState(false);
 
@@ -53,8 +66,11 @@ export default function SiteBanking() {
 
   // statement
   const [stmtAcc, setStmtAcc] = useState("");
-  const stmt = useQuery(api.bankingCustomer.statement as any, stmtAcc ? { tenantId: id, accountId: stmtAcc as Id<"tenantAccounts"> } : "skip") as any;
+  const stmt = useQuery(api.bankingCustomer.statement as any, stmtAcc && id ? { tenantId: id, accountId: stmtAcc as Id<"tenantAccounts"> } : "skip") as any;
 
+  const resolving = paramKind === "subdomain" && bySubdomain === undefined;
+  if (resolving) return <div className="p-8"><div className="animate-pulse text-slate-400">Loading…</div></div>;
+  if (!id) return <div className="max-w-3xl mx-auto p-8"><div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm"><div className="font-semibold">404 — Banking tenant not found</div><Link to="/business" className="underline">Back to Business</Link></div></div>;
   if (publicT === undefined || member === undefined) return <div className="p-8"><div className="animate-pulse text-slate-400">Loading…</div></div>;
   if (!publicT) return <div className="max-w-3xl mx-auto p-8"><div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm"><div className="font-semibold">404 — Banking tenant not found</div><Link to="/business" className="underline">Back to Business</Link></div></div>;
   const currency = (publicT as any).currency ?? "USD";

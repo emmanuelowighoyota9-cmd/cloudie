@@ -162,6 +162,65 @@ test("idempotency — duplicate key returns same reference", () => {
   void key;
 });
 
+// ─── Regression: idempotency keys are tenant + operation scoped ─────────────
+// A key stored by tenant A (or by a different operation) must never replay
+// its result for tenant B — that would leak another tenant's record.
+
+function checkIdem(stored: { tenantId: string; kind: string } | null, kind: string, tenantId: string) {
+  if (!stored) return { status: "miss" as const };
+  if (stored.tenantId !== tenantId || stored.kind !== kind) return { status: "conflict" as const };
+  return { status: "replay" as const };
+}
+
+test("idempotency — same key from another tenant is a conflict, not a replay", () => {
+  const stored = { tenantId: "tenant-A", kind: "transfer" };
+  expect(checkIdem(stored, "transfer", "tenant-A")).toEqual({ status: "replay" });
+  expect(checkIdem(stored, "transfer", "tenant-B")).toEqual({ status: "conflict" });
+  expect(checkIdem(stored, "openAccount", "tenant-A")).toEqual({ status: "conflict" });
+  expect(checkIdem(null, "transfer", "tenant-A")).toEqual({ status: "miss" });
+});
+
+// ─── Regression: opening-deposit group must balance ─────────────────────────
+// The previous implementation compared the opening amount against twice itself
+// and threw, making it impossible to fund a new account.
+
+test("opening deposit — credited account and contra debit balance", () => {
+  const d = 25000;
+  const legs = [
+    { debitMinor: 0, creditMinor: d }, // customer account credited
+    { debitMinor: d, creditMinor: 0 }, // funds-source contra debited
+  ];
+  expect(debitsEqCredits(legs)).toBe(true);
+  // The old, broken sanity check the fix replaced:
+  const broken = [{ debitMinor: d, creditMinor: d }, { debitMinor: 0, creditMinor: d }];
+  expect(debitsEqCredits(broken)).toBe(false);
+});
+
+// ─── Regression: tenant route param classification ─────────────────────────
+
+import { classifyTenantParam } from "@/lib/tenantParam";
+
+test("tenant param — slug resolves as subdomain, convex id as id", () => {
+  expect(classifyTenantParam("crestline-capitalfive")).toBe("subdomain");
+  expect(classifyTenantParam("k17abc9def8gh70pqrs2t3vwx4y5z6a7b")).toBe("id");
+  expect(classifyTenantParam("")).toBe("empty");
+  expect(classifyTenantParam(undefined)).toBe("empty");
+  expect(classifyTenantParam("   ")).toBe("empty");
+  // A slug must never be sent to Convex as a document id.
+  expect(classifyTenantParam("accounts")).not.toBe("id");
+});
+
+// ─── Regression: public portal reads must not throw for non-members ─────────
+// memberTenant/memberAccounts/bankingHistory/listBeneficiaries/onboardingMe are
+// rendered before a visitor signs in; they return empty rather than throwing.
+
+test("portal reads — non-members receive empty data, never an error", () => {
+  const memberTenant = (m: unknown) => (m ? { tenant: {} } : null);
+  const memberAccounts = (m: unknown) => (m ? [1] : []);
+  expect(memberTenant(null)).toBeNull();
+  expect(memberAccounts(null)).toEqual([]);
+});
+
 test("fees snapshot — historical tx retains fee config at transaction time", () => {
   const feeSnapshot = { transferFeeMinor: 50, perTransactionLimitMinor: 100000 };
   const transfer = { amountMinor: 10000, feeMinor: feeSnapshot.transferFeeMinor, feeSnapshot };

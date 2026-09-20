@@ -300,7 +300,9 @@ const schema = defineSchema(
       userId: v.id("users"),
       role: v.string(),
       createdAt: v.number(),
-    }).index("by_tenant", ["tenantId"]),
+    })
+      .index("by_tenant", ["tenantId"])
+      .index("by_tenant_and_user", ["tenantId", "userId"]),
 
     tenantLedger: defineTable({
       tenantId: v.id("tenantSites"),

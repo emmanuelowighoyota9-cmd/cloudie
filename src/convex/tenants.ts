@@ -355,7 +355,7 @@ export const listAccounts = query({
       .query("tenantAccounts")
       .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
       .order("desc")
-      .collect();
+      .take(500);
   },
 });
 
@@ -373,24 +373,47 @@ export const createAccount = mutation({
     const tenant = await ctx.db.get(args.tenantId);
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
     if (!tenant.isActive) throw new Error("Site is locked");
+    const lifecycle = (tenant as any).lifecycleStatus ?? (tenant.isActive ? "active" : "disabled");
+    if (["disabled", "suspended", "archived", "draft"].includes(lifecycle)) throw new Error(`Site is ${lifecycle}`);
 
-    // Generate realistic account/routing numbers.
-    const acctNum = `${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+    // Generate a unique account number (collision-checked against the by_account_number index).
+    let acctNum = "";
+    for (let i = 0; i < 10; i++) {
+      const cand = `${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+      const dupe = await ctx.db.query("tenantAccounts").withIndex("by_account_number", (q) => q.eq("accountNumber", cand)).first();
+      if (!dupe) { acctNum = cand; break; }
+    }
+    if (!acctNum) throw new Error("Account number collision");
     const routingNum = `${Math.floor(100000000 + Math.random() * 900000000)}`;
+    const currency = (tenant as any).currency ?? "USD";
+    const openingMinor = Math.max(0, Math.round((args.initialBalance ?? 0) * 100));
     const now = Date.now();
 
-    return await ctx.db.insert("tenantAccounts", {
+    const id = await ctx.db.insert("tenantAccounts", {
       tenantId: args.tenantId,
       userId: args.userId,
       accountType: args.accountType,
       name: args.name,
-      balance: args.initialBalance ?? 0,
+      balance: openingMinor / 100,
       accountNumber: acctNum,
       routingNumber: routingNum,
-      currency: "USD",
+      currency,
       isActive: true,
+      status: "active",
+      balanceMinor: openingMinor,
+      availableBalanceMinor: openingMinor,
+      ledgerBalanceMinor: openingMinor,
       createdAt: now,
     });
+
+    // Opening funding is recorded through the same double-entry ledger every other money path uses.
+    if (openingMinor > 0) {
+      const groupId = `opening-${id}-${now}`;
+      await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "adjustment", relatedId: id, accountId: id, userId: args.userId, debitMinor: 0, creditMinor: openingMinor, currency, description: "Opening balance", createdAt: now } as any);
+      await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "adjustment", relatedId: id, userId: args.userId, debitMinor: openingMinor, creditMinor: 0, currency, description: "Opening balance (contra)", createdAt: now } as any);
+    }
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "ACCOUNT_OPENED_BY_ADMIN", resource: "tenantAccount", resourceId: id, after: { userId: args.userId, accountNumber: acctNum, openingMinor, currency }, createdAt: now } as any);
+    return id;
   },
 });
 
@@ -426,11 +449,23 @@ export const depositToAccount = mutation({
     const account = await ctx.db.get(args.accountId);
     if (!account || account.tenantId !== args.tenantId) throw new Error("Account not found");
     if (!account.isActive) throw new Error("Account is closed");
+    const acctStatus = (account as any).status ?? (account.isActive ? "active" : "closed");
+    if (["frozen", "suspended", "closed"].includes(acctStatus)) throw new Error("Account is " + acctStatus);
 
     const depositAmount = Math.abs(args.amount);
-    const newBalance = account.balance + depositAmount;
-    await ctx.db.patch(args.accountId, { balance: newBalance });
+    const amountMinor = Math.round(depositAmount * 100);
+    if (amountMinor <= 0) throw new Error("Invalid amount");
+    const currency = (account as any).currency ?? (tenant as any).currency ?? "USD";
+    const prev = (account as any).balanceMinor ?? Math.round((account.balance ?? 0) * 100);
+    const newMinor = prev + amountMinor;
     const now = Date.now();
+    const groupId = `admin-deposit-${args.accountId}-${now}`;
+
+    // Same double-entry ledger as every other money path (balanced group, never a bare balance write).
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: args.description || `Deposit to ${account.name}`, createdAt: now } as any);
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description: `${args.description || `Deposit to ${account.name}`} (contra)`, createdAt: now } as any);
+
+    await ctx.db.patch(args.accountId, { balanceMinor: newMinor, availableBalanceMinor: newMinor, ledgerBalanceMinor: newMinor, balance: newMinor / 100 } as any);
 
     await ctx.db.insert("tenantLedger", {
       tenantId: args.tenantId,
@@ -441,17 +476,19 @@ export const depositToAccount = mutation({
       createdAt: now,
     });
 
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "DEPOSIT_RECORDED", resource: "tenantAccount", resourceId: args.accountId, before: { balanceMinor: prev }, after: { balanceMinor: newMinor, amountMinor, currency, groupId }, createdAt: now } as any);
+
     await ctx.db.insert("notifications", {
       userId: account.userId,
       title: "Deposit received",
-      message: `${fmtCurrency(depositAmount)} deposited to ${account.name}. New balance: ${fmtCurrency(newBalance)}.`,
+      message: `${fmtCurrency(depositAmount)} deposited to ${account.name}. New balance: ${fmtCurrency(newMinor / 100)}.`,
       type: "wallet",
       isRead: false,
       link: "/business",
       createdAt: now,
     });
 
-    return { newBalance };
+    return { newBalance: newMinor / 100 };
   },
 });
 
@@ -470,14 +507,25 @@ export const withdrawFromAccount = mutation({
     const account = await ctx.db.get(args.accountId);
     if (!account || account.tenantId !== args.tenantId) throw new Error("Account not found");
     if (!account.isActive) throw new Error("Account is closed");
+    const acctStatus = (account as any).status ?? (account.isActive ? "active" : "closed");
+    if (["frozen", "suspended", "closed"].includes(acctStatus)) throw new Error("Account is " + acctStatus);
 
     const withdrawAmount = Math.abs(args.amount);
-    if (account.accountType !== "credit" && account.balance < withdrawAmount) {
+    const amountMinor = Math.round(withdrawAmount * 100);
+    if (amountMinor <= 0) throw new Error("Invalid amount");
+    const currency = (account as any).currency ?? (tenant as any).currency ?? "USD";
+    const prev = (account as any).balanceMinor ?? Math.round((account.balance ?? 0) * 100);
+    if (account.accountType !== "credit" && prev < amountMinor) {
       throw new Error("Insufficient funds");
     }
-    const newBalance = account.balance - withdrawAmount;
-    await ctx.db.patch(args.accountId, { balance: newBalance });
+    const newMinor = prev - amountMinor;
     const now = Date.now();
+    const groupId = `admin-withdrawal-${args.accountId}-${now}`;
+
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description: args.description || `Withdrawal from ${account.name}`, createdAt: now } as any);
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: `${args.description || `Withdrawal from ${account.name}`} (contra)`, createdAt: now } as any);
+
+    await ctx.db.patch(args.accountId, { balanceMinor: newMinor, availableBalanceMinor: newMinor, ledgerBalanceMinor: newMinor, balance: newMinor / 100 } as any);
 
     await ctx.db.insert("tenantLedger", {
       tenantId: args.tenantId,
@@ -488,17 +536,19 @@ export const withdrawFromAccount = mutation({
       createdAt: now,
     });
 
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "WITHDRAWAL_RECORDED", resource: "tenantAccount", resourceId: args.accountId, before: { balanceMinor: prev }, after: { balanceMinor: newMinor, amountMinor, currency, groupId }, createdAt: now } as any);
+
     await ctx.db.insert("notifications", {
       userId: account.userId,
       title: "Withdrawal processed",
-      message: `${fmtCurrency(withdrawAmount)} withdrawn from ${account.name}. New balance: ${fmtCurrency(newBalance)}.`,
+      message: `${fmtCurrency(withdrawAmount)} withdrawn from ${account.name}. New balance: ${fmtCurrency(newMinor / 100)}.`,
       type: "wallet",
       isRead: false,
       link: "/business",
       createdAt: now,
     });
 
-    return { newBalance };
+    return { newBalance: newMinor / 100 };
   },
 });
 
@@ -1141,6 +1191,35 @@ export const adminListKycRecords = query({
       records.map(async (r) => {
         const user = await ctx.db.get(r.userId);
         return { ...r, userName: user?.name ?? user?.email ?? "Unknown" };
+      })
+    );
+    return enriched;
+  },
+});
+
+/** Bank admin: list deposits awaiting reconciliation (customer-initiated). */
+export const adminListDeposits = query({
+  args: { tenantId: v.id("tenantSites"), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.ownerId !== userId) return [];
+    const rows = await ctx.db
+      .query("bankingDeposits")
+      .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId))
+      .order("desc")
+      .take(Math.min(args.limit ?? 100, 500));
+    const enriched = await Promise.all(
+      rows.map(async (d: any) => {
+        const user: any = await ctx.db.get(d.userId);
+        const account: any = d.accountId ? await ctx.db.get(d.accountId) : null;
+        return {
+          ...d,
+          userName: user?.name ?? user?.email ?? "Unknown",
+          accountName: account ? (account as any).name : null,
+          accountNumber: account ? (account as any).accountNumber : null,
+        };
       })
     );
     return enriched;

@@ -41,11 +41,18 @@ export default function SiteAdmin() {
   const transactions = useQuery(api.tenants.adminListTransactions, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
   const kycRecords = useQuery(api.tenants.adminListKycRecords, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
 
+  // Tenant-scoped accounts (admin-guarded query) — used for the deposit picker.
+  const accountsList = useQuery(api.bankingAdmin.adminListBalances, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
+  const pendingDeposits = useQuery(api.tenants.adminListDeposits, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
+
   const addCustomer = useMutation(api.tenants.adminAddCustomer);
   const removeCustomer = useMutation(api.tenants.adminRemoveCustomer);
   const reviewKyc = useMutation(api.tenants.adminReviewCustomerKyc);
-  const createAccount = useMutation(api.tenants.createAccount);
-  const depositToAccount = useMutation(api.tenants.depositToAccount);
+  // Ledger-backed account opening (writes balanced double-entry posts, never a bare balance write).
+  const createAccount = useMutation(api.bankingCustomer.adminOpenAccount);
+  const recordDeposit = useMutation(api.tenants.depositToAccount);
+  // Customer-initiated deposits are reconciled through a controlled, auditable admin action.
+  const reconcileDeposit = useMutation(api.bankingAdmin.adminOverrideDeposit);
   const updateSite = useMutation(api.tenants.update);
 
   const [tab, setTab] = useState<"overview" | "customers" | "kyc" | "transactions" | "settings">("overview");
@@ -96,6 +103,7 @@ export default function SiteAdmin() {
   ) ?? [];
 
   const pendingKyc = kycRecords?.filter((k) => k.status === "submitted" || k.status === "under_review") ?? [];
+  const awaitingDeposits = ((pendingDeposits ?? []) as any[]).filter((d) => d.status === "pending" || d.status === "processing");
   const filteredTxns = transactions?.filter((t) =>
     !search || t.userName.toLowerCase().includes(search.toLowerCase()) || t.description.toLowerCase().includes(search.toLowerCase())
   ) ?? [];
@@ -124,8 +132,18 @@ export default function SiteAdmin() {
     if (!depositData.accountId || !depositData.amount || !siteId) return;
     setBusy(true);
     try {
-      await depositToAccount({ tenantId: siteId as Id<"tenantSites">, accountId: depositData.accountId as Id<"tenantAccounts">, amount: Number(depositData.amount) });
+      await recordDeposit({ tenantId: siteId as Id<"tenantSites">, accountId: depositData.accountId as Id<"tenantAccounts">, amount: Number(depositData.amount) });
       toast.success("Deposit successful"); setDepositOpen(false); setDepositData({ accountId: "", amount: "" });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const handleReconcile = async (depositId: string, action: "complete" | "fail") => {
+    if (!siteId) return;
+    setBusy(true);
+    try {
+      await reconcileDeposit({ tenantId: siteId as Id<"tenantSites">, depositId: depositId as Id<"bankingDeposits">, action, reason: "Admin reconciliation from bank admin panel" });
+      toast.success(action === "complete" ? "Deposit credited to ledger" : "Deposit marked failed");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
     finally { setBusy(false); }
   };
@@ -159,7 +177,7 @@ export default function SiteAdmin() {
     { key: "overview" as const, label: "Dashboard", icon: BarChart3 },
     { key: "customers" as const, label: "Customers", icon: Users },
     { key: "kyc" as const, label: "KYC Reviews", icon: ShieldCheck, badge: pendingKyc.length },
-    { key: "transactions" as const, label: "Transactions", icon: Activity },
+    { key: "transactions" as const, label: "Transactions", icon: Activity, badge: awaitingDeposits.length },
     { key: "settings" as const, label: "Settings", icon: Settings },
   ];
 
@@ -381,6 +399,28 @@ export default function SiteAdmin() {
                   <DollarSign className="h-3.5 w-3.5" /> Record Deposit
                 </button>
               </div>
+              {awaitingDeposits.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="h-4 w-4 text-amber-600" />
+                    <h2 className="text-sm font-bold text-gray-900">Deposits awaiting reconciliation</h2>
+                    <span className="ml-auto rounded-full bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5">{awaitingDeposits.length}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">Customer deposits only credit the ledger once approved by an administrator.</p>
+                  <div className="space-y-2">
+                    {awaitingDeposits.slice(0, 20).map((d) => (
+                      <div key={d._id} className="flex flex-wrap items-center gap-3 rounded-xl bg-white border border-amber-100 px-4 py-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-gray-900">{fmtCurrency((d.amountMinor ?? 0) / 100)}</p>
+                          <p className="text-xs text-gray-400">{d.reference} · {d.userName} · {d.method}</p>
+                        </div>
+                        <button onClick={() => handleReconcile(d._id, "complete")} disabled={busy} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 disabled:opacity-50">Credit</button>
+                        <button onClick={() => handleReconcile(d._id, "fail")} disabled={busy} className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-xs font-bold hover:bg-gray-50 disabled:opacity-50">Fail</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
                 {filteredTxns.length === 0 ? (
                   <div className="p-12 text-center text-sm text-gray-400">
@@ -542,10 +582,11 @@ export default function SiteAdmin() {
                 <select value={depositData.accountId} onChange={(e) => setDepositData({ ...depositData, accountId: e.target.value })}
                   className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2">
                   <option value="">Select account</option>
-                  {customers?.flatMap((c) => {
-                    // We don't have account data in the customer list, use a generic approach
-                    return [];
-                  })}
+                  {(accountsList ?? []).map((a: any) => (
+                    <option key={a._id} value={a._id}>
+                      {a.userName || a.userEmail || "Account"} · {a.name} · ••••{String(a.accountNumber).slice(-4)}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>

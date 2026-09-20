@@ -42,9 +42,17 @@ async function readJson(req: Request): Promise<Record<string, any>> {
   }
 }
 
+// Convex document ids are long base32-ish strings. Reserved path segments such as
+// "accounts", "transfers" or "join" must never be mistaken for a tenant id.
+function looksLikeId(value: string): boolean {
+  return value.length >= 20 && !/[/?&\s]/.test(value);
+}
+
 function tenantIdFromUrl(url: URL): string | null {
   const m = url.pathname.match(/\/api\/banking\/tenants\/([^/]+)/);
-  return m?.[1] ?? null;
+  const captured = m?.[1] ?? null;
+  if (!captured || !looksLikeId(captured)) return null;
+  return captured;
 }
 
 function errorResponse(e: unknown): Response {
@@ -58,7 +66,8 @@ function errorResponse(e: unknown): Response {
   if (msg.includes("ACCOUNT_NOT_FOUND")) return json({ error: "ACCOUNT_NOT_FOUND", message: msg }, 404);
   if (msg.includes("INSUFFICIENT_FUNDS")) return json({ error: "INSUFFICIENT_FUNDS", message: msg }, 422);
   if (msg.includes("INVALID_")) return json({ error: msg.split(":")[0] ?? "VALIDATION_ERROR", message: msg }, 400);
-  if (msg.includes("DUPLICATE")) return json({ error: "CONFLICT", message: msg }, 409);
+  if (msg.includes("DUPLICATE") || msg.includes("IDEMPOTENCY_KEY_CONFLICT")) return json({ error: "CONFLICT", message: msg }, 409);
+  if (msg.includes("ACCOUNT_INACTIVE") || msg.includes("SOURCE_ACCOUNT_INACTIVE") || msg.includes("DESTINATION_INACTIVE")) return json({ error: "ACCOUNT_INACTIVE", message: msg }, 409);
   if (msg.includes("DAILY_LIMIT")) return json({ error: "LIMIT_EXCEEDED", message: msg }, 422);
   if (msg === "INVALID_JSON") return json({ error: "INVALID_JSON", message: "Invalid JSON body" }, 400);
   return json({ error: "BAD_REQUEST", message: msg }, status ?? 400);
@@ -167,9 +176,11 @@ http.route({ path: "/api/tenants/provision", method: "POST", handler: provisionH
 
 // POST /api/banking/tenants/:tenantId/join
 const joinHandler = httpAction(async (ctx, req) => {
+  const body = await readJson(req);
+  if ((body as any).__invalid) return json({ error: "INVALID_JSON" }, 400);
   try {
     const url = new URL(req.url);
-    const tenantId = tenantIdFromUrl(url);
+    const tenantId = tenantIdFromUrl(url) ?? String(body.tenantId ?? "").trim();
     if (!tenantId) return json({ error: "MISSING_TENANT" }, 400);
     return json(await ctx.runMutation(api.bankingCustomer.joinTenant as any, { tenantId: tenantId as any }));
   } catch (e) {

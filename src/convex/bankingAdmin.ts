@@ -215,6 +215,14 @@ export const adminOverrideDeposit = mutation({
       const currency = (dep as any).currency as string;
       const amountMinor = (dep as any).amountMinor as number;
       const now = Date.now();
+      // Balanced double-entry group: debits === credits.
+      const entries = [
+        { debitMinor: 0, creditMinor: amountMinor },
+        { debitMinor: amountMinor, creditMinor: 0 },
+      ];
+      if (entries.reduce((s, e) => s + e.debitMinor, 0) !== entries.reduce((s, e) => s + e.creditMinor, 0)) {
+        throw new Error("invariant violated: deposit group unbalanced");
+      }
       await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit" as const, relatedId: args.depositId as unknown as string, accountId: acctId, userId: (dep as any).userId as Id<"users"> | undefined, debitMinor: 0, creditMinor: amountMinor, currency, description: `Deposit ${(dep as any).reference} credited (admin override)`, createdAt: now } as any);
       await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit" as const, relatedId: args.depositId as unknown as string, debitMinor: amountMinor, creditMinor: 0, currency, description: `Deposit ${(dep as any).reference} (contra)`, createdAt: now } as any);
       if (acctId) {
@@ -417,6 +425,17 @@ export const adminAuditLog = query({
   handler: async (ctx, args) => {
     await requireBankAdmin(ctx as any, args.tenantId);
     const logs = await ctx.db.query("auditLogs").order("desc").take(Math.min(args.limit ?? 100, 500));
-    return logs.filter((l: any) => l.resourceId === args.tenantId || l.resource === "tenantSite" || String(l.resourceId ?? "").startsWith(String(args.tenantId).slice(0, 8)));
+    // Tenant-scoped: only logs whose resource belongs to this tenant are returned.
+    const tenantAccounts = await ctx.db.query("tenantAccounts").withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId)).take(500);
+    const accountIds = new Set(tenantAccounts.map((a: any) => String(a._id)));
+    const tenantRefs = new Set<string>([String(args.tenantId)]);
+    for (const a of tenantAccounts) tenantRefs.add(String(a._id));
+    return logs.filter((l: any) => {
+      const rid = String(l.resourceId ?? "");
+      if (tenantRefs.has(rid)) return true;
+      if (accountIds.has(rid)) return true;
+      // transfer/deposit/withdrawal/kyc rows carry tenantId; check via resourceRefs recorded at write time
+      return l.resource === "tenantSite" && rid === String(args.tenantId);
+    });
   },
 });

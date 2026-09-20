@@ -24,18 +24,40 @@ async function assertTenantActive(tenant: any) {
     throw new Error(`TENANT_UNAVAILABLE: tenant is ${status}`);
 }
 
-async function requireTenantUser(ctx: MutationCtx | QueryCtx, tenantId: Id<"tenantSites">, includeOwnerAsMember = true) {
+/** Indexed membership check — the owner always counts as a member. */
+async function isMemberOf(ctx: MutationCtx | QueryCtx, tenant: any, userId: Id<"users">) {
+  if (tenant.ownerId === userId) return true;
+  const row = await ctx.db
+    .query("tenantUsers")
+    .withIndex("by_tenant_and_user", (q: any) => q.eq("tenantId", tenant._id).eq("userId", userId))
+    .first();
+  return !!row;
+}
+
+async function requireTenantUser(ctx: MutationCtx | QueryCtx, tenantId: Id<"tenantSites">) {
   const { userId } = await requireAuth(ctx as any);
   const tenant = await getTenant(tenantId, ctx);
-  // owner is always a member
   const isOwner = tenant.ownerId === userId;
-  let isMember = false;
-  if (!isOwner || !includeOwnerAsMember) {
-    const rows = await ctx.db.query("tenantUsers").withIndex("by_tenant", (q: any) => q.eq("tenantId", tenantId)).collect();
-    isMember = rows.some((r: any) => r.userId === userId);
-  }
-  if (isOwner && includeOwnerAsMember) isMember = true;
+  const isMember = await isMemberOf(ctx, tenant, userId);
   if (!isMember) throw new Error("FORBIDDEN: not a member of this tenant");
+  return { userId, tenant, isOwner, isMember };
+}
+
+/**
+ * Soft membership probe for read queries rendered by the public tenant portal.
+ * Returns null (instead of throwing) when the visitor is signed out or not a member,
+ * so the portal can render its sign-in / self-signup screen instead of an error boundary.
+ * Isolation is unchanged: non-members still receive no tenant data.
+ */
+async function softMember(ctx: MutationCtx | QueryCtx, tenantId: Id<"tenantSites">) {
+  const uid = await getAuthUserId(ctx as any);
+  if (!uid) return null;
+  const tenant = await ctx.db.get(tenantId);
+  if (!tenant || tenant.siteType !== "bank") return null;
+  const userId = uid as Id<"users">;
+  const isOwner = (tenant as any).ownerId === userId;
+  const isMember = await isMemberOf(ctx, tenant, userId);
+  if (!isMember) return null;
   return { userId, tenant, isOwner, isMember };
 }
 
@@ -71,11 +93,14 @@ function verifyDebitsEqCredits(entries: Array<{ debitMinor: number; creditMinor:
   if (deb !== cre) throw new Error(`invariant violated: debits ${deb} !== credits ${cre}`);
 }
 
-async function checkIdem(ctx: MutationCtx, key: string, tenantId?: Id<"tenantSites">) {
+async function checkIdem(ctx: MutationCtx, key: string, kind: string, tenantId: Id<"tenantSites">) {
   if (!key) return null;
   const existing = await ctx.db.query("bankingIdempotency").withIndex("by_key", q => q.eq("key", key)).first();
-  if (existing) return existing;
-  return null;
+  if (!existing) return null;
+  // Idempotency keys are tenant + operation scoped. A key that belongs to another
+  // tenant or another operation must never replay someone else's result.
+  if (existing.tenantId !== tenantId || existing.kind !== kind) throw new Error("IDEMPOTENCY_KEY_CONFLICT");
+  return existing;
 }
 async function recordIdem(ctx: MutationCtx, key: string, kind: string, tenantId: Id<"tenantSites">, actorId: Id<"users"> | undefined, resultType: string, resultId: string) {
   if (!key) return;
@@ -93,17 +118,20 @@ function fmtMoney(minor: number, currency = "USD") {
 export const memberTenant = query({
   args: { tenantId: v.id("tenantSites") },
   handler: async (ctx, args) => {
-    const m = await requireTenantUser(ctx as QueryCtx, args.tenantId);
-    const t = await getTenant(args.tenantId, ctx);
-    return { tenant: { _id: t._id, siteName: t.siteName, displayName: (t as any).displayName, subdomain: t.subdomain, currency: (t as any).currency ?? "USD", lifecycleStatus: (t as any).lifecycleStatus, isActive: t.isActive, branding: (t as any).branding }, isOwner: m.isOwner };
+    const m = await softMember(ctx as QueryCtx, args.tenantId);
+    if (!m) return null;
+    const t = m.tenant as any;
+    return { tenant: { _id: t._id, siteName: t.siteName, displayName: t.displayName, subdomain: t.subdomain, currency: t.currency ?? "USD", lifecycleStatus: t.lifecycleStatus, isActive: t.isActive, branding: t.branding }, isOwner: m.isOwner };
   },
 });
 
 export const memberAccounts = query({
   args: { tenantId: v.id("tenantSites") },
   handler: async (ctx, args) => {
-    const { userId } = await requireTenantUser(ctx as QueryCtx, args.tenantId);
-    const t = await getTenant(args.tenantId, ctx);
+    const m = await softMember(ctx as QueryCtx, args.tenantId);
+    if (!m) return [];
+    const { userId } = m;
+    const t = m.tenant as any;
     const rows = await ctx.db.query("tenantAccounts").withIndex("by_tenant_and_user", q => q.eq("tenantId", args.tenantId).eq("userId", userId)).collect();
     // only rows belonging to caller (plus visibility) — no cross-tenant leakage
     return rows.map(r => ({ _id: r._id, name: r.name, accountType: r.accountType, accountNumber: r.accountNumber, currency: (r as any).currency ?? (t as any).currency ?? "USD", isActive: r.isActive, status: (r as any).status ?? (r.isActive ? "active" : "closed"), balanceMinor: (r as any).balanceMinor ?? Math.round((r.balance ?? 0) * 100), createdAt: r.createdAt }));
@@ -126,10 +154,10 @@ export const accountTransactions = query({
 export const onboardingMe = query({
   args: { tenantId: v.id("tenantSites") },
   handler: async (ctx, args) => {
-    const { userId } = await requireTenantUser(ctx as QueryCtx, args.tenantId);
-    const ky = await ctx.db.query("kycRecords").withIndex("by_tenant", q => q.eq("tenantId", args.tenantId)).collect();
-    const mine = ky.filter(r => r.userId === userId).sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
-    return { kyc: mine };
+    const m = await softMember(ctx as QueryCtx, args.tenantId);
+    if (!m) return { kyc: [] as any[] };
+    const log = await ctx.db.query("kycRecords").withIndex("by_user", q => q.eq("userId", m.userId)).order("desc").take(20);
+    return { kyc: log.filter((r: any) => r.tenantId === args.tenantId) };
   },
 });
 
@@ -181,7 +209,7 @@ export const openAccount = mutation({
 
     const key = args.idempotencyKey?.trim();
     if (key) {
-      const idem = await checkIdem(ctx as MutationCtx, key, args.tenantId);
+      const idem = await checkIdem(ctx as MutationCtx, key, "openAccount", args.tenantId);
       if (idem?.resultId) {
         const existing = await ctx.db.get(idem.resultId as any);
         if (existing) return { id: existing._id, reused: true };
@@ -251,7 +279,7 @@ export const adminOpenAccount = mutation({
 
     const key = args.idempotencyKey?.trim();
     if (key) {
-      const idem = await checkIdem(ctx as MutationCtx, key, args.tenantId);
+      const idem = await checkIdem(ctx as MutationCtx, key, "adminOpenAccount", args.tenantId);
       if (idem?.resultId) { const existing = await ctx.db.get(idem.resultId as any); if (existing) return { id: existing._id, reused: true }; }
     }
 
@@ -289,9 +317,14 @@ export const adminOpenAccount = mutation({
     if (args.openingDepositMinor && args.openingDepositMinor > 0) {
       const groupId = `adjust-${id}-${now}`;
       const d = args.openingDepositMinor;
-      verifyDebitsEqCredits([{ debitMinor: d, creditMinor: d }, { debitMinor: 0, creditMinor: d }]); // sanity
+      // Balanced double-entry: customer account credited, funds-source contra debited.
+      const openingEntries = [
+        { debitMinor: 0, creditMinor: d },
+        { debitMinor: d, creditMinor: 0 },
+      ];
+      verifyDebitsEqCredits(openingEntries);
       await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "adjustment", relatedId: id, accountId: id, userId: args.userId, debitMinor: 0, creditMinor: d, currency, description: `Opening deposit ${fmtMoney(d, currency)}`, createdAt: now } as any);
-      await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "adjustment", relatedId: id, accountId: id, userId: args.userId, debitMinor: d, creditMinor: 0, currency, description: `Opening deposit (contra)`, createdAt: now } as any);
+      await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "adjustment", relatedId: id, userId: args.userId, debitMinor: d, creditMinor: 0, currency, description: `Opening deposit (contra)`, createdAt: now } as any);
     }
     if (key) await recordIdem(ctx as MutationCtx, key, "adminOpenAccount", args.tenantId, ownerId, "tenantAccount", id);
     return { id, accountNumber: accountNumber!, currency };
@@ -317,8 +350,9 @@ export const setAccountStatus = mutation({
 export const listBeneficiaries = query({
   args: { tenantId: v.id("tenantSites") },
   handler: async (ctx, args) => {
-    const { userId } = await requireTenantUser(ctx as QueryCtx, args.tenantId);
-    return await ctx.db.query("bankingBeneficiaries").withIndex("by_tenant_owner", q => q.eq("tenantId", args.tenantId).eq("ownerUserId", userId)).collect();
+    const m = await softMember(ctx as QueryCtx, args.tenantId);
+    if (!m) return [];
+    return await ctx.db.query("bankingBeneficiaries").withIndex("by_tenant_owner", q => q.eq("tenantId", args.tenantId).eq("ownerUserId", m.userId)).collect();
   },
 });
 
@@ -392,11 +426,24 @@ export const createDeposit = mutation({
     await assertTenantActive(tenant);
     const amountMinor = toMinorSafe(args.amountMinor);
     if (amountMinor <= 0) throw new Error("INVALID_AMOUNT");
-    const currency = (args.currency ?? (tenant as any).currency ?? "USD").toUpperCase();
+    // Validate the funding target up-front: the account must exist, belong to this
+    // tenant, and be owned by the caller. Never trust a client-supplied account id.
+    let target: any = null;
+    if (args.accountId) {
+      target = await ctx.db.get(args.accountId);
+      if (!target || (target as any).tenantId !== args.tenantId) throw new Error("ACCOUNT_NOT_FOUND");
+      if ((target as any).userId !== userId) throw new Error("FORBIDDEN: account not owned by caller");
+      const st = ((target as any).status ?? (target.isActive ? "active" : "closed")) as string;
+      if (!target.isActive || ["frozen", "suspended", "closed"].includes(st)) throw new Error("ACCOUNT_INACTIVE");
+    }
+    const currency = (args.currency ?? target?.currency ?? (tenant as any).currency ?? "USD").toUpperCase();
     const key = args.idempotencyKey?.trim();
     if (key) {
       const row = await ctx.db.query("bankingDeposits").withIndex("by_idempotency", q => q.eq("idempotencyKey", key)).first();
-      if (row) return { id: row._id, reference: row.reference, reused: true };
+      if (row) {
+        if ((row as any).tenantId !== args.tenantId || row.userId !== userId) throw new Error("IDEMPOTENCY_KEY_CONFLICT");
+        return { id: row._id, reference: row.reference, reused: true };
+      }
     }
     const reference = toReference("DEP-");
     const now = Date.now();
@@ -507,7 +554,10 @@ export const createWithdrawal = mutation({
     const key = args.idempotencyKey?.trim();
     if (key) {
       const row = await ctx.db.query("bankingWithdrawals").withIndex("by_idempotency", q => q.eq("idempotencyKey", key)).first();
-      if (row) return { id: row._id, reference: row.reference, status: row.status, reused: true };
+      if (row) {
+        if ((row as any).tenantId !== args.tenantId || row.userId !== userId) throw new Error("IDEMPOTENCY_KEY_CONFLICT");
+        return { id: row._id, reference: row.reference, status: row.status, reused: true };
+      }
     }
     const reference = toReference("WTH-");
     const now = Date.now();
@@ -607,7 +657,10 @@ export const createTransfer = mutation({
     const key = args.idempotencyKey?.trim();
     if (key) {
       const row = await ctx.db.query("bankingTransfers").withIndex("by_idempotency", q => q.eq("idempotencyKey", key)).first();
-      if (row) return { id: row._id, reference: row.reference, status: row.status, reused: true };
+      if (row) {
+        if ((row as any).tenantId !== args.tenantId || row.initiatorUserId !== userId) throw new Error("IDEMPOTENCY_KEY_CONFLICT");
+        return { id: row._id, reference: row.reference, status: row.status, reused: true };
+      }
     }
 
     const reference = toReference("TXN-");
@@ -661,10 +714,6 @@ export const createTransfer = mutation({
     }
 
     await ctx.db.patch(transferId, { status: "completed", completedAt: now } as any);
-    for (const row of ledgerRows) {
-      // Re-point the already-written entries to completed transfer id handled above via realized id above
-      // (writes above already use real id; nothing more to do)
-    }
 
     if (key) await recordIdem(ctx as MutationCtx, key, "transfer", args.tenantId, userId, "bankingTransfers", transferId);
     await audit(ctx as MutationCtx, userId, "TRANSFER_COMPLETED", "bankingTransfer", transferId, null, { reference, amountMinor, feeMinor, currency, destType: args.destType });
@@ -679,10 +728,12 @@ export const createTransfer = mutation({
 export const bankingHistory = query({
   args: { tenantId: v.id("tenantSites"), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { userId } = await requireTenantUser(ctx as QueryCtx, args.tenantId);
+    const m = await softMember(ctx as QueryCtx, args.tenantId);
+    if (!m) return { transfers: [] as any[], deposits: [] as any[], withdrawals: [] as any[], ledgerPosts: [] as any[] };
+    const { userId } = m;
     // member sees their own txns; owner sees broader (allowed: tenant owner)
     const [transfers, deposits, withdrawals, entries] = await Promise.all([
-      ctx.db.query("bankingTransfers").withIndex("by_tenant", q => q.eq("tenantId", args.tenantId)).order("desc").take(100),
+      ctx.db.query("bankingTransfers").withIndex("by_tenant", q => q.eq("tenantId", args.tenantId)).order("desc").take(200),
       ctx.db.query("bankingDeposits").withIndex("by_user", q => q.eq("userId", userId)).order("desc").take(50),
       ctx.db.query("bankingWithdrawals").withIndex("by_user", q => q.eq("userId", userId)).order("desc").take(50),
       ctx.db.query("bankingLedgerEntries").withIndex("by_user", q => q.eq("userId", userId)).order("desc").take(100),
