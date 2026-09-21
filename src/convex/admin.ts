@@ -1,6 +1,156 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+
+// ─── Payment Provider Key Management ───
+
+/**
+ * Save a payment provider key (secret or public) to adminSettings.
+ * Keys are stored with the 'payments' category so they appear in the payments section.
+ */
+export const savePaymentProviderKey = mutation({
+  args: {
+    key: v.string(),
+    value: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin only");
+
+    // Validate key name
+    const allowedKeys = [
+      "paystack_secret_key",
+      "paystack_public_key",
+      "paystack_test_secret",
+      "paystack_test_public",
+      "paystack_webhook_secret",
+    ];
+    if (!allowedKeys.includes(args.key)) {
+      throw new Error("Invalid payment provider key name");
+    }
+
+    // Store or update the key
+    const existing = await ctx.db
+      .query("adminSettings")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        value: args.value,
+        updatedBy: userId,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await ctx.db.insert("adminSettings", {
+        key: args.key,
+        value: args.value,
+        category: "payments",
+        updatedBy: userId,
+        updatedAt: Date.now(),
+      });
+    }
+
+    // Audit log
+    await ctx.db.insert("auditLogs", {
+      actorId: userId,
+      actorEmail: user.email,
+      action: "paystack_key_updated",
+      resource: "payment_provider",
+      resourceId: args.key,
+      after: { key: args.key, value: "***" },
+      reason: "Payment provider key updated",
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Delete a payment provider key from adminSettings.
+ */
+export const deletePaymentProviderKey = mutation({
+  args: {
+    key: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") throw new Error("Admin only");
+
+    const existing = await ctx.db
+      .query("adminSettings")
+      .withIndex("by_key", (q) => q.eq("key", args.key))
+      .first();
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    // Audit log
+    await ctx.db.insert("auditLogs", {
+      actorId: userId,
+      actorEmail: user.email,
+      action: "paystack_key_deleted",
+      resource: "payment_provider",
+      resourceId: args.key,
+      before: { key: args.key },
+      reason: "Payment provider key deleted",
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get all payment provider keys (masked) for the admin page.
+ */
+export const getPaymentProviderKeys = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin") return [];
+
+    const keys = [
+      "paystack_secret_key",
+      "paystack_public_key",
+      "paystack_test_secret",
+      "paystack_test_public",
+      "paystack_webhook_secret",
+    ];
+
+    const results: { key: string; isSet: boolean; masked: string; updatedAt: number | null; updatedBy: string | null }[] = [];
+    for (const key of keys) {
+      const row = await ctx.db
+        .query("adminSettings")
+        .withIndex("by_key", (q) => q.eq("key", key))
+        .first();
+      if (row) {
+        const val = String(row.value);
+        const masked = val.length > 8
+          ? val.substring(0, 4) + "••••" + val.substring(val.length - 4)
+          : "••••••••";
+        results.push({
+          key,
+          isSet: true,
+          masked,
+          updatedAt: row.updatedAt,
+          updatedBy: row.updatedBy ?? null,
+        });
+      } else {
+        results.push({ key, isSet: false, masked: "", updatedAt: null, updatedBy: null });
+      }
+    }
+    return results;
+  },
+});
 
 // ─── User Management ───
 export const listUsers = query({

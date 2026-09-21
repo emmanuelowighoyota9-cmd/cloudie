@@ -82,6 +82,7 @@ const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
 const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
 const AdminPricing = lazy(() => import("./pages/AdminPricing.tsx"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
+const AdminPaymentProviders = lazy(() => import("./pages/AdminPaymentProviders.tsx"));
 const AdminLayout = lazy(() => import("./components/admin/AdminLayout.tsx").then(m => ({ default: m.AdminLayout })));
 
 function RouteLoading() {
@@ -252,6 +253,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="infrastructure" element={<AdminInfrastructure />} />
                   <Route path="pricing" element={<AdminPricing />} />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="payments" element={<AdminPaymentProviders />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

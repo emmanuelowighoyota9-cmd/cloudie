@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import {
   Activity,
   BadgeDollarSign,
+  CreditCard,
   Bell,
   BarChart3,
   Boxes,
@@ -54,6 +55,7 @@ const NAV = [
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/system-health", label: "System Health", icon: Activity },
   { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign },
+  { to: "/admin/payments", label: "Payment Providers", icon: CreditCard },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

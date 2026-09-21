@@ -7,17 +7,20 @@ import { createHmac } from "node:crypto";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
-function getSecretKey(): string {
+async function getSecretKey(ctx: { runQuery: Function }): Promise<string> {
   const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) throw new Error("PAYSTACK_SECRET_KEY is not configured. Add it in the project Keys tab.");
-  return key;
+  if (key) return key;
+  // Fall back to stored key in adminSettings
+  const stored = await ctx.runQuery(internal.paymentConfig.getStoredKey, { key: "paystack_secret_key" });
+  if (stored) return stored;
+  throw new Error("PAYSTACK_SECRET_KEY is not configured. Add it in the project Keys tab or Admin > Payment Providers.");
 }
 
-async function paystackFetch(path: string, opts: RequestInit = {}): Promise<Record<string, unknown>> {
+async function paystackFetch(path: string, secretKey: string, opts: RequestInit = {}): Promise<Record<string, unknown>> {
   const res = await fetch(`${PAYSTACK_BASE}${path}`, {
     ...opts,
     headers: {
-      Authorization: `Bearer ${getSecretKey()}`,
+      Authorization: `Bearer ${secretKey}`,
       "Content-Type": "application/json",
       ...opts.headers,
     },
@@ -41,13 +44,15 @@ export const initializePayment = action({
     email: v.string(),
   },
   handler: async (ctx, args) => {
+    const secretKey = await getSecretKey(ctx);
+
     // Generate a unique reference
     const reference = `CLD-${args.packageId}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
     // Amount in kobo (Paystack uses smallest currency unit; USD has 2 decimals)
     const amountKobo = Math.round(args.amountUsd * 100);
 
-    const result = await paystackFetch("/transaction/initialize", {
+    const result = await paystackFetch("/transaction/initialize", secretKey, {
       method: "POST",
       body: JSON.stringify({
         email: args.email,
@@ -83,7 +88,8 @@ export const verifyAndCredit = action({
     reference: v.string(),
   },
   handler: async (ctx, args) => {
-    const result = await paystackFetch(`/transaction/verify/${encodeURIComponent(args.reference)}`);
+    const secretKey = await getSecretKey(ctx);
+    const result = await paystackFetch(`/transaction/verify/${encodeURIComponent(args.reference)}`, secretKey);
     const data = result.data as Record<string, unknown>;
 
     const status = data.status as string;
@@ -133,10 +139,16 @@ export const verifyWebhookSignature = action({
     signature: v.string(),
   },
   handler: async (ctx, args) => {
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (!secret) throw new Error("PAYSTACK_SECRET_KEY not configured");
+    // Try webhook signing secret first, then fall back to main secret
+    let secret: string = process.env.PAYSTACK_WEBHOOK_SECRET ?? "";
+    if (!secret) {
+      const stored: string | null = await ctx.runQuery(internal.paymentConfig.getStoredKey, { key: "paystack_webhook_secret" });
+      if (stored) secret = stored;
+    }
+    if (!secret) secret = await getSecretKey(ctx);
+    if (!secret) throw new Error("No Paystack secret configured for webhook verification");
 
-    const expected = createHmac("sha512", secret).update(args.rawBody).digest("hex");
+    const expected: string = createHmac("sha512", secret).update(args.rawBody).digest("hex");
     return expected === args.signature;
   },
 });
