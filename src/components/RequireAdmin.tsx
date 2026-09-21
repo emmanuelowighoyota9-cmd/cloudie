@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
+import { Loader2, LogOut, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Link, Navigate, useLocation } from "react-router";
 import { toast } from "sonner";
@@ -93,6 +93,61 @@ function ClaimAdminPanel() {
 }
 
 /**
+ * Escape hatch for a signed-in NON-admin who landed on an admin route:
+ * offers sign-out (then routes to the dedicated admin login) instead of a
+ * dead end. This is the common "wrong account" fix.
+ */
+function NonAdminNotice() {
+  const { user, signOut } = useAuth();
+  const [busy, setBusy] = useState(false);
+
+  const handleSignOut = async () => {
+    setBusy(true);
+    try {
+      await signOut();
+      toast.success("Signed out. Sign in with the administrator account.");
+    } catch {
+      toast.error("Sign out failed");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/50">
+          <ShieldAlert className="h-6 w-6 text-red-600 dark:text-red-400" />
+        </div>
+        <h1 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+          Access restricted
+        </h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          You are signed in as <span className="font-medium">{user?.email ?? "another account"}</span>,
+          which does not have administrator access.
+        </p>
+        <div className="mt-6 flex flex-col gap-2">
+          <button
+            onClick={handleSignOut}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60"
+          >
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            <LogOut className="h-4 w-4" />
+            Sign out and use admin login
+          </button>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+/**
  * Server-authoritative admin gate: the client check below is convenience only.
  * Every admin Convex function re-verifies the admin role server-side
  * (`requireAdmin` in adminApi.ts), so spoofing this component grants nothing.
@@ -136,28 +191,8 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     if (anyAdmin === false) {
       return <ClaimAdminPanel />;
     }
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/50">
-            <ShieldAlert className="h-6 w-6 text-red-600 dark:text-red-400" />
-          </div>
-          <h1 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
-            Access restricted
-          </h1>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            This area is only available to platform administrators. Your
-            attempt is subject to access auditing.
-          </p>
-          <Link
-            to="/dashboard"
-            className="mt-6 inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-blue-700 hover:to-indigo-700"
-          >
-            Back to dashboard
-          </Link>
-        </div>
-      </main>
-    );
+    // Signed-in non-admin: clear escape (sign out → /admin/login), not a dead end.
+    return <NonAdminNotice />;
   }
 
   return children;

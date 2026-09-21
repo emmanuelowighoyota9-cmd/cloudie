@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import logo from "@/assets/logo.svg";
-import { Eye, EyeOff, Loader2, Lock, Mail, ShieldAlert } from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, LogOut, Mail, ShieldAlert } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -17,9 +17,13 @@ import { toast } from "sonner";
  * auth page (identical hashing), then runs the shared post-login
  * initialization and routes to the admin console. The admin console itself
  * re-verifies the role server-side on every request.
+ *
+ * Safe for account switching: an already-authenticated NON-admin sees the
+ * form with a notice + "sign out" escape instead of being bounced to the
+ * admin console (which would dead-end on "Access restricted").
  */
 function AdminLoginForm() {
-  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, user, signIn, signOut } = useAuth();
   const initializeUser = useMutation(api.admin.initializeUser);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -31,12 +35,29 @@ function AdminLoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
+  const isAdmin = isAuthenticated && user?.role === "admin";
+  // Auto-redirect ONLY when the current session is already an administrator.
+  // A signed-in non-admin must be able to reach the form to switch accounts.
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (!authLoading && isAdmin) {
       navigate(destination, { replace: true });
     }
-  }, [authLoading, isAuthenticated, navigate, destination]);
+  }, [authLoading, isAdmin, navigate, destination]);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      setError(null);
+      toast.success("Signed out. Enter the administrator credentials.");
+    } catch {
+      toast.error("Sign out failed");
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -60,6 +81,9 @@ function AdminLoginForm() {
       } catch (e) {
         console.warn("initializeUser failed", e);
       }
+      // Route to the console. RequireAdmin re-verifies the role server-side:
+      // admins land on the dashboard; non-admins get a clear "sign out and
+      // switch" escape instead of a silent dead end.
       toast.success("Administrator signed in");
       navigate(destination, { replace: true });
     } catch (err) {
@@ -95,6 +119,34 @@ function AdminLoginForm() {
             Cloudie platform control console
           </p>
         </div>
+
+        {/* Signed in as a non-admin: offer an escape instead of a redirect loop */}
+        {isAuthenticated && !isAdmin && !authLoading && (
+          <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+            <p className="font-medium text-amber-300">
+              You&apos;re signed in as {user?.email ?? "another account"}, which is
+              not an administrator.
+            </p>
+            <p className="mt-1 text-xs text-amber-200/70">
+              Sign out below, then enter the administrator credentials.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className="mt-3 w-full gap-2 border-amber-500/40 bg-transparent text-amber-200 hover:bg-amber-500/20 hover:text-amber-100"
+            >
+              {isSigningOut ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+              Sign out and switch account
+            </Button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div className="space-y-2">
@@ -147,7 +199,7 @@ function AdminLoginForm() {
 
           <Button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || isAuthenticated}
             className="w-full gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
           >
             {isLoading ? (
