@@ -19,6 +19,7 @@ import {
   Ruler,
   Copy,
   ExternalLink,
+  Pencil,
 } from "lucide-react";
 import { Link, useParams } from "react-router";
 import { useState } from "react";
@@ -183,6 +184,16 @@ export default function ShipmentUpdates() {
         <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(s.trackingNumber); toast.success("Tracking number copied"); }}>
           <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy
         </Button>
+        {s.role === "sender" && s.status !== "DELIVERED" && s.status !== "CANCELLED" && (
+          <Link to={`/shipments/${id}/edit`}>
+            <Button variant="outline" size="sm" className="gap-1.5"><Pencil className="h-3.5 w-3.5" /> Update</Button>
+          </Link>
+        )}
+        {s.role === "sender" && s.status !== "DELIVERED" && s.status !== "CANCELLED" && (
+          <Link to={`/shipments/${id}/edit`}>
+            <Button variant="outline" size="sm" className="gap-1.5"><Pencil className="h-3.5 w-3.5" /> Update</Button>
+          </Link>
+        )}
         <Link to={`/tracking/${s.trackingNumber}`} target="_blank">
           <Button variant="outline" size="sm"><ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Public View</Button>
         </Link>
