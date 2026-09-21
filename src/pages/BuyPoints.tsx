@@ -1,11 +1,29 @@
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, Coins, CreditCard, Wallet, Zap } from "lucide-react";
-import { useState } from "react";
+import { Check, Coins, CreditCard, Wallet, Zap, Shield, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router";
+import { useAuth } from "@/hooks/use-auth";
+
+declare global {
+  interface Window {
+    PaystackPop?: {
+      setup: (config: {
+        key: string;
+        email: string;
+        amount: number;
+        currency?: string;
+        ref: string;
+        onClose?: () => void;
+        callback: (response: { reference: string; status: string }) => void;
+      }) => { openIframe: () => void };
+    };
+  }
+}
 
 const packages = [
   { id: "starter", name: "Starter", points: 1000, price: 10, icon: Coins, color: "from-blue-500 to-blue-600", popular: false },
@@ -13,57 +31,137 @@ const packages = [
   { id: "scale", name: "Scale", points: 6000, price: 50, icon: Wallet, color: "from-indigo-500 to-purple-600", popular: false },
 ];
 
+function loadPaystackScript(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.PaystackPop) { resolve(); return; }
+    const existing = document.querySelector("script[src*=\"js.paystack.co\"]");
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Failed to load Paystack")));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://js.paystack.co/v1/inline.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Paystack script"));
+    document.head.appendChild(script);
+  });
+}
+
 export default function BuyPoints() {
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const balance = useQuery(api.points.getBalance);
-  const buyPoints = useMutation(api.points.buyPoints);
+  const initializePayment = useAction(api.paystack.initializePayment);
+  const verifyAndCredit = useAction(api.paystack.verifyAndCredit);
+  const getPublicKey = useAction(api.paystack.getPublicKey);
   const [selectedPkg, setSelectedPkg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "crypto">("card");
+  const [verifying, setVerifying] = useState(false);
   const [purchased, setPurchased] = useState<{ points: number; amount: number } | null>(null);
+  const [paystackReady, setPaystackReady] = useState(false);
+
+  // Load Paystack script
+  useEffect(() => {
+    loadPaystackScript()
+      .then(() => setPaystackReady(true))
+      .catch(() => {
+        toast.error("Could not load payment processor. Please refresh.");
+      });
+  }, []);
+
+  // Handle return from Paystack (callback URL)
+  useEffect(() => {
+    const ref = searchParams.get("reference");
+    if (ref && !verifying) {
+      setVerifying(true);
+      verifyAndCredit({ reference: ref })
+        .then((result) => {
+          if (result.verified && result.credited) {
+            const pkg = packages.find((p) => p.id === searchParams.get("packageId"));
+            setPurchased({
+              points: result.points ?? pkg?.points ?? 0,
+              amount: pkg?.price ?? 0,
+            });
+            toast.success(`${(result.points ?? 0).toLocaleString()} points added to your account!`);
+          } else if (result.verified && !result.credited) {
+            toast.info("Payment was already processed.");
+          } else {
+            toast.error(result.message ?? "Payment could not be verified.");
+          }
+          setSearchParams({});
+        })
+        .catch((err) => {
+          toast.error(err instanceof Error ? err.message : "Verification failed");
+          setSearchParams({});
+        })
+        .finally(() => setVerifying(false));
+    }
+  }, [searchParams]);
 
   const handlePurchase = async (pkg: typeof packages[0]) => {
-    setSelectedPkg(pkg.id);
-  };
+    if (!user?.email) {
+      toast.error("Email is required for payment. Please update your profile.");
+      return;
+    }
 
-  const confirmPurchase = async () => {
-    if (!selectedPkg) return;
-    const pkg = packages.find((p) => p.id === selectedPkg);
-    if (!pkg) return;
     setLoading(true);
+    setSelectedPkg(pkg.id);
+
     try {
-      await buyPoints({
+      // Initialize payment on server
+      const result = await initializePayment({
         packageId: pkg.id,
         points: pkg.points,
         amountUsd: pkg.price,
-        paymentMethod: paymentMethod,
+        email: user.email,
       });
-      setPurchased({ points: pkg.points, amount: pkg.price });
-      setSelectedPkg(null);
-      toast.success(`${pkg.points.toLocaleString()} points added to your account!`);
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Failed to purchase points");
-    } finally {
+
+      // Redirect to Paystack checkout page
+      window.location.href = result.authorization_url;
+    } catch (err) {
       setLoading(false);
+      setSelectedPkg(null);
+      toast.error(err instanceof Error ? err.message : "Payment failed to initialize");
     }
   };
+
+  if (verifying) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Verifying Payment</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Please wait while we confirm your payment...</p>
+        </div>
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-8 text-center">
+            <div className="mx-auto h-12 w-12 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+            <p className="mt-4 text-sm text-muted-foreground">Confirming your payment with Paystack...</p>
+            <p className="mt-1 text-xs text-muted-foreground">This usually takes a few seconds.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (purchased) {
     return (
       <div className="space-y-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Purchase Complete</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your points have been added to your account.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Purchase Complete</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Your points have been added to your account.</p>
         </div>
         <Card className="max-w-md mx-auto">
           <CardContent className="p-8 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/50">
               <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">Success!</h2>
-            <p className="mt-2 text-slate-500 dark:text-slate-400">
+            <h2 className="mt-4 text-xl font-bold text-foreground">Success!</h2>
+            <p className="mt-2 text-muted-foreground">
               +{purchased.points.toLocaleString()} points added to your wallet
             </p>
-            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               Charged ${purchased.amount}
             </p>
             <Button className="mt-6" onClick={() => setPurchased(null)}>
@@ -78,9 +176,9 @@ export default function BuyPoints() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Buy Points</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Current balance: <span className="font-semibold text-blue-600">{(balance ?? 0).toLocaleString()} pts</span>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Buy Points</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Current balance: <span className="font-semibold text-primary">{(balance ?? 0).toLocaleString()} pts</span>
         </p>
       </div>
 
@@ -91,9 +189,9 @@ export default function BuyPoints() {
             key={pkg.id}
             className={`relative overflow-hidden transition-all ${
               selectedPkg === pkg.id
-                ? "ring-2 ring-blue-500 shadow-lg"
+                ? "ring-2 ring-primary shadow-lg"
                 : "hover:shadow-md"
-            } ${pkg.popular ? "border-blue-500 dark:border-blue-400" : ""}`}
+            } ${pkg.popular ? "border-primary" : ""}`}
           >
             {pkg.popular && (
               <div className="absolute top-0 right-0">
@@ -106,102 +204,75 @@ export default function BuyPoints() {
               <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${pkg.color} text-white`}>
                 <pkg.icon className="h-6 w-6" />
               </div>
-              <h3 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">{pkg.name}</h3>
+              <h3 className="mt-4 text-lg font-bold text-foreground">{pkg.name}</h3>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-slate-900 dark:text-white">{pkg.points.toLocaleString()}</span>
-                <span className="text-sm text-slate-500 dark:text-slate-400">pts</span>
+                <span className="text-3xl font-bold text-foreground">{pkg.points.toLocaleString()}</span>
+                <span className="text-sm text-muted-foreground">pts</span>
               </div>
-              <p className="mt-1 text-2xl font-bold text-blue-600">${pkg.price}</p>
+              <p className="mt-1 text-2xl font-bold text-primary">${pkg.price}</p>
               <ul className="mt-4 space-y-2">
                 {[
                   `${pkg.points.toLocaleString()} points`,
                   "Instant delivery",
                   "No expiration",
+                  "Secure via Paystack",
                 ].map((feat) => (
-                  <li key={feat} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                  <li key={feat} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Check className="h-4 w-4 text-green-500 shrink-0" />
                     {feat}
                   </li>
                 ))}
               </ul>
               <Button
-                className="w-full mt-6"
+                className="w-full mt-6 gap-2"
                 variant={selectedPkg === pkg.id ? "default" : "outline"}
                 onClick={() => handlePurchase(pkg)}
+                disabled={loading}
               >
-                Select
+                {loading && selectedPkg === pkg.id ? (
+                  "Processing..."
+                ) : (
+                  <>
+                    <CreditCard className="h-4 w-4" /> Pay ${pkg.price}
+                  </>
+                )}
               </Button>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Checkout */}
-      {selectedPkg && (
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500">Checkout</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Package</span>
-              <span className="font-medium text-slate-900 dark:text-white">
-                {packages.find((p) => p.id === selectedPkg)?.name}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Points</span>
-              <span className="font-medium text-slate-900 dark:text-white">
-                +{packages.find((p) => p.id === selectedPkg)?.points.toLocaleString()} pts
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-500">Amount</span>
-              <span className="font-bold text-lg text-slate-900 dark:text-white">
-                ${packages.find((p) => p.id === selectedPkg)?.price}
-              </span>
-            </div>
-
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Payment Method</p>
-              <div className="flex gap-2">
-                <Button
-                  variant={paymentMethod === "card" ? "default" : "outline"}
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => setPaymentMethod("card")}
-                >
-                  <CreditCard className="h-4 w-4" /> Card
-                </Button>
-                <Button
-                  variant={paymentMethod === "crypto" ? "default" : "outline"}
-                  size="sm"
-                  className="gap-2"
-                  onClick={() => setPaymentMethod("crypto")}
-                >
-                  <Coins className="h-4 w-4" /> Crypto
-                </Button>
+      {/* Payment Info */}
+      <Card className="max-w-4xl">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Secure Payment</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex items-start gap-3">
+              <Shield className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Bank-Level Security</p>
+                <p className="text-xs text-muted-foreground">256-bit SSL encryption protects your payment data.</p>
               </div>
             </div>
-
-            <p className="text-xs text-slate-400 dark:text-slate-500">
-              {paymentMethod === "card"
-                ? "Payment will be processed securely via our payment partner. Points are credited upon successful verification."
-                : "Crypto deposits are processed via Web3. Points are credited after blockchain confirmation."}
-            </p>
-
-            <div className="flex gap-2 pt-2">
-              <Button variant="outline" onClick={() => setSelectedPkg(null)} className="flex-1">
-                Cancel
-              </Button>
-              <Button onClick={confirmPurchase} disabled={loading} className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                {loading ? "Processing..." : `Pay $${packages.find((p) => p.id === selectedPkg)?.price}`}
-              </Button>
+            <div className="flex items-start gap-3">
+              <CreditCard className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Multiple Payment Methods</p>
+                <p className="text-xs text-muted-foreground">Card, bank transfer, USSD, and more via Paystack.</p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="flex items-start gap-3">
+              <ArrowRight className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-foreground">Instant Credit</p>
+                <p className="text-xs text-muted-foreground">Points are credited immediately after payment verification.</p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

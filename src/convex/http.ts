@@ -407,4 +407,77 @@ const apiDocsHandler = httpAction(async () => {
 http.route({ path: "/api/banking/docs", method: "GET", handler: apiDocsHandler });
 http.route({ path: "/api/docs", method: "GET", handler: apiDocsHandler });
 
+// ─── Paystack Webhook ─────────────────────────────────────────────
+// POST /api/webhooks/paystack
+// Verifies HMAC signature, records payment, credits user points.
+
+const paystackWebhookHandler = httpAction(async (ctx, req) => {
+  // Read raw body for signature verification
+  const rawBody = await req.text();
+
+  // Verify signature using Paystack action (crypto is not available in httpAction)
+  const signature = req.headers.get("x-paystack-signature");
+  if (!signature) {
+    return json({ error: "Missing signature" }, 401);
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  // Verify HMAC via Paystack API (uses node:crypto in the action)
+  try {
+    const verified = await ctx.runAction(api.paystack.verifyWebhookSignature, {
+      rawBody,
+      signature,
+    });
+    if (!verified) {
+      return json({ error: "Invalid signature" }, 401);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return json({ error: "Signature verification failed", message: msg }, 500);
+  }
+
+  const event = body.event as string | undefined;
+  const data = body.data as Record<string, unknown> | undefined;
+
+  if (event !== "charge.success" || !data) {
+    // Acknowledge non-success events without processing
+    return json({ ok: true, skipped: true });
+  }
+
+  const reference = data.reference as string;
+  if (!reference) {
+    return json({ error: "Missing reference" }, 400);
+  }
+
+  try {
+    // Record and credit via internal mutation
+    await ctx.runMutation(internal.paystackInternal.recordPaymentAndCredit, {
+      reference,
+      packageId: String((data.metadata as Record<string, unknown>)?.packageId ?? "unknown"),
+      points: Number((data.metadata as Record<string, unknown>)?.points ?? 0),
+      amountUsd: Number(data.amount ?? 0) / 100,
+      amountKobo: Number(data.amount ?? 0),
+      paystackStatus: String(data.status ?? "success"),
+      metadata: data.metadata ?? {},
+    });
+
+    return json({ ok: true, reference });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    // If already credited, that's fine
+    if (msg.includes("Duplicate") || msg.includes("already")) {
+      return json({ ok: true, reference, note: "already credited" });
+    }
+    return json({ error: "Processing failed", message: msg }, 500);
+  }
+});
+
+http.route({ path: "/api/webhooks/paystack", method: "POST", handler: paystackWebhookHandler });
+
 export default http;
