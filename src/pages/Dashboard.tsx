@@ -13,8 +13,8 @@ function MetricCard({ title, value, icon: Icon, color }: { title: string; value:
       <CardContent className="p-5">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{title}</p>
-            <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{value}</p>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
+            <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
           </div>
           <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
             <Icon className="h-5 w-5" />
@@ -44,34 +44,34 @@ export default function Dashboard() {
     <div className="space-y-8">
       {/* Welcome */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Welcome back{user?.name ? `, ${user.name}` : ""}
         </h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        <p className="mt-1 text-sm text-muted-foreground dark:text-slate-400">
           Here's an overview of your Cloudie workspace.
         </p>
       </div>
 
       {/* Hero Points Card */}
       <Card className="overflow-hidden border-0 shadow-md">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-2">
+        <div className="bg-primary px-6 py-2">
           <div className="h-1.5 w-32 bg-white/30 rounded-full" />
         </div>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 shadow-lg">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-accent-foreground shadow-lg">
                 <Coins className="h-7 w-7 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Points Balance</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-white">{balance?.toLocaleString() ?? 0}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Cloudie Points</p>
+                <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Points Balance</p>
+                <p className="text-3xl font-bold text-foreground">{balance?.toLocaleString() ?? 0}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Cloudie Points</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <Link to="/buy-points">
-                <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-6">
+                <Button className="gap-2 bg-primary hover:from-blue-700 hover:to-indigo-700 px-6">
                   <ShoppingBag className="h-4 w-4" /> Buy Points
                 </Button>
               </Link>
@@ -115,8 +115,8 @@ export default function Dashboard() {
                 <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="font-medium text-slate-900 dark:text-white">New Shipment</p>
-                <p className="text-xs text-slate-500">100 pts</p>
+                <p className="font-medium text-foreground">New Shipment</p>
+                <p className="text-xs text-muted-foreground">100 pts</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>
@@ -129,8 +129,8 @@ export default function Dashboard() {
                 <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="font-medium text-slate-900 dark:text-white">Generate Document</p>
-                <p className="text-xs text-slate-500">From 80 pts</p>
+                <p className="font-medium text-foreground">Generate Document</p>
+                <p className="text-xs text-muted-foreground">From 80 pts</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>
@@ -143,8 +143,8 @@ export default function Dashboard() {
                 <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <p className="font-medium text-slate-900 dark:text-white">Marketplace</p>
-                <p className="text-xs text-slate-500">Browse products</p>
+                <p className="font-medium text-foreground">Marketplace</p>
+                <p className="text-xs text-muted-foreground">Browse products</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>
@@ -157,8 +157,8 @@ export default function Dashboard() {
                 <Building2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
               </div>
               <div>
-                <p className="font-medium text-slate-900 dark:text-white">Create Site</p>
-                <p className="text-xs text-slate-500">Business Suite</p>
+                <p className="font-medium text-foreground">Create Site</p>
+                <p className="text-xs text-muted-foreground">Business Suite</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>
@@ -169,7 +169,7 @@ export default function Dashboard() {
       {/* Workspace Hub */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Your Workspaces
           </CardTitle>
           <p className="text-xs text-slate-400">Everything else lives in one of these.</p>
@@ -190,8 +190,8 @@ export default function Dashboard() {
                         <w.icon className="h-5 w-5" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-slate-900 dark:text-white">{w.title}</h3>
-                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{w.desc}</p>
+                        <h3 className="font-semibold text-foreground">{w.title}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground dark:text-slate-400">{w.desc}</p>
                       </div>
                       <ArrowUpRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                     </div>
@@ -207,7 +207,7 @@ export default function Dashboard() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Recent Activity
             </CardTitle>
           </CardHeader>
@@ -219,7 +219,7 @@ export default function Dashboard() {
                 {recentTx.map((tx) => (
                   <div key={tx._id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{tx.description}</p>
+                      <p className="truncate text-sm font-medium text-foreground">{tx.description}</p>
                       <p className="text-xs text-slate-400">{typeLabel(tx.type)} • {new Date(tx.createdAt).toLocaleDateString()}</p>
                     </div>
                     <span className={`text-sm font-bold ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
@@ -234,7 +234,7 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-slate-500">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Recent Orders
             </CardTitle>
           </CardHeader>
@@ -248,7 +248,7 @@ export default function Dashboard() {
                 {orders.slice(0, 5).map((o) => (
                   <div key={o._id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700/30">
                     <div>
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">Order #{o._id.slice(-8)}</p>
+                      <p className="text-sm font-medium text-foreground">Order #{o._id.slice(-8)}</p>
                       <p className="text-xs text-slate-400">{new Date(o.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right">
