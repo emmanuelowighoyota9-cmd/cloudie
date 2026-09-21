@@ -544,15 +544,7 @@ export default function PublicTracking() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border bg-card p-5">
-                  <h2 className="text-sm font-semibold text-foreground">Need help?</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Sign in to raise a query about this shipment against your Cloudie workspace.
-                  </p>
-                  <Button asChild size="sm" className="mt-3 w-full">
-                    <Link to="/auth?returnTo=/tracking">Sign in</Link>
-                  </Button>
-                </div>
+
               </div>
             </section>
 
