@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import { Plus, Receipt, Store } from "lucide-react";
 import { Link } from "react-router";
+import { usePricing } from "@/lib/pricing";
 
 export default function Personal() {
+  const { ngnLabel } = usePricing();
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 50 });
 
@@ -45,6 +47,7 @@ export default function Personal() {
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Balance</p>
                 <p className="text-2xl font-bold text-slate-900 dark:text-white">{(balance ?? 0).toLocaleString()} pts</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">≈ {ngnLabel(balance ?? 0)}</p>
               </div>
             </div>
           </CardContent>
@@ -58,6 +61,7 @@ export default function Personal() {
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total Earned</p>
                 <p className="text-2xl font-bold text-green-600">+{totalEarned.toLocaleString()}</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{ngnLabel(totalEarned)}</p>
               </div>
             </div>
           </CardContent>
@@ -71,6 +75,7 @@ export default function Personal() {
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total Spent</p>
                 <p className="text-2xl font-bold text-amber-600">-{totalSpent.toLocaleString()}</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{ngnLabel(totalSpent)}</p>
               </div>
             </div>
           </CardContent>

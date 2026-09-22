@@ -16,8 +16,10 @@ import {
   AdminSkeleton,
   fmtDate,
 } from "@/components/admin/shared";
+import { usePricing, formatNgn } from "@/lib/pricing";
 
 export default function AdminUserDetail() {
+  const { ngnPerPoint } = usePricing();
   const { id } = useParams();
   const detail = useQuery(
     api.adminApi.adminUserDetail,
@@ -103,6 +105,7 @@ export default function AdminUserDetail() {
           <CardContent className="p-4">
             <p className="text-[11px] uppercase tracking-wider text-slate-400">Points balance</p>
             <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{(user.pointsBalance ?? 0).toLocaleString()}</p>
+            <p className="text-[11px] text-slate-400">≈ {formatNgn((user.pointsBalance ?? 0) * ngnPerPoint)}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
@@ -111,6 +114,7 @@ export default function AdminUserDetail() {
             <p className="mt-1 flex items-center gap-1 text-2xl font-bold text-green-600">
               <ArrowUpRight className="h-4 w-4" />{wallet.totalCredited.toLocaleString()}
             </p>
+            <p className="text-[11px] text-slate-400">{formatNgn(wallet.totalCredited * ngnPerPoint)}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
@@ -119,6 +123,7 @@ export default function AdminUserDetail() {
             <p className="mt-1 flex items-center gap-1 text-2xl font-bold text-red-600">
               <ArrowDownRight className="h-4 w-4" />{wallet.totalDebited.toLocaleString()}
             </p>
+            <p className="text-[11px] text-slate-400">{formatNgn(wallet.totalDebited * ngnPerPoint)}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
@@ -227,7 +232,7 @@ export default function AdminUserDetail() {
                 <div key={d._id} className="flex items-center gap-3 p-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{d.title}</p>
-                    <p className="text-[11px] capitalize text-slate-400">{d.type} · {d.pointsCost} pts</p>
+                    <p className="text-[11px] capitalize text-slate-400">{d.type} · {d.pointsCost} pts · {formatNgn(d.pointsCost * ngnPerPoint)}</p>
                   </div>
                   <span className="text-xs text-slate-400">{fmtDate(d.createdAt)}</span>
                 </div>
@@ -244,8 +249,7 @@ export default function AdminUserDetail() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-mono text-xs text-slate-500">{o._id}</p>
                     <p className="text-[11px] text-slate-400">{fmtDate(o.createdAt)}</p>
-                  </div>
-                  <span className="text-sm font-semibold">{o.totalPoints.toLocaleString()} pts</span>
+                  </div>                      <span className="text-sm font-semibold">{o.totalPoints.toLocaleString()} pts · {formatNgn(o.totalPoints * ngnPerPoint)}</span>
                   <StatusBadge status={o.status} />
                 </div>
               ))}

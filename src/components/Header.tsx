@@ -27,12 +27,14 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { MobileNav } from "./MobileNav";
+import { usePricing } from "@/lib/pricing";
 
 export function Header() {
   const { user, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const pointsBalance = useQuery(api.points.getBalance);
+  const { ngnLabel } = usePricing();
   const unreadCount = useQuery(api.notifications.unreadCount);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -69,6 +71,11 @@ export function Header() {
           >
             <Box className="h-3.5 w-3.5" />
             {pointsBalance != null ? `${pointsBalance.toLocaleString()} pts` : "—"}
+            {pointsBalance != null && (
+              <span className="hidden text-[11px] font-normal opacity-90 sm:inline">
+                · {ngnLabel(pointsBalance)}
+              </span>
+            )}
           </Badge>
         </Link>
 

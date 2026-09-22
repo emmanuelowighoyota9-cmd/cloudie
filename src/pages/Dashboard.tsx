@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers } from "lucide-react";
 import { Link } from "react-router";
+import { usePricing } from "@/lib/pricing";
 
 function MetricCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: React.ComponentType<{ className?: string }>; color: string }) {
   return (
@@ -26,6 +27,7 @@ function MetricCard({ title, value, icon: Icon, color }: { title: string; value:
 }
 
 export default function Dashboard() {
+  const { pointsWithNgn } = usePricing();
   const { user } = useAuth();
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 100 });
@@ -116,7 +118,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="font-medium text-foreground">New Shipment</p>
-                <p className="text-xs text-muted-foreground">100 pts</p>
+                <p className="text-xs text-muted-foreground">{pointsWithNgn(100)}</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>
@@ -130,7 +132,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="font-medium text-foreground">Generate Document</p>
-                <p className="text-xs text-muted-foreground">From 80 pts</p>
+                <p className="text-xs text-muted-foreground">From {pointsWithNgn(80)}</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>

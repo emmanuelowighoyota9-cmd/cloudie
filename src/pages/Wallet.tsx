@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Coins, ArrowUpRight, ArrowDownRight, Plus } from "lucide-react";
 import { Link } from "react-router";
+import { usePricing, formatNgn } from "@/lib/pricing";
 
 function typeLabel(type: string): string {
   const labels: Record<string, string> = {
@@ -19,6 +20,7 @@ function typeLabel(type: string): string {
 export default function Wallet() {
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 100 });
+  const { ngnPerPoint, ngnLabel } = usePricing();
 
   return (
     <div className="space-y-8">
@@ -40,6 +42,9 @@ export default function Wallet() {
           <p className="text-sm font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">Points Balance</p>
           <p className="mt-2 text-4xl font-bold text-blue-900 dark:text-blue-100">
             {(balance ?? 0).toLocaleString()}
+          </p>
+          <p className="mt-1 text-sm font-semibold text-blue-700 dark:text-blue-300">
+            ≈ {ngnLabel(balance ?? 0)}
           </p>
         </CardContent>
       </Card>
@@ -81,13 +86,16 @@ export default function Wallet() {
                     {typeLabel(tx.type)} • {new Date(tx.createdAt).toLocaleDateString()}
                   </p>
                   </div>
-                  <p
-                    className={`text-sm font-bold shrink-0 ${
-                      tx.amount > 0 ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
-                  </p>
+                  <div className="shrink-0 text-right">
+                    <p
+                      className={`text-sm font-bold ${
+                        tx.amount > 0 ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
+                      {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
+                    </p>
+                    <p className="text-[11px] text-slate-400">{formatNgn(tx.amount * ngnPerPoint)}</p>
+                  </div>
                 </div>
               ))}
             </div>

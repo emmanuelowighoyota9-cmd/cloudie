@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ArrowDownRight, ArrowUpRight, Download, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, downloadCsv, fmtDate } from "@/components/admin/shared";
+import { usePricing, formatNgn } from "@/lib/pricing";
 
 type LedgerEntry = {
   _id: string;
@@ -36,6 +37,7 @@ const TYPE_FILTERS = [
 const PAGE_SIZE = 25;
 
 export default function AdminTransactions() {
+  const { ngnPerPoint } = usePricing();
   const ledger = useQuery(api.points.getAdminLedger, { limit: 1000 }) as LedgerEntry[] | undefined;
   const users = useQuery(api.admin.listUsers, { limit: 1000 });
 
@@ -150,7 +152,7 @@ export default function AdminTransactions() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Amount</th>
+                    <th className="px-4 py-3 font-medium">Amount (pts / ₦)</th>
                     <th className="px-4 py-3 font-medium">User</th>
                     <th className="px-4 py-3 font-medium">Type</th>
                     <th className="px-4 py-3 font-medium">Description</th>
@@ -168,6 +170,7 @@ export default function AdminTransactions() {
                             {l.amount > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                             {l.amount > 0 ? "+" : ""}{l.amount.toLocaleString()}
                           </span>
+                          <p className="text-[11px] text-slate-400">{formatNgn(l.amount * ngnPerPoint)}</p>
                         </td>
                         <td className="max-w-[180px] px-4 py-3">
                           <p className="truncate text-xs text-slate-700 dark:text-slate-300">{u?.email ?? l.userId.slice(-8)}</p>
@@ -176,7 +179,10 @@ export default function AdminTransactions() {
                         <td className="max-w-[260px] px-4 py-3">
                           <p className="truncate text-xs text-slate-600 dark:text-slate-400">{l.description}</p>
                         </td>
-                        <td className="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-300">{l.balanceAfter.toLocaleString()}</td>
+                        <td className="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {l.balanceAfter.toLocaleString()}
+                          <span className="ml-1 text-slate-400">· {formatNgn(l.balanceAfter * ngnPerPoint)}</span>
+                        </td>
                         <td className="px-4 py-3 text-xs text-slate-500">{fmtDate(l.createdAt)}</td>
                       </tr>
                     );

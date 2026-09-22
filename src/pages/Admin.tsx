@@ -20,9 +20,12 @@ import {
 import { Link } from "react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { usePricing } from "@/lib/pricing";
 
 export default function Admin() {
   const data = useQuery(api.adminApi.adminDashboard);
+  const { ngnPerPoint } = usePricing();
+  const ngnValue = (points: number) => `₦${Math.round(points * ngnPerPoint).toLocaleString("en-NG")}`;
 
   if (data === undefined) {
     return (
@@ -69,8 +72,8 @@ export default function Admin() {
     {
       title: "Points Economy",
       items: [
-        { title: "Points Issued", value: data.points.minted, icon: Coins, color: "blue" as const, to: "/admin/transactions" },
-        { title: "Points Burned", value: data.points.burned, icon: Coins, color: "amber" as const, to: "/admin/transactions" },
+        { title: "Points Issued", value: data.points.minted, icon: Coins, color: "blue" as const, to: "/admin/transactions", hint: ngnValue(data.points.minted) },
+        { title: "Points Burned", value: data.points.burned, icon: Coins, color: "amber" as const, to: "/admin/transactions", hint: ngnValue(data.points.burned) },
         { title: "Velocity (24h)", value: data.points.velocity24h, icon: Zap, color: "purple" as const, to: "/admin/transactions" },
       ],
     },
@@ -110,7 +113,7 @@ export default function Admin() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {group.items.map((m) => (
               <Link key={m.title} to={m.to}>
-                <StatCard title={m.title} value={m.value} icon={m.icon} color={m.color} />
+                <StatCard title={m.title} value={m.value} icon={m.icon} color={m.color} hint={"hint" in m ? (m.hint as string | undefined) : undefined} />
               </Link>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { useMutation, useAction, useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
+import { usePricing, formatNgn, formatUsd } from "@/lib/pricing";
 
 declare global {
   interface Window {
@@ -25,10 +26,12 @@ declare global {
   }
 }
 
-const packages = [
-  { id: "starter", name: "Starter", points: 1000, price: 10, icon: Coins, color: "from-blue-500 to-blue-600", popular: false },
-  { id: "growth", name: "Growth", points: 2800, price: 25, icon: Zap, color: "from-blue-600 to-indigo-600", popular: true },
-  { id: "scale", name: "Scale", points: 6000, price: 50, icon: Wallet, color: "from-indigo-500 to-purple-600", popular: false },
+/** Visual treatment per package slot — content comes from admin pricing. */
+const PACKAGE_STYLES = [
+  { icon: Coins, color: "from-blue-500 to-blue-600" },
+  { icon: Zap, color: "from-blue-600 to-indigo-600" },
+  { icon: Wallet, color: "from-indigo-500 to-indigo-600" },
+  { icon: Coins, color: "from-sky-500 to-blue-600" },
 ];
 
 function loadPaystackScript(): Promise<void> {
@@ -55,20 +58,17 @@ export default function BuyPoints() {
   const balance = useQuery(api.points.getBalance);
   const initializePayment = useAction(api.paystack.initializePayment);
   const verifyAndCredit = useAction(api.paystack.verifyAndCredit);
-  const getPublicKey = useAction(api.paystack.getPublicKey);
+  const { packages, ngnPerPoint, ngnLabel, loading: pricingLoading } = usePricing();
   const [selectedPkg, setSelectedPkg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
-  const [purchased, setPurchased] = useState<{ points: number; amount: number } | null>(null);
-  const [paystackReady, setPaystackReady] = useState(false);
+  const [purchased, setPurchased] = useState<{ points: number; ngn: number; usd: number } | null>(null);
 
   // Load Paystack script
   useEffect(() => {
-    loadPaystackScript()
-      .then(() => setPaystackReady(true))
-      .catch(() => {
-        toast.error("Could not load payment processor. Please refresh.");
-      });
+    loadPaystackScript().catch(() => {
+      toast.error("Could not load payment processor. Please refresh.");
+    });
   }, []);
 
   // Handle return from Paystack (callback URL)
@@ -82,7 +82,8 @@ export default function BuyPoints() {
             const pkg = packages.find((p) => p.id === searchParams.get("packageId"));
             setPurchased({
               points: result.points ?? pkg?.points ?? 0,
-              amount: pkg?.price ?? 0,
+              ngn: pkg?.priceNgn ?? 0,
+              usd: pkg?.priceUsd ?? 0,
             });
             toast.success(`${(result.points ?? 0).toLocaleString()} points added to your account!`);
           } else if (result.verified && !result.credited) {
@@ -110,11 +111,13 @@ export default function BuyPoints() {
     setSelectedPkg(pkg.id);
 
     try {
-      // Initialize payment on server
+      // Initialize payment on server — naira settlement via Paystack.
       const result = await initializePayment({
         packageId: pkg.id,
         points: pkg.points,
-        amountUsd: pkg.price,
+        amountUsd: pkg.priceUsd,
+        amountNgn: pkg.priceNgn,
+        currency: "NGN",
         email: user.email,
       });
 
@@ -162,7 +165,8 @@ export default function BuyPoints() {
               +{purchased.points.toLocaleString()} points added to your wallet
             </p>
             <p className="text-sm text-muted-foreground mt-1">
-              Charged ${purchased.amount}
+              Charged {formatNgn(purchased.ngn)}
+              {purchased.usd > 0 && ` (${formatUsd(purchased.usd)})`}
             </p>
             <Button className="mt-6" onClick={() => setPurchased(null)}>
               Buy More Points
@@ -179,67 +183,85 @@ export default function BuyPoints() {
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Buy Points</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Current balance: <span className="font-semibold text-primary">{(balance ?? 0).toLocaleString()} pts</span>
+          <span className="ml-1 text-muted-foreground">≈ {ngnLabel(balance ?? 0)}</span>
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          1 point = {formatNgn(ngnPerPoint)} · all prices charged in naira (₦)
         </p>
       </div>
 
       {/* Pricing Cards */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
-        {packages.map((pkg) => (
-          <Card
-            key={pkg.id}
-            className={`relative overflow-hidden transition-all ${
-              selectedPkg === pkg.id
-                ? "ring-2 ring-primary shadow-lg"
-                : "hover:shadow-md"
-            } ${pkg.popular ? "border-primary" : ""}`}
-          >
-            {pkg.popular && (
-              <div className="absolute top-0 right-0">
-                <Badge className="rounded-none rounded-bl-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0 text-[10px]">
-                  Popular
-                </Badge>
-              </div>
-            )}
-            <CardContent className="p-6">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${pkg.color} text-white`}>
-                <pkg.icon className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-lg font-bold text-foreground">{pkg.name}</h3>
-              <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-3xl font-bold text-foreground">{pkg.points.toLocaleString()}</span>
-                <span className="text-sm text-muted-foreground">pts</span>
-              </div>
-              <p className="mt-1 text-2xl font-bold text-primary">${pkg.price}</p>
-              <ul className="mt-4 space-y-2">
-                {[
-                  `${pkg.points.toLocaleString()} points`,
-                  "Instant delivery",
-                  "No expiration",
-                  "Secure via Paystack",
-                ].map((feat) => (
-                  <li key={feat} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="h-4 w-4 text-green-500 shrink-0" />
-                    {feat}
-                  </li>
-                ))}
-              </ul>
-              <Button
-                className="w-full mt-6 gap-2"
-                variant={selectedPkg === pkg.id ? "default" : "outline"}
-                onClick={() => handlePurchase(pkg)}
-                disabled={loading}
-              >
-                {loading && selectedPkg === pkg.id ? (
-                  "Processing..."
-                ) : (
-                  <>
-                    <CreditCard className="h-4 w-4" /> Pay ${pkg.price}
-                  </>
-                )}
-              </Button>
+        {pricingLoading && packages.length === 0 && (
+          <Card className="sm:col-span-2 lg:col-span-3">
+            <CardContent className="p-8 text-center text-sm text-muted-foreground animate-pulse">
+              Loading packages…
             </CardContent>
           </Card>
-        ))}
+        )}
+        {packages.map((pkg, index) => {
+          const style = PACKAGE_STYLES[index % PACKAGE_STYLES.length];
+          const Icon = style.icon;
+          return (
+            <Card
+              key={pkg.id}
+              className={`relative overflow-hidden transition-all ${
+                selectedPkg === pkg.id
+                  ? "ring-2 ring-primary shadow-lg"
+                  : "hover:shadow-md"
+              } ${pkg.popular ? "border-primary" : ""}`}
+            >
+              {pkg.popular && (
+                <div className="absolute top-0 right-0">
+                  <Badge className="rounded-none rounded-bl-lg bg-blue-600 text-white border-0 text-[10px]">
+                    Popular
+                  </Badge>
+                </div>
+              )}
+              <CardContent className="p-6">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${style.color} text-white`}>
+                  <Icon className="h-6 w-6" />
+                </div>
+                <h3 className="mt-4 text-lg font-bold text-foreground">{pkg.name}</h3>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="text-3xl font-bold text-foreground">{pkg.points.toLocaleString()}</span>
+                  <span className="text-sm text-muted-foreground">pts</span>
+                </div>
+                <p className="mt-1 text-2xl font-bold text-primary">{formatNgn(pkg.priceNgn)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatUsd(pkg.priceUsd)} · {formatNgn(pkg.priceNgn / (pkg.points || 1))}/pt
+                </p>
+                <ul className="mt-4 space-y-2">
+                  {[
+                    `${pkg.points.toLocaleString()} points`,
+                    "Instant delivery",
+                    "No expiration",
+                    "Secure via Paystack (₦)",
+                  ].map((feat) => (
+                    <li key={feat} className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Check className="h-4 w-4 text-green-500 shrink-0" />
+                      {feat}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  className="w-full mt-6 gap-2"
+                  variant={selectedPkg === pkg.id ? "default" : "outline"}
+                  onClick={() => handlePurchase(pkg)}
+                  disabled={loading}
+                >
+                  {loading && selectedPkg === pkg.id ? (
+                    "Processing..."
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4" /> Pay {formatNgn(pkg.priceNgn)}
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Payment Info */}
@@ -259,7 +281,7 @@ export default function BuyPoints() {
             <div className="flex items-start gap-3">
               <CreditCard className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-foreground">Multiple Payment Methods</p>
+                <p className="text-sm font-medium text-foreground">Pay in Naira</p>
                 <p className="text-xs text-muted-foreground">Card, bank transfer, USSD, and more via Paystack.</p>
               </div>
             </div>

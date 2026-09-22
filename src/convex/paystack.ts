@@ -41,29 +41,40 @@ export const initializePayment = action({
     packageId: v.string(),
     points: v.number(),
     amountUsd: v.number(),
+    amountNgn: v.optional(v.number()),
     email: v.string(),
+    currency: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const secretKey = await getSecretKey(ctx);
 
+    // Settle in naira when a naira price is supplied (keeps USD as fallback).
+    const currency = (args.currency ?? (args.amountNgn ? "NGN" : "USD")).toUpperCase();
+    const amountMajor = currency === "NGN" ? args.amountNgn ?? 0 : args.amountUsd;
+    if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
+      throw new Error("Invalid payment amount");
+    }
+
     // Generate a unique reference
     const reference = `CLD-${args.packageId}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-    // Amount in kobo (Paystack uses smallest currency unit; USD has 2 decimals)
-    const amountKobo = Math.round(args.amountUsd * 100);
+    // Amount in the smallest currency unit (kobo for NGN, cents for USD)
+    const amountKobo = Math.round(amountMajor * 100);
 
     const result = await paystackFetch("/transaction/initialize", secretKey, {
       method: "POST",
       body: JSON.stringify({
         email: args.email,
         amount: amountKobo,
-        currency: "USD",
+        currency,
         reference,
         callback_url: `${typeof window !== "undefined" ? window.location.origin : ""}/buy-points?reference=${reference}`,
         metadata: {
           packageId: args.packageId,
           points: args.points,
           amountUsd: args.amountUsd,
+          amountNgn: args.amountNgn ?? 0,
+          currency,
           platform: "cloudie",
         },
       }),
@@ -103,7 +114,10 @@ export const verifyAndCredit = action({
 
     const points = Number(metadata.points ?? 0);
     const packageId = String(metadata.packageId ?? "unknown");
-    const amountUsd = amount / 100;
+    const currency = String(data.currency ?? metadata.currency ?? "USD").toUpperCase();
+    const amountMajor = amount / 100;
+    const amountUsd = currency === "USD" ? amountMajor : Number(metadata.amountUsd ?? 0);
+    const amountNgn = currency === "NGN" ? amountMajor : Number(metadata.amountNgn ?? 0);
 
     if (points <= 0) {
       return { verified: false, message: "Invalid points in transaction metadata" };
@@ -121,6 +135,8 @@ export const verifyAndCredit = action({
       packageId,
       points,
       amountUsd,
+      amountNgn,
+      currency,
       amountKobo: amount,
       paystackStatus: status,
       metadata,

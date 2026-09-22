@@ -9,11 +9,13 @@ import { Download, Search, Shield, UserCheck, UserX } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, downloadCsv, fmtDate } from "@/components/admin/shared";
+import { usePricing, formatNgn } from "@/lib/pricing";
 
 type SortKey = "newest" | "oldest" | "points-desc" | "points-asc" | "name";
 
 export default function AdminUsers() {
   const users = useQuery(api.admin.listUsers, { limit: 500 });
+  const { ngnPerPoint } = usePricing();
   const suspendUser = useMutation(api.admin.suspendUser);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -142,9 +144,14 @@ export default function AdminUsers() {
                   <StatusBadge status={u.role === "admin" ? "admin" : u.role === "vendor" ? "vendor" : "user"} />
                   <StatusBadge status={u.isTerminated ? "terminated" : u.isSuspended ? "suspended" : "active"} />
                 </div>
-                <p className="w-24 shrink-0 text-right text-sm font-semibold text-blue-600 dark:text-blue-400">
-                  {(u.pointsBalance ?? 0).toLocaleString()} pts
-                </p>
+                <div className="w-28 shrink-0 text-right">
+                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                    {(u.pointsBalance ?? 0).toLocaleString()} pts
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {formatNgn((u.pointsBalance ?? 0) * ngnPerPoint)}
+                  </p>
+                </div>
                 <p className="hidden w-28 shrink-0 text-xs text-slate-400 md:block">{fmtDate(u.createdAt)}</p>
                 <div className="flex shrink-0 gap-1">
                   <Button variant="outline" size="sm" asChild>

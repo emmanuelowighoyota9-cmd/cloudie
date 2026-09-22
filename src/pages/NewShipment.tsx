@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { usePricing } from "@/lib/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ const emptyParty = (): Party => ({
 });
 
 export default function NewShipment() {
+  const { pointsWithNgn } = usePricing();
   const createShipment = useMutation(api.trackingUser.createMyShipment);
   const serviceTypes = useQuery(api.trackingQueries.listServiceTypes);
   const navigate = useNavigate();
@@ -136,7 +138,7 @@ export default function NewShipment() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <Package className="h-4 w-4" />
-            {loading ? "Creating..." : "Create Shipment (100 pts)"}
+            {loading ? "Creating..." : `Create Shipment (${pointsWithNgn(100)})`}
           </Button>
         </div>
       </form>

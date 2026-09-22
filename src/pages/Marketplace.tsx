@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { usePricing } from "@/lib/pricing";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 export default function Marketplace() {
+  const { pointsWithNgn } = usePricing();
   const products = useQuery(api.marketplace.listProducts, {});
   const orders = useQuery(api.marketplace.getMyOrders);
   const balance = useQuery(api.points.getBalance);
@@ -79,7 +81,7 @@ export default function Marketplace() {
             {orders.map((o) => (
               <Card key={o._id} className="notebook-card">
                 <CardContent className="p-4 flex items-center justify-between">
-                  <div>              <p className="text-sm font-medium text-slate-900 dark:text-white">Order {o._id.slice(-8)}</p><p className="text-xs text-muted-foreground">{o.totalPoints} pts • {new Date(o.createdAt).toLocaleDateString()}</p></div>
+                  <div>              <p className="text-sm font-medium text-slate-900 dark:text-white">Order {o._id.slice(-8)}</p><p className="text-xs text-muted-foreground">{pointsWithNgn(o.totalPoints)} • {new Date(o.createdAt).toLocaleDateString()}</p></div>
                   <Badge variant={o.status === "completed" ? "default" : "secondary"}>{o.status}</Badge>
                 </CardContent>
               </Card>

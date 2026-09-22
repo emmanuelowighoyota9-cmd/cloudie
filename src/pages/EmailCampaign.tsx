@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { usePricing, formatNgn } from "@/lib/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 export default function EmailCampaign() {
+  const { ngnPerPoint } = usePricing();
   const createCampaign = useMutation(api.assets.createCampaign);
   const campaigns = useQuery(api.assets.listCampaigns, { limit: 10 });
   const [loading, setLoading] = useState(false);
@@ -24,7 +26,7 @@ export default function EmailCampaign() {
     const recipients = form.recipientsText.split("\n").map((r) => r.trim()).filter(Boolean);
     if (recipients.length === 0) { toast.error("Add at least one recipient"); return; }
     const cost = recipients.length * 10;
-    if (!confirm(`This will send ${recipients.length} emails for ${cost} points. Continue?`)) return;
+    if (!confirm(`This will send ${recipients.length} emails for ${cost} points (${formatNgn(cost * ngnPerPoint)}). Continue?`)) return;
     setLoading(true);
     try {
       await createCampaign({ ...form, recipients });
@@ -39,7 +41,7 @@ export default function EmailCampaign() {
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Email Campaign</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Compose and send email campaigns. Cost: 10 points per email.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Compose and send email campaigns. Cost: 10 points ({formatNgn(10 * ngnPerPoint)}) per email.</p>
         </div>
       </div>
 
@@ -55,7 +57,7 @@ export default function EmailCampaign() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <Send className="h-4 w-4" />
-            {loading ? "Sending..." : `Send Campaign (${form.recipientsText.split("\n").filter((r) => r.trim()).length * 10} pts)`}
+            {loading ? "Sending..." : `Send Campaign (${form.recipientsText.split("\n").filter((r) => r.trim()).length * 10} pts · ${formatNgn(form.recipientsText.split("\n").filter((r) => r.trim()).length * 10 * ngnPerPoint)})`}
           </Button>
         </div>
       </form>
@@ -69,7 +71,7 @@ export default function EmailCampaign() {
             <div className="space-y-2">
               {campaigns.map((c) => (
                 <div key={c._id} className="flex items-center justify-between p-3 rounded-lg hover:bg-[var(--nb-ink)]/5">
-                  <div><p className="text-sm font-medium text-[var(--nb-ink)]">{c.subject}</p><p className="text-xs text-muted-foreground">{c.totalRecipients} recipients • {c.pointsCost} pts • {new Date(c.createdAt).toLocaleDateString()}</p></div>
+                  <div><p className="text-sm font-medium text-[var(--nb-ink)]">{c.subject}</p><p className="text-xs text-muted-foreground">{c.totalRecipients} recipients • {c.pointsCost} pts · {formatNgn(c.pointsCost * ngnPerPoint)} • {new Date(c.createdAt).toLocaleDateString()}</p></div>
                 </div>
               ))}
             </div>

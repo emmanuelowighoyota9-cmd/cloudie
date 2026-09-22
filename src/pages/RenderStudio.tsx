@@ -4,8 +4,10 @@ import { Image, Palette, Type, Shapes, Download } from "lucide-react";
 import { Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
+import { usePricing } from "@/lib/pricing";
 
 export default function RenderStudio() {
+  const { ngnLabel } = usePricing();
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const templates = [
     { id: "social", name: "Social Media Post", size: "1080×1080" },
@@ -20,7 +22,7 @@ export default function RenderStudio() {
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Rendering Studio</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Create and render images. Cost: 50 points per render.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create and render images. Cost: 50 points ({ngnLabel(50)}) per render.</p>
         </div>
       </div>
 
@@ -39,7 +41,7 @@ export default function RenderStudio() {
               <Button variant="outline" size="sm"><Shapes className="h-4 w-4 mr-1" /> Shapes</Button>
               <Button variant="outline" size="sm"><Image className="h-4 w-4 mr-1" /> Image</Button>
               <Button variant="outline" size="sm"><Palette className="h-4 w-4 mr-1" /> Colors</Button>
-              <Button size="sm" className="ml-auto"><Download className="h-4 w-4 mr-1" /> Export (50 pts)</Button>
+              <Button size="sm" className="ml-auto"><Download className="h-4 w-4 mr-1" /> Export (50 pts · {ngnLabel(50)})</Button>
             </div>
           </CardContent>
         </Card>

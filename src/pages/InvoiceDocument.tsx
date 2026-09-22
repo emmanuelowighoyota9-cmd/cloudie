@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { usePricing } from "@/lib/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,7 @@ import { DocumentViewer } from "@/components/documents/DocumentViewer";
 interface InvoiceItem { description: string; quantity: number; unitPrice: number; }
 
 export default function InvoiceDocument() {
+  const { pointsWithNgn } = usePricing();
   const generate = useMutation(api.documents.generate);
   const docs = useQuery(api.documents.list, { type: "invoice", limit: 10 });
   const [loading, setLoading] = useState(false);
@@ -93,7 +95,7 @@ export default function InvoiceDocument() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <FileSpreadsheet className="h-4 w-4" />
-            {loading ? "Generating..." : "Generate Invoice (80 pts)"}
+            {loading ? "Generating..." : `Generate Invoice (${pointsWithNgn(80)})`}
           </Button>
         </div>
       </form>

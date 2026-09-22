@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { usePricing, formatNgn } from "@/lib/pricing";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const UPDATE_COST = 25;
 const EVENT_COST = 15;
 
 export default function ShipmentUpdateForm() {
+  const { ngnPerPoint } = usePricing();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const detail = useQuery(
@@ -228,7 +230,7 @@ export default function ShipmentUpdateForm() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Update Details</p>
-              <p className="text-xs text-muted-foreground">{UPDATE_COST} points per update</p>
+              <p className="text-xs text-muted-foreground">{UPDATE_COST} points ({formatNgn(UPDATE_COST * ngnPerPoint)}) per update</p>
             </div>
             <Badge variant="outline" className="ml-auto text-[10px]">
               <Coins className="h-3 w-3 mr-1" />{UPDATE_COST}
@@ -242,7 +244,7 @@ export default function ShipmentUpdateForm() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Add Event / Note</p>
-              <p className="text-xs text-muted-foreground">{EVENT_COST} points per event</p>
+              <p className="text-xs text-muted-foreground">{EVENT_COST} points ({formatNgn(EVENT_COST * ngnPerPoint)}) per event</p>
             </div>
             <Badge variant="outline" className="ml-auto text-[10px]">
               <Coins className="h-3 w-3 mr-1" />{EVENT_COST}

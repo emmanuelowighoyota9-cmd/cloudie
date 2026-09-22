@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { usePricing } from "@/lib/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { Link } from "react-router";
 import { DocumentViewer } from "@/components/documents/DocumentViewer";
 
 export default function CustomsDocument() {
+  const { pointsWithNgn } = usePricing();
   const generate = useMutation(api.documents.generate);
   const [loading, setLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<unknown>(null);
@@ -74,7 +76,7 @@ export default function CustomsDocument() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <ScrollText className="h-4 w-4" />
-            {loading ? "Generating..." : "Generate Document (100 pts)"}
+            {loading ? "Generating..." : `Generate Document (${pointsWithNgn(100)})`}
           </Button>
         </div>
       </form>

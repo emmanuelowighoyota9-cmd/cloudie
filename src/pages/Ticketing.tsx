@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Plane, Building, FileSpreadsheet, ScrollText, ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
+import { usePricing } from "@/lib/pricing";
 
 const docTypes = [
   { label: "Flight Itinerary", description: "Generate professional flight itinerary documents", icon: Plane, to: "/ticketing/flight", color: "bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400", cost: 150 },
@@ -10,6 +11,8 @@ const docTypes = [
 ];
 
 export default function Ticketing() {
+  const { ngnLabel } = usePricing();
+
   return (
     <div className="space-y-8">
       <div>
@@ -32,7 +35,7 @@ export default function Ticketing() {
                       <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{dt.description}</p>
-                    <p className="mt-2 text-xs font-medium text-blue-600 dark:text-blue-400">{dt.cost} points per document</p>
+                    <p className="mt-2 text-xs font-medium text-blue-600 dark:text-blue-400">{dt.cost} points · {ngnLabel(dt.cost)} per document</p>
                   </div>
                 </div>
               </CardContent>

@@ -25,6 +25,8 @@ export const recordPaymentAndCredit = internalMutation({
     packageId: v.string(),
     points: v.number(),
     amountUsd: v.number(),
+    amountNgn: v.optional(v.number()),
+    currency: v.optional(v.string()),
     amountKobo: v.number(),
     paystackStatus: v.string(),
     metadata: v.any(),
@@ -46,6 +48,11 @@ export const recordPaymentAndCredit = internalMutation({
 
     const now = Date.now();
     const orderNumber = `ORD-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const currency = (args.currency ?? "USD").toUpperCase();
+    const chargeLabel =
+      currency === "NGN"
+        ? `₦${(args.amountNgn ?? args.amountKobo / 100).toLocaleString()}`
+        : `$${args.amountUsd.toLocaleString()}`;
 
     // Create payment order record
     const orderId = await ctx.db.insert("paymentOrders", {
@@ -55,7 +62,7 @@ export const recordPaymentAndCredit = internalMutation({
       packageId: args.packageId,
       points: args.points,
       amountSubunit: args.amountKobo,
-      currency: "USD",
+      currency,
       status: "paid",
       paystackReference: args.reference,
       paidAt: now,
@@ -75,7 +82,7 @@ export const recordPaymentAndCredit = internalMutation({
       userId,
       amount: args.points,
       balanceAfter: newBalance,
-      description: `Points purchase: ${args.points.toLocaleString()} pts ($${args.amountUsd}) via Paystack`,
+      description: `Points purchase: ${args.points.toLocaleString()} pts (${chargeLabel}) via Paystack`,
       type: "purchase",
       reference: "paystack",
       referenceId: args.reference,
@@ -83,6 +90,8 @@ export const recordPaymentAndCredit = internalMutation({
       metadata: {
         packageId: args.packageId,
         amountUsd: args.amountUsd,
+        amountNgn: args.amountNgn,
+        currency,
         paystackReference: args.reference,
       },
       createdAt: now,
@@ -95,7 +104,7 @@ export const recordPaymentAndCredit = internalMutation({
     await ctx.db.insert("notifications", {
       userId,
       title: "Points purchased",
-      message: `+${args.points.toLocaleString()} pts — $${args.amountUsd} via Paystack`,
+      message: `+${args.points.toLocaleString()} pts — ${chargeLabel} via Paystack`,
       type: "points_credited",
       isRead: false,
       createdAt: now,
