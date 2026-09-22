@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { usePricing, formatNgn } from "@/lib/pricing";
+import { usePricing } from "@/lib/pricing";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,9 @@ const UPDATE_COST = 25;
 const EVENT_COST = 15;
 
 export default function ShipmentUpdateForm() {
-  const { ngnPerPoint } = usePricing();
+  const { price } = usePricing();
+  const updatePrice = price("shipment_tracking_update", UPDATE_COST);
+  const eventPrice = price("shipment_event_add", EVENT_COST);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const detail = useQuery(
@@ -195,7 +197,7 @@ export default function ShipmentUpdateForm() {
       </motion.div>
 
       {/* Points Balance Warning */}
-      {currentBalance < UPDATE_COST && currentBalance < EVENT_COST && (
+      {currentBalance < updatePrice.points && currentBalance < eventPrice.points && (
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/30">
             <CardContent className="flex items-center gap-3 p-4">
@@ -203,7 +205,7 @@ export default function ShipmentUpdateForm() {
               <div>
                 <p className="text-sm font-medium text-red-700 dark:text-red-300">Insufficient points</p>
                 <p className="text-xs text-red-600/80 dark:text-red-400/80">
-                  You need at least {UPDATE_COST} points to update details or {EVENT_COST} points to add an event.
+                  You need at least {updatePrice.points} points to update details or {eventPrice.points} points to add an event.
                 </p>
               </div>
               <Link to="/buy-points" className="ml-auto">
@@ -230,10 +232,10 @@ export default function ShipmentUpdateForm() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Update Details</p>
-              <p className="text-xs text-muted-foreground">{UPDATE_COST} points ({formatNgn(UPDATE_COST * ngnPerPoint)}) per update</p>
+              <p className="text-xs text-muted-foreground">{updatePrice.label} per update</p>
             </div>
             <Badge variant="outline" className="ml-auto text-[10px]">
-              <Coins className="h-3 w-3 mr-1" />{UPDATE_COST}
+              <Coins className="h-3 w-3 mr-1" />{updatePrice.points}
             </Badge>
           </CardContent>
         </Card>
@@ -244,10 +246,10 @@ export default function ShipmentUpdateForm() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Add Event / Note</p>
-              <p className="text-xs text-muted-foreground">{EVENT_COST} points ({formatNgn(EVENT_COST * ngnPerPoint)}) per event</p>
+              <p className="text-xs text-muted-foreground">{eventPrice.label} per event</p>
             </div>
             <Badge variant="outline" className="ml-auto text-[10px]">
-              <Coins className="h-3 w-3 mr-1" />{EVENT_COST}
+              <Coins className="h-3 w-3 mr-1" />{eventPrice.points}
             </Badge>
           </CardContent>
         </Card>
@@ -285,7 +287,7 @@ export default function ShipmentUpdateForm() {
                   Shipment Details
                 </CardTitle>
                 <CardDescription>
-                  Edit package and recipient information. Changes cost {UPDATE_COST} points.
+                  Edit package and recipient information. Changes cost {updatePrice.points} points.
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleUpdateDetails}>
@@ -425,7 +427,7 @@ export default function ShipmentUpdateForm() {
                 </CardContent>
                 <div className="flex items-center justify-between border-t border-border px-6 py-4">
                   <p className="text-xs text-muted-foreground">
-                    Cost: <strong className="text-foreground">{UPDATE_COST} points</strong>
+                    Cost: <strong className="text-foreground">{updatePrice.points} points ({updatePrice.ngnLabel})</strong>
                   </p>
                   <Button
                     type="submit"

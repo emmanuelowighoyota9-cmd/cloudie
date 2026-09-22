@@ -7,7 +7,8 @@ import { useState } from "react";
 import { usePricing } from "@/lib/pricing";
 
 export default function RenderStudio() {
-  const { ngnLabel } = usePricing();
+  const { price } = usePricing();
+  const renderPrice = price("image_render", 50);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const templates = [
     { id: "social", name: "Social Media Post", size: "1080×1080" },
@@ -22,7 +23,7 @@ export default function RenderStudio() {
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Rendering Studio</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Create and render images. Cost: 50 points ({ngnLabel(50)}) per render.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create and render images. Cost: {renderPrice.label} per render.</p>
         </div>
       </div>
 
@@ -41,7 +42,7 @@ export default function RenderStudio() {
               <Button variant="outline" size="sm"><Shapes className="h-4 w-4 mr-1" /> Shapes</Button>
               <Button variant="outline" size="sm"><Image className="h-4 w-4 mr-1" /> Image</Button>
               <Button variant="outline" size="sm"><Palette className="h-4 w-4 mr-1" /> Colors</Button>
-              <Button size="sm" className="ml-auto"><Download className="h-4 w-4 mr-1" /> Export (50 pts · {ngnLabel(50)})</Button>
+              <Button size="sm" className="ml-auto"><Download className="h-4 w-4 mr-1" /> Export ({renderPrice.label})</Button>
             </div>
           </CardContent>
         </Card>

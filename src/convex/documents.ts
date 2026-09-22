@@ -1,12 +1,22 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { effectivePointsCost } from "./pricing";
 
+/** Platform defaults, used when the admin has not set a per-service price. */
 const DOCUMENT_COSTS: Record<string, number> = {
   flight: 150,
   hotel: 120,
   invoice: 80,
   customs: 100,
+};
+
+/** Maps a document type onto its billable service key in `pointPricing`. */
+const DOCUMENT_SERVICES: Record<string, string> = {
+  flight: "flight_pdf",
+  hotel: "hotel_pdf",
+  invoice: "commercial_invoice",
+  customs: "customs_document",
 };
 
 export const generate = mutation({
@@ -27,7 +37,11 @@ export const generate = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
 
-    const cost = DOCUMENT_COSTS[args.type];
+    const cost = await effectivePointsCost(
+      ctx,
+      DOCUMENT_SERVICES[args.type],
+      DOCUMENT_COSTS[args.type],
+    );
     const balance = user.pointsBalance ?? 0;
     if (balance < cost) {
       throw new Error(`Insufficient points. Document generation costs ${cost} points.`);

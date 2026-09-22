@@ -16,6 +16,9 @@ type PricingRow = {
   service: string;
   workspace: string;
   pointsCost: number;
+  /** Optional per-service price overrides — blank means "derive from rate". */
+  priceNgn?: number;
+  priceUsd?: number;
   isActive: boolean;
   effectiveFrom: number;
   updatedAt: number;
@@ -35,6 +38,7 @@ const WORKSPACES = ["shipments", "ticketing", "business", "services", "platform"
 const SEED_SERVICES: { service: string; workspace: string }[] = [
   { service: "shipment_create", workspace: "shipments" },
   { service: "shipment_tracking_update", workspace: "shipments" },
+  { service: "shipment_event_add", workspace: "shipments" },
   { service: "flight_pdf", workspace: "ticketing" },
   { service: "hotel_pdf", workspace: "ticketing" },
   { service: "commercial_invoice", workspace: "ticketing" },
@@ -64,6 +68,8 @@ export default function AdminPricing() {
 
   const [draft, setDraft] = useState({ service: "", workspace: "platform", cost: "" });
   const [edits, setEdits] = useState<Record<string, string>>({});
+  /** Per-service price overrides keyed `${service}|ngn` / `${service}|usd`. */
+  const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
   // Point conversion rate (₦ per point / $ per point)
@@ -163,16 +169,39 @@ export default function AdminPricing() {
 
   const save = async (row: PricingRow) => {
     const raw = edits[row.service];
-    const cost = raw !== undefined ? Number(raw) : row.pointsCost;
+    const cost = raw !== undefined && raw !== "" ? Number(raw) : row.pointsCost;
     if (!Number.isFinite(cost) || cost < 0) {
       toast.error("Cost must be a non-negative number");
       return;
     }
+    const ngnRaw = priceEdits[`${row.service}|ngn`];
+    const usdRaw = priceEdits[`${row.service}|usd`];
+    const priceNgn = ngnRaw === undefined || ngnRaw === "" ? undefined : Number(ngnRaw);
+    const priceUsd = usdRaw === undefined || usdRaw === "" ? undefined : Number(usdRaw);
+    if (priceNgn !== undefined && (!Number.isFinite(priceNgn) || priceNgn < 0)) {
+      toast.error("Naira price must be a non-negative number (or blank for auto)");
+      return;
+    }
+    if (priceUsd !== undefined && (!Number.isFinite(priceUsd) || priceUsd < 0)) {
+      toast.error("Dollar price must be a non-negative number (or blank for auto)");
+      return;
+    }
     setSaving(row.service);
     try {
-      await upsert({ service: row.service, workspace: row.workspace, pointsCost: cost, isActive: row.isActive });
+      await upsert({
+        service: row.service,
+        workspace: row.workspace,
+        pointsCost: cost,
+        priceNgn,
+        priceUsd,
+        isActive: row.isActive,
+      });
       setEdits((e) => ({ ...e, [row.service]: "" }));
-      toast.success(`${row.service} priced at ${cost} pts (${formatNgn(cost * ngnRate)})`);
+      setPriceEdits((p) => ({ ...p, [`${row.service}|ngn`]: "", [`${row.service}|usd`]: "" }));
+      const shown = priceNgn ?? cost * ngnRate;
+      toast.success(
+        `${row.service}: ${cost} pts · ${formatNgn(shown)}${priceNgn === undefined ? " (auto from rate)" : " (custom price)"}`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -418,9 +447,16 @@ export default function AdminPricing() {
       {/* Service pricing */}
       <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
         <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-          <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-white">
-            <BadgeDollarSign className="h-4 w-4 text-blue-600" /> Service pricing
-          </CardTitle>
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-white">
+              <BadgeDollarSign className="h-4 w-4 text-blue-600" /> Service pricing
+            </CardTitle>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Set a points cost and the exact ₦/$ price per service. Leave a price blank to
+              derive it from the point rate. Only <strong>active</strong> services are charged —
+              inactive rows keep the platform default.
+            </p>
+          </div>
           <Button
             size="sm"
             variant="outline"
@@ -441,7 +477,8 @@ export default function AdminPricing() {
                     <th className="px-4 py-3 font-medium">Service</th>
                     <th className="px-4 py-3 font-medium">Workspace</th>
                     <th className="px-4 py-3 font-medium">Points</th>
-                    <th className="px-4 py-3 font-medium">Price (₦)</th>
+                    <th className="px-4 py-3 font-medium">Price ₦</th>
+                    <th className="px-4 py-3 font-medium">Price $</th>
                     <th className="px-4 py-3 font-medium">Active</th>
                     <th className="px-4 py-3 font-medium">Updated</th>
                     <th className="px-4 py-3" />
@@ -469,8 +506,44 @@ export default function AdminPricing() {
                             onChange={(e) => setEdits((s) => ({ ...s, [row.service]: e.target.value }))}
                           />
                         </td>
-                        <td className="px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          {pointsValue > 0 ? formatNgn(ngnValue) : "—"}
+                        <td className="px-4 py-2.5">
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            inputMode="decimal"
+                            aria-label={`Naira price for ${row.service}`}
+                            className="h-8 w-28"
+                            placeholder={pointsValue > 0 ? String(Math.round(ngnValue)) : "auto"}
+                            value={
+                              priceEdits[`${row.service}|ngn`] ??
+                              (row.priceNgn != null ? String(row.priceNgn) : "")
+                            }
+                            onChange={(e) =>
+                              setPriceEdits((p) => ({ ...p, [`${row.service}|ngn`]: e.target.value }))
+                            }
+                          />
+                          <p className="mt-0.5 text-[10px] text-slate-400">
+                            {row.priceNgn != null ? "custom" : "auto from rate"}
+                          </p>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Input
+                            type="number"
+                            min={0}
+                            step="0.001"
+                            inputMode="decimal"
+                            aria-label={`Dollar price for ${row.service}`}
+                            className="h-8 w-24"
+                            placeholder={pointsValue > 0 ? String(Math.round(pointsValue * usdRate * 1000) / 1000) : "auto"}
+                            value={
+                              priceEdits[`${row.service}|usd`] ??
+                              (row.priceUsd != null ? String(row.priceUsd) : "")
+                            }
+                            onChange={(e) =>
+                              setPriceEdits((p) => ({ ...p, [`${row.service}|usd`]: e.target.value }))
+                            }
+                          />
                         </td>
                         <td className="px-4 py-2.5">
                           <Switch
@@ -482,7 +555,17 @@ export default function AdminPricing() {
                         </td>
                         <td className="px-4 py-2.5 text-xs text-slate-400">{isNew ? "—" : fmtDate(row.updatedAt)}</td>
                         <td className="px-4 py-2.5 text-right">
-                          <Button size="sm" variant="outline" disabled={saving === row.service || (edits[row.service] ?? "") === ""} onClick={() => save(row)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={
+                              saving === row.service ||
+                              ((edits[row.service] ?? "") === "" &&
+                                (priceEdits[`${row.service}|ngn`] ?? "") === "" &&
+                                (priceEdits[`${row.service}|usd`] ?? "") === "")
+                            }
+                            onClick={() => save(row)}
+                          >
                             Save
                           </Button>
                         </td>

@@ -27,7 +27,9 @@ function MetricCard({ title, value, icon: Icon, color }: { title: string; value:
 }
 
 export default function Dashboard() {
-  const { pointsWithNgn } = usePricing();
+  const { price } = usePricing();
+  const shipmentPrice = price("shipment_create", 100);
+  const invoicePrice = price("commercial_invoice", 80);
   const { user } = useAuth();
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 100 });
@@ -118,7 +120,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="font-medium text-foreground">New Shipment</p>
-                <p className="text-xs text-muted-foreground">{pointsWithNgn(100)}</p>
+                <p className="text-xs text-muted-foreground">{shipmentPrice.label}</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>
@@ -132,7 +134,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="font-medium text-foreground">Generate Document</p>
-                <p className="text-xs text-muted-foreground">From {pointsWithNgn(80)}</p>
+                <p className="text-xs text-muted-foreground">From {invoicePrice.label}</p>
               </div>
               <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
             </CardContent>

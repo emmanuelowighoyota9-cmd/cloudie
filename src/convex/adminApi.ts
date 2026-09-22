@@ -69,12 +69,21 @@ export const upsertPricing = mutation({
     service: v.string(),
     workspace: v.string(),
     pointsCost: v.number(),
+    /** Optional per-service price override (blank = derive from point rate). */
+    priceNgn: v.optional(v.number()),
+    priceUsd: v.optional(v.number()),
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
     const { adminId, admin } = await requireAdmin(ctx);
     if (!Number.isFinite(args.pointsCost) || args.pointsCost < 0) {
       throw new Error("INVALID_COST");
+    }
+    if (args.priceNgn !== undefined && (!Number.isFinite(args.priceNgn) || args.priceNgn < 0)) {
+      throw new Error("INVALID_NGN_PRICE");
+    }
+    if (args.priceUsd !== undefined && (!Number.isFinite(args.priceUsd) || args.priceUsd < 0)) {
+      throw new Error("INVALID_USD_PRICE");
     }
 
     const now = Date.now();
@@ -85,10 +94,20 @@ export const upsertPricing = mutation({
 
     let id: Id<"pointPricing">;
     if (existing) {
-      const before = { pointsCost: existing.pointsCost, isActive: existing.isActive };
-      await ctx.db.patch(existing._id, {
+      const before = {
+        pointsCost: existing.pointsCost,
+        priceNgn: existing.priceNgn,
+        priceUsd: existing.priceUsd,
+        isActive: existing.isActive,
+      };
+      const after = {
         pointsCost: args.pointsCost,
+        priceNgn: args.priceNgn,
+        priceUsd: args.priceUsd,
         isActive: args.isActive,
+      };
+      await ctx.db.patch(existing._id, {
+        ...after,
         workspace: args.workspace,
         updatedBy: adminId,
         updatedAt: now,
@@ -99,7 +118,7 @@ export const upsertPricing = mutation({
         resource: "pointPricing",
         resourceId: existing._id,
         before,
-        after: { pointsCost: args.pointsCost, isActive: args.isActive },
+        after,
         reason: `Updated pricing for ${args.service}`,
       });
     } else {
@@ -107,6 +126,8 @@ export const upsertPricing = mutation({
         service: args.service,
         workspace: args.workspace,
         pointsCost: args.pointsCost,
+        priceNgn: args.priceNgn,
+        priceUsd: args.priceUsd,
         isActive: args.isActive,
         effectiveFrom: now,
         updatedBy: adminId,
@@ -116,7 +137,12 @@ export const upsertPricing = mutation({
         action: "PRICING_CREATED",
         resource: "pointPricing",
         resourceId: id,
-        after: { service: args.service, pointsCost: args.pointsCost },
+        after: {
+          service: args.service,
+          pointsCost: args.pointsCost,
+          priceNgn: args.priceNgn,
+          priceUsd: args.priceUsd,
+        },
       });
     }
     void admin;
@@ -140,7 +166,8 @@ export const getPublicPricing = query({
  */
 const DEFAULT_PRICING: { service: string; workspace: string; pointsCost: number }[] = [
   { service: "shipment_create", workspace: "shipments", pointsCost: 50 },
-  { service: "shipment_tracking_update", workspace: "shipments", pointsCost: 5 },
+  { service: "shipment_tracking_update", workspace: "shipments", pointsCost: 25 },
+  { service: "shipment_event_add", workspace: "shipments", pointsCost: 15 },
   { service: "flight_pdf", workspace: "ticketing", pointsCost: 25 },
   { service: "hotel_pdf", workspace: "ticketing", pointsCost: 25 },
   { service: "commercial_invoice", workspace: "ticketing", pointsCost: 20 },
@@ -202,6 +229,8 @@ export const bulkUpsertPricing = mutation({
         service: v.string(),
         workspace: v.string(),
         pointsCost: v.number(),
+        priceNgn: v.optional(v.number()),
+        priceUsd: v.optional(v.number()),
         isActive: v.boolean(),
       }),
     ),
@@ -217,6 +246,12 @@ export const bulkUpsertPricing = mutation({
       if (!Number.isFinite(entry.pointsCost) || entry.pointsCost < 0) {
         throw new Error(`INVALID_COST:${entry.service}`);
       }
+      if (entry.priceNgn !== undefined && (!Number.isFinite(entry.priceNgn) || entry.priceNgn < 0)) {
+        throw new Error(`INVALID_NGN_PRICE:${entry.service}`);
+      }
+      if (entry.priceUsd !== undefined && (!Number.isFinite(entry.priceUsd) || entry.priceUsd < 0)) {
+        throw new Error(`INVALID_USD_PRICE:${entry.service}`);
+      }
     }
 
     const now = Date.now();
@@ -230,6 +265,8 @@ export const bulkUpsertPricing = mutation({
       if (existing) {
         await ctx.db.patch(existing._id, {
           pointsCost: entry.pointsCost,
+          priceNgn: entry.priceNgn,
+          priceUsd: entry.priceUsd,
           isActive: entry.isActive,
           workspace: entry.workspace,
           updatedBy: adminId,
@@ -240,6 +277,8 @@ export const bulkUpsertPricing = mutation({
           service,
           workspace: entry.workspace,
           pointsCost: entry.pointsCost,
+          priceNgn: entry.priceNgn,
+          priceUsd: entry.priceUsd,
           isActive: entry.isActive,
           effectiveFrom: now,
           updatedBy: adminId,

@@ -12,7 +12,8 @@ import { useState } from "react";
 import { Link } from "react-router";
 
 export default function EmailCampaign() {
-  const { ngnPerPoint } = usePricing();
+  const { price, ngnPerPoint } = usePricing();
+  const emailPrice = price("email_per_recipient", 10);
   const createCampaign = useMutation(api.assets.createCampaign);
   const campaigns = useQuery(api.assets.listCampaigns, { limit: 10 });
   const [loading, setLoading] = useState(false);
@@ -25,8 +26,8 @@ export default function EmailCampaign() {
     e.preventDefault();
     const recipients = form.recipientsText.split("\n").map((r) => r.trim()).filter(Boolean);
     if (recipients.length === 0) { toast.error("Add at least one recipient"); return; }
-    const cost = recipients.length * 10;
-    if (!confirm(`This will send ${recipients.length} emails for ${cost} points (${formatNgn(cost * ngnPerPoint)}). Continue?`)) return;
+    const cost = recipients.length * emailPrice.points;
+    if (!confirm(`This will send ${recipients.length} emails for ${cost} points (${formatNgn(emailPrice.ngn * recipients.length)}). Continue?`)) return;
     setLoading(true);
     try {
       await createCampaign({ ...form, recipients });
@@ -41,7 +42,7 @@ export default function EmailCampaign() {
         <Link to="/services"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Email Campaign</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Compose and send email campaigns. Cost: 10 points ({formatNgn(10 * ngnPerPoint)}) per email.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Compose and send email campaigns. Cost: {emailPrice.label} per email.</p>
         </div>
       </div>
 
@@ -57,7 +58,9 @@ export default function EmailCampaign() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <Send className="h-4 w-4" />
-            {loading ? "Sending..." : `Send Campaign (${form.recipientsText.split("\n").filter((r) => r.trim()).length * 10} pts · ${formatNgn(form.recipientsText.split("\n").filter((r) => r.trim()).length * 10 * ngnPerPoint)})`}
+            {loading
+              ? "Sending..."
+              : `Send Campaign (${form.recipientsText.split("\n").filter((r) => r.trim()).length * emailPrice.points} pts · ${formatNgn(emailPrice.ngn * form.recipientsText.split("\n").filter((r) => r.trim()).length)})`}
           </Button>
         </div>
       </form>

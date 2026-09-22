@@ -14,7 +14,8 @@ import { DocumentViewer } from "@/components/documents/DocumentViewer";
 interface InvoiceItem { description: string; quantity: number; unitPrice: number; }
 
 export default function InvoiceDocument() {
-  const { pointsWithNgn } = usePricing();
+  const { price } = usePricing();
+  const docPrice = price("commercial_invoice", 80);
   const generate = useMutation(api.documents.generate);
   const docs = useQuery(api.documents.list, { type: "invoice", limit: 10 });
   const [loading, setLoading] = useState(false);
@@ -95,7 +96,7 @@ export default function InvoiceDocument() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <FileSpreadsheet className="h-4 w-4" />
-            {loading ? "Generating..." : `Generate Invoice (${pointsWithNgn(80)})`}
+            {loading ? "Generating..." : `Generate Invoice (${docPrice.label})`}
           </Button>
         </div>
       </form>

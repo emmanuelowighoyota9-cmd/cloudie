@@ -663,6 +663,9 @@ const schema = defineSchema(
       service: v.string(),
       workspace: v.string(),
       pointsCost: v.number(),
+      /** Per-service price overrides. When unset the point rate is used. */
+      priceNgn: v.optional(v.number()),
+      priceUsd: v.optional(v.number()),
       isActive: v.boolean(),
       effectiveFrom: v.number(),
       updatedBy: v.optional(v.id("users")),

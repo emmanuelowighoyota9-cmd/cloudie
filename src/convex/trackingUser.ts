@@ -4,6 +4,7 @@ import type { QueryCtx, MutationCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { createShipmentCore } from "./tracking";
+import { effectivePointsCost } from "./pricing";
 
 const SHIPMENT_COST_POINTS = 100;
 
@@ -176,17 +177,19 @@ export const createMyShipment = mutation({
     if (user.isTerminated) throw new Error("FORBIDDEN: account terminated");
 
     // Guarded balance check + debit + immutable ledger row.
+    // Admins may set a per-service price; the constant is the fallback.
+    const shipmentCost = await effectivePointsCost(ctx, "shipment_create", SHIPMENT_COST_POINTS);
     const balance = user.pointsBalance ?? 0;
-    if (balance < SHIPMENT_COST_POINTS) {
+    if (balance < shipmentCost) {
       throw new Error(
-        `Insufficient points: creating a shipment costs ${SHIPMENT_COST_POINTS} points.`,
+        `Insufficient points: creating a shipment costs ${shipmentCost} points.`,
       );
     }
-    const newBalance = balance - SHIPMENT_COST_POINTS;
+    const newBalance = balance - shipmentCost;
     await ctx.db.patch(userId, { pointsBalance: newBalance });
     await ctx.db.insert("pointLedger", {
       userId,
-      amount: -SHIPMENT_COST_POINTS,
+      amount: -shipmentCost,
       balanceAfter: newBalance,
       description: "Shipment creation",
       type: "shipment_creation",
@@ -256,18 +259,19 @@ export const customerUpdateShipment = mutation({
     if (shipment.status === "DELIVERED") throw new Error("Cannot update a delivered shipment");
     if (shipment.status === "CANCELLED") throw new Error("Cannot update a cancelled shipment");
 
-    // Points check + debit
+    // Points check + debit (per-service price wins when configured)
+    const updateCost = await effectivePointsCost(ctx, "shipment_tracking_update", UPDATE_COST_POINTS);
     const balance = user.pointsBalance ?? 0;
-    if (balance < UPDATE_COST_POINTS) {
+    if (balance < updateCost) {
       throw new Error(
-        `Insufficient points: updating a shipment costs ${UPDATE_COST_POINTS} points. You have ${balance}.`,
+        `Insufficient points: updating a shipment costs ${updateCost} points. You have ${balance}.`,
       );
     }
-    const newBalance = balance - UPDATE_COST_POINTS;
+    const newBalance = balance - updateCost;
     await ctx.db.patch(userId, { pointsBalance: newBalance });
     await ctx.db.insert("pointLedger", {
       userId,
-      amount: -UPDATE_COST_POINTS,
+      amount: -updateCost,
       balanceAfter: newBalance,
       description: "Shipment update",
       type: "tracking_update",
@@ -329,7 +333,7 @@ export const customerUpdateShipment = mutation({
       shipmentId: args.shipmentId,
       status: shipment.status,
       title: "Shipment updated by sender",
-      description: `Updated: ${changeSummary}. ${UPDATE_COST_POINTS} points charged.`,
+      description: `Updated: ${changeSummary}. ${updateCost} points charged.`,
       eventTimestamp: Date.now(),
       isPublic: true,
       createdBy: userId,
@@ -381,18 +385,19 @@ export const customerAddShipmentEvent = mutation({
     if (shipment.status === "DELIVERED") throw new Error("Cannot add events to a delivered shipment");
     if (shipment.status === "CANCELLED") throw new Error("Cannot add events to a cancelled shipment");
 
-    // Points check + debit
+    // Points check + debit (per-service price wins when configured)
+    const eventCost = await effectivePointsCost(ctx, "shipment_event_add", EVENT_COST_POINTS);
     const balance = user.pointsBalance ?? 0;
-    if (balance < EVENT_COST_POINTS) {
+    if (balance < eventCost) {
       throw new Error(
-        `Insufficient points: adding a shipment event costs ${EVENT_COST_POINTS} points. You have ${balance}.`,
+        `Insufficient points: adding a shipment event costs ${eventCost} points. You have ${balance}.`,
       );
     }
-    const newBalance = balance - EVENT_COST_POINTS;
+    const newBalance = balance - eventCost;
     await ctx.db.patch(userId, { pointsBalance: newBalance });
     await ctx.db.insert("pointLedger", {
       userId,
-      amount: -EVENT_COST_POINTS,
+      amount: -eventCost,
       balanceAfter: newBalance,
       description: "Shipment event added",
       type: "tracking_update",

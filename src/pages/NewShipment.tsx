@@ -22,7 +22,8 @@ const emptyParty = (): Party => ({
 });
 
 export default function NewShipment() {
-  const { pointsWithNgn } = usePricing();
+  const { price } = usePricing();
+  const shipmentPrice = price("shipment_create", 100);
   const createShipment = useMutation(api.trackingUser.createMyShipment);
   const serviceTypes = useQuery(api.trackingQueries.listServiceTypes);
   const navigate = useNavigate();
@@ -138,7 +139,7 @@ export default function NewShipment() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <Package className="h-4 w-4" />
-            {loading ? "Creating..." : `Create Shipment (${pointsWithNgn(100)})`}
+            {loading ? "Creating..." : `Create Shipment (${shipmentPrice.label})`}
           </Button>
         </div>
       </form>

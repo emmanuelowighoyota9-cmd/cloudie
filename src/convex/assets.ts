@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { effectivePointsCost } from "./pricing";
 
 export const upload = mutation({
   args: {
@@ -83,7 +84,9 @@ export const createCampaign = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
 
-    const pointsCost = args.recipients.length * 10;
+    // Per-recipient price is admin-configurable (service: email_per_recipient)
+    const perRecipient = await effectivePointsCost(ctx, "email_per_recipient", 10);
+    const pointsCost = args.recipients.length * perRecipient;
     const balance = user.pointsBalance ?? 0;
     if (balance < pointsCost) {
       throw new Error(`Insufficient points. Need ${pointsCost} points.`);

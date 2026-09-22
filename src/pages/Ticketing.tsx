@@ -4,14 +4,14 @@ import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
 
 const docTypes = [
-  { label: "Flight Itinerary", description: "Generate professional flight itinerary documents", icon: Plane, to: "/ticketing/flight", color: "bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400", cost: 150 },
-  { label: "Hotel Reservation", description: "Generate hotel reservation confirmations", icon: Building, to: "/ticketing/hotel", color: "bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400", cost: 120 },
-  { label: "Commercial Invoice", description: "Generate professional commercial invoices", icon: FileSpreadsheet, to: "/ticketing/invoice", color: "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400", cost: 80 },
-  { label: "Customs Document", description: "Generate customs declaration documents", icon: ScrollText, to: "/ticketing/customs", color: "bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400", cost: 100 },
+  { label: "Flight Itinerary", description: "Generate professional flight itinerary documents", icon: Plane, to: "/ticketing/flight", color: "bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400", service: "flight_pdf", cost: 150 },
+  { label: "Hotel Reservation", description: "Generate hotel reservation confirmations", icon: Building, to: "/ticketing/hotel", color: "bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400", service: "hotel_pdf", cost: 120 },
+  { label: "Commercial Invoice", description: "Generate professional commercial invoices", icon: FileSpreadsheet, to: "/ticketing/invoice", color: "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400", service: "commercial_invoice", cost: 80 },
+  { label: "Customs Document", description: "Generate customs declaration documents", icon: ScrollText, to: "/ticketing/customs", color: "bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400", service: "customs_document", cost: 100 },
 ];
 
 export default function Ticketing() {
-  const { ngnLabel } = usePricing();
+  const { price } = usePricing();
 
   return (
     <div className="space-y-8">
@@ -35,7 +35,7 @@ export default function Ticketing() {
                       <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">{dt.description}</p>
-                    <p className="mt-2 text-xs font-medium text-blue-600 dark:text-blue-400">{dt.cost} points · {ngnLabel(dt.cost)} per document</p>
+                    <p className="mt-2 text-xs font-medium text-blue-600 dark:text-blue-400">{price(dt.service, dt.cost).label} per document</p>
                   </div>
                 </div>
               </CardContent>

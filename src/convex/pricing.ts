@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import type { QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { requireAdmin, auditLog } from "./adminApi";
 
@@ -88,6 +88,46 @@ export const getBillingConfig = query({
       currency: "NGN",
       packages,
     };
+  },
+});
+
+/**
+ * Effective point cost charged for a service.
+ *
+ * An active row in `pointPricing` is authoritative; when no active price has
+ * been configured the caller's platform default is used. This is the single
+ * source of truth for both charging and display.
+ */
+export async function effectivePointsCost(
+  ctx: QueryCtx | MutationCtx,
+  service: string,
+  fallbackPoints: number,
+): Promise<number> {
+  const row = await ctx.db
+    .query("pointPricing")
+    .withIndex("by_service", (q) => q.eq("service", service))
+    .first();
+  if (row && row.isActive && row.pointsCost > 0) return row.pointsCost;
+  return fallbackPoints;
+}
+
+/**
+ * Active per-service price list. Drives costing on every customer surface so
+ * an admin-set price is what customers actually see.
+ */
+export const getServicePrices = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("pointPricing").withIndex("by_service").collect();
+    const rate = await readRate(ctx);
+    return rows
+      .filter((r) => r.isActive)
+      .map((r) => ({
+        service: r.service,
+        pointsCost: r.pointsCost,
+        priceNgn: r.priceNgn ?? r.pointsCost * rate.ngnPerPoint,
+        priceUsd: r.priceUsd ?? r.pointsCost * rate.usdPerPoint,
+      }));
   },
 });
 

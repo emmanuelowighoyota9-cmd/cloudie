@@ -12,7 +12,8 @@ import { Link } from "react-router";
 import { DocumentViewer } from "@/components/documents/DocumentViewer";
 
 export default function FlightDocument() {
-  const { pointsWithNgn } = usePricing();
+  const { price } = usePricing();
+  const docPrice = price("flight_pdf", 150);
   const generate = useMutation(api.documents.generate);
   const docs = useQuery(api.documents.list, { type: "flight", limit: 10 });
   const [loading, setLoading] = useState(false);
@@ -92,7 +93,7 @@ export default function FlightDocument() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <Plane className="h-4 w-4" />
-            {loading ? "Generating..." : `Generate Document (${pointsWithNgn(150)})`}
+            {loading ? "Generating..." : `Generate Document (${docPrice.label})`}
           </Button>
         </div>
       </form>

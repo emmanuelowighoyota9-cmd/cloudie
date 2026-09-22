@@ -12,7 +12,8 @@ import { Link } from "react-router";
 import { DocumentViewer } from "@/components/documents/DocumentViewer";
 
 export default function CustomsDocument() {
-  const { pointsWithNgn } = usePricing();
+  const { price } = usePricing();
+  const docPrice = price("customs_document", 100);
   const generate = useMutation(api.documents.generate);
   const [loading, setLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<unknown>(null);
@@ -76,7 +77,7 @@ export default function CustomsDocument() {
         <div className="flex justify-end">
           <Button type="submit" size="lg" disabled={loading} className="gap-2">
             <ScrollText className="h-4 w-4" />
-            {loading ? "Generating..." : `Generate Document (${pointsWithNgn(100)})`}
+            {loading ? "Generating..." : `Generate Document (${docPrice.label})`}
           </Button>
         </div>
       </form>
