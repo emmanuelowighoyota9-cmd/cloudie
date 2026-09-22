@@ -99,7 +99,11 @@ function ClaimAdminPanel() {
  */
 function NonAdminNotice() {
   const { user, signOut } = useAuth();
+  const claim = useMutation(api.admin.claimFirstAdmin);
   const [busy, setBusy] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
 
   const handleSignOut = async () => {
     setBusy(true);
@@ -109,6 +113,18 @@ function NonAdminNotice() {
     } catch {
       toast.error("Sign out failed");
       setBusy(false);
+    }
+  };
+
+  const handleRecovery = async () => {
+    setRecoveryBusy(true);
+    try {
+      await claim({ setupCode: recoveryCode.trim() || undefined });
+      toast.success("Administrator access granted");
+      window.location.reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Recovery failed");
+      setRecoveryBusy(false);
     }
   };
 
@@ -141,6 +157,53 @@ function NonAdminNotice() {
           >
             Back to dashboard
           </Link>
+        </div>
+
+        {/* Recovery: only succeeds when the platform's existing administrators
+            are locked out, or when the operator supplies ADMIN_SETUP_CODE. */}
+        <div className="mt-5 border-t border-slate-200 pt-4 text-left dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => setShowRecovery((v) => !v)}
+            className="w-full text-center text-xs font-medium text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+          >
+            {showRecovery ? "Hide administrator recovery" : "Platform locked out? Administrator recovery"}
+          </button>
+
+          {showRecovery && (
+            <div className="mt-3 space-y-3">
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                Grants administrator access to this signed-in account. It is only
+                allowed when no existing administrator can be reached, or when you
+                enter the platform recovery code. Every attempt is audited.
+              </p>
+              <div className="space-y-1.5 text-left">
+                <Label htmlFor="recovery-code" className="text-xs">
+                  Recovery code <span className="text-slate-400">(if configured)</span>
+                </Label>
+                <Input
+                  id="recovery-code"
+                  value={recoveryCode}
+                  onChange={(e) => setRecoveryCode(e.target.value)}
+                  placeholder="Leave empty if no code was set"
+                  disabled={recoveryBusy}
+                />
+              </div>
+              <Button
+                onClick={handleRecovery}
+                disabled={recoveryBusy}
+                variant="outline"
+                className="w-full gap-2"
+              >
+                {recoveryBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" />
+                )}
+                Claim administrator access
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </main>

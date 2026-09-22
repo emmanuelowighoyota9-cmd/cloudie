@@ -1,8 +1,44 @@
 // Internal mutations used by the adminSeed action (must NOT be in a "use node"
 // file together with the action, so they live here).
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { Scrypt } from "lucia";
+
+/** Look up an existing password auth account by email (avoids duplicates). */
+export const findPasswordAccount = internalQuery({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const account = await ctx.db
+      .query("authAccounts")
+      .withIndex("providerAndAccountId", (q) =>
+        q.eq("provider", "password").eq("providerAccountId", args.email),
+      )
+      .first();
+    return account ? { accountId: account._id, userId: account.userId } : null;
+  },
+});
+
+/** Audit trail entry for an administrator account created from the console. */
+export const recordAdminCreated = internalMutation({
+  args: {
+    email: v.string(),
+    userId: v.union(v.id("users"), v.null()),
+    actorId: v.id("users"),
+    actorEmail: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("auditLogs", {
+      actorId: args.actorId,
+      actorEmail: args.actorEmail ?? undefined,
+      action: "ADMIN_CREATED",
+      resource: "user",
+      resourceId: args.userId ?? undefined,
+      after: { email: args.email, role: "admin" },
+      createdAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
 
 /** Idempotently ensure a user document has the admin role + profile fields. */
 export const ensureAdminRole = internalMutation({

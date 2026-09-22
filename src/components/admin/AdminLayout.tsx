@@ -30,6 +30,7 @@ import {
   Settings,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   ShoppingCart,
   Sun,
   Truck,
@@ -39,6 +40,7 @@ import {
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/users", label: "Users", icon: Users },
+  { to: "/admin/administrators", label: "Administrators", icon: ShieldCheck },
   { to: "/admin/vendors", label: "Vendors", icon: Boxes, badge: "pendingVendors" as const },
   { to: "/admin/marketplace", label: "Marketplace", icon: ShoppingCart },
   { to: "/admin/orders", label: "Orders", icon: Package },

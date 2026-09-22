@@ -288,10 +288,15 @@ function generateReferralCode(): string {
 }
 
 /**
- * One-time bootstrap: promote the current user to ADMIN when the platform has
- * no administrator yet. If ADMIN_SETUP_CODE is set in the environment the
- * caller must supply it. Always audited; permanently disabled once any admin
- * exists.
+ * Promote the signed-in user to ADMIN. Two legitimate cases:
+ *
+ *  1. Bootstrap — the platform has no administrator yet.
+ *  2. Recovery — an administrator exists but cannot be reached (no email on
+ *     the account, so neither password reset nor email-code sign-in is
+ *     possible), or the operator supplies the ADMIN_SETUP_CODE master code.
+ *
+ * In normal operation (an administrator with an email exists) this is refused
+ * server-side. Every claim is audited.
  */
 export const claimFirstAdmin = mutation({
   args: { setupCode: v.optional(v.string()) },
@@ -300,12 +305,24 @@ export const claimFirstAdmin = mutation({
     if (!userId) throw new Error("UNAUTHORIZED: sign in first");
 
     const users = await ctx.db.query("users").take(1000);
-    if (users.some((u) => u.role === "admin")) {
-      throw new Error("FORBIDDEN: an administrator already exists");
-    }
+    const admins = users.filter((u) => u.role === "admin");
 
     const expected = process.env.ADMIN_SETUP_CODE;
-    if (expected && args.setupCode !== expected) {
+    const hasSetupCode = typeof expected === "string" && expected.length > 0;
+    const codeMatches = hasSetupCode && args.setupCode === expected;
+
+    if (admins.length > 0) {
+      // The operator's master code always authorises a claim. Otherwise the
+      // claim is only allowed when every existing administrator is locked out
+      // (no email = no password reset, no email-code sign-in) — refusing here
+      // would leave the platform permanently unadministrable.
+      const anyReachable = admins.some(
+        (a) => typeof a.email === "string" && a.email.trim().length > 0,
+      );
+      if (!codeMatches && anyReachable) {
+        throw new Error("FORBIDDEN: an administrator already exists");
+      }
+    } else if (hasSetupCode && !codeMatches) {
       throw new Error("INVALID_SETUP_CODE");
     }
 
@@ -323,9 +340,40 @@ export const claimFirstAdmin = mutation({
       resource: "user",
       resourceId: userId,
       after: { role: "admin" },
+      reason: codeMatches
+        ? "setup_code"
+        : admins.length > 0
+          ? "no_reachable_administrator"
+          : "bootstrap",
       createdAt: Date.now(),
     });
     return { success: true };
+  },
+});
+
+/**
+ * Platform administrators (super-admin console). Admin-only.
+ * Returns only the fields the console needs — never secrets or session data.
+ */
+export const listAdministrators = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED");
+    const me = await ctx.db.get(userId);
+    if (me?.role !== "admin") throw new Error("FORBIDDEN: administrator only");
+
+    const users = await ctx.db.query("users").take(1000);
+    return users
+      .filter((u) => u.role === "admin")
+      .map((u) => ({
+        _id: u._id,
+        email: u.email ?? null,
+        name: u.name ?? null,
+        isAnonymous: u.isAnonymous ?? false,
+        createdAt: u.createdAt ?? null,
+        lastActiveAt: u.lastActiveAt ?? null,
+      }));
   },
 });
 
