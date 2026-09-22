@@ -4,6 +4,15 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { createHmac } from "node:crypto";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Doc } from "./_generated/dataModel";
+
+/** Paystack can report a charge as still settling for a moment after redirect. */
+const SETTLING_STATUSES = new Set(["pending", "processing", "ongoing"]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -44,15 +53,33 @@ export const initializePayment = action({
     amountNgn: v.optional(v.number()),
     email: v.string(),
     currency: v.optional(v.string()),
+    callbackUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const secretKey = await getSecretKey(ctx);
+
+    // The buyer must be known up-front: webhooks/callbacks arrive unauthenticated,
+    // so the pending order (created below) is what later resolves who to credit.
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Please sign in again to purchase points.");
+
+    // Absolute callback URL — actions run server-side where `window` never exists.
+    const base = (args.callbackUrl ?? "").trim().replace(/\/+$/, "");
+    let callbackUrl: string;
+    try {
+      callbackUrl = new URL(`${base}/buy-points`).toString();
+    } catch {
+      throw new Error("Invalid checkout callback URL. Please reload the page and try again.");
+    }
 
     // Settle in naira when a naira price is supplied (keeps USD as fallback).
     const currency = (args.currency ?? (args.amountNgn ? "NGN" : "USD")).toUpperCase();
     const amountMajor = currency === "NGN" ? args.amountNgn ?? 0 : args.amountUsd;
     if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
       throw new Error("Invalid payment amount");
+    }
+    if (!Number.isFinite(args.points) || args.points <= 0) {
+      throw new Error("Invalid points package");
     }
 
     // Generate a unique reference
@@ -68,7 +95,7 @@ export const initializePayment = action({
         amount: amountKobo,
         currency,
         reference,
-        callback_url: `${typeof window !== "undefined" ? window.location.origin : ""}/buy-points?reference=${reference}`,
+        callback_url: `${callbackUrl}?reference=${reference}&packageId=${encodeURIComponent(args.packageId)}`,
         metadata: {
           packageId: args.packageId,
           points: args.points,
@@ -81,14 +108,37 @@ export const initializePayment = action({
     });
 
     const data = result.data as Record<string, unknown>;
+    const accessCode = data.access_code as string;
+    const authorizationUrl = data.authorization_url as string;
+
+    // Record the pending order server-side so the webhook (no session) and the
+    // browser callback can both resolve buyer + authoritative amounts by reference.
+    await ctx.runMutation(internal.paystackInternal.recordPendingOrder, {
+      reference,
+      userId,
+      packageId: args.packageId,
+      points: args.points,
+      amountSubunit: amountKobo,
+      currency,
+      accessCode,
+      authorizationUrl,
+    });
 
     return {
-      authorization_url: data.authorization_url as string,
-      access_code: data.access_code as string,
-      reference: reference,
+      authorization_url: authorizationUrl,
+      access_code: accessCode,
+      reference,
     };
   },
 });
+
+/**
+ * Explicit result shape — also breaks TypeScript's inference cycle through
+ * `_generated/api` (which imports this file) when typing the handler.
+ */
+type VerifyResult =
+  | { verified: false; status?: string; message: string; reference?: string }
+  | { verified: true; credited: boolean; points: number; reference: string; orderId?: string; message?: string };
 
 /**
  * Verify a Paystack transaction by reference.
@@ -98,23 +148,52 @@ export const verifyAndCredit = action({
   args: {
     reference: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<VerifyResult> => {
     const secretKey = await getSecretKey(ctx);
     const result = await paystackFetch(`/transaction/verify/${encodeURIComponent(args.reference)}`, secretKey);
     const data = result.data as Record<string, unknown>;
 
-    const status = data.status as string;
-    const amount = data.amount as number; // in kobo
     const metadata = (data.metadata ?? {}) as Record<string, unknown>;
-    const reference = data.reference as string;
+    const reference = String(data.reference ?? args.reference);
+    let status = data.status as string;
+
+    // The instant the user lands back, Paystack can still report the charge as
+    // settling. Poll a few times so the credit happens on this visit.
+    for (let attempt = 0; SETTLING_STATUSES.has(status) && attempt < 4; attempt++) {
+      await sleep(1200);
+      try {
+        const retry = await paystackFetch(`/transaction/verify/${encodeURIComponent(args.reference)}`, secretKey);
+        const retryData = retry.data as Record<string, unknown>;
+        status = retryData.status as string;
+        if (status === "success") Object.assign(data, retryData);
+      } catch {
+        // transient Paystack error — keep the previous status and retry
+      }
+    }
 
     if (status !== "success") {
       return { verified: false, status, message: `Transaction status: ${status}` };
     }
 
-    const points = Number(metadata.points ?? 0);
-    const packageId = String(metadata.packageId ?? "unknown");
+    const amount = data.amount as number; // in kobo
     const currency = String(data.currency ?? metadata.currency ?? "USD").toUpperCase();
+
+    // The pending order is authoritative for points/amount and resolves the buyer
+    // even when this action runs without a session (callback before auth hydrates).
+    const existing: Doc<"paymentOrders"> | null = await ctx.runQuery(internal.paystackInternal.findPaymentByRef, { reference });
+    if (existing?.status === "paid") {
+      return { verified: true, credited: false, message: "Already credited", points: existing.points, reference };
+    }
+    if (existing && existing.amountSubunit !== amount) {
+      return {
+        verified: false,
+        message: "Payment amount does not match this order. Please contact support.",
+        reference,
+      };
+    }
+
+    const points = existing?.points ?? Number(metadata.points ?? 0);
+    const packageId = existing?.packageId ?? String(metadata.packageId ?? "unknown");
     const amountMajor = amount / 100;
     const amountUsd = currency === "USD" ? amountMajor : Number(metadata.amountUsd ?? 0);
     const amountNgn = currency === "NGN" ? amountMajor : Number(metadata.amountNgn ?? 0);
@@ -123,13 +202,7 @@ export const verifyAndCredit = action({
       return { verified: false, message: "Invalid points in transaction metadata" };
     }
 
-    // Check for idempotency — don't credit twice
-    const existing = await ctx.runQuery(internal.paystackInternal.findPaymentByRef, { reference });
-    if (existing) {
-      return { verified: true, credited: false, message: "Already credited", points, reference };
-    }
-
-    // Credit the user via points system
+    // Credit the user via points system (idempotent — safe to call again)
     const orderResult: string = await ctx.runMutation(internal.paystackInternal.recordPaymentAndCredit, {
       reference,
       packageId,
@@ -141,7 +214,14 @@ export const verifyAndCredit = action({
       paystackStatus: status,
       metadata,
     });
-    return { verified: true, credited: true, points, reference, orderId: orderResult };
+    const alreadyCredited = orderResult.startsWith("already:");
+    return {
+      verified: true,
+      credited: !alreadyCredited,
+      points,
+      reference,
+      orderId: alreadyCredited ? orderResult.slice(8) : orderResult,
+    };
   },
 });
 

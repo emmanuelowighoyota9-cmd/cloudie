@@ -456,18 +456,25 @@ const paystackWebhookHandler = httpAction(async (ctx, req) => {
   }
 
   try {
-    // Record and credit via internal mutation
-    await ctx.runMutation(internal.paystackInternal.recordPaymentAndCredit, {
+    // Record and credit via internal mutation. The pending order (created at
+    // checkout init) resolves the buyer — webhooks have no user session.
+    const meta = (data.metadata ?? {}) as Record<string, unknown>;
+    const currency = String(data.currency ?? meta.currency ?? "USD").toUpperCase();
+    const amountMinor = Number(data.amount ?? 0); // kobo/cents
+    const amountMajor = amountMinor / 100;
+    const result: string = await ctx.runMutation(internal.paystackInternal.recordPaymentAndCredit, {
       reference,
-      packageId: String((data.metadata as Record<string, unknown>)?.packageId ?? "unknown"),
-      points: Number((data.metadata as Record<string, unknown>)?.points ?? 0),
-      amountUsd: Number(data.amount ?? 0) / 100,
-      amountKobo: Number(data.amount ?? 0),
+      packageId: String(meta.packageId ?? "unknown"),
+      points: Number(meta.points ?? 0),
+      amountUsd: currency === "USD" ? amountMajor : Number(meta.amountUsd ?? 0),
+      amountNgn: currency === "NGN" ? amountMajor : Number(meta.amountNgn ?? 0),
+      currency,
+      amountKobo: amountMinor,
       paystackStatus: String(data.status ?? "success"),
-      metadata: data.metadata ?? {},
+      metadata: meta,
     });
 
-    return json({ ok: true, reference });
+    return json({ ok: true, reference, credited: !result.startsWith("already:") });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // If already credited, that's fine

@@ -16,8 +16,56 @@ export const findPaymentByRef = internalQuery({
 });
 
 /**
+ * Record the pending order created at checkout init, BEFORE redirecting to
+ * Paystack. This is the server-side source of truth linking a reference to the
+ * buyer — webhooks arrive unauthenticated and must resolve the buyer from here.
+ */
+export const recordPendingOrder = internalMutation({
+  args: {
+    reference: v.string(),
+    userId: v.id("users"),
+    packageId: v.string(),
+    points: v.number(),
+    amountSubunit: v.number(),
+    currency: v.string(),
+    accessCode: v.optional(v.string()),
+    authorizationUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("paymentOrders")
+      .withIndex("by_reference", (q) => q.eq("paystackReference", args.reference))
+      .first();
+    if (existing) return existing._id;
+
+    const now = Date.now();
+    const orderNumber = `ORD-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    return await ctx.db.insert("paymentOrders", {
+      orderNumber,
+      buyerId: args.userId,
+      kind: "points_package",
+      packageId: args.packageId,
+      points: args.points,
+      amountSubunit: args.amountSubunit,
+      currency: args.currency,
+      status: "initialized",
+      paystackReference: args.reference,
+      accessCode: args.accessCode,
+      authorizationUrl: args.authorizationUrl,
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
+/**
  * Record a successful Paystack payment and credit the user's points.
- * Runs as an internal mutation so it can be called from an action.
+ * Runs as an internal mutation so it can be called from an action OR the
+ * unauthenticated webhook — the buyer is resolved from the pending order first,
+ * falling back to the caller's session only when no order exists yet.
+ *
+ * Idempotent: if the order is already paid (or the ledger entry exists), it
+ * returns early without crediting twice.
  */
 export const recordPaymentAndCredit = internalMutation({
   args: {
@@ -32,63 +80,102 @@ export const recordPaymentAndCredit = internalMutation({
     metadata: v.any(),
   },
   handler: async (ctx, args) => {
-    // Get the authenticated user
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("UNAUTHORIZED");
-
-    const user = await ctx.db.get(userId);
-    if (!user) throw new Error("User not found");
-
-    // Idempotency: check if already recorded
+    // Idempotency + buyer resolution via the pending order (session-free path).
     const existing = await ctx.db
       .query("paymentOrders")
       .withIndex("by_reference", (q) => q.eq("paystackReference", args.reference))
       .first();
-    if (existing) return existing._id;
+    if (existing?.status === "paid") return `already:${existing._id}`;
+
+    // Double-credit guard on the ledger itself (covers racing webhook + callback).
+    const idempotencyKey = `paystack-${args.reference}`;
+    const priorLedger = await ctx.db
+      .query("pointLedger")
+      .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idempotencyKey))
+      .first();
+    if (priorLedger) {
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          status: "paid",
+          creditedLedgerId: priorLedger._id,
+          updatedAt: Date.now(),
+        });
+        return `already:${existing._id}`;
+      }
+      return `already:${priorLedger.referenceId ?? "ledger"}`;
+    }
+
+    // Prefer the order's authoritative amounts; metadata is only a fallback.
+    const points = existing?.points ?? args.points;
+    const packageId = existing?.packageId ?? args.packageId;
+    const amountSubunit = existing?.amountSubunit ?? args.amountKobo;
+
+    // Resolve the buyer: pending order first (webhook path), session second.
+    let userId = existing?.buyerId;
+    if (!userId) {
+      const sessionUserId = await getAuthUserId(ctx);
+      if (!sessionUserId) {
+        throw new Error("UNAUTHORIZED: cannot resolve buyer for this payment");
+      }
+      userId = sessionUserId;
+    }
+
+    const user = await ctx.db.get(userId);
+    if (!user) throw new Error("User not found");
+    if (points <= 0) throw new Error("Invalid points for this payment");
 
     const now = Date.now();
-    const orderNumber = `ORD-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
     const currency = (args.currency ?? "USD").toUpperCase();
     const chargeLabel =
       currency === "NGN"
-        ? `₦${(args.amountNgn ?? args.amountKobo / 100).toLocaleString()}`
-        : `$${args.amountUsd.toLocaleString()}`;
+        ? `₦${(args.amountNgn ?? amountSubunit / 100).toLocaleString()}`
+        : `$${(args.amountUsd || amountSubunit / 100).toLocaleString()}`;
 
-    // Create payment order record
-    const orderId = await ctx.db.insert("paymentOrders", {
-      orderNumber,
-      buyerId: userId,
-      kind: "points_package",
-      packageId: args.packageId,
-      points: args.points,
-      amountSubunit: args.amountKobo,
-      currency,
-      status: "paid",
-      paystackReference: args.reference,
-      paidAt: now,
-      verifiedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Mark the order paid (or create it if the webhook beat checkout recording).
+    let orderId = existing?._id;
+    if (orderId) {
+      await ctx.db.patch(orderId, {
+        status: "paid",
+        paidAt: now,
+        verifiedAt: now,
+        updatedAt: now,
+      });
+    } else {
+      orderId = await ctx.db.insert("paymentOrders", {
+        orderNumber: `ORD-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+        buyerId: userId,
+        kind: "points_package",
+        packageId,
+        points,
+        amountSubunit,
+        currency,
+        status: "paid",
+        paystackReference: args.reference,
+        paidAt: now,
+        verifiedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     // Credit points to user
     const currentBalance = user.pointsBalance ?? 0;
-    const newBalance = currentBalance + args.points;
+    const newBalance = currentBalance + points;
 
     await ctx.db.patch(userId, { pointsBalance: newBalance });
 
     // Create ledger entry
     const ledgerId = await ctx.db.insert("pointLedger", {
       userId,
-      amount: args.points,
+      amount: points,
       balanceAfter: newBalance,
-      description: `Points purchase: ${args.points.toLocaleString()} pts (${chargeLabel}) via Paystack`,
+      description: `Points purchase: ${points.toLocaleString()} pts (${chargeLabel}) via Paystack`,
       type: "purchase",
       reference: "paystack",
       referenceId: args.reference,
-      idempotencyKey: `paystack-${args.reference}`,
+      idempotencyKey,
       metadata: {
-        packageId: args.packageId,
+        packageId,
         amountUsd: args.amountUsd,
         amountNgn: args.amountNgn,
         currency,
@@ -104,7 +191,7 @@ export const recordPaymentAndCredit = internalMutation({
     await ctx.db.insert("notifications", {
       userId,
       title: "Points purchased",
-      message: `+${args.points.toLocaleString()} pts — ${chargeLabel} via Paystack`,
+      message: `+${points.toLocaleString()} pts — ${chargeLabel} via Paystack`,
       type: "points_credited",
       isRead: false,
       createdAt: now,

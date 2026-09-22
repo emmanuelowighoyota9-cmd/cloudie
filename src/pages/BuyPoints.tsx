@@ -76,18 +76,49 @@ export default function BuyPoints() {
     const ref = searchParams.get("reference");
     if (ref && !verifying) {
       setVerifying(true);
-      verifyAndCredit({ reference: ref })
+
+      const settlePoints = (result: { points?: number; credited?: boolean }) => {
+        const pkg = packages.find((p) => p.id === searchParams.get("packageId"));
+        setPurchased({
+          points: result.points ?? pkg?.points ?? 0,
+          ngn: pkg?.priceNgn ?? 0,
+          usd: pkg?.priceUsd ?? 0,
+        });
+        if (result.credited) {
+          toast.success(`${(result.points ?? 0).toLocaleString()} points added to your account!`);
+        } else {
+          toast.info("Payment confirmed — your points are already in your wallet.");
+        }
+      };
+
+      // Paystack can still report the charge as settling right after redirect —
+      // poll a few times so the credit lands on this visit.
+      const verifyWithRetry = async () => {
+        let lastError: unknown = null;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          if (attempt > 0) await new Promise((r) => setTimeout(r, 2000));
+          try {
+            const result = await verifyAndCredit({ reference: ref });
+            if (result.verified) return result;
+            const status = (result.status ?? "").toLowerCase();
+            // Only keep polling while the charge is still settling.
+            if (!["pending", "processing", "ongoing"].includes(status)) return result;
+            lastError = null;
+          } catch (err) {
+            lastError = err;
+          }
+        }
+        if (lastError) throw lastError;
+        return {
+          verified: false as const,
+          message: "Payment is still processing — it will be credited shortly. Check your wallet in a moment.",
+        };
+      };
+
+      verifyWithRetry()
         .then((result) => {
-          if (result.verified && result.credited) {
-            const pkg = packages.find((p) => p.id === searchParams.get("packageId"));
-            setPurchased({
-              points: result.points ?? pkg?.points ?? 0,
-              ngn: pkg?.priceNgn ?? 0,
-              usd: pkg?.priceUsd ?? 0,
-            });
-            toast.success(`${(result.points ?? 0).toLocaleString()} points added to your account!`);
-          } else if (result.verified && !result.credited) {
-            toast.info("Payment was already processed.");
+          if (result.verified) {
+            settlePoints(result);
           } else {
             toast.error(result.message ?? "Payment could not be verified.");
           }
@@ -119,6 +150,8 @@ export default function BuyPoints() {
         amountNgn: pkg.priceNgn,
         currency: "NGN",
         email: user.email,
+        // Absolute origin — the action runs server-side where `window` never exists.
+        callbackUrl: window.location.origin,
       });
 
       // Redirect to Paystack checkout page
@@ -167,6 +200,10 @@ export default function BuyPoints() {
             <p className="text-sm text-muted-foreground mt-1">
               Charged {formatNgn(purchased.ngn)}
               {purchased.usd > 0 && ` (${formatUsd(purchased.usd)})`}
+            </p>
+            <p className="mt-3 text-sm text-foreground">
+              New balance:{" "}
+              <span className="font-semibold text-primary">{(balance ?? 0).toLocaleString()} pts</span>
             </p>
             <Button className="mt-6" onClick={() => setPurchased(null)}>
               Buy More Points
