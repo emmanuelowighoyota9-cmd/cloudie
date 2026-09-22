@@ -226,6 +226,98 @@ export const verifyAndCredit = action({
 });
 
 /**
+ * Result of the automatic recovery pass — typed explicitly to keep
+ * TypeScript's inference from cycling through `_generated/api`.
+ */
+type RecoveryResult = { checked: number; recovered: number; points: number };
+
+/**
+ * Self-healing credit pass: re-verifies the buyer's recent UNPAID orders with
+ * Paystack and credits any that succeeded but never made it through the
+ * callback/webhook (closed tab, dropped redirect, webhook not configured…).
+ *
+ * Called once when the user opens Buy Points or Wallet. Idempotent — the
+ * credit path refuses to double-pay.
+ */
+export const recoverPendingCredits = action({
+  args: {},
+  handler: async (ctx, args): Promise<RecoveryResult> => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { checked: 0, recovered: 0, points: 0 };
+
+    // Only recent orders — bounded work per visit.
+    const since = Date.now() - 48 * 60 * 60 * 1000;
+    const orders: Doc<"paymentOrders">[] = await ctx.runQuery(
+      internal.paystackInternal.listRecentUnpaidOrders,
+      { userId, since },
+    );
+    if (orders.length === 0) return { checked: 0, recovered: 0, points: 0 };
+
+    const secretKey = await getSecretKey(ctx);
+    let recovered = 0;
+    let points = 0;
+    let checked = 0;
+
+    for (const order of orders.slice(0, 5)) {
+      const reference = order.paystackReference!;
+      checked++;
+
+      let data: Record<string, unknown>;
+      try {
+        const res = await paystackFetch(
+          `/transaction/verify/${encodeURIComponent(reference)}`,
+          secretKey,
+        );
+        data = res.data as Record<string, unknown>;
+      } catch {
+        // Reference unknown or transient Paystack error — try again next visit.
+        continue;
+      }
+
+      const status = String(data.status ?? "");
+      if (status === "success") {
+        const amountMinor = Number(data.amount ?? 0);
+        if (order.amountSubunit !== amountMinor) {
+          // Amount mismatch — do not credit; leave for manual review.
+          continue;
+        }
+        const meta = (data.metadata ?? {}) as Record<string, unknown>;
+        const currency = String(data.currency ?? meta.currency ?? order.currency).toUpperCase();
+        const amountMajor = amountMinor / 100;
+        const result: string = await ctx.runMutation(
+          internal.paystackInternal.recordPaymentAndCredit,
+          {
+            reference,
+            packageId: order.packageId,
+            points: order.points,
+            amountUsd: currency === "USD" ? amountMajor : Number(meta.amountUsd ?? 0),
+            amountNgn: currency === "NGN" ? amountMajor : Number(meta.amountNgn ?? 0),
+            currency,
+            amountKobo: amountMinor,
+            paystackStatus: status,
+            metadata: meta,
+          },
+        );
+        if (!result.startsWith("already:")) {
+          recovered++;
+          points += order.points;
+        }
+      } else if (status === "failed" || status === "abandoned" || status === "reversed") {
+        // Terminal for us — stop re-verifying this order on future visits.
+        await ctx.runMutation(internal.paystackInternal.markOrderSettled, {
+          reference,
+          status: status === "abandoned" ? "abandoned" : "failed",
+          reason: `Paystack status: ${status}`,
+        });
+      }
+      // "pending"/"processing" — still settling, retry next visit.
+    }
+
+    return { checked, recovered, points };
+  },
+});
+
+/**
  * Verify a Paystack webhook HMAC signature.
  * Uses node:crypto to compute HMAC-SHA512 and compare with the provided signature.
  */

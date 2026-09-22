@@ -58,6 +58,7 @@ export default function BuyPoints() {
   const balance = useQuery(api.points.getBalance);
   const initializePayment = useAction(api.paystack.initializePayment);
   const verifyAndCredit = useAction(api.paystack.verifyAndCredit);
+  const recoverPendingCredits = useAction(api.paystack.recoverPendingCredits);
   const { packages, ngnPerPoint, ngnLabel, loading: pricingLoading } = usePricing();
   const [selectedPkg, setSelectedPkg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,24 @@ export default function BuyPoints() {
     loadPaystackScript().catch(() => {
       toast.error("Could not load payment processor. Please refresh.");
     });
+  }, []);
+
+  // Self-heal: credit any recent payment whose callback/webhook never arrived
+  // (closed tab, dropped redirect). Skipped during the callback flow below.
+  useEffect(() => {
+    if (searchParams.get("reference")) return;
+    recoverPendingCredits({})
+      .then((r) => {
+        if (r.recovered > 0) {
+          toast.success(
+            `${r.points.toLocaleString()} points from an earlier payment were added to your wallet!`,
+          );
+        }
+      })
+      .catch(() => {
+        // best-effort — the webhook/callback paths still cover crediting
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Handle return from Paystack (callback URL)

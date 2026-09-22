@@ -1,4 +1,6 @@
-import { useQuery } from "convex/react";
+import { useAction, useQuery } from "convex/react";
+import { useEffect } from "react";
+import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,24 @@ export default function Wallet() {
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 100 });
   const { ngnPerPoint, ngnLabel } = usePricing();
+  const recoverPendingCredits = useAction(api.paystack.recoverPendingCredits);
+
+  // Self-heal: if a Paystack payment succeeded but its callback/webhook never
+  // arrived, credit it here. Balance + ledger update reactively.
+  useEffect(() => {
+    recoverPendingCredits({})
+      .then((r) => {
+        if (r.recovered > 0) {
+          toast.success(
+            `${r.points.toLocaleString()} points from an earlier payment were added to your wallet!`,
+          );
+        }
+      })
+      .catch(() => {
+        // best-effort — callback/webhook paths still cover crediting
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-8">

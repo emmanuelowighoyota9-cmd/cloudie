@@ -16,6 +16,56 @@ export const findPaymentByRef = internalQuery({
 });
 
 /**
+ * Recent unpaid orders for a buyer — used by the recovery pass to re-verify
+ * payments the user may have abandoned mid-redirect (closed tab, etc.).
+ */
+export const listRecentUnpaidOrders = internalQuery({
+  args: { userId: v.id("users"), since: v.number() },
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query("paymentOrders")
+      .withIndex("by_buyer", (q) =>
+        q.eq("buyerId", args.userId).gte("createdAt", args.since),
+      )
+      .order("desc")
+      .take(20);
+    return rows.filter(
+      (r) =>
+        (r.status === "initialized" || r.status === "pending") &&
+        !!r.paystackReference,
+    );
+  },
+});
+
+/**
+ * Close out an order Paystack reports as failed/abandoned so it stops being
+ * re-verified on every visit.
+ */
+export const markOrderSettled = internalMutation({
+  args: {
+    reference: v.string(),
+    status: v.union(v.literal("failed"), v.literal("abandoned")),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const order = await ctx.db
+      .query("paymentOrders")
+      .withIndex("by_reference", (q) => q.eq("paystackReference", args.reference))
+      .first();
+    if (!order) return null;
+    if (order.status === "paid" || order.status === "failed" || order.status === "abandoned") {
+      return order._id;
+    }
+    await ctx.db.patch(order._id, {
+      status: args.status,
+      failureReason: args.reason,
+      updatedAt: Date.now(),
+    });
+    return order._id;
+  },
+});
+
+/**
  * Record the pending order created at checkout init, BEFORE redirecting to
  * Paystack. This is the server-side source of truth linking a reference to the
  * buyer — webhooks arrive unauthenticated and must resolve the buyer from here.
