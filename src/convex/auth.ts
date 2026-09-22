@@ -17,6 +17,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           ...(name.length > 0 ? { name } : {}),
         };
       },
+      // Enables the "reset" / "reset-verification" flows: a 6-digit code is
+      // emailed through the same OTP service used for email sign-in, and the
+      // submitted code lets the user set a new password.
+      reset: emailOtp,
     }),
     emailOtp,
   ],

@@ -1,7 +1,7 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { getAuthUserId, modifyAccountCredentials } from "@convex-dev/auth/server";
+import { query, mutation, internalMutation, action } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 
 // ─── Payment Provider Key Management ───
 
@@ -326,6 +326,52 @@ export const claimFirstAdmin = mutation({
       createdAt: Date.now(),
     });
     return { success: true };
+  },
+});
+
+/**
+ * Server-side administrator password reset.
+ *
+ * Only callable by an authenticated ADMIN. Uses Convex Auth's own
+ * modifyAccountCredentials (same path as the "reset-verification" flow) so
+ * the Scrypt hash format and session invalidation match the Password provider.
+ * Audited. This must be an ACTION because modifyAccountCredentials runs its
+ * hashing in the action runtime.
+ */
+export const resetAdminPassword = action({
+  args: { newPassword: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED: sign in first");
+    const admin = await ctx.runQuery(api.users.currentUser);
+    if (!admin || admin.role !== "admin") {
+      throw new Error("FORBIDDEN: administrator only");
+    }
+    if (args.newPassword.length < 8) {
+      throw new Error("Password must be at least 8 characters.");
+    }
+    if (!admin.email) throw new Error("ACCOUNT_HAS_NO_EMAIL");
+    await modifyAccountCredentials(ctx, {
+      provider: "password",
+      account: { id: admin.email, secret: args.newPassword },
+    });
+    await ctx.runMutation(internal.admin.auditAdminPasswordReset, { adminId: userId });
+    return { success: true };
+  },
+});
+
+export const auditAdminPasswordReset = internalMutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const admin = await ctx.db.get(args.adminId);
+    await ctx.db.insert("auditLogs", {
+      actorId: args.adminId,
+      actorEmail: admin?.email,
+      action: "ADMIN_PASSWORD_RESET",
+      resource: "user",
+      resourceId: args.adminId,
+      createdAt: Date.now(),
+    });
   },
 });
 
