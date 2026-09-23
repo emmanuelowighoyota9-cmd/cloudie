@@ -6,8 +6,9 @@ import { toast } from "sonner";
 import {
   Building2, Landmark, ShieldCheck, Globe, Settings2, DollarSign,
   Check, Paintbrush, AlertTriangle, Truck, Ticket, Briefcase, Wrench, ChevronDown,
-  Sparkles, RefreshCw, MonitorSmartphone, LayoutDashboard, Moon, Sun,
+  Sparkles, RefreshCw, Moon, Sun,
 } from "lucide-react";
+import { TemplateSurfaces } from "@/components/admin/BankingTemplatePreview";
 
 function Field({ label, children, hint, required }: { label: string; children: React.ReactNode; hint?: string; required?: boolean }) {
   return (
@@ -69,75 +70,6 @@ const FEATURE_LABELS: Record<string, string> = {
   realtime: "Realtime",
 };
 
-/** Miniature customer-app preview painted with the template's own design kit. */
-function AppPreview({ tpl }: { tpl: BankingTemplate }) {
-  const isDark = tpl.themeMode === "dark";
-  const primary = tpl.primaryColor ?? "#0F172A";
-  const accent = tpl.accentColor ?? "#0EA5E9";
-  const surface = tpl.surfaceColor ?? (isDark ? "#0B1220" : "#F8FAFC");
-  const panel = isDark ? "#16233A" : "#FFFFFF";
-  const radius = tpl.radius ?? "0.75rem";
-  return (
-    <div className="overflow-hidden" style={{ backgroundColor: surface, borderRadius: radius }} aria-hidden>
-      <div className="flex items-center justify-between px-2.5 py-1.5" style={{ backgroundColor: primary }}>
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded" style={{ backgroundColor: accent }} />
-          <span className="h-1.5 w-10 rounded-full bg-white/70" />
-        </div>
-        <span className="h-1.5 w-5 rounded-full bg-white/35" />
-      </div>
-      <div className="px-2.5 py-2.5 space-y-1.5">
-        <span className="block h-1.5 w-3/5 rounded-full" style={{ backgroundColor: accent }} />
-        <span className="block h-1 w-4/5 rounded-full" style={{ backgroundColor: isDark ? "rgba(255,255,255,0.35)" : "rgba(15,23,42,0.25)" }} />
-        <div className="flex gap-1.5 pt-1">
-          {[0, 1].map((i) => (
-            <div key={i} className="flex-1 p-1.5" style={{ backgroundColor: panel, borderRadius: radius, border: `1px solid ${isDark ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.08)"}` }}>
-              <span className="block h-1 w-8 rounded-full" style={{ backgroundColor: isDark ? "rgba(255,255,255,0.30)" : "rgba(15,23,42,0.20)" }} />
-              <span className="mt-1 block h-2 w-11 rounded-full" style={{ backgroundColor: accent }} />
-            </div>
-          ))}
-        </div>
-        <span className="mt-1 block h-3.5 w-14 rounded-full" style={{ backgroundColor: accent }} />
-      </div>
-    </div>
-  );
-}
-
-/** Miniature tenant admin-console preview (sidebar + stats + activity bars). */
-function ConsolePreview({ tpl }: { tpl: BankingTemplate }) {
-  const isDark = tpl.themeMode === "dark";
-  const primary = tpl.primaryColor ?? "#0F172A";
-  const accent = tpl.accentColor ?? "#0EA5E9";
-  const surface = isDark ? "#EEF2F7" : tpl.surfaceColor ?? "#F8FAFC";
-  const panel = "#FFFFFF";
-  const radius = tpl.radius ?? "0.75rem";
-  return (
-    <div className="flex overflow-hidden" style={{ backgroundColor: surface, borderRadius: radius }} aria-hidden>
-      <div className="w-7 shrink-0 space-y-1.5 p-1.5" style={{ backgroundColor: primary }}>
-        <span className="block h-1.5 w-4 rounded-full bg-white/70" />
-        {[0, 1, 2].map((i) => (
-          <span key={i} className="block h-1 w-4 rounded-full" style={{ backgroundColor: i === 0 ? accent : "rgba(255,255,255,0.35)" }} />
-        ))}
-      </div>
-      <div className="flex-1 space-y-1.5 p-1.5">
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="flex-1 p-1" style={{ backgroundColor: panel, borderRadius: radius, border: "1px solid rgba(15,23,42,0.08)" }}>
-              <span className="block h-1 w-5 rounded-full" style={{ backgroundColor: "rgba(15,23,42,0.18)" }} />
-              <span className="mt-1 block h-1.5 w-7 rounded-full" style={{ backgroundColor: i === 1 ? accent : primary }} />
-            </div>
-          ))}
-        </div>
-        <div className="flex items-end gap-1 p-1.5" style={{ backgroundColor: panel, borderRadius: radius, border: "1px solid rgba(15,23,42,0.08)" }}>
-          {[7, 11, 6, 13, 9, 15].map((h, i) => (
-            <span key={i} className="w-1.5 rounded-sm" style={{ height: `${h}px`, backgroundColor: i % 2 === 0 ? accent : `${accent}77` }} />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AdminBankingCreateTenant() {
   const nav = useNavigate();
   const templates = useQuery(api.bankingTenant.listTemplates);
@@ -165,6 +97,9 @@ export default function AdminBankingCreateTenant() {
     lifecycleStatus: "active" as string,
     primaryColor: "#0f172a",
     accentColor: "#0ea5e9",
+    themeMode: "light" as string,
+    surfaceColor: "#f8fafc",
+    radius: "0.75rem",
     features: {
       customerPortal: true, accounts: true, transfers: true, deposits: true,
       withdrawals: true, kyc: true, statements: true, notifications: true,
@@ -205,6 +140,9 @@ export default function AdminBankingCreateTenant() {
       plan: (tpl.plan ?? prev.plan) as string,
       primaryColor: tpl.primaryColor ?? prev.primaryColor,
       accentColor: tpl.accentColor ?? prev.accentColor,
+      themeMode: tpl.themeMode ?? prev.themeMode,
+      surfaceColor: tpl.surfaceColor ?? prev.surfaceColor,
+      radius: tpl.radius ?? prev.radius,
       features: tpl.features ? { ...prev.features, ...tpl.features } : prev.features,
     }));
     toast.success(`${tpl.name} kit applied — review the details below`);
@@ -245,6 +183,9 @@ export default function AdminBankingCreateTenant() {
           primaryColor: f.primaryColor || undefined,
           accentColor: f.accentColor || undefined,
           templateSlug: f.templateSlug || undefined,
+          themeMode: f.themeMode || undefined,
+          surfaceColor: f.surfaceColor || undefined,
+          radius: f.radius || undefined,
         });
         toast.success(`Banking tenant created: ${f.bankName} (${r.subdomain})`);
         nav(`/admin/tenants/${r.id}/banking`);
@@ -367,20 +308,7 @@ export default function AdminBankingCreateTenant() {
                           </span>
                         </div>
 
-                        <div className="mt-3 grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                              <MonitorSmartphone className="h-3 w-3" /> Customer app
-                            </p>
-                            <AppPreview tpl={tpl} />
-                          </div>
-                          <div className="space-y-1">
-                            <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-slate-400">
-                              <LayoutDashboard className="h-3 w-3" /> Admin console
-                            </p>
-                            <ConsolePreview tpl={tpl} />
-                          </div>
-                        </div>
+                        <TemplateSurfaces kit={tpl} className="mt-3" />
 
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">{tpl.currency}</span>
@@ -464,10 +392,33 @@ export default function AdminBankingCreateTenant() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Settings2 className="h-4 w-4 text-slate-400" /> Branding</div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white"><Settings2 className="h-4 w-4 text-slate-400" /> Branding & design kit</div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <Field label="Primary color"><input value={f.primaryColor} onChange={e => set("primaryColor", e.target.value)} placeholder="#0f172a" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
                 <Field label="Accent color"><input value={f.accentColor} onChange={e => set("accentColor", e.target.value)} placeholder="#0ea5e9" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></Field>
+                <Field label="Theme mode" hint="Applies to the customer banking app and the tenant admin console.">
+                  <select value={f.themeMode} onChange={e => set("themeMode", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                  </select>
+                </Field>
+                <Field label="Surface color" hint="Page background behind panels and cards. Inherited from the template when left as-is.">
+                  <div className="flex items-stretch gap-2">
+                    <input value={f.surfaceColor} onChange={e => set("surfaceColor", e.target.value)} placeholder="#f8fafc" className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-mono dark:bg-slate-800 dark:border-slate-700" />
+                    <input type="color" aria-label="Surface color swatch" value={/^#[0-9a-fA-F]{6}$/.test(f.surfaceColor) ? f.surfaceColor : "#f8fafc"} onChange={e => set("surfaceColor", e.target.value)} className="h-[42px] w-12 shrink-0 cursor-pointer rounded-xl border border-slate-200 bg-white p-1 dark:bg-slate-800 dark:border-slate-700" />
+                  </div>
+                </Field>
+                <Field label="Corner radius" hint="Softness of cards, inputs and buttons across both surfaces.">
+                  <select value={f.radius} onChange={e => set("radius", e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">
+                    {["0.25rem", "0.5rem", "0.75rem", "1rem", "1.25rem"].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Live preview</div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+                  <TemplateSurfaces kit={f} />
+                </div>
               </div>
             </div>
 
@@ -480,7 +431,7 @@ export default function AdminBankingCreateTenant() {
                   {Object.entries(f.features).map(([k, val]) => (
                     <label key={k} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs dark:bg-slate-800 dark:border-slate-700">
                       <input type="checkbox" checked={!!val} onChange={e => setF(p => ({ ...p, features: { ...p.features, [k]: e.target.checked } }))} />
-                      {k}
+                      {FEATURE_LABELS[k] ?? k}
                     </label>
                   ))}
                 </div>

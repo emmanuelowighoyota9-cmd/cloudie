@@ -564,6 +564,10 @@ export const createBankingTenant = mutation({
     accentColor: v.optional(v.string()),
     // Optional template to copy defaults from
     templateSlug: v.optional(v.string()),
+    // Design-kit overrides — win over the template so a kit can be tweaked at creation.
+    themeMode: v.optional(v.string()),
+    surfaceColor: v.optional(v.string()),
+    radius: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { adminId, admin } = await requireAdmin(ctx);
@@ -571,6 +575,11 @@ export const createBankingTenant = mutation({
 
     // Validations
     const sub = args.subdomain.trim().toLowerCase();
+    if (args.themeMode && !["light", "dark"].includes(args.themeMode)) throw new Error("INVALID_THEME_MODE: light|dark");
+    const surfaceOverride = args.surfaceColor
+      ? (args.surfaceColor.startsWith("#") ? args.surfaceColor : `#${args.surfaceColor}`)
+      : undefined;
+    if (surfaceOverride && !/^#[0-9a-fA-F]{6}$/.test(surfaceOverride)) throw new Error("INVALID_SURFACE_COLOR: #rrggbb");
     if (!/^[a-z][a-z0-9-]{2,60}$/.test(sub)) throw new Error("INVALID_SUBDOMAIN: 3-60 chars, lowercase, hyphens only");
     if (!/^[A-Z]{3}$/.test(args.currency)) throw new Error("INVALID_CURRENCY: 3-letter ISO code");
     if (args.plan && !VALID_PLANS.includes(args.plan as any)) throw new Error(`INVALID_PLAN: ${VALID_PLANS.join("|")}`);
@@ -596,8 +605,17 @@ export const createBankingTenant = mutation({
           ...templateBranding(tpl),
           primaryColor: args.primaryColor || tpl.primaryColor,
           accentColor: args.accentColor || tpl.accentColor,
+          themeMode: args.themeMode || tpl.themeMode || "light",
+          surfaceColor: surfaceOverride || tpl.surfaceColor,
+          radius: args.radius || tpl.radius || "0.75rem",
         }
-      : { primaryColor: args.primaryColor, accentColor: args.accentColor, themeMode: "light", radius: "0.75rem" };
+      : {
+          primaryColor: args.primaryColor,
+          accentColor: args.accentColor,
+          themeMode: args.themeMode || "light",
+          surfaceColor: surfaceOverride,
+          radius: args.radius || "0.75rem",
+        };
 
     const row = {
       ownerId: adminId,

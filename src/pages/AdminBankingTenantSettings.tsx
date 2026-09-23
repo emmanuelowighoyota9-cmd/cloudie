@@ -5,6 +5,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Building2, Globe, DollarSign, Landmark, ShieldCheck, Palette, Paintbrush, FileText, ArrowLeft } from "lucide-react";
+import { TemplateSurfaces } from "@/components/admin/BankingTemplatePreview";
 
 function Section({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
   return (
@@ -24,7 +25,19 @@ export default function AdminBankingTenantSettings() {
   const [busy, setBusy] = useState(false);
 
   const [general, setGeneral] = useState({ siteName: "", displayName: "", contactEmail: "", contactPhone: "", supportEmail: "", supportPhone: "", country: "", timezone: "", plan: "", currency: "" });
-  const [branding, setBranding] = useState({ primaryColor: "", accentColor: "", logo: "" });
+  const [branding, setBranding] = useState({
+    primaryColor: "",
+    accentColor: "",
+    logo: "",
+    themeMode: "light",
+    surfaceColor: "",
+    radius: "0.75rem",
+    tagline: "",
+    heroHeadline: "",
+    customerAppStyle: "",
+    adminConsoleStyle: "",
+    templateSlug: "",
+  });
   const [fees, setFees] = useState({ transferFeeMinor: "", withdrawalFeeMinor: "", depositFeeMinor: "", perTransactionLimitMinor: "", dailyTransferLimitMinor: "", dailyWithdrawalLimitMinor: "", minTransactionMinor: "" });
   const [accountsInfo] = useState("Account numbers are generated securely per tenant. Double-entry posts are immutable; use lifecycle/status controls for holds. No frontend balance is authoritative.");
 
@@ -43,7 +56,19 @@ export default function AdminBankingTenantSettings() {
       currency: (tenant as any).currency ?? "USD",
     });
     const b = (tenant as any).branding ?? {};
-    setBranding({ primaryColor: b.primaryColor ?? "", accentColor: b.accentColor ?? "", logo: b.logo ?? "" });
+    setBranding({
+      primaryColor: b.primaryColor ?? "",
+      accentColor: b.accentColor ?? "",
+      logo: b.logo ?? "",
+      themeMode: b.themeMode ?? "light",
+      surfaceColor: b.surfaceColor ?? "",
+      radius: b.radius ?? "0.75rem",
+      tagline: b.tagline ?? "",
+      heroHeadline: b.heroHeadline ?? "",
+      customerAppStyle: b.customerAppStyle ?? "",
+      adminConsoleStyle: b.adminConsoleStyle ?? "",
+      templateSlug: b.templateSlug ?? "",
+    });
   }, [tenant]);
 
   useEffect(() => {
@@ -73,8 +98,23 @@ export default function AdminBankingTenantSettings() {
   const saveBranding = async () => {
     setBusy(true);
     try {
-      await update({ tenantId: id, branding: { logo: branding.logo || undefined, primaryColor: branding.primaryColor || undefined, accentColor: branding.accentColor || undefined } as any });
-      toast.success("Branding saved");
+      await update({
+        tenantId: id,
+        branding: {
+          logo: branding.logo || undefined,
+          primaryColor: branding.primaryColor || undefined,
+          accentColor: branding.accentColor || undefined,
+          themeMode: branding.themeMode || undefined,
+          surfaceColor: branding.surfaceColor || undefined,
+          radius: branding.radius || undefined,
+          tagline: branding.tagline || undefined,
+          heroHeadline: branding.heroHeadline || undefined,
+          customerAppStyle: branding.customerAppStyle || undefined,
+          adminConsoleStyle: branding.adminConsoleStyle || undefined,
+          templateSlug: branding.templateSlug || undefined,
+        } as any,
+      });
+      toast.success("Design kit saved — both surfaces update on next render");
     } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
 
@@ -104,7 +144,7 @@ export default function AdminBankingTenantSettings() {
         <div className="grid sm:grid-cols-2 gap-4">
           <label className="space-y-1.5 text-sm"><span className="font-medium">Bank name</span><input value={general.siteName} onChange={e => setGeneral({ ...general, siteName: e.target.value })} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
           <label className="space-y-1.5 text-sm"><span className="font-medium">Display name</span><input value={general.displayName} onChange={e => setGeneral({ ...general, displayName: e.target.value })} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
-          <label className="space-y-1.5 text-sm"><span className="font-medium">Currency (ISO 413 code)</span><input value={general.currency} onChange={e => setGeneral({ ...general, currency: e.target.value.toUpperCase() })} placeholder="USD" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm"><span className="font-medium">Currency (ISO 4217 code)</span><input value={general.currency} onChange={e => setGeneral({ ...general, currency: e.target.value.toUpperCase() })} placeholder="USD" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
           <label className="space-y-1.5 text-sm"><span className="font-medium">Country</span><input value={general.country} onChange={e => setGeneral({ ...general, country: e.target.value })} placeholder="United States" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
           <label className="space-y-1.5 text-sm"><span className="font-medium">Timezone</span><input value={general.timezone} onChange={e => setGeneral({ ...general, timezone: e.target.value })} placeholder="America/New_York" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
           <label className="space-y-1.5 text-sm"><span className="font-medium">Plan</span><select value={general.plan} onChange={e => setGeneral({ ...general, plan: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"><option value="">(unchanged)</option>{["free","starter","pro","enterprise"].map(p=> <option key={p} value={p}>{p}</option>)}</select></label>
@@ -144,13 +184,33 @@ export default function AdminBankingTenantSettings() {
         <div className="text-sm text-slate-600 dark:text-slate-300">KYC states: submitted → under_review → approved/rejected/resubmission_required. Approval never auto-marked. Review: banks own adminOpenAccount/approve flows; Super Admin retains global KYC review via tenants:adminKycReview. Document uploads are stored via Convex storage with tenant-scoped authorization.</div>
       </Section>
 
-      <Section title="6. Branding — logo, primary brand, login & customer portal" icon={Palette}>
+      <Section title="6. Branding — design kit for the customer app & admin console" icon={Palette}>
         <div className="grid sm:grid-cols-3 gap-4">
-          <label className="space-y-1.5 text-sm"><span className="font-medium">Primary color</span><input value={branding.primaryColor} onChange={e => setBranding({ ...branding, primaryColor: e.target.value })} placeholder="#0f172a" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
-          <label className="space-y-1.5 text-sm"><span className="font-medium">Accent color</span><input value={branding.accentColor} onChange={e => setBranding({ ...branding, accentColor: e.target.value })} placeholder="#0ea5e9" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm"><span className="font-medium">Primary color</span><input value={branding.primaryColor} onChange={e => setBranding({ ...branding, primaryColor: e.target.value })} placeholder="#0f172a" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-mono dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm"><span className="font-medium">Accent color</span><input value={branding.accentColor} onChange={e => setBranding({ ...branding, accentColor: e.target.value })} placeholder="#0ea5e9" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-mono dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm"><span className="font-medium">Surface color</span><input value={branding.surfaceColor} onChange={e => setBranding({ ...branding, surfaceColor: e.target.value })} placeholder="#f8fafc" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-mono dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm"><span className="font-medium">Theme mode</span><select value={branding.themeMode} onChange={e => setBranding({ ...branding, themeMode: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+          <label className="space-y-1.5 text-sm"><span className="font-medium">Corner radius</span><select value={branding.radius} onChange={e => setBranding({ ...branding, radius: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700">{(["0.25rem", "0.5rem", "0.75rem", "1rem", "1.25rem"].includes(branding.radius) ? ["0.25rem", "0.5rem", "0.75rem", "1rem", "1.25rem"] : [branding.radius, "0.25rem", "0.5rem", "0.75rem", "1rem", "1.25rem"]).map(r => <option key={r} value={r}>{r}</option>)}</select></label>
           <label className="space-y-1.5 text-sm"><span className="font-medium">Logo URL</span><input value={branding.logo} onChange={e => setBranding({ ...branding, logo: e.target.value })} placeholder="https://…" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm sm:col-span-2"><span className="font-medium">Tagline</span><input value={branding.tagline} onChange={e => setBranding({ ...branding, tagline: e.target.value })} placeholder="Everyday banking that moves at the speed of you." className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm sm:col-span-3"><span className="font-medium">Hero headline</span><input value={branding.heroHeadline} onChange={e => setBranding({ ...branding, heroHeadline: e.target.value })} placeholder="Banking, reimagined for the everyday" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm sm:col-span-3"><span className="font-medium">Customer app style notes</span><input value={branding.customerAppStyle} onChange={e => setBranding({ ...branding, customerAppStyle: e.target.value })} placeholder="Neo-fintech: soft surfaces, card-first dashboard" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
+          <label className="space-y-1.5 text-sm sm:col-span-3"><span className="font-medium">Admin console style notes</span><input value={branding.adminConsoleStyle} onChange={e => setBranding({ ...branding, adminConsoleStyle: e.target.value })} placeholder="Airy analytics console: wide cards, live activity rail" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
         </div>
-        <button disabled={busy} onClick={saveBranding} className="rounded-xl bg-slate-900 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-50"><Paintbrush className="inline h-4 w-4 mr-1" /> Save branding</button>
+
+        <div className="space-y-1.5">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Live preview — customer app & admin console</div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/60">
+            <TemplateSurfaces kit={branding} />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs text-slate-400">
+            {branding.templateSlug ? <>Base kit: <span className="font-mono">{branding.templateSlug}</span> — edits above override the kit without discarding tenant data.</> : "No template kit applied — values below are the tenant's own."}
+          </div>
+          <button disabled={busy} onClick={saveBranding} className="rounded-xl bg-slate-900 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-50"><Paintbrush className="inline h-4 w-4 mr-1" /> Save design kit</button>
+        </div>
       </Section>
     </div>
   );
