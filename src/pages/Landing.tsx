@@ -73,9 +73,6 @@ export default function Landing() {
             <span className="text-lg font-bold text-foreground">Cloudie</span>
           </div>            <div className="flex items-center gap-2">
             <PwaInstallButton />
-            <Link to="/admin/tenants/banking">
-              <Button variant="ghost" size="sm">Banking tenants</Button>
-            </Link>
             <Link to="/auth">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>

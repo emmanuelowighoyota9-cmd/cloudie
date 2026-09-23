@@ -96,8 +96,7 @@ export function TenantGate({ children }: { children: React.ReactNode }) {
       <div className="min-h-[60vh] flex items-center justify-center p-8">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center max-w-md">
           <div className="text-sm font-semibold">Tenant not found</div>
-          <div className="text-xs text-slate-500 mt-1">No tenant is provisioned for {sub}.g0ki.com. Ask a Super Admin to provision it at /admin/tenants/new.</div>
-          <Link to="/admin/tenants/new" className="mt-3 inline-flex rounded-xl bg-slate-900 text-white px-4 py-2 text-sm">Provision tenant</Link>
+          <div className="text-xs text-slate-500 mt-1">No tenant is provisioned for {sub}.g0ki.com. Contact your platform administrator to provision it.</div>
         </div>
       </div>
     );

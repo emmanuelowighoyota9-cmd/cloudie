@@ -150,7 +150,6 @@ export default function SiteBanking() {
           <div className="flex gap-2 mt-2">
             <Link to={`/site/${id}`} className="text-xs rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">Public banking site</Link>
             <Link to={`/site/${id}/admin`} className="text-xs rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">Bank admin app</Link>
-            <Link to={`/admin/tenants/${id}/banking`} className="text-xs rounded-full bg-slate-900 text-white px-3 py-1">Super Admin → tenant banking</Link>
           </div>
         </div>
         <div className="text-xs text-slate-400">Customer onboarding · KYC · Accounts · Ledger-backed balances · Transfers · Statements</div>

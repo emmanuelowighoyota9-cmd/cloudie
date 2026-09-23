@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from "react-router";
+import { Link, useParams, useNavigate } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useMemo, useEffect } from "react";
@@ -41,7 +41,6 @@ export default function TenantBankingHost() {
           <div className="text-sm font-semibold">Banking tenant — no tenant context</div>
           <div className="text-xs text-slate-500 mt-2">Visit crestline-capitalfive.g0ki.com/banking or /t/crestline-capitalfive/banking.</div>
           <div className="mt-4 flex justify-center gap-2">
-            <Link to="/admin/tenants/banking" className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm">Banking tenants</Link>
             <Link to="/" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm">Home</Link>
           </div>
         </div>
@@ -57,8 +56,7 @@ export default function TenantBankingHost() {
       <div className="min-h-[60vh] flex items-center justify-center p-8">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center max-w-md">
           <div className="text-sm font-semibold">Tenant not found</div>
-          <div className="text-xs text-slate-500 mt-1">No tenant for {sub}.g0ki.com. Create it at /admin/tenants/new.</div>
-          <Link to="/admin/tenants/new" className="mt-3 inline-flex rounded-xl bg-slate-900 text-white px-4 py-2 text-sm">Create tenant</Link>
+          <div className="text-xs text-slate-500 mt-1">No tenant is provisioned for {sub}.g0ki.com. Contact your platform administrator to provision it.</div>
         </div>
       </div>
     );
