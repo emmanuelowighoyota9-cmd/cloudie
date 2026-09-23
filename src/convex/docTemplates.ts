@@ -998,6 +998,123 @@ export const adminPublishTemplateVersion = mutation({
   },
 });
 
+/** Admin: load a template (any status) with its editable schema + layout. */
+export const adminGetTemplate = query({
+  args: { templateId: v.id("documentTemplates") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const template = await ctx.db.get(args.templateId);
+    if (!template) return null;
+    return {
+      _id: template._id,
+      name: template.name,
+      slug: template.slug,
+      description: template.description ?? "",
+      documentType: template.documentType,
+      categoryLabel: categoryDef(template.documentType).label,
+      sensitivity: template.sensitivity ?? "standard",
+      requiredCredits: template.requiredCredits ?? 0,
+      supportedFormats: template.supportedFormats ?? ["png", "pdf"],
+      status: template.status ?? "draft",
+      currentVersion: template.currentVersion,
+      schema: template.schema ?? { fields: [] },
+      configuration: template.configuration ?? { pages: [] },
+    };
+  },
+});
+
+/** Admin: create a brand-new template with its first published version. */
+export const adminCreateTemplate = mutation({
+  args: {
+    name: v.string(),
+    slug: v.optional(v.string()),
+    documentType: v.string(),
+    description: v.optional(v.string()),
+    sensitivity: v.optional(v.string()),
+    requiredCredits: v.optional(v.number()),
+    supportedFormats: v.optional(v.array(v.string())),
+    schema: v.any(),
+    configuration: v.any(),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+
+    const name = sanitizeText(args.name.trim(), 80);
+    if (!name) throw new Error("A template name is required");
+
+    const known = CATEGORIES.some((c) => c.key === args.documentType);
+    if (!known) throw new Error(`Unknown category: ${args.documentType}`);
+
+    const issues = validateTemplateDefinition(args.schema, args.configuration);
+    if (issues.length > 0) {
+      throw new Error(issues.map((i) => `${i.field}: ${i.message}`).join("; ").slice(0, 400));
+    }
+
+    const slug = slugify(args.slug?.trim() || name);
+    const clash = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .first();
+    if (clash) throw new Error(`The slug "${slug}" is already taken`);
+
+    // A sensitive category can never be downgraded to standard: the forced
+    // DEMO watermark is a platform guarantee, not a per-template preference.
+    const forcedSensitive = categoryDef(args.documentType).sensitive;
+    const sensitivity = forcedSensitive ? "sensitive" : (args.sensitivity ?? "standard");
+    const requiredCredits = Math.max(0, Math.round(args.requiredCredits ?? 0));
+    const supportedFormats = (args.supportedFormats ?? ["png", "pdf"]).filter(
+      (f) => f === "png" || f === "pdf",
+    );
+    const now = Date.now();
+
+    const templateId = await ctx.db.insert("documentTemplates", {
+      documentType: args.documentType,
+      name,
+      slug,
+      description: sanitizeText(args.description?.trim() ?? "", 240),
+      renderer: "svg",
+      status: "active",
+      visibility: "public",
+      sensitivity,
+      requiredCredits,
+      supportedFormats: supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"],
+      schema: args.schema,
+      configuration: args.configuration,
+      createdById: adminId,
+      isActive: true,
+      currentVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("documentTemplateVersions", {
+      templateId,
+      version: 1,
+      title: name,
+      blocks: {
+        schema: args.schema,
+        configuration: args.configuration,
+        sensitivity,
+        requiredCredits,
+        supportedFormats: supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"],
+      } satisfies VersionBlocks,
+      pointsCost: requiredCredits,
+      createdById: adminId,
+      createdAt: now,
+    });
+
+    await auditLog(ctx, adminId, {
+      action: "DOCUMENT_TEMPLATE_CREATED",
+      resource: "documentTemplates",
+      resourceId: templateId,
+      after: { name, slug, documentType: args.documentType, requiredCredits },
+      reason: "Created a document template",
+    });
+
+    return { templateId, slug };
+  },
+});
+
 /** Admin: which templates are being used, and how much they earn. */
 export const adminDocumentStats = query({
   args: {},

@@ -1,7 +1,8 @@
+import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Archive, CheckCircle2, Coins, FileStack, Layers, PauseCircle, Share2 } from "lucide-react";
+import { Archive, CheckCircle2, Coins, FileStack, Layers, PauseCircle, Pencil, Plus, Share2 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
@@ -37,11 +38,19 @@ export default function AdminDocumentTemplates() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Document Templates</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Platform catalogue for SoftBaker document generation. Status changes are audited and take effect immediately.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Document Templates</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Platform catalogue for SoftBaker document generation. Build layouts visually, publish immutable versions,
+            and control what customers can generate.
+          </p>
+        </div>
+        <Button asChild className="gap-1.5">
+          <Link to="/admin/document-templates/new">
+            <Plus className="h-4 w-4" /> New template
+          </Link>
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -131,6 +140,11 @@ export default function AdminDocumentTemplates() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" asChild>
+                            <Link to={`/admin/document-templates/${template._id}/edit`}>
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </Link>
+                          </Button>
                           {template.status !== "active" ? (
                             <Button
                               size="sm"

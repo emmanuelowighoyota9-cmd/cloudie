@@ -298,6 +298,86 @@ export function isValidFieldId(id: unknown): id is string {
   return typeof id === "string" && /^[a-zA-Z][a-zA-Z0-9_]{0,40}$/.test(id);
 }
 
+/** Every element kind the renderer understands. */
+export const LAYOUT_ELEMENT_KINDS = [
+  "text",
+  "rect",
+  "line",
+  "image",
+  "qr",
+  "barcode",
+  "badge",
+] as const;
+
+/** Kinds whose content is meaningless without a field binding. */
+const BOUND_ELEMENT_KINDS: readonly string[] = ["image", "qr", "barcode", "badge"];
+
+/** Smallest box each kind can be drawn in and still be legible/usable. */
+const MIN_KIND_EXTENT: Record<string, { w: number; h: number }> = {
+  text: { w: 0, h: 6 },
+  // 1×1 is deliberate: hairline dividers are drawn as 1px filled panels.
+  rect: { w: 1, h: 1 },
+  line: { w: 1, h: 1 },
+  image: { w: 8, h: 8 },
+  qr: { w: 32, h: 32 },
+  barcode: { w: 48, h: 16 },
+  badge: { w: 24, h: 14 },
+};
+
+/** Slack allowed at the page edge before a layout is reported as clipped. */
+const PAGE_SLACK = 2;
+
+function isNum(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Page-space extent of an element, using the same defaults as the renderer.
+ *
+ * Auto-width text reports `w: 0` because its width depends on real content at
+ * render time — only its anchor point is statically checkable.
+ */
+function elementExtent(el: LayoutElement): { x: number; y: number; w: number; h: number } | null {
+  switch (el.kind) {
+    case "rect":
+    case "image":
+      if (!isNum(el.x) || !isNum(el.y) || !isNum(el.w) || !isNum(el.h)) return null;
+      return { x: el.x, y: el.y, w: el.w, h: el.h };
+    case "qr":
+      if (!isNum(el.x) || !isNum(el.y) || !isNum(el.size)) return null;
+      return { x: el.x, y: el.y, w: el.size, h: el.size };
+    case "barcode":
+      if (!isNum(el.x) || !isNum(el.y)) return null;
+      return { x: el.x, y: el.y, w: isNum(el.w) ? el.w : 240, h: isNum(el.h) ? el.h : 60 };
+    case "badge": {
+      if (!isNum(el.x) || !isNum(el.y)) return null;
+      const size = isNum(el.size) ? el.size : 13;
+      return { x: el.x, y: el.y, w: isNum(el.w) ? el.w : 90, h: isNum(el.h) ? el.h : size + 16 };
+    }
+    case "line":
+      if (!isNum(el.x1) || !isNum(el.y1) || !isNum(el.x2) || !isNum(el.y2)) return null;
+      return {
+        x: Math.min(el.x1, el.x2),
+        y: Math.min(el.y1, el.y2),
+        w: Math.max(Math.abs(el.x2 - el.x1), 1),
+        h: Math.max(Math.abs(el.y2 - el.y1), 1),
+      };
+    case "text": {
+      if (!isNum(el.x) || !isNum(el.y)) return null;
+      const size = isNum(el.size) ? el.size : 16;
+      const lines = Math.max(1, String(el.text ?? "x").split("\n").length);
+      const lineHeight = isNum(el.lineHeight) ? el.lineHeight : size * 1.35;
+      // Ascenders reach roughly 0.8em above the baseline, not the full em box.
+      return {
+        x: el.x,
+        y: el.y - size * 0.8,
+        w: isNum(el.w) ? el.w : 0,
+        h: lineHeight * (lines - 1) + size * 1.05,
+      };
+    }
+  }
+}
+
 export function validateTemplateDefinition(schema: unknown, configuration: unknown): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const s = schema as TemplateSchema | null;
@@ -331,16 +411,56 @@ export function validateTemplateDefinition(schema: unknown, configuration: unkno
       return;
     }
     if (p.elements.length > ENGINE_LIMITS.maxElementsPerPage) issues.push({ field: "configuration", message: `Page ${i + 1} has too many elements` });
-    for (const el of p.elements) {
-      if (!el || typeof el !== "object" || typeof (el as { kind?: unknown }).kind !== "string") {
+    for (const raw of p.elements) {
+      if (!raw || typeof raw !== "object" || typeof (raw as { kind?: unknown }).kind !== "string") {
         issues.push({ field: "configuration", message: `Page ${i + 1} has a malformed element` });
         continue;
       }
-      const bind = (el as { bind?: unknown }).bind;
+      const el = raw as LayoutElement;
+      if (!(LAYOUT_ELEMENT_KINDS as readonly string[]).includes(el.kind)) {
+        issues.push({ field: "configuration", message: `Page ${i + 1} has an unknown element kind "${String(el.kind)}"` });
+        continue;
+      }
+
+      const bind = (raw as { bind?: unknown }).bind;
       if (typeof bind === "string" && bind.length > 0 && !seen.has(bind)) {
         // Bindings on image/qr/badge/status must reference real fields; text may
         // bind to any field, otherwise it must exist.
         issues.push({ field: "configuration", message: `Element binds to unknown field "${bind}" on page ${i + 1}` });
+      } else if (BOUND_ELEMENT_KINDS.includes(el.kind) && (typeof bind !== "string" || bind.length === 0)) {
+        // An unbound image/QR/barcode/badge would render as a permanent
+        // placeholder, so reject it rather than ship a broken template.
+        issues.push({
+          field: "configuration",
+          message: `Page ${i + 1}: ${el.kind} element needs a bound field`,
+        });
+      }
+
+      const extent = elementExtent(el);
+      if (!extent) {
+        issues.push({ field: "configuration", message: `Page ${i + 1}: ${el.kind} element has invalid geometry` });
+        continue;
+      }
+      const min = MIN_KIND_EXTENT[el.kind];
+      if (extent.w < min.w || extent.h < min.h) {
+        issues.push({
+          field: "configuration",
+          message: `Page ${i + 1}: ${el.kind} is too small (min ${min.w}×${min.h})`,
+        });
+        continue;
+      }
+      // Anything outside the page is clipped away at export, so an off-page
+      // element is a silent loss of content rather than a cosmetic problem.
+      if (
+        extent.x < -PAGE_SLACK ||
+        extent.y < -PAGE_SLACK ||
+        extent.x + extent.w > p.width + PAGE_SLACK ||
+        extent.y + extent.h > p.height + PAGE_SLACK
+      ) {
+        issues.push({
+          field: "configuration",
+          message: `Page ${i + 1}: ${el.kind} is outside the page and would be clipped`,
+        });
       }
     }
   });
