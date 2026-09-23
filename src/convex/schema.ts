@@ -895,18 +895,37 @@ const schema = defineSchema(
       .index("by_storage", ["storageId"]),
 
     // ─── Document engine: templates → versions → render → stored bytes ───
+    // Schema-driven SoftBaker templates. The renderer consumes a frozen
+    // version snapshot (documentTemplateVersions.blocks) so a generated
+    // document never changes appearance when the live template is edited.
     documentTemplates: defineTable({
-      documentType: v.string(),
+      documentType: v.string(), // category key (banking_ui, flight_itinerary, …)
       name: v.string(),
+      slug: v.string(),
+      description: v.optional(v.string()),
+      thumbnailUrl: v.optional(v.string()),
+      renderer: v.optional(v.string()), // "svg"
+      status: v.optional(v.string()), // draft | active | disabled | archived
+      visibility: v.optional(v.string()), // public | unlisted | private
+      // "sensitive" templates ALWAYS render a forced DEMO/SAMPLE watermark —
+      // the flag is server-owned and never part of user-editable layout.
+      sensitivity: v.optional(v.string()), // standard | sensitive
+      requiredCredits: v.optional(v.number()), // points charged per PDF render
+      supportedFormats: v.optional(v.array(v.string())), // ["png", "pdf"]
+      schema: v.optional(v.any()), // { fields: FieldDef[] }
+      configuration: v.optional(v.any()), // { pages: TemplatePage[], background, renderScale }
       createdById: v.id("users"),
       tenantId: v.optional(v.id("tenantSites")),
       isActive: v.boolean(),
       currentVersion: v.number(),
+      archivedAt: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
       .index("by_type", ["documentType"])
-      .index("by_creator", ["createdById", "createdAt"]),
+      .index("by_creator", ["createdById", "createdAt"])
+      .index("by_slug", ["slug"])
+      .index("by_status", ["status"]),
 
     documentTemplateVersions: defineTable({
       templateId: v.id("documentTemplates"),
@@ -919,21 +938,50 @@ const schema = defineSchema(
     })
       .index("by_template", ["templateId", "version"]),
 
+    // Generated documents: DRAFT → RENDERING → COMPLETED → SHARED →
+    // REVOKED / EXPIRED / ARCHIVED, with FAILED + RETRY for errors.
+    // Shares use an unguessable 131-bit slug — never sequential IDs.
     renderedDocuments: defineTable({
       templateVersionId: v.id("documentTemplateVersions"),
+      templateId: v.optional(v.id("documentTemplates")),
+      templateVersion: v.optional(v.number()),
       ownerId: v.id("users"),
       tenantId: v.optional(v.id("tenantSites")),
-      storageFileId: v.id("storageFiles"),
+      title: v.optional(v.string()),
+      status: v.optional(v.string()),
+      inputData: v.optional(v.any()),
+      // Artifacts: legacy field kept for compatibility; image = PNG/JPEG page
+      // raster; pdf = server-assembled PDF. All live in storageFiles.
+      storageFileId: v.optional(v.id("storageFiles")),
+      imageFileId: v.optional(v.id("storageFiles")),
+      pdfFileId: v.optional(v.id("storageFiles")),
       fileName: v.string(),
       pageCount: v.number(),
       sizeBytes: v.number(),
+      publicSlug: v.optional(v.string()),
+      isPublic: v.optional(v.boolean()),
+      expiresAt: v.optional(v.number()),
+      revokedAt: v.optional(v.number()),
+      viewCount: v.optional(v.number()),
+      lastViewedAt: v.optional(v.number()),
+      failureReason: v.optional(v.string()),
       metadata: v.optional(v.any()),
-      pointsCost: v.number(),
+      pointsCost: v.number(), // total charged so far (ledger is authoritative)
       createdAt: v.number(),
+      updatedAt: v.optional(v.number()),
     })
       .index("by_owner", ["ownerId", "createdAt"])
       .index("by_tenant", ["tenantId"])
-      .index("by_version", ["templateVersionId", "createdAt"]),
+      .index("by_version", ["templateVersionId", "createdAt"])
+      .index("by_publicSlug", ["publicSlug"])
+      .index("by_status", ["status"]),
+
+    // ─── Rate limiting (no Redis: fixed windows persisted in Convex) ───
+    rateLimitBuckets: defineTable({
+      key: v.string(), // "public_view:<slug>" | "render:<userId>" | …
+      windowStart: v.number(),
+      count: v.number(),
+    }).index("by_key_and_window", ["key", "windowStart"]),
 
     // ─── Cloudie email engine ───
     emailMessages: defineTable({
