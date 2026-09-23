@@ -31,7 +31,7 @@ export default function EmailCampaign() {
     setLoading(true);
     try {
       await createCampaign({ ...form, recipients });
-      toast.success("Campaign sent!");
+      toast.success("Campaign queued — delivery status appears in the admin email log.");
       setForm({ subject: "", senderName: "", content: "", recipientsText: "" });
     } catch (err) { toast.error(err instanceof Error ? err.message : "Failed"); } finally { setLoading(false); }
   };

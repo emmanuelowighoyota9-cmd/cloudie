@@ -23,6 +23,7 @@ import {
   Gavel,
   LayoutDashboard,
   LogOut,
+  Mail,
   MapPin,
   Moon,
   Package,
@@ -58,7 +59,8 @@ const NAV = [
   { to: "/admin/system-health", label: "System Health", icon: Activity },
   { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign },
   { to: "/admin/payments", label: "Payment Providers", icon: CreditCard },
-  { to: "/admin/settings", label: "Settings", icon: Settings },
+  { to: "/admin/settings/email", label: "Email Settings", icon: Mail },
+  { to: "/admin/settings", label: "Settings", icon: Settings, exact: true },
 ];
 
 function GlobalSearch() {

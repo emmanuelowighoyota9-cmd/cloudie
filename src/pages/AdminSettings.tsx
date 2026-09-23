@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { KeyRound, Plus, Settings2 } from "lucide-react";
+import { KeyRound, Mail, Plus, Settings2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { AdminPageHeader, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 
 type SettingRow = { _id: string; key: string; value: unknown; category: string; updatedAt: number };
@@ -104,6 +105,23 @@ export default function AdminSettings() {
         title="Platform Settings"
         description="Non-secret runtime configuration. Every change is audited (SETTING_CHANGED). Credentials live in environment configuration only."
       />
+
+      <Link to="/admin/settings/email" className="block">
+        <Card className="rounded-xl border-blue-200 bg-blue-50/40 shadow-sm transition-colors hover:border-blue-300 dark:border-blue-900 dark:bg-blue-950/20 dark:hover:border-blue-800">
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white dark:bg-slate-800">
+              <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Email → Elastic Email</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Provider status, encrypted API key, sender identity, test delivery, and email logs.
+              </p>
+            </div>
+            <Settings2 className="h-4 w-4 shrink-0 text-slate-400" />
+          </CardContent>
+        </Card>
+      </Link>
 
       {settings === undefined ? (
         <AdminSkeleton rows={6} />

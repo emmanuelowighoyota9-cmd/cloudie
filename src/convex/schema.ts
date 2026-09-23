@@ -915,12 +915,15 @@ const schema = defineSchema(
       .index("by_tenant", ["tenantId"])
       .index("by_version", ["templateVersionId", "createdAt"]),
 
-    // ─── Cloudie email engine (no third-party SaaS) ───
+    // ─── Cloudie email engine ───
     emailMessages: defineTable({
       to: v.string(),
       fromName: v.string(),
       subject: v.string(),
       textBody: v.string(),
+      htmlBody: v.optional(v.string()),
+      /** Delivery provider that carried the message (e.g. elastic_email). */
+      provider: v.optional(v.string()),
       templateKey: v.optional(v.string()),
       userId: v.optional(v.id("users")),
       campaignId: v.optional(v.id("emailCampaigns")),
@@ -944,7 +947,8 @@ const schema = defineSchema(
     })
       .index("by_status", ["status", "nextAttemptAt"])
       .index("by_campaign", ["campaignId"])
-      .index("by_to", ["to", "createdAt"]),
+      .index("by_to", ["to", "createdAt"])
+      .index("by_createdAt", ["createdAt"]),
 
     emailDeliveryLogs: defineTable({
       messageId: v.id("emailMessages"),
@@ -965,6 +969,47 @@ const schema = defineSchema(
       reason: v.optional(v.string()),
       createdAt: v.number(),
     }).index("by_email", ["email"]),
+
+    // ─── Transactional email provider configuration (admin-managed) ───
+    // Singleton row (single-tenant platform): the Elastic Email connection is
+    // configured from the Admin Dashboard, not from per-deployment env files.
+    // The API key is stored ONLY here and ONLY as an AES-256-GCM payload — it
+    // is never returned to the browser, logged, or placed in a URL.
+    emailSettings: defineTable({
+      provider: v.string(), // "elastic_email"
+      enabled: v.boolean(),
+      /** Encrypted API key: "v1:<iv>.<tag>.<ciphertext>" (base64 components). */
+      apiKeyEncrypted: v.optional(v.string()),
+      /** Masked placeholder for the admin UI (bullets only — no key material). */
+      apiKeyMasked: v.optional(v.string()),
+      /** Where the live key actually comes from: dashboard | environment | none. */
+      apiKeySource: v.optional(v.string()),
+      fromEmail: v.string(),
+      fromName: v.string(),
+      replyToEmail: v.optional(v.string()),
+      testRecipient: v.optional(v.string()),
+      /** not_configured | disabled | unverified | connected | invalid_key | sender_error | provider_error */
+      status: v.string(),
+      statusMessage: v.optional(v.string()),
+      lastVerifiedAt: v.optional(v.number()),
+      lastTestAt: v.optional(v.number()),
+      lastTestStatus: v.optional(v.string()),
+      lastTestRecipient: v.optional(v.string()),
+      lastTestMessage: v.optional(v.string()),
+      lastError: v.optional(v.string()),
+      lastErrorAt: v.optional(v.number()),
+      updatedBy: v.optional(v.id("users")),
+      updatedAt: v.number(),
+    }).index("by_provider", ["provider"]),
+
+    // Server-side key material (never exposed by any query). Used only to
+    // bootstrap the email-credential encryption key when the deployment has no
+    // EMAIL_CREDENTIAL_ENCRYPTION_KEY configured.
+    systemSecrets: defineTable({
+      name: v.string(),
+      value: v.string(),
+      createdAt: v.number(),
+    }).index("by_name", ["name"]),
 
     // ─── Cloudie job system (Postgres-equivalent: Convex-owned DB queue) ───
     cloudieJobs: defineTable({

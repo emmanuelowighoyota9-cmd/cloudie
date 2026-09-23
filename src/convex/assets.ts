@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { effectivePointsCost } from "./pricing";
 
 export const upload = mutation({
@@ -83,6 +84,25 @@ export const createCampaign = mutation({
 
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
+    if (args.recipients.length === 0) throw new Error("Add at least one recipient");
+    if (args.recipients.length > 200) {
+      throw new Error("MAX_RECIPIENTS: up to 200 recipients per campaign batch");
+    }
+
+    // Centralized email service gate: never charge for mail that cannot be
+    // delivered, and never silently drop it either.
+    const readiness: { ready: boolean; enabled: boolean; apiKeyConfigured: boolean; senderConfigured: boolean; statusMessage: string | null } =
+      await ctx.runQuery(internal.emailAdmin.getDispatchReadiness, {});
+    if (!readiness.ready) {
+      const reason = !readiness.apiKeyConfigured
+        ? "Elastic Email is not configured yet."
+        : !readiness.senderConfigured
+          ? "The sender email and name are not configured yet."
+          : !readiness.enabled
+            ? "Transactional email is currently disabled by the platform administrator."
+            : "Transactional email is currently unavailable.";
+      throw new Error(`EMAIL_UNAVAILABLE: ${reason} No points were charged.`);
+    }
 
     // Per-recipient price is admin-configurable (service: email_per_recipient)
     const perRecipient = await effectivePointsCost(ctx, "email_per_recipient", 10);
@@ -103,30 +123,39 @@ export const createCampaign = mutation({
       createdAt: Date.now(),
     });
 
-    const status = args.scheduledAt ? "scheduled" : "sent";
-
+    const now = Date.now();
     const campaignId = await ctx.db.insert("emailCampaigns", {
       userId,
       subject: args.subject,
       senderName: args.senderName,
       content: args.content,
       recipients: args.recipients,
-      status: status as "scheduled" | "sent",
+      status: "scheduled",
       scheduledAt: args.scheduledAt,
-      sentAt: status === "sent" ? Date.now() : undefined,
       totalRecipients: args.recipients.length,
       pointsCost,
-      createdAt: Date.now(),
+      createdAt: now,
     });
 
     for (const email of args.recipients) {
       await ctx.db.insert("emailDeliveries", {
         campaignId,
         recipientEmail: email,
-        status: status === "sent" ? "sent" : "pending",
-        sentAt: status === "sent" ? Date.now() : undefined,
+        status: "pending",
       });
     }
+
+    // Hand the batch to the centralized email service, which renders, sanitizes,
+    // delivers through Elastic Email, and flips each delivery row to its real
+    // outcome. Future-dated campaigns are queued at their scheduled time.
+    const delay = args.scheduledAt && args.scheduledAt > now ? args.scheduledAt - now : 0;
+    await ctx.scheduler.runAfter(delay, internal.email.enqueueCampaign, {
+      campaignId,
+      subject: args.subject,
+      userId,
+      contentHtml: args.content,
+      recipients: args.recipients.slice(0, 200),
+    });
 
     return campaignId;
   },
