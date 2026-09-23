@@ -10,6 +10,7 @@ import {
   Eye, EyeOff, CheckCircle, XCircle, Clock, AlertTriangle,
   ArrowLeft, PiggyBank, Briefcase, Bell, BarChart3, Palette, Wallet,
 } from "lucide-react";
+import { bankTheme } from "@/lib/tenantBankTheme";
 
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -70,8 +71,13 @@ export default function SiteAdmin() {
   const [settingsForm, setSettingsForm] = useState({ siteName: "", contactEmail: "", primaryColor: "", accentColor: "" });
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  const primary = site?.branding?.primaryColor || "#003087";
-  const accent = site?.branding?.accentColor || "#0050a0";
+  // Design kit from the banking template applied at tenancy creation. The
+  // console keeps readable light surfaces even for dark templates — the palette,
+  // sidebar treatment and style language carry the template instead.
+  const theme = bankTheme(site?.branding);
+  const primary = theme.primary;
+  const accent = theme.accent;
+  const consoleSurface = theme.isDark ? "#EEF2F7" : theme.surface;
 
   if (site === undefined) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
@@ -182,7 +188,7 @@ export default function SiteAdmin() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen flex" style={{ backgroundColor: consoleSurface }}>
       {/* ── Sidebar ── */}
       <aside className="hidden lg:flex lg:w-64 flex-col text-white" style={{ backgroundColor: primary }}>
         <div className="p-5 border-b border-white/10">
@@ -196,6 +202,11 @@ export default function SiteAdmin() {
             <div>
               <p className="text-sm font-bold leading-none">{site.siteName}</p>
               <p className="text-[10px] text-white/50 mt-0.5">Admin Panel</p>
+              {theme.adminConsoleStyle && (
+                <p className="text-[10px] text-white/40 mt-0.5 max-w-[150px] truncate" title={theme.adminConsoleStyle}>
+                  {theme.adminConsoleStyle}
+                </p>
+              )}
             </div>
           </div>
         </div>

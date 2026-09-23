@@ -28,6 +28,299 @@ export const listTemplates = query({
   },
 });
 
+/**
+ * ─── Modern banking templates ───────────────────────────────────────────────
+ *
+ * Each template is a complete modern banking kit: it shapes BOTH surfaces a
+ * tenant gets — the customer banking app (theming, copy, surfaces) and the
+ * tenant admin console (density/label language) — plus the operating defaults
+ * (currency, plan, region, support, feature set). Provisioning a tenant applies
+ * the whole kit in one step instead of hand-painting colours afterwards.
+ */
+export type BankingTemplateFeatures = {
+  customerPortal: boolean;
+  accounts: boolean;
+  transfers: boolean;
+  deposits: boolean;
+  withdrawals: boolean;
+  kyc: boolean;
+  statements: boolean;
+  notifications: boolean;
+  auditLogging: boolean;
+  realtime: boolean;
+};
+
+export type BankingTemplateKit = {
+  name: string;
+  slug: string;
+  bankName: string;
+  displayName: string;
+  currency: string;
+  country: string;
+  timezone: string;
+  supportEmail: string;
+  supportPhone: string;
+  plan: string;
+  primaryColor: string;
+  accentColor: string;
+  themeMode: "light" | "dark";
+  surfaceColor: string;
+  radius: string;
+  tagline: string;
+  heroHeadline: string;
+  customerAppStyle: string;
+  adminConsoleStyle: string;
+  description: string;
+  features: BankingTemplateFeatures;
+};
+
+const ALL_FEATURES_ON: BankingTemplateFeatures = {
+  customerPortal: true,
+  accounts: true,
+  transfers: true,
+  deposits: true,
+  withdrawals: true,
+  kyc: true,
+  statements: true,
+  notifications: true,
+  auditLogging: true,
+  realtime: true,
+};
+
+export const MODERN_BANKING_TEMPLATES: BankingTemplateKit[] = [
+  {
+    name: "Aurora Digital Bank",
+    slug: "aurora-digital",
+    bankName: "Aurora Digital Bank",
+    displayName: "Aurora Digital Bank",
+    currency: "USD",
+    country: "United States",
+    timezone: "America/New_York",
+    supportEmail: "support@aurora-digital.g0ki.com",
+    supportPhone: "+1 (800) 220-7788",
+    plan: "pro",
+    primaryColor: "#0B4F6C",
+    accentColor: "#0FA3A3",
+    themeMode: "light",
+    surfaceColor: "#F5F9FB",
+    radius: "1rem",
+    tagline: "Everyday banking that moves at the speed of you.",
+    heroHeadline: "Banking, reimagined for the everyday",
+    customerAppStyle: "Neo-fintech: soft surfaces, mint accents, card-first dashboard",
+    adminConsoleStyle: "Airy analytics console: wide cards, live activity rail",
+    description:
+      "Modern consumer fintech look. Bright surfaces, high-contrast cards and a mobile-first account experience for mass-market digital banking.",
+    features: { ...ALL_FEATURES_ON },
+  },
+  {
+    name: "Meridian Private Bank",
+    slug: "meridian-private",
+    bankName: "Meridian Private Bank",
+    displayName: "Meridian Private Bank",
+    currency: "GBP",
+    country: "United Kingdom",
+    timezone: "Europe/London",
+    supportEmail: "concierge@meridian-private.g0ki.com",
+    supportPhone: "+44 20 7946 0812",
+    plan: "enterprise",
+    primaryColor: "#0B1220",
+    accentColor: "#C8A24A",
+    themeMode: "dark",
+    surfaceColor: "#0F172A",
+    radius: "0.5rem",
+    tagline: "Discretion, precision and wealth intelligence — in one private desk.",
+    heroHeadline: "Private banking, engineered for scale",
+    customerAppStyle: "Dark luxury: champagne accents, dense statements, concierge entry",
+    adminConsoleStyle: "Operator console: high-density tables, risk-first layout",
+    description:
+      "Dark, premium wealth-management theme suited to private banking, family-office and concierge-service tenants.",
+    features: { ...ALL_FEATURES_ON },
+  },
+  {
+    name: "Northwind Credit Union",
+    slug: "northwind-union",
+    bankName: "Northwind Credit Union",
+    displayName: "Northwind Credit Union",
+    currency: "USD",
+    country: "United States",
+    timezone: "America/Chicago",
+    supportEmail: "members@northwind-union.g0ki.com",
+    supportPhone: "+1 (877) 445-2210",
+    plan: "starter",
+    primaryColor: "#14532D",
+    accentColor: "#D97706",
+    themeMode: "light",
+    surfaceColor: "#F3F8F4",
+    radius: "1.25rem",
+    tagline: "Member-owned banking with a human voice.",
+    heroHeadline: "Banking owned by its members",
+    customerAppStyle: "Friendly member portal: rounded cards, plain-language guidance",
+    adminConsoleStyle: "Guided service desk: queue-first inbox, member timeline",
+    description:
+      "Approachable community/credit-union theme with generous rounding, warm accents and member-support oriented admin tooling.",
+    features: { ...ALL_FEATURES_ON, realtime: false },
+  },
+  {
+    name: "Crestline Capital",
+    slug: "crestline-capital",
+    bankName: "Crestline Capital",
+    displayName: "Crestline Capital",
+    currency: "USD",
+    country: "United States",
+    timezone: "America/New_York",
+    supportEmail: "support@crestline-capital.g0ki.com",
+    supportPhone: "+1 (800) 000-0000",
+    plan: "enterprise",
+    primaryColor: "#0F172A",
+    accentColor: "#0EA5E9",
+    themeMode: "light",
+    surfaceColor: "#F8FAFC",
+    radius: "0.75rem",
+    tagline: "Institutional-grade banking infrastructure.",
+    heroHeadline: "Banking infrastructure for modern institutions",
+    customerAppStyle: "Institutional: restrained navy/sky palette, ledger-first statements",
+    adminConsoleStyle: "Supervisory console: compliance and ledger controls front and centre",
+    description:
+      "The reference enterprise look: navy and sky, restrained type, compliance-first console. Default template for institutional tenants.",
+    features: { ...ALL_FEATURES_ON },
+  },
+];
+
+/**
+ * Idempotently create/refresh the modern template catalog. Safe to call any
+ * number of times; never touches custom templates an operator created.
+ */
+export const ensureModernBankingTemplates = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    let created = 0;
+    let updated = 0;
+    for (const kit of MODERN_BANKING_TEMPLATES) {
+      const existing = await ctx.db
+        .query("bankingTemplates")
+        .withIndex("by_slug", (q) => q.eq("slug", kit.slug))
+        .first();
+      const row = {
+        name: kit.name,
+        bankName: kit.bankName,
+        displayName: kit.displayName,
+        slug: kit.slug,
+        currency: kit.currency,
+        country: kit.country,
+        timezone: kit.timezone,
+        supportEmail: kit.supportEmail,
+        supportPhone: kit.supportPhone,
+        plan: kit.plan,
+        primaryColor: kit.primaryColor,
+        accentColor: kit.accentColor,
+        themeMode: kit.themeMode,
+        surfaceColor: kit.surfaceColor,
+        radius: kit.radius,
+        tagline: kit.tagline,
+        heroHeadline: kit.heroHeadline,
+        customerAppStyle: kit.customerAppStyle,
+        adminConsoleStyle: kit.adminConsoleStyle,
+        description: kit.description,
+        features: kit.features,
+      };
+      if (existing) {
+        await ctx.db.patch(existing._id, { ...row, updatedAt: now });
+        updated++;
+      } else {
+        await ctx.db.insert("bankingTemplates", { ...row, createdAt: now, updatedAt: now });
+        created++;
+      }
+    }
+    return { created, updated, total: MODERN_BANKING_TEMPLATES.length };
+  },
+});
+
+/** Admin-triggered catalog refresh (button on the tenancy creation screen). */
+export const seedModernBankingTemplates = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { adminId, admin } = await requireAdmin(ctx);
+    const now = Date.now();
+    let created = 0;
+    for (const kit of MODERN_BANKING_TEMPLATES) {
+      const existing = await ctx.db
+        .query("bankingTemplates")
+        .withIndex("by_slug", (q) => q.eq("slug", kit.slug))
+        .first();
+      if (existing) continue;
+      await ctx.db.insert("bankingTemplates", {
+        name: kit.name,
+        bankName: kit.bankName,
+        displayName: kit.displayName,
+        slug: kit.slug,
+        currency: kit.currency,
+        country: kit.country,
+        timezone: kit.timezone,
+        supportEmail: kit.supportEmail,
+        supportPhone: kit.supportPhone,
+        plan: kit.plan,
+        primaryColor: kit.primaryColor,
+        accentColor: kit.accentColor,
+        themeMode: kit.themeMode,
+        surfaceColor: kit.surfaceColor,
+        radius: kit.radius,
+        tagline: kit.tagline,
+        heroHeadline: kit.heroHeadline,
+        customerAppStyle: kit.customerAppStyle,
+        adminConsoleStyle: kit.adminConsoleStyle,
+        description: kit.description,
+        features: kit.features,
+        createdBy: adminId,
+        createdAt: now,
+        updatedAt: now,
+      });
+      created++;
+    }
+    await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TEMPLATES_SEEDED", "bankingTemplate", "modern-catalog", null, { created });
+    return { created };
+  },
+});
+
+/** Resolve a template by slug, falling back to the newest template available. */
+async function resolveTemplate(ctx: QueryCtx | MutationCtx, slug?: string) {
+  if (slug) {
+    const found = await ctx.db
+      .query("bankingTemplates")
+      .withIndex("by_slug", (q) => q.eq("slug", slug))
+      .first();
+    if (found) return found;
+  }
+  return await ctx.db.query("bankingTemplates").withIndex("by_name").first();
+}
+
+/** The design kit + operating defaults a template contributes to a tenant. */
+function templateBranding(tpl: {
+  slug?: string;
+  primaryColor?: string;
+  accentColor?: string;
+  themeMode?: string;
+  surfaceColor?: string;
+  radius?: string;
+  tagline?: string;
+  heroHeadline?: string;
+  customerAppStyle?: string;
+  adminConsoleStyle?: string;
+}) {
+  return {
+    primaryColor: tpl.primaryColor,
+    accentColor: tpl.accentColor,
+    themeMode: tpl.themeMode ?? "light",
+    surfaceColor: tpl.surfaceColor,
+    radius: tpl.radius ?? "0.75rem",
+    tagline: tpl.tagline,
+    heroHeadline: tpl.heroHeadline,
+    customerAppStyle: tpl.customerAppStyle,
+    adminConsoleStyle: tpl.adminConsoleStyle,
+    templateSlug: tpl.slug,
+  };
+}
+
 export const upsertTemplate = mutation({
   args: {
     name: v.string(),
@@ -42,6 +335,15 @@ export const upsertTemplate = mutation({
     plan: v.optional(v.string()),
     primaryColor: v.optional(v.string()),
     accentColor: v.optional(v.string()),
+    // Modern design kit (customer app + admin console)
+    themeMode: v.optional(v.string()),
+    surfaceColor: v.optional(v.string()),
+    radius: v.optional(v.string()),
+    tagline: v.optional(v.string()),
+    heroHeadline: v.optional(v.string()),
+    customerAppStyle: v.optional(v.string()),
+    adminConsoleStyle: v.optional(v.string()),
+    description: v.optional(v.string()),
     features: v.object({
       customerPortal: v.boolean(),
       accounts: v.boolean(),
@@ -57,43 +359,79 @@ export const upsertTemplate = mutation({
   },
   handler: async (ctx, args) => {
     const { adminId, admin } = await requireAdmin(ctx);
-    const existing = await ctx.db.query("bankingTemplates").withIndex("by_name", q => q.eq("name", args.name)).first();
     const now = Date.now();
+    const design = {
+      themeMode: args.themeMode,
+      surfaceColor: args.surfaceColor,
+      radius: args.radius,
+      tagline: args.tagline,
+      heroHeadline: args.heroHeadline,
+      customerAppStyle: args.customerAppStyle,
+      adminConsoleStyle: args.adminConsoleStyle,
+      description: args.description,
+    };
+    // Keyed by slug when supplied, so a custom kit cannot fork the catalog.
+    const existing = args.slug
+      ? await ctx.db.query("bankingTemplates").withIndex("by_slug", q => q.eq("slug", args.slug)).first()
+      : await ctx.db.query("bankingTemplates").withIndex("by_name", q => q.eq("name", args.name)).first();
     if (existing) {
-      await ctx.db.patch(existing._id, { bankName: args.bankName, displayName: args.displayName, slug: args.slug, currency: args.currency, country: args.country, timezone: args.timezone, supportEmail: args.supportEmail, supportPhone: args.supportPhone, plan: args.plan, primaryColor: args.primaryColor, accentColor: args.accentColor, features: args.features, updatedAt: now });
+      await ctx.db.patch(existing._id, { name: args.name, bankName: args.bankName, displayName: args.displayName, slug: args.slug, currency: args.currency, country: args.country, timezone: args.timezone, supportEmail: args.supportEmail, supportPhone: args.supportPhone, plan: args.plan, primaryColor: args.primaryColor, accentColor: args.accentColor, ...design, features: args.features, updatedAt: now });
       await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TEMPLATE_UPDATED", "bankingTemplate", existing._id, null, args);
       return { id: existing._id, created: false };
     }
-    const id = await ctx.db.insert("bankingTemplates", { name: args.name, bankName: args.bankName, displayName: args.displayName, slug: args.slug, currency: args.currency, country: args.country, timezone: args.timezone, supportEmail: args.supportEmail, supportPhone: args.supportPhone, plan: args.plan, primaryColor: args.primaryColor, accentColor: args.accentColor, features: args.features, createdBy: adminId, createdAt: now, updatedAt: now });
+    const id = await ctx.db.insert("bankingTemplates", { name: args.name, bankName: args.bankName, displayName: args.displayName, slug: args.slug, currency: args.currency, country: args.country, timezone: args.timezone, supportEmail: args.supportEmail, supportPhone: args.supportPhone, plan: args.plan, primaryColor: args.primaryColor, accentColor: args.accentColor, ...design, features: args.features, createdBy: adminId, createdAt: now, updatedAt: now });
     await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TEMPLATE_CREATED", "bankingTemplate", id, null, args);
     return { id, created: true };
   },
 });
 
+/**
+ * Legacy entry point kept for existing callers: ensures the full modern
+ * catalog exists (Crestline Capital included) without forking duplicates.
+ */
 export const ensureCrestlineTemplate = internalMutation({
   args: {},
   handler: async (ctx) => {
     const now = Date.now();
-    const targetName = "Crestline Capital Banking Template";
-    const existing = await ctx.db.query("bankingTemplates").withIndex("by_name", q => q.eq("name", targetName)).first();
-    const data = {
-      name: targetName,
-      bankName: "Crestline Capital",
-      displayName: "Crestline Capital",
-      slug: "crestline-capital",
-      currency: "USD",
-      country: "United States",
-      timezone: "America/New_York",
-      supportEmail: "support@crestline-capital.g0ki.com",
-      supportPhone: "+1 (800) 000-0000",
-      plan: "enterprise" as const,
-      primaryColor: "#0f172a",
-      accentColor: "#0ea5e9",
-      features: { customerPortal: true, accounts: true, transfers: true, deposits: true, withdrawals: true, kyc: true, statements: true, notifications: true, auditLogging: true, realtime: true },
-    };
-    if (existing) await ctx.db.patch(existing._id, { ...data, updatedAt: now });
-    else await ctx.db.insert("bankingTemplates", { ...data, createdAt: now, updatedAt: now });
-    return { ok: true };
+    let created = 0;
+    let updated = 0;
+    for (const kit of MODERN_BANKING_TEMPLATES) {
+      const existing = await ctx.db
+        .query("bankingTemplates")
+        .withIndex("by_slug", (q) => q.eq("slug", kit.slug))
+        .first();
+      const row = {
+        name: kit.name,
+        bankName: kit.bankName,
+        displayName: kit.displayName,
+        slug: kit.slug,
+        currency: kit.currency,
+        country: kit.country,
+        timezone: kit.timezone,
+        supportEmail: kit.supportEmail,
+        supportPhone: kit.supportPhone,
+        plan: kit.plan,
+        primaryColor: kit.primaryColor,
+        accentColor: kit.accentColor,
+        themeMode: kit.themeMode,
+        surfaceColor: kit.surfaceColor,
+        radius: kit.radius,
+        tagline: kit.tagline,
+        heroHeadline: kit.heroHeadline,
+        customerAppStyle: kit.customerAppStyle,
+        adminConsoleStyle: kit.adminConsoleStyle,
+        description: kit.description,
+        features: kit.features,
+      };
+      if (existing) {
+        await ctx.db.patch(existing._id, { ...row, updatedAt: now });
+        updated++;
+      } else {
+        await ctx.db.insert("bankingTemplates", { ...row, createdAt: now, updatedAt: now });
+        created++;
+      }
+    }
+    return { ok: true, created, updated };
   },
 });
 
@@ -150,6 +488,14 @@ export const createAdminTenant = mutation({
       if (existingSlug) throw new Error("DUPLICATE_SLUG");
     }
     const isActive = !["disabled", "suspended", "archived", "draft"].includes(status);
+    const tpl = isBanking ? await resolveTemplate(ctx, args.templateSlug) : null;
+    const branding = tpl
+      ? {
+          ...templateBranding(tpl),
+          primaryColor: args.primaryColor || tpl.primaryColor,
+          accentColor: args.accentColor || tpl.accentColor,
+        }
+      : { primaryColor: args.primaryColor, accentColor: args.accentColor, themeMode: "light", radius: "0.75rem" };
     const row: Record<string, unknown> = {
       ownerId: adminId,
       siteName: args.tenantName.trim(),
@@ -162,12 +508,12 @@ export const createAdminTenant = mutation({
       timezone: args.timezone?.trim(),
       supportEmail: (args.supportEmail ?? args.contactEmail).trim(),
       supportPhone: (args.supportPhone ?? args.contactPhone ?? "").trim(),
-      plan: (args.plan ?? (isBanking ? "enterprise" : "starter")).toString(),
+      plan: (args.plan ?? tpl?.plan ?? (isBanking ? "enterprise" : "starter")).toString(),
       lifecycleStatus: status,
       bankingEnabled: isBanking ? true : false,
       isActive,
       renewalDate: now + 365 * 24 * 3600 * 1000,
-      branding: { primaryColor: args.primaryColor, accentColor: args.accentColor },
+      branding,
       contactEmail: args.contactEmail.trim(),
       contactPhone: args.contactPhone?.trim(),
       createdAt: now,
@@ -180,9 +526,16 @@ export const createAdminTenant = mutation({
         // store feature flags as template-like record linked to tenant for explainability
         await ctx.db.insert("auditLogs", { actorId: adminId, actorEmail: admin.email, action: "BANKING_FEATURES_CONFIGURED", resource: "tenantSite", resourceId: tenantId, after: args.bankingFeatures, createdAt: now });
       }
-      if (args.templateSlug) {
-        const tpl = await ctx.db.query("bankingTemplates").withIndex("by_slug", q => q.eq("slug", args.templateSlug!)).first();
-        if (tpl) await ctx.db.patch(tenantId, { branding: { primaryColor: tpl.primaryColor, accentColor: tpl.accentColor } } as any);
+      if (tpl) {
+        await ctx.db.insert("auditLogs", {
+          actorId: adminId,
+          actorEmail: admin.email,
+          action: "BANKING_TEMPLATE_APPLIED",
+          resource: "tenantSite",
+          resourceId: tenantId,
+          after: { slug: tpl.slug, name: tpl.name, themeMode: branding.themeMode, customerAppStyle: tpl.customerAppStyle, adminConsoleStyle: tpl.adminConsoleStyle },
+          createdAt: now,
+        });
       }
     }
     const suffix = isBanking ? "/banking" : "";
@@ -233,44 +586,52 @@ export const createBankingTenant = mutation({
     }
 
     const isActive = status !== "disabled" && status !== "archived" && status !== "draft" && status !== "suspended";
+
+    // Apply the modern banking kit (customer app + admin console design, plus
+    // region/plan/support defaults) before anything is written, so the tenant is
+    // themed correctly from its first render. Explicit form values always win.
+    const tpl = await resolveTemplate(ctx, args.templateSlug);
+    const branding = tpl
+      ? {
+          ...templateBranding(tpl),
+          primaryColor: args.primaryColor || tpl.primaryColor,
+          accentColor: args.accentColor || tpl.accentColor,
+        }
+      : { primaryColor: args.primaryColor, accentColor: args.accentColor, themeMode: "light", radius: "0.75rem" };
+
     const row = {
       ownerId: adminId,
       siteName: args.bankName.trim(),
-      displayName: (args.displayName ?? args.bankName).trim(),
+      displayName: (args.displayName ?? tpl?.displayName ?? args.bankName).trim(),
       slug: args.slug?.trim().toLowerCase() || sub,
       subdomain: sub,
       siteType: "bank" as const,
       currency: args.currency,
-      country: args.country?.trim(),
-      timezone: args.timezone?.trim(),
-      supportEmail: (args.supportEmail ?? args.contactEmail).trim(),
-      supportPhone: (args.supportPhone ?? args.contactPhone ?? "").trim(),
-      plan: (args.plan ?? "enterprise").toString(),
+      country: args.country?.trim() || tpl?.country,
+      timezone: args.timezone?.trim() || tpl?.timezone,
+      supportEmail: (args.supportEmail ?? tpl?.supportEmail ?? args.contactEmail).trim(),
+      supportPhone: (args.supportPhone ?? tpl?.supportPhone ?? args.contactPhone ?? "").trim(),
+      plan: (args.plan ?? tpl?.plan ?? "enterprise").toString(),
       lifecycleStatus: status,
       bankingEnabled: true,
       isActive,
       renewalDate: now + 365 * 24 * 3600 * 1000,
-      branding: { primaryColor: args.primaryColor, accentColor: args.accentColor },
+      branding,
       contactEmail: args.contactEmail.trim(),
       contactPhone: args.contactPhone?.trim(),
       createdAt: now,
     } as any;
 
     const tenantId = await ctx.db.insert("tenantSites", row);
-    await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TENANT_CREATED", "tenantSite", tenantId, null, row);
+    await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TENANT_CREATED", "tenantSite", tenantId, null, {
+      ...row,
+      templateApplied: tpl ? { slug: tpl.slug, name: tpl.name, customerAppStyle: tpl.customerAppStyle, adminConsoleStyle: tpl.adminConsoleStyle } : null,
+    });
 
     // Seed default fee/limits row (auditable)
     await ctx.db.insert("bankingFeeConfig", { tenantId, transferFeeMinor: 0, withdrawalFeeMinor: 0, currency: args.currency, updatedBy: adminId, updatedAt: now });
 
-    // Optional: copy template branding if templateSlug
-    if (args.templateSlug) {
-      const tpl = await ctx.db.query("bankingTemplates").withIndex("by_slug", q => q.eq("slug", args.templateSlug!)).first();
-      if (tpl) {
-        await ctx.db.patch(tenantId, { branding: { primaryColor: tpl.primaryColor, accentColor: tpl.accentColor } } as any);
-      }
-    }
-
-    return { id: tenantId, subdomain: sub };
+    return { id: tenantId, subdomain: sub, templateApplied: tpl?.slug ?? null };
   },
 });
 
@@ -287,7 +648,21 @@ export const updateBankingTenant = mutation({
     currency: v.optional(v.string()),
     country: v.optional(v.string()),
     timezone: v.optional(v.string()),
-    branding: v.optional(v.object({ logo: v.optional(v.string()), primaryColor: v.optional(v.string()), accentColor: v.optional(v.string()) })),
+    branding: v.optional(v.object({
+      logo: v.optional(v.string()),
+      primaryColor: v.optional(v.string()),
+      accentColor: v.optional(v.string()),
+      // Design kit (customer app + admin console) — optional so partial saves
+      // never wipe the kit applied from a banking template.
+      themeMode: v.optional(v.string()),
+      surfaceColor: v.optional(v.string()),
+      radius: v.optional(v.string()),
+      tagline: v.optional(v.string()),
+      heroHeadline: v.optional(v.string()),
+      customerAppStyle: v.optional(v.string()),
+      adminConsoleStyle: v.optional(v.string()),
+      templateSlug: v.optional(v.string()),
+    })),
     // Financial config (audited)
     feeConfig: v.optional(v.object({
       transferFeeMinor: v.optional(v.number()),
@@ -311,7 +686,8 @@ export const updateBankingTenant = mutation({
       const val = access(key);
       if (val !== undefined) patch[key] = typeof val === "string" ? val.trim() : val;
     }
-    if (args.branding) patch.branding = args.branding;
+    // Merge so editing one field (e.g. logo) keeps the rest of the design kit.
+    if (args.branding) patch.branding = { ...((tenant as any).branding ?? {}), ...args.branding };
     if (Object.keys(patch).length) await ctx.db.patch(args.tenantId, patch);
     await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TENANT_UPDATED", "tenantSite", args.tenantId, before, patch);
 
@@ -330,6 +706,56 @@ export const updateBankingTenant = mutation({
       }
     }
     return { success: true };
+  },
+});
+
+/**
+ * Super Admin: apply a modern banking template kit to an existing tenant.
+ *
+ * Creation always applies a kit, but tenants provisioned before the catalog (or
+ * ones being rebranded) need a way to adopt one. The kit themes both surfaces —
+ * the customer banking app and the tenant admin console — and can optionally
+ * pull across the template's operating defaults (region, plan, support contacts).
+ * The logo and any field the template leaves unset are preserved.
+ */
+export const applyBankingTemplateToTenant = mutation({
+  args: {
+    tenantId: v.id("tenantSites"),
+    templateSlug: v.string(),
+    applyOperatingDefaults: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { adminId, admin } = await requireAdmin(ctx);
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.siteType !== "bank") throw new Error("TENANT_NOT_FOUND");
+    const tpl = await resolveTemplate(ctx, args.templateSlug);
+    if (!tpl) throw new Error(`TEMPLATE_NOT_FOUND: ${args.templateSlug}`);
+    const now = Date.now();
+    const before = { branding: (tenant as any).branding ?? {}, plan: (tenant as any).plan };
+
+    const kit = templateBranding(tpl);
+    const branding: Record<string, unknown> = { ...((tenant as any).branding ?? {}) };
+    for (const [k, val] of Object.entries(kit)) if (val !== undefined) branding[k] = val;
+
+    const patch: Record<string, unknown> = { branding };
+    if (args.applyOperatingDefaults) {
+      if (tpl.plan) patch.plan = tpl.plan;
+      if (tpl.country) patch.country = tpl.country;
+      if (tpl.timezone) patch.timezone = tpl.timezone;
+      if (tpl.supportEmail) patch.supportEmail = tpl.supportEmail;
+    }
+    await ctx.db.patch(args.tenantId, patch as any);
+    await toAudit(ctx as MutationCtx, adminId, admin.email, "BANKING_TEMPLATE_APPLIED", "tenantSite", args.tenantId, before, {
+      templateSlug: tpl.slug,
+      kit,
+      operatingDefaultsApplied: !!args.applyOperatingDefaults,
+    });
+
+    return {
+      template: { slug: tpl.slug, name: tpl.name, customerAppStyle: tpl.customerAppStyle, adminConsoleStyle: tpl.adminConsoleStyle },
+      branding,
+      appliedAt: now,
+    };
   },
 });
 

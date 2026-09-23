@@ -4,6 +4,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Building2, LogIn, UserPlus, Landmark, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
+import { bankTheme, bankThemeVars } from "@/lib/tenantBankTheme";
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -21,8 +22,9 @@ export function useTenantSite() {
 export function SiteLayout({ children, active, authenticated }: LayoutProps) {
   const { site } = useTenantSite();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const primary = site?.branding?.primaryColor || "#003087";
-  const accent = site?.branding?.accentColor || "#0050a0";
+  // Design kit applied from the banking template chosen at tenancy creation.
+  const theme = bankTheme(site?.branding);
+  const { primary, accent, isDark, surface, panel, border, text } = theme;
 
   if (!site) {
     return (
@@ -46,7 +48,10 @@ export function SiteLayout({ children, active, authenticated }: LayoutProps) {
       ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div
+      className="min-h-screen flex flex-col"
+      style={{ backgroundColor: surface, color: text, ...bankThemeVars(theme) }}
+    >
       {/* ── Top Bar ── */}
       <nav className="text-white shadow-lg" style={{ backgroundColor: primary }}>
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -160,38 +165,42 @@ export function SiteLayout({ children, active, authenticated }: LayoutProps) {
       <main className="flex-1">{children}</main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-gray-200 bg-white">
+      <footer style={{ backgroundColor: panel, borderTop: `1px solid ${border}` }}>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8">
           <div className="grid gap-8 sm:grid-cols-3">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <Landmark className="h-5 w-5" style={{ color: primary }} />
-                <span className="font-bold text-gray-900">{site.siteName}</span>
+                <Landmark className="h-5 w-5" style={{ color: accent }} />
+                <span className="font-bold" style={{ color: text }}>{site.siteName}</span>
               </div>
-              <p className="text-sm text-gray-500">
-                {site.siteType === "bank"
-                  ? "Secure digital banking for the modern world."
-                  : "Smart investment platform for your financial future."}
+              <p className="text-sm" style={{ color: theme.muted }}>
+                {theme.tagline ??
+                  (site.siteType === "bank"
+                    ? "Secure digital banking for the modern world."
+                    : "Smart investment platform for your financial future.")}
               </p>
             </div>
             <div>
-              <h4 className="font-semibold text-gray-900 text-sm mb-3">Quick Links</h4>
+              <h4 className="text-sm font-semibold mb-3" style={{ color: text }}>Quick Links</h4>
               <div className="space-y-2">
-                <Link to={`/site/${site._id}`} className="block text-sm text-gray-500 hover:text-gray-900">Home</Link>
-                <Link to={`/site/${site._id}/services`} className="block text-sm text-gray-500 hover:text-gray-900">Services</Link>
-                <Link to={`/site/${site._id}/contact`} className="block text-sm text-gray-500 hover:text-gray-900">Contact</Link>
+                <Link to={`/site/${site._id}`} className="block text-sm hover:underline" style={{ color: theme.muted }}>Home</Link>
+                <Link to={`/site/${site._id}/services`} className="block text-sm hover:underline" style={{ color: theme.muted }}>Services</Link>
+                <Link to={`/site/${site._id}/contact`} className="block text-sm hover:underline" style={{ color: theme.muted }}>Contact</Link>
               </div>
             </div>
             <div>
-              <h4 className="font-semibold text-gray-900 text-sm mb-3">Contact</h4>
-              <div className="space-y-1 text-sm text-gray-500">
+              <h4 className="text-sm font-semibold mb-3" style={{ color: text }}>Contact</h4>
+              <div className="space-y-1 text-sm" style={{ color: theme.muted }}>
                 {site.contactEmail && <p>{site.contactEmail}</p>}
                 {site.contactPhone && <p>{site.contactPhone}</p>}
                 <p className="mt-2">Member FDIC · Equal Housing Lender</p>
               </div>
             </div>
           </div>
-          <div className="mt-8 border-t border-gray-100 pt-4 text-center text-xs text-gray-400">
+          <div
+            className="mt-8 pt-4 text-center text-xs"
+            style={{ color: theme.muted, borderTop: `1px solid ${border}` }}
+          >
             © {new Date().getFullYear()} {site.siteName}. All rights reserved. Powered by Cloudie.
           </div>
         </div>

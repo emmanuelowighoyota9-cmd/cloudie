@@ -4,14 +4,16 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@//convex/_generated/dataModel";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ShieldCheck, Landmark, CreditCard, ArrowRight, Lock, Eye, Zap, Globe } from "lucide-react";
+import { bankTheme } from "@/lib/tenantBankTheme";
 
 export default function SiteLanding() {
   const { siteId } = useParams<{ siteId: string }>();
   const site = useQuery(api.tenants.publicGet, siteId ? { id: siteId as Id<"tenantSites"> } : "skip");
   const stats = useQuery(api.tenants.publicStats, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
 
-  const primary = site?.branding?.primaryColor || "#003087";
-  const accent = site?.branding?.accentColor || "#0050a0";
+  // Design kit from the banking template applied at tenancy creation.
+  const theme = bankTheme(site?.branding);
+  const { primary, accent, text, muted, panel, border, radius } = theme;
 
   if (site === undefined) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
@@ -56,15 +58,14 @@ export default function SiteLanding() {
               <ShieldCheck className="h-4 w-4" />
               {site.siteType === "bank" ? "FDIC Insured" : "SEC Registered"}
             </div>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight">
-              Banking
-              <br />
-              <span style={{ color: accent }}>Reimagined</span>
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight max-w-2xl">
+              {theme.heroHeadline ?? (site.siteType === "bank" ? "Banking, reimagined" : "Investing, simplified")}
             </h1>
             <p className="mt-6 text-lg text-white/80 max-w-xl leading-relaxed">
-              {site.siteType === "bank"
-                ? "Experience seamless digital banking with real-time transfers, smart account management, and enterprise-grade security — all from one platform."
-                : "Access professional investment tools, portfolio management, and real-time market data designed for modern investors."}
+              {theme.tagline ??
+                (site.siteType === "bank"
+                  ? "Experience seamless digital banking with real-time transfers, smart account management, and enterprise-grade security — all from one platform."
+                  : "Access professional investment tools, portfolio management, and real-time market data designed for modern investors.")}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
@@ -87,24 +88,24 @@ export default function SiteLanding() {
 
       {/* ── Stats Bar ── */}
       {stats && stats.totalAccounts > 0 && (
-        <section className="bg-white border-b border-gray-200">
+        <section style={{ backgroundColor: panel, borderBottom: `1px solid ${border}` }}>
           <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
               <div>
-                <p className="text-2xl font-bold" style={{ color: primary }}>{stats.totalAccounts}</p>
-                <p className="text-sm text-gray-500">Active Accounts</p>
+                <p className="text-2xl font-bold" style={{ color: accent }}>{stats.totalAccounts}</p>
+                <p className="text-sm" style={{ color: muted }}>Active Accounts</p>
               </div>
               <div>
-                <p className="text-2xl font-bold" style={{ color: primary }}>${stats.totalBalance.toLocaleString()}</p>
-                <p className="text-sm text-gray-500">Total Balance</p>
+                <p className="text-2xl font-bold" style={{ color: accent }}>${stats.totalBalance.toLocaleString()}</p>
+                <p className="text-sm" style={{ color: muted }}>Total Balance</p>
               </div>
               <div>
-                <p className="text-2xl font-bold" style={{ color: primary }}>{stats.checking + stats.savings}</p>
-                <p className="text-sm text-gray-500">Deposit Accounts</p>
+                <p className="text-2xl font-bold" style={{ color: accent }}>{stats.checking + stats.savings}</p>
+                <p className="text-sm" style={{ color: muted }}>Deposit Accounts</p>
               </div>
               <div>
-                <p className="text-2xl font-bold" style={{ color: primary }}>{stats.credit}</p>
-                <p className="text-sm text-gray-500">Credit Accounts</p>
+                <p className="text-2xl font-bold" style={{ color: accent }}>{stats.credit}</p>
+                <p className="text-sm" style={{ color: muted }}>Credit Accounts</p>
               </div>
             </div>
           </div>
@@ -112,12 +113,12 @@ export default function SiteLanding() {
       )}
 
       {/* ── Features ── */}
-      <section className="py-20">
+      <section className="py-20" style={{ backgroundColor: theme.surface }}>
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900">Why Choose {site.siteName}?</h2>
-            <p className="mt-3 text-gray-500 max-w-lg mx-auto">
-              Built for the way you bank today. Fast, secure, and always accessible.
+            <h2 className="text-3xl font-bold" style={{ color: text }}>Why Choose {site.siteName}?</h2>
+            <p className="mt-3 max-w-lg mx-auto" style={{ color: muted }}>
+              {theme.customerAppStyle ?? "Built for the way you bank today. Fast, secure, and always accessible."}
             </p>
           </div>
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
@@ -129,12 +130,16 @@ export default function SiteLanding() {
               { icon: Lock, title: "KYC & Compliance", desc: "Streamlined identity verification that meets regulatory requirements without the hassle." },
               { icon: Globe, title: "Anywhere Access", desc: "Fully responsive web platform that works beautifully on desktop, tablet, and mobile." },
             ].map((f) => (
-              <div key={f.title} className="group rounded-2xl border border-gray-200 bg-white p-6 hover:shadow-lg transition-all duration-300 hover:border-gray-300">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: `${primary}10` }}>
-                  <f.icon className="h-6 w-6" style={{ color: primary }} />
+              <div
+                key={f.title}
+                className="group p-6 transition-all duration-300 hover:shadow-lg"
+                style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl" style={{ backgroundColor: theme.accentSoft }}>
+                  <f.icon className="h-6 w-6" style={{ color: accent }} />
                 </div>
-                <h3 className="mt-4 font-bold text-gray-900">{f.title}</h3>
-                <p className="mt-2 text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+                <h3 className="mt-4 font-bold" style={{ color: text }}>{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed" style={{ color: muted }}>{f.desc}</p>
               </div>
             ))}
           </div>
@@ -142,10 +147,10 @@ export default function SiteLanding() {
       </section>
 
       {/* ── CTA ── */}
-      <section className="py-16" style={{ backgroundColor: `${primary}08` }}>
+      <section className="py-16" style={{ backgroundColor: theme.isDark ? theme.panel : theme.accentSoft }}>
         <div className="mx-auto max-w-3xl px-4 sm:px-6 text-center">
-          <h2 className="text-3xl font-bold text-gray-900">Ready to Get Started?</h2>
-          <p className="mt-3 text-gray-500">Open your account in minutes. No paperwork, no waiting.</p>
+          <h2 className="text-3xl font-bold" style={{ color: text }}>Ready to Get Started?</h2>
+          <p className="mt-3" style={{ color: muted }}>Open your account in minutes. No paperwork, no waiting.</p>
           <div className="mt-8 flex justify-center gap-4">
             <Link
               to={`/site/${site._id}/signup`}

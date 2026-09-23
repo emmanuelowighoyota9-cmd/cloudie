@@ -260,11 +260,21 @@ const schema = defineSchema(
       bankingEnabled: v.optional(v.boolean()),
       isActive: v.boolean(),
       renewalDate: v.optional(v.number()),
+      // Branding + design kit applied from the template used at creation time.
       branding: v.optional(
         v.object({
           logo: v.optional(v.string()),
           primaryColor: v.optional(v.string()),
           accentColor: v.optional(v.string()),
+          /** "light" | "dark" design mode for the customer app + admin console. */
+          themeMode: v.optional(v.string()),
+          surfaceColor: v.optional(v.string()),
+          radius: v.optional(v.string()),
+          tagline: v.optional(v.string()),
+          heroHeadline: v.optional(v.string()),
+          customerAppStyle: v.optional(v.string()),
+          adminConsoleStyle: v.optional(v.string()),
+          templateSlug: v.optional(v.string()),
         }),
       ),
       contactEmail: v.optional(v.string()),
@@ -512,6 +522,16 @@ const schema = defineSchema(
       plan: v.optional(v.string()),
       primaryColor: v.optional(v.string()),
       accentColor: v.optional(v.string()),
+      // ─── Modern design kit (applied to the tenant's customer app + admin console) ───
+      /** "light" | "dark" */
+      themeMode: v.optional(v.string()),
+      surfaceColor: v.optional(v.string()),
+      radius: v.optional(v.string()),
+      tagline: v.optional(v.string()),
+      heroHeadline: v.optional(v.string()),
+      customerAppStyle: v.optional(v.string()),
+      adminConsoleStyle: v.optional(v.string()),
+      description: v.optional(v.string()),
       features: v.object({
         customerPortal: v.boolean(),
         accounts: v.boolean(),
