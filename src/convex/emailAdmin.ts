@@ -3,7 +3,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { auditLog, requireAdmin } from "./adminApi";
-import { MASKED_SECRET, PROVIDER, envApiKeyName, maskEmail } from "./emailShared";
+import { MASKED_SECRET, PROVIDER, envApiKeyName, envSmtpPassword, maskEmail } from "./emailShared";
 
 /**
  * Server-side store for the admin-managed transactional email provider
@@ -46,6 +46,16 @@ function keyStatus(doc: { apiKeyEncrypted?: string } | null) {
   return { source: "none" as const, configured: false, envVar: null };
 }
 
+/** Same contract as {@link keyStatus}, for the SMTP relay password. */
+function smtpPasswordStatus(doc: { smtpPasswordEncrypted?: string } | null) {
+  const env = envSmtpPassword();
+  if (env) return { source: "environment" as const, configured: true, envVar: env.name };
+  if (doc?.smtpPasswordEncrypted) return { source: "dashboard" as const, configured: true, envVar: null };
+  return { source: "none" as const, configured: false, envVar: null };
+}
+
+const SMTP_DEFAULTS = { host: "smtp.elasticemail.com", port: 2525 };
+
 // ─── Admin reads ────────────────────────────────────────────────────────────
 
 /**
@@ -58,14 +68,20 @@ export const getEmailSettings = query({
     await requireAdmin(ctx);
     const doc = await loadSettingsDoc(ctx);
     const key = keyStatus(doc ?? null);
+    const smtpPassword = smtpPasswordStatus(doc ?? null);
     const platformName = await ctx.db
       .query("adminSettings")
       .withIndex("by_key", (q) => q.eq("key", "platform_name"))
       .first();
 
     const enabled = doc?.enabled ?? false;
+    const transport = doc?.transport === "smtp" ? "smtp" : "api";
+    // Readiness depends on the active transport: whichever credential carries
+    // the mail is the one that has to be present.
+    const activeConfigured =
+      transport === "smtp" ? !!(doc?.smtpHost && doc?.smtpPort) && smtpPassword.configured : key.configured;
     // "Connected" is only ever claimed after a real server-side verification.
-    const status: EmailStatus = !key.configured
+    const status: EmailStatus = !activeConfigured
       ? "not_configured"
       : !enabled
         ? "disabled"
@@ -75,9 +91,18 @@ export const getEmailSettings = query({
       provider: PROVIDER,
       providerLabel: "Elastic Email",
       enabled,
+      transport,
       apiKeyConfigured: key.configured,
       apiKeySource: key.source,
       apiKeyEnvVar: key.envVar,
+      smtpHost: doc?.smtpHost ?? SMTP_DEFAULTS.host,
+      smtpPort: doc?.smtpPort ?? SMTP_DEFAULTS.port,
+      smtpSecure: doc?.smtpSecure ?? false,
+      smtpUsername: doc?.smtpUsername ?? "",
+      smtpPasswordConfigured: smtpPassword.configured,
+      smtpPasswordSource: smtpPassword.source,
+      smtpPasswordEnvVar: smtpPassword.envVar,
+      smtpPasswordMasked: smtpPassword.configured ? MASKED_SECRET : "",
       /** Bullets only — never any part of the stored secret. */
       apiKeyMasked: key.configured ? MASKED_SECRET : "",
       fromEmail: doc?.fromEmail ?? "",
@@ -176,14 +201,22 @@ export const getConfigForSend = internalQuery({
     const doc = await loadSettingsDoc(ctx);
     if (!doc) return null;
     const key = keyStatus(doc);
+    const smtpPassword = smtpPasswordStatus(doc);
     const platformName = await ctx.db
       .query("adminSettings")
       .withIndex("by_key", (q) => q.eq("key", "platform_name"))
       .first();
     return {
       enabled: doc.enabled,
+      transport: doc.transport ?? "api",
       apiKeyEncrypted: doc.apiKeyEncrypted ?? null,
       apiKeySource: key.source,
+      smtpHost: doc.smtpHost ?? null,
+      smtpPort: doc.smtpPort ?? null,
+      smtpSecure: doc.smtpSecure ?? false,
+      smtpUsername: doc.smtpUsername ?? null,
+      smtpPasswordEncrypted: doc.smtpPasswordEncrypted ?? null,
+      smtpPasswordSource: smtpPassword.source,
       fromEmail: doc.fromEmail,
       fromName: doc.fromName,
       replyToEmail: doc.replyToEmail ?? null,
@@ -199,14 +232,22 @@ export const getDispatchReadiness = internalQuery({
   handler: async (ctx) => {
     const doc = await loadSettingsDoc(ctx);
     const key = keyStatus(doc ?? null);
+    const smtpPassword = smtpPasswordStatus(doc ?? null);
+    const transport = doc?.transport === "smtp" ? "smtp" : "api";
+    const credentialConfigured =
+      transport === "smtp"
+        ? !!(doc?.smtpHost ?? "").trim() && !!(doc?.smtpPort ?? 0) && !!doc?.smtpUsername && smtpPassword.configured
+        : key.configured;
     const senderConfigured = !!(doc?.fromEmail ?? "").trim() && !!(doc?.fromName ?? "").trim();
     return {
       provider: PROVIDER,
       enabled: doc?.enabled ?? false,
+      transport,
       apiKeyConfigured: key.configured,
       apiKeySource: key.source,
+      credentialConfigured,
       senderConfigured,
-      ready: (doc?.enabled ?? false) && key.configured && senderConfigured,
+      ready: (doc?.enabled ?? false) && credentialConfigured && senderConfigured,
       status: (doc?.status as string | undefined) ?? "not_configured",
       statusMessage: doc?.statusMessage ?? null,
     };
@@ -397,6 +438,133 @@ export const saveApiKeyRow = internalMutation({
       reason: "Elastic Email API key updated from the admin dashboard",
     });
     return { id };
+  },
+});
+
+/** Persist the transport selection and its non-secret relay settings. */
+export const saveTransportRow = internalMutation({
+  args: {
+    adminId: v.id("users"),
+    transport: v.string(),
+    smtpHost: v.optional(v.string()),
+    smtpPort: v.optional(v.number()),
+    smtpSecure: v.optional(v.boolean()),
+    smtpUsername: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existing = await loadSettingsDoc(ctx);
+    const patch = {
+      transport: args.transport,
+      smtpHost: args.smtpHost?.trim() || undefined,
+      smtpPort: args.smtpPort,
+      smtpSecure: args.smtpSecure ?? false,
+      smtpUsername: args.smtpUsername?.trim() || undefined,
+      status: "unverified" as const,
+      statusMessage: "Transport settings saved. Re-verify the connection.",
+      updatedBy: args.adminId,
+      updatedAt: now,
+    };
+    let id: Id<"emailSettings">;
+    if (existing) {
+      await ctx.db.patch(existing._id, patch);
+      id = existing._id;
+    } else {
+      id = await ctx.db.insert("emailSettings", {
+        provider: PROVIDER,
+        enabled: false,
+        fromEmail: "",
+        fromName: "",
+        ...patch,
+      });
+    }
+    // Host/port/username are configuration, not credentials, so they are safe to
+    // record — the password is never part of this write.
+    await auditLog(ctx, args.adminId, {
+      action: "EMAIL_TRANSPORT_UPDATED",
+      resource: "emailSettings",
+      resourceId: id,
+      after: {
+        transport: patch.transport,
+        smtpHost: patch.smtpHost ?? null,
+        smtpPort: patch.smtpPort ?? null,
+        smtpSecure: patch.smtpSecure,
+        smtpUsername: patch.smtpUsername ?? null,
+      },
+      reason: `Email delivery transport set to ${patch.transport}`,
+    });
+    return { id };
+  },
+});
+
+/** Store a freshly sealed SMTP password (ciphertext + bullets only). */
+export const saveSmtpCredentialRow = internalMutation({
+  args: {
+    adminId: v.id("users"),
+    passwordEncrypted: v.string(),
+    username: v.optional(v.string()),
+    replacedExisting: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const existing = await loadSettingsDoc(ctx);
+    const patch = {
+      smtpPasswordEncrypted: args.passwordEncrypted,
+      smtpPasswordMasked: MASKED_SECRET,
+      smtpPasswordSource: "dashboard",
+      smtpUsername: args.username?.trim() || existing?.smtpUsername,
+      transport: "smtp",
+      status: "unverified" as const,
+      statusMessage: "SMTP credentials saved. Run a test email to confirm delivery.",
+      updatedBy: args.adminId,
+      updatedAt: now,
+    };
+    let id: Id<"emailSettings">;
+    if (existing) {
+      await ctx.db.patch(existing._id, patch);
+      id = existing._id;
+    } else {
+      id = await ctx.db.insert("emailSettings", {
+        provider: PROVIDER,
+        enabled: false,
+        fromEmail: "",
+        fromName: "",
+        ...patch,
+      });
+    }
+    await auditLog(ctx, args.adminId, {
+      action: args.replacedExisting ? "EMAIL_SMTP_PASSWORD_REPLACED" : "EMAIL_SMTP_PASSWORD_SET",
+      resource: "emailSettings",
+      resourceId: id,
+      after: { masked: MASKED_SECRET, storedEncrypted: true, username: patch.smtpUsername ?? null },
+      reason: "SMTP relay password updated from the admin dashboard",
+    });
+    return { id };
+  },
+});
+
+export const clearSmtpCredentialRow = internalMutation({
+  args: { adminId: v.id("users") },
+  handler: async (ctx, args) => {
+    const existing = await loadSettingsDoc(ctx);
+    if (!existing) return { success: true };
+    await ctx.db.patch(existing._id, {
+      smtpPasswordEncrypted: undefined,
+      smtpPasswordMasked: undefined,
+      smtpPasswordSource: "none",
+      status: "not_configured",
+      statusMessage: "SMTP password removed.",
+      lastVerifiedAt: undefined,
+      updatedBy: args.adminId,
+      updatedAt: Date.now(),
+    });
+    await auditLog(ctx, args.adminId, {
+      action: "EMAIL_SMTP_PASSWORD_CLEARED",
+      resource: "emailSettings",
+      resourceId: existing._id,
+      reason: "SMTP relay password removed from the admin dashboard",
+    });
+    return { success: true };
   },
 });
 

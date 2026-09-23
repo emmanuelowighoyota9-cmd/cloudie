@@ -29,6 +29,24 @@ export function envEncryptionKey(): string | null {
   return null;
 }
 
+/** Active delivery transport for the platform. */
+export type TransportKind = "api" | "smtp";
+
+/** Elastic Email SMTP relay defaults (prefilled in the admin form). */
+export const SMTP_DEFAULT_HOST = "smtp.elasticemail.com";
+export const SMTP_DEFAULT_PORT = 2525;
+
+/** Deployment-level SMTP password vars (optional escape hatch; first match wins). */
+export const ENV_SMTP_PASSWORD_VARS = ["ELASTIC_EMAIL_SMTP_PASSWORD", "ELASTICEMAIL_SMTP_PASSWORD"] as const;
+
+export function envSmtpPassword(): { value: string; name: string } | null {
+  for (const name of ENV_SMTP_PASSWORD_VARS) {
+    const value = process.env[name];
+    if (typeof value === "string" && value.trim()) return { value: value.trim(), name };
+  }
+  return null;
+}
+
 /** Deployment-level API key vars (optional escape hatch; first match wins). */
 export const ENV_API_KEY_VARS = ["ELASTIC_EMAIL_API_KEY", "ELASTICEMAIL_API_KEY"] as const;
 

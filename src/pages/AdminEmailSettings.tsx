@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useMemo, useState } from "react";
@@ -21,6 +22,7 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
+  Server,
   Trash2,
 } from "lucide-react";
 import { AdminEmpty, AdminPageHeader, AdminSkeleton, StatusBadge, fmtDate } from "@/components/admin/shared";
@@ -40,6 +42,8 @@ type FormValues = {
   replyToEmail: string;
   testRecipient: string;
 };
+
+type SmtpValues = { host: string; port: string; secure: boolean; username: string };
 
 type StatusKey =
   | "not_configured"
@@ -103,6 +107,9 @@ export default function AdminEmailSettings() {
   const saveConfig = useMutation(api.emailAdmin.saveConfig);
   const saveApiKey = useAction(api.email.saveApiKey);
   const clearApiKey = useAction(api.email.clearApiKey);
+  const saveTransportConfig = useAction(api.email.saveTransportConfig);
+  const saveSmtpPassword = useAction(api.email.saveSmtpPassword);
+  const clearSmtpPassword = useAction(api.email.clearSmtpPassword);
   const refreshStatus = useAction(api.email.refreshEmailStatus);
   const sendTestEmail = useAction(api.email.sendTestEmail);
 
@@ -116,7 +123,14 @@ export default function AdminEmailSettings() {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [replacing, setReplacing] = useState(false);
-  const [busy, setBusy] = useState<"save" | "key" | "test" | "status" | "clear" | null>(null);
+  const [smtpDraft, setSmtpDraft] = useState<SmtpValues | null>(null);
+  const [transportDraft, setTransportDraft] = useState<"api" | "smtp" | null>(null);
+  const [smtpPassword, setSmtpPassword] = useState("");
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [replacingSmtp, setReplacingSmtp] = useState(false);
+  const [busy, setBusy] = useState<
+    "save" | "key" | "test" | "status" | "clear" | "transport" | "smtp" | "clearSmtp" | null
+  >(null);
 
   const form = useMemo<FormValues>(
     () => ({
@@ -130,6 +144,18 @@ export default function AdminEmailSettings() {
   );
 
   const update = (patch: Partial<FormValues>) => setDraft({ ...form, ...patch });
+
+  const smtp = useMemo<SmtpValues>(
+    () => ({
+      host: smtpDraft?.host ?? settings?.smtpHost ?? "smtp.elasticemail.com",
+      port: smtpDraft?.port ?? String(settings?.smtpPort ?? 2525),
+      secure: smtpDraft?.secure ?? settings?.smtpSecure ?? false,
+      username: smtpDraft?.username ?? settings?.smtpUsername ?? "",
+    }),
+    [smtpDraft, settings],
+  );
+  const updateSmtp = (patch: Partial<SmtpValues>) => setSmtpDraft({ ...smtp, ...patch });
+  const transport: "api" | "smtp" = transportDraft ?? (settings?.transport === "smtp" ? "smtp" : "api");
 
   if (settings === undefined || stats === undefined) {
     return (
@@ -184,6 +210,67 @@ export default function AdminEmailSettings() {
     }
   };
 
+  const handleSaveTransport = async () => {
+    setBusy("transport");
+    try {
+      const result = await saveTransportConfig({
+        transport,
+        smtpHost: smtp.host.trim() || undefined,
+        smtpPort: Number(smtp.port) || undefined,
+        smtpSecure: smtp.secure,
+        smtpUsername: smtp.username.trim() || undefined,
+      });
+      setTransportDraft(null);
+      setSmtpDraft(null);
+      if (result.success) toast.success(result.message);
+      else toast.warning(result.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the transport settings");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleSaveSmtpPassword = async () => {
+    if (!smtpPassword.trim()) {
+      toast.error("Paste the SMTP password issued by your provider first");
+      return;
+    }
+    setBusy("smtp");
+    try {
+      const result = await saveSmtpPassword({
+        password: smtpPassword.trim(),
+        username: smtp.username.trim(),
+        smtpHost: smtp.host.trim(),
+        smtpPort: Number(smtp.port) || undefined,
+        smtpSecure: smtp.secure,
+      });
+      setSmtpPassword("");
+      setShowSmtpPassword(false);
+      setReplacingSmtp(false);
+      setSmtpDraft(null);
+      if (result.success) toast.success(result.message);
+      else toast.warning(result.message);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the SMTP credentials");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleClearSmtpPassword = async () => {
+    setBusy("clearSmtp");
+    try {
+      await clearSmtpPassword({});
+      toast.success("SMTP password removed");
+      setReplacingSmtp(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not remove the SMTP password");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const handleClearKey = async () => {
     setBusy("clear");
     try {
@@ -229,12 +316,14 @@ export default function AdminEmailSettings() {
   };
 
   const showKeyForm = replacing || !keyConfigured;
+  const smtpConfigured = settings.smtpPasswordConfigured;
+  const showSmtpPasswordForm = replacingSmtp || !smtpConfigured;
 
   return (
     <div className="space-y-6">
       <AdminPageHeader
         title="Email Settings"
-        description="Elastic Email powers every transactional message. The API key is encrypted at rest and never returned to the browser."
+        description="Elastic Email powers every transactional message, over its HTTP API or its SMTP relay. Credentials are encrypted at rest and never returned to the browser."
         actions={
           <Button size="sm" variant="outline" onClick={handleRefresh} disabled={busy !== null} className="gap-1.5">
             {busy === "status" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -289,6 +378,11 @@ export default function AdminEmailSettings() {
               />
               <StatusTile label="Last verified" value={fmtDate(settings.lastVerifiedAt)} />
               <StatusTile
+                label="Active transport"
+                value={transport === "smtp" ? `SMTP · ${settings.smtpHost}:${settings.smtpPort}` : "HTTP API"}
+                hint={transport === "smtp" ? (settings.smtpSecure ? "Implicit TLS" : "STARTTLS") : "Elastic Email v4 API"}
+              />
+              <StatusTile
                 label="Deliveries (last 500)"
                 value={`${stats.sent} sent · ${stats.failed} failed`}
                 hint={`${stats.queued} queued · ${stats.bounced} bounced`}
@@ -309,6 +403,11 @@ export default function AdminEmailSettings() {
             <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-white">
               <KeyRound className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Elastic Email API key
+              {transport === "smtp" && (
+                <Badge variant="outline" className="border-slate-200 text-[10px] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  Not in use — SMTP relay is active
+                </Badge>
+              )}
             </CardTitle>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Stored encrypted (AES-256-GCM) on the server only. It is never sent back to the browser, never logged, and never placed in a URL.
@@ -427,6 +526,219 @@ export default function AdminEmailSettings() {
           </CardContent>
         </Card>
 
+        {/* ── Delivery transport ────────────────────────────────────────── */}
+        <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-white">
+              <Server className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              Delivery transport
+            </CardTitle>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Elastic Email accepts either its HTTP API (an API key) or its SMTP relay (a server-issued username and password). Choose which one
+              carries platform mail — only the active transport is used for sending and verification.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RadioGroup
+              value={transport}
+              onValueChange={(v) => setTransportDraft(v === "smtp" ? "smtp" : "api")}
+              className="grid gap-3 sm:grid-cols-2"
+            >
+              <label
+                htmlFor="transport-api"
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                  transport === "api"
+                    ? "border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/30"
+                    : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"
+                }`}
+              >
+                <RadioGroupItem value="api" id="transport-api" className="mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">HTTP API</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    Send with an Elastic Email API key. Verified against the account endpoint.
+                  </p>
+                </div>
+              </label>
+              <label
+                htmlFor="transport-smtp"
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                  transport === "smtp"
+                    ? "border-blue-300 bg-blue-50/60 dark:border-blue-800 dark:bg-blue-950/30"
+                    : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/50"
+                }`}
+              >
+                <RadioGroupItem value="smtp" id="transport-smtp" className="mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">SMTP relay</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    Send through the relay with a username and password. Verified by opening a real session.
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
+
+            {transport === "smtp" && (
+              <div className="space-y-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp-host" className="text-xs text-slate-600 dark:text-slate-400">
+                      SMTP server
+                    </Label>
+                    <Input
+                      id="smtp-host"
+                      value={smtp.host}
+                      onChange={(e) => updateSmtp({ host: e.target.value })}
+                      placeholder="smtp.elasticemail.com"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp-port" className="text-xs text-slate-600 dark:text-slate-400">
+                      Port
+                    </Label>
+                    <Input
+                      id="smtp-port"
+                      inputMode="numeric"
+                      value={smtp.port}
+                      onChange={(e) => updateSmtp({ port: e.target.value.replace(/[^0-9]/g, "") })}
+                      placeholder="2525"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="smtp-username" className="text-xs text-slate-600 dark:text-slate-400">
+                      SMTP username
+                    </Label>
+                    <Input
+                      id="smtp-username"
+                      value={smtp.username}
+                      onChange={(e) => updateSmtp({ username: e.target.value })}
+                      placeholder="account@yourdomain.com"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="flex items-end gap-3 pb-1">
+                    <Switch checked={smtp.secure} onCheckedChange={(v) => updateSmtp({ secure: v })} id="smtp-secure" />
+                    <div>
+                      <Label htmlFor="smtp-secure" className="text-xs text-slate-600 dark:text-slate-400">
+                        Implicit TLS (port 465)
+                      </Label>
+                      <p className="text-[11px] text-slate-400">Leave off for 2525 / 587 — those upgrade with STARTTLS.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {smtpConfigured && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <code className="rounded bg-slate-100 px-2 py-1 font-mono text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          {settings.smtpPasswordMasked}
+                        </code>
+                        <Badge
+                          variant="outline"
+                          className="border-green-200 bg-green-50 text-[10px] text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300"
+                        >
+                          <CheckCircle2 className="mr-1 h-3 w-3" /> Password saved
+                        </Badge>
+                        {settings.smtpPasswordSource === "environment" && (
+                          <Badge
+                            variant="outline"
+                            className="border-amber-300 bg-amber-50 text-[10px] text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+                          >
+                            Project environment ({settings.smtpPasswordEnvVar})
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        Sealed with AES-256-GCM on the server. The full password is not retrievable — replace it to rotate.
+                      </p>
+                    </div>
+                    <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setReplacingSmtp(true)} disabled={busy !== null || replacingSmtp}>
+                      <RotateCcw className="h-3.5 w-3.5" /> Replace password
+                    </Button>
+                  </div>
+                )}
+
+                {showSmtpPasswordForm ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="smtp-password" className="text-xs text-slate-600 dark:text-slate-400">
+                      {smtpConfigured ? "New SMTP password" : "SMTP password"}
+                    </Label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <div className="relative flex-1">
+                        <Input
+                          id="smtp-password"
+                          type={showSmtpPassword ? "text" : "password"}
+                          value={smtpPassword}
+                          onChange={(e) => setSmtpPassword(e.target.value)}
+                          placeholder="Paste the password shown when the SMTP credential was created"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className="pr-9"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSmtpPassword((v) => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                          aria-label={showSmtpPassword ? "Hide SMTP password" : "Show SMTP password"}
+                        >
+                          {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button className="gap-1.5" onClick={handleSaveSmtpPassword} disabled={busy !== null || !smtpPassword.trim()}>
+                          {busy === "smtp" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                          Save &amp; verify
+                        </Button>
+                        {replacingSmtp && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              setReplacingSmtp(false);
+                              setSmtpPassword("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Provider-issued SMTP passwords are shown only once. Saving seals it, switches the transport to SMTP, and verifies the relay
+                      immediately — the value is never displayed again.
+                    </p>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="gap-1.5 text-red-600 hover:text-red-700 dark:text-red-400"
+                    onClick={handleClearSmtpPassword}
+                    disabled={busy !== null}
+                  >
+                    {busy === "clearSmtp" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    Remove stored password
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={handleSaveTransport} disabled={busy !== null} className="gap-1.5">
+                {busy === "transport" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Save transport &amp; verify
+              </Button>
+              <span className="text-[11px] text-slate-400">
+                Active transport: <strong className="font-medium text-slate-600 dark:text-slate-300">{transport === "smtp" ? "SMTP relay" : "HTTP API"}</strong>
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* ── Sender configuration ──────────────────────────────────────── */}
         <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
           <CardHeader className="pb-3">
@@ -439,7 +751,7 @@ export default function AdminEmailSettings() {
             </CardTitle>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {form.enabled
-                ? "Transactional email is ON. Platform flows (campaigns, notifications) dispatch through Elastic Email."
+                ? `Transactional email is ON. Platform flows (campaigns, notifications) dispatch through ${transport === "smtp" ? "the SMTP relay" : "the Elastic Email API"}.`
                 : "While OFF, no sending is attempted and admin tests are blocked. Queued messages are refused with a logged reason rather than discarded silently."}
             </p>
           </CardHeader>
@@ -448,7 +760,8 @@ export default function AdminEmailSettings() {
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300">
                 <p className="font-medium">Elastic Email is not configured.</p>
                 <p className="mt-0.5">
-                  Add your Elastic Email API key above plus the sender details below, then save. Transactional email stays off until you enable it.
+                  Add credentials for the transport you selected above, fill in the sender details below, then save. Transactional email stays off until
+                you enable it.
                 </p>
               </div>
             )}

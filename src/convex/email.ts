@@ -7,7 +7,8 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { decryptSecret, encryptSecret, generateEncryptionSecret } from "./emailCrypto";
-import { AUTO_KEY_NAME, envApiKey, envEncryptionKey } from "./emailShared";
+import { AUTO_KEY_NAME, envApiKey, envEncryptionKey, envSmtpPassword, type TransportKind } from "./emailShared";
+import nodemailer from "nodemailer";
 import { renderTemplate, sanitizeHtml, type EmailTemplateKey } from "./emailRender";
 
 /**
@@ -106,9 +107,21 @@ async function resolveEncryptionSecret(ctx: ActionCtx): Promise<{ secret: string
   return { secret: stored.value, source: "auto" };
 }
 
+type SmtpConfig = {
+  host: string;
+  port: number;
+  secure: boolean;
+  username: string;
+  password: string | null;
+  passwordSource: "dashboard" | "environment" | "none";
+};
+
 type SenderConfig = {
+  /** Which provider transport actually carries the message. */
+  transport: TransportKind;
   apiKey: string | null;
   keySource: "dashboard" | "environment" | "none";
+  smtp: SmtpConfig | null;
   fromEmail: string;
   fromName: string;
   replyToEmail: string | null;
@@ -126,8 +139,15 @@ async function loadSenderConfig(
 ): Promise<{ config: SenderConfig } | { error: { code: string; message: string } }> {
   const row: {
     enabled: boolean;
+    transport: string | null;
     apiKeyEncrypted: string | null;
     apiKeySource: "dashboard" | "environment" | "none";
+    smtpHost: string | null;
+    smtpPort: number | null;
+    smtpSecure: boolean;
+    smtpUsername: string | null;
+    smtpPasswordEncrypted: string | null;
+    smtpPasswordSource: "dashboard" | "environment" | "none";
     fromEmail: string;
     fromName: string;
     replyToEmail: string | null;
@@ -156,10 +176,47 @@ async function loadSenderConfig(
     }
   }
 
+  // ── SMTP credential (same sealing scheme, same key resolution) ───────────
+  const envSmtp = envSmtpPassword();
+  let smtpPassword: string | null = null;
+  let smtpPasswordSource: "dashboard" | "environment" | "none" = "none";
+  if (envSmtp) {
+    smtpPassword = envSmtp.value;
+    smtpPasswordSource = "environment";
+  } else if (row.smtpPasswordEncrypted) {
+    try {
+      const { secret } = await resolveEncryptionSecret(ctx);
+      smtpPassword = decryptSecret(row.smtpPasswordEncrypted, secret);
+      smtpPasswordSource = "dashboard";
+    } catch {
+      return {
+        error: {
+          code: "CREDENTIAL_UNREADABLE",
+          message:
+            "The saved SMTP password could not be decrypted. Replace it in the dashboard (credentials are bound to the deployment encryption key).",
+        },
+      };
+    }
+  }
+
+  const smtp: SmtpConfig | null =
+    row.smtpHost || row.smtpPort || row.smtpUsername
+      ? {
+          host: (row.smtpHost ?? "").trim(),
+          port: row.smtpPort ?? 0,
+          secure: row.smtpSecure ?? false,
+          username: (row.smtpUsername ?? "").trim(),
+          password: smtpPassword,
+          passwordSource: smtpPasswordSource,
+        }
+      : null;
+
   return {
     config: {
+      transport: row.transport === "smtp" ? "smtp" : "api",
       apiKey,
       keySource: env ? "environment" : apiKey ? "dashboard" : "none",
+      smtp,
       fromEmail: row.fromEmail,
       fromName: row.fromName,
       replyToEmail: row.replyToEmail,
@@ -168,6 +225,33 @@ async function loadSenderConfig(
       status: row.status,
     },
   };
+}
+
+/**
+ * Human-readable reason the active transport cannot send, or `null` when it is
+ * ready. Used by every send path so a half-configured transport is reported
+ * instead of silently failing.
+ */
+function credentialProblem(config: SenderConfig): string | null {
+  if (config.transport === "smtp") {
+    const smtp = config.smtp;
+    if (!smtp || !smtp.host || !smtp.port) {
+      return "Set the SMTP host and port, then save the transport settings.";
+    }
+    if (!smtp.username || !smtp.password) {
+      return "Add the SMTP username and password for the relay.";
+    }
+    return null;
+  }
+  if (!config.apiKey) return "Add your Elastic Email API key to enable transactional email.";
+  return null;
+}
+
+/** Label used in status messages and delivery logs for the active transport. */
+function transportLabel(config: SenderConfig): string {
+  return config.transport === "smtp"
+    ? `SMTP relay ${config.smtp?.host ?? ""}:${config.smtp?.port ?? ""}`.trim()
+    : "Elastic Email API";
 }
 
 // ─── Provider calls ─────────────────────────────────────────────────────────
@@ -216,6 +300,89 @@ async function elasticSend(
       message: cleanProviderMessage(e instanceof Error ? e.message : String(e), apiKey),
     };
   }
+}
+
+type SmtpOutcome =
+  | { ok: true; messageId: string | null }
+  | { ok: false; kind: ProviderErrorKind; status: number; message: string };
+
+/** Create a relay connection from the stored configuration. */
+function smtpTransport(config: SenderConfig) {
+  const smtp = config.smtp;
+  if (!smtp) throw new Error("SMTP_NOT_CONFIGURED");
+  return nodemailer.createTransport({
+    host: smtp.host,
+    port: smtp.port,
+    secure: smtp.secure,
+    auth: { user: smtp.username, pass: smtp.password ?? "" },
+    connectionTimeout: REQUEST_TIMEOUT_MS,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
+    tls: { minVersion: "TLSv1.2" },
+  });
+}
+
+/** Map a nodemailer failure onto the provider error vocabulary. */
+function classifySmtpError(error: unknown): { kind: ProviderErrorKind; status: number; message: string } {
+  const candidate = error as { code?: string; responseCode?: number; response?: string; message?: string } | null;
+  const code = String(candidate?.code ?? "");
+  const status = typeof candidate?.responseCode === "number" ? candidate.responseCode : 0;
+  const detail = candidate?.response ?? candidate?.message ?? String(error);
+  const message = cleanProviderMessage(detail);
+
+  if (code === "EAUTH" || status === 535 || status === 534 || /auth/i.test(message)) {
+    return { kind: "invalid_key", status, message };
+  }
+  if (code.startsWith("E" + "CONN") || code === "ETIMEDOUT" || code === "ESOCKET" || code === "EDNS" || code === "ECONNECTION") {
+    return { kind: "network_error", status, message };
+  }
+  if (status >= 550 && status <= 559) return { kind: "sender_error", status, message };
+  return { kind: "provider_error", status, message };
+}
+
+/** Deliver one message through the configured SMTP relay. */
+async function smtpSend(
+  config: SenderConfig,
+  message: { to: string; subject: string; html: string; text: string; fromEmail: string; fromName: string; replyTo: string | null },
+): Promise<SmtpOutcome> {
+  try {
+    const info = await smtpTransport(config).sendMail({
+      from: { name: message.fromName, address: message.fromEmail },
+      to: message.to,
+      replyTo: message.replyTo ?? message.fromEmail,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
+    const messageId = typeof info?.messageId === "string" ? info.messageId : null;
+    return { ok: true, messageId };
+  } catch (error) {
+    const failure = classifySmtpError(error);
+    return { ok: false, ...failure };
+  }
+}
+
+/** Validate the relay credentials without sending anything. */
+async function smtpVerify(config: SenderConfig): Promise<{ ok: true } | { ok: false; kind: ProviderErrorKind; message: string }> {
+  try {
+    await smtpTransport(config).verify();
+    return { ok: true };
+  } catch (error) {
+    const failure = classifySmtpError(error);
+    return { ok: false, kind: failure.kind, message: failure.message };
+  }
+}
+
+/** Route a message through whichever transport is active. */
+async function dispatchSend(
+  config: SenderConfig,
+  message: { to: string; subject: string; html: string; text: string; fromEmail: string; fromName: string; replyTo: string | null },
+): Promise<ProviderOutcome<{ messageId: string | null }>> {
+  if (config.transport === "smtp") {
+    const result = await smtpSend(config, message);
+    return result.ok ? { ok: true, data: { messageId: result.messageId } } : result;
+  }
+  return await elasticSend(config.apiKey ?? "", message);
 }
 
 type AccountProbe =
@@ -290,16 +457,39 @@ async function verifyAndRecord(
   ctx: ActionCtx,
   config: SenderConfig,
 ): Promise<{ status: string; message: string }> {
-  if (!config.apiKey) {
+  const problem = credentialProblem(config);
+  if (problem) {
     await ctx.runMutation(internal.emailAdmin.recordVerification, {
       status: "not_configured",
-      statusMessage: "Add your Elastic Email API key to enable transactional email.",
+      statusMessage: problem,
       verified: false,
     });
-    return { status: "not_configured", message: "No API key is configured." };
+    return { status: "not_configured", message: problem };
   }
 
-  const probe = await elasticAccount(config.apiKey);
+  // SMTP is verified by actually opening a relay session, not by inspecting
+  // stored fields — "Connected" must mean the provider accepted the credentials.
+  if (config.transport === "smtp") {
+    const probe = await smtpVerify(config);
+    if (probe.ok) {
+      const label = transportLabel(config);
+      await ctx.runMutation(internal.emailAdmin.recordVerification, {
+        status: "connected",
+        statusMessage: `${label} authenticated successfully.`,
+        verified: true,
+      });
+      return { status: "connected", message: `Connected through ${label}.` };
+    }
+    await ctx.runMutation(internal.emailAdmin.recordVerification, {
+      status: probe.kind === "invalid_key" ? "invalid_key" : probe.kind === "sender_error" ? "sender_error" : "provider_error",
+      statusMessage: probe.message,
+      lastError: probe.message,
+      verified: false,
+    });
+    return { status: probe.kind, message: probe.message };
+  }
+
+  const probe = await elasticAccount(config.apiKey as string);
   if (probe.ok) {
     const label = probe.accountEmail ? maskEmailForDisplay(probe.accountEmail) : "your Elastic Email account";
     await ctx.runMutation(internal.emailAdmin.recordVerification, {
@@ -353,6 +543,18 @@ export const saveApiKey = action({
 
     const loaded = await loadSenderConfig(ctx);
     if ("error" in loaded) return { success: true, status: "unverified", message: loaded.error.message, encryptionKeySource: source };
+
+    // The key is only verified when the HTTP API is actually the live transport —
+    // otherwise the check would be reporting on the SMTP relay instead.
+    if (loaded.config.transport === "smtp") {
+      return {
+        success: true,
+        status: "unverified",
+        message: "API key saved. The SMTP relay is the active transport, so this key is stored but not currently used.",
+        encryptionKeySource: source,
+      };
+    }
+
     const verification = await verifyAndRecord(ctx, loaded.config);
     return {
       success: true,
@@ -372,6 +574,116 @@ export const clearApiKey = action({
   handler: async (ctx) => {
     const { adminId } = await requireAdminAction(ctx);
     await ctx.runMutation(internal.emailAdmin.clearApiKeyRow, { adminId });
+    return { success: true };
+  },
+});
+
+/**
+ * Choose how mail leaves the platform and persist the non-secret relay details.
+ * Either transport is validated server-side, then the live configuration is
+ * re-verified so the status panel reflects reality immediately.
+ */
+export const saveTransportConfig = action({
+  args: {
+    transport: v.string(),
+    smtpHost: v.optional(v.string()),
+    smtpPort: v.optional(v.number()),
+    smtpSecure: v.optional(v.boolean()),
+    smtpUsername: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdminAction(ctx);
+    if (args.transport !== "api" && args.transport !== "smtp") {
+      throw new Error("INVALID_TRANSPORT: choose either the API or the SMTP relay");
+    }
+
+    const host = (args.smtpHost ?? "").trim();
+    const username = (args.smtpUsername ?? "").trim();
+    const port = Math.trunc(args.smtpPort ?? 0);
+
+    if (args.transport === "smtp") {
+      if (!host || /\s/.test(host)) throw new Error("INVALID_SMTP_HOST: enter the relay hostname (e.g. smtp.elasticemail.com)");
+      if (!Number.isFinite(port) || port < 1 || port > 65_535) throw new Error("INVALID_SMTP_PORT: enter a port between 1 and 65535");
+    }
+
+    await ctx.runMutation(internal.emailAdmin.saveTransportRow, {
+      adminId,
+      transport: args.transport,
+      smtpHost: host || undefined,
+      smtpPort: args.transport === "smtp" ? port : args.smtpPort,
+      smtpSecure: args.smtpSecure ?? false,
+      smtpUsername: username || undefined,
+    });
+
+    const loaded = await loadSenderConfig(ctx);
+    if ("error" in loaded) {
+      return { success: false, status: "not_configured", message: loaded.error.message };
+    }
+    const verification = await verifyAndRecord(ctx, loaded.config);
+    return {
+      success: verification.status === "connected",
+      status: verification.status,
+      message: `Transport saved. ${verification.message}`,
+    };
+  },
+});
+
+/** Seal a new SMTP relay password (and optional username), then verify it. */
+export const saveSmtpPassword = action({
+  args: { password: v.string(), username: v.optional(v.string()), smtpHost: v.optional(v.string()), smtpPort: v.optional(v.number()), smtpSecure: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdminAction(ctx);
+    const password = args.password.trim();
+    if (password.length < 4) throw new Error("INVALID_SMTP_PASSWORD: paste the SMTP password issued by your provider");
+
+    const host = (args.smtpHost ?? "").trim();
+    const port = Math.trunc(args.smtpPort ?? 0);
+    if (!host || /\s/.test(host)) throw new Error("INVALID_SMTP_HOST: enter the relay hostname (e.g. smtp.elasticemail.com)");
+    if (!Number.isFinite(port) || port < 1 || port > 65_535) throw new Error("INVALID_SMTP_PORT: enter a port between 1 and 65535");
+    const username = (args.username ?? "").trim();
+    if (!username || /\s/.test(username)) throw new Error("INVALID_SMTP_USERNAME: enter the SMTP username issued by your provider");
+
+    const existing: { smtpPasswordEncrypted: string | null } | null = await ctx.runQuery(internal.emailAdmin.getConfigForSend, {});
+    const { secret, source } = await resolveEncryptionSecret(ctx);
+
+    // Persist host/port first so the credential is verified against the settings
+    // the administrator just entered, not stale ones.
+    await ctx.runMutation(internal.emailAdmin.saveTransportRow, {
+      adminId,
+      transport: "smtp",
+      smtpHost: host,
+      smtpPort: port,
+      smtpSecure: args.smtpSecure ?? false,
+      smtpUsername: username,
+    });
+    await ctx.runMutation(internal.emailAdmin.saveSmtpCredentialRow, {
+      adminId,
+      passwordEncrypted: encryptSecret(password, secret),
+      username,
+      replacedExisting: !!existing?.smtpPasswordEncrypted,
+    });
+
+    const loaded = await loadSenderConfig(ctx);
+    if ("error" in loaded) return { success: false, status: "unverified", message: loaded.error.message };
+    const verification = await verifyAndRecord(ctx, loaded.config);
+    return {
+      success: verification.status === "connected",
+      status: verification.status,
+      message:
+        verification.status === "connected"
+          ? `SMTP credentials saved and verified. ${verification.message}`
+          : `SMTP credentials saved. ${verification.message}`,
+      encryptionKeySource: source,
+    };
+  },
+});
+
+/** Remove the stored SMTP password (does not touch a deployment-level env var). */
+export const clearSmtpPassword = action({
+  args: {},
+  handler: async (ctx) => {
+    const { adminId } = await requireAdminAction(ctx);
+    await ctx.runMutation(internal.emailAdmin.clearSmtpCredentialRow, { adminId });
     return { success: true };
   },
 });
@@ -410,8 +722,9 @@ export const sendTestEmail = action({
     if ("error" in loaded) return { success: false, status: "not_configured", message: loaded.error.message };
     const config = loaded.config;
 
-    if (!config.apiKey) {
-      return { success: false, status: "not_configured", message: "Add your Elastic Email API key first." };
+    const problem = credentialProblem(config);
+    if (problem) {
+      return { success: false, status: "not_configured", message: problem };
     }
     if (!config.fromEmail.trim() || !config.fromName.trim()) {
       return { success: false, status: "sender_error", message: "Set the From email and From name before testing." };
@@ -448,7 +761,7 @@ export const sendTestEmail = action({
     }
 
     await ctx.runMutation(internal.emailAdmin.markMessageSending, { messageId: queued.id });
-    const outcome = await elasticSend(config.apiKey, {
+    const outcome = await dispatchSend(config, {
       to: recipient,
       subject: rendered.subject,
       html: rendered.html,
@@ -474,7 +787,7 @@ export const sendTestEmail = action({
 
     const isSenderProblem = outcome.kind === "sender_error";
     const friendly = isSenderProblem
-      ? `Elastic Email rejected the sender address: ${outcome.message}. Verify the From address or its domain in your Elastic Email account.`
+      ? `${transportLabel(config)} rejected the sender address: ${outcome.message}. Verify the From address or its domain with your email provider.`
       : outcome.message;
 
     await ctx.runMutation(internal.emailAdmin.markMessageFailed, {
@@ -509,7 +822,7 @@ export const sendTransactional = internalAction({
     const loaded = await loadSenderConfig(ctx);
     if ("error" in loaded) return { queued: false, status: "not_configured", message: loaded.error.message };
     const config = loaded.config;
-    if (!config.apiKey || !config.fromEmail.trim() || !config.fromName.trim()) {
+    if (credentialProblem(config) || !config.fromEmail.trim() || !config.fromName.trim()) {
       return { queued: false, status: "not_configured", message: "Transactional email is not fully configured." };
     }
     if (!config.enabled) {
@@ -549,7 +862,7 @@ export const enqueueCampaign = internalAction({
     const loaded = await loadSenderConfig(ctx);
     const blocked = "error" in loaded
       ? loaded.error.message
-      : !loaded.config.apiKey || !loaded.config.fromEmail.trim() || !loaded.config.fromName.trim()
+      : credentialProblem(loaded.config) || !loaded.config.fromEmail.trim() || !loaded.config.fromName.trim()
         ? "Transactional email is not fully configured."
         : !loaded.config.enabled
           ? "Transactional email is disabled by the administrator."
@@ -615,7 +928,7 @@ export const enqueueCampaignMessage = internalAction({
       return { queued: false, status: "not_configured", message: loaded.error.message };
     }
     const config = loaded.config;
-    if (!config.apiKey || !config.fromEmail.trim() || !config.fromName.trim()) {
+    if (credentialProblem(config) || !config.fromEmail.trim() || !config.fromName.trim()) {
       const reason = "Transactional email is not fully configured.";
       await ctx.runMutation(internal.emailAdmin.failCampaign, { campaignId: args.campaignId, reason });
       return { queued: false, status: "not_configured", message: reason };
@@ -654,8 +967,8 @@ export const dispatchQueued = internalAction({
     const loaded = await loadSenderConfig(ctx);
     const config = "config" in loaded ? loaded.config : null;
     const loadError = "error" in loaded ? loaded.error : null;
-    const apiKey = config?.apiKey ?? null;
-    const ready = !!config && !!apiKey && config.enabled && !!config.fromEmail.trim() && !!config.fromName.trim();
+    const credentialIssue = config ? credentialProblem(config) : "Email provider is not configured.";
+    const ready = !!config && !credentialIssue && config.enabled && !!config.fromEmail.trim() && !!config.fromName.trim();
 
     const messages = (await ctx.runQuery(internal.emailAdmin.claimQueuedMessages, { limit })) as {
       _id: MessageId;
@@ -672,11 +985,11 @@ export const dispatchQueued = internalAction({
 
     if (messages.length === 0) return { processed: 0, sent: 0, failed: 0 };
 
-    if (!ready || !config || !apiKey) {
+    if (!ready || !config) {
       const reason =
-        loadError?.message ??
+        loadError?.message ?? credentialIssue ??
         (!config
-          ? "Elastic Email is not configured."
+          ? "Email provider is not configured."
           : !config.enabled
             ? "Transactional email is disabled by the administrator."
             : "Sender configuration is incomplete.");
@@ -703,7 +1016,7 @@ export const dispatchQueued = internalAction({
 
     for (const message of messages) {
       await ctx.runMutation(internal.emailAdmin.markMessageSending, { messageId: message._id });
-      const outcome = await elasticSend(apiKey, {
+      const outcome = await dispatchSend(config, {
         to: message.to,
         subject: message.subject,
         html: message.html ?? `<p>${message.text.replace(/</g, "&lt;")}</p>`,

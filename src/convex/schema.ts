@@ -998,12 +998,24 @@ const schema = defineSchema(
     emailSettings: defineTable({
       provider: v.string(), // "elastic_email"
       enabled: v.boolean(),
+      /** Delivery transport: "api" (HTTP API key) | "smtp" (SMTP relay). */
+      transport: v.optional(v.string()),
       /** Encrypted API key: "v1:<iv>.<tag>.<ciphertext>" (base64 components). */
       apiKeyEncrypted: v.optional(v.string()),
       /** Masked placeholder for the admin UI (bullets only — no key material). */
       apiKeyMasked: v.optional(v.string()),
       /** Where the live key actually comes from: dashboard | environment | none. */
       apiKeySource: v.optional(v.string()),
+      // ── SMTP relay (alternative transport) ─────────────────────────────────
+      smtpHost: v.optional(v.string()),
+      smtpPort: v.optional(v.number()),
+      smtpSecure: v.optional(v.boolean()),
+      smtpUsername: v.optional(v.string()),
+      /** SMTP password, sealed the same way as the API key (never returned). */
+      smtpPasswordEncrypted: v.optional(v.string()),
+      smtpPasswordMasked: v.optional(v.string()),
+      /** dashboard | environment | none */
+      smtpPasswordSource: v.optional(v.string()),
       fromEmail: v.string(),
       fromName: v.string(),
       replyToEmail: v.optional(v.string()),
