@@ -2,17 +2,56 @@ import { useParams, Link } from "react-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { classifyTenantParam } from "@/lib/tenantParam";
-import { ShieldCheck, Landmark, CreditCard, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, Wallet, Plus, Users, FileText, Bell, DollarSign, Check } from "lucide-react";
+import { bankTheme, bankTone, type BankTheme, type BankTone } from "@/lib/tenantBankTheme";
+import {
+  ShieldCheck, Landmark, CreditCard, ArrowLeftRight, ArrowDownLeft, ArrowUpRight,
+  Wallet, Plus, Users, FileText, Bell, ChevronRight, Check,
+} from "lucide-react";
 
 function Money({ minor, currency = "USD" }: { minor: number; currency?: string }) {
-  const sym = currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency + " ";
-  const s = (minor / 100).toFixed(2);
-  return <>{sym}{s}</>;
+  try {
+    return (
+      <>
+        {new Intl.NumberFormat("en-US", { style: "currency", currency }).format(minor / 100)}
+      </>
+    );
+  } catch {
+    return <>{`${currency} ${(minor / 100).toFixed(2)}`}</>;
+  }
 }
-function fmtDate(ms?: number) { return ms ? new Date(ms).toLocaleString() : "—"; }
+
+function fmtDate(ms?: number) {
+  return ms ? new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+}
+
+type Tab = "overview" | "accounts" | "transfers" | "beneficiaries" | "statements";
+
+// Declared at module scope (not inside the page) so React keeps the same element
+// types across renders — otherwise every keystroke remounts the subtree and inputs lose focus.
+function Shell({ theme, children }: { theme: BankTheme; children: React.ReactNode }) {
+  return <div style={{ backgroundColor: theme.surface, color: theme.text, minHeight: "100vh" }}>{children}</div>;
+}
+
+function Panel({ theme, children, className = "" }: { theme: BankTheme; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className} style={{ backgroundColor: theme.panel, border: `1px solid ${theme.border}`, borderRadius: theme.radius }}>
+      {children}
+    </div>
+  );
+}
+
+function Pill({ theme, tone, children }: { theme: BankTheme; tone: BankTone; children: React.ReactNode }) {
+  const t = bankTone(theme, tone);
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium capitalize"
+      style={{ backgroundColor: t.bg, color: t.fg, border: `1px solid ${t.border}` }}>
+      {children}
+    </span>
+  );
+}
 
 export default function SiteBanking() {
   // Two entry routes resolve to the same portal:
@@ -36,7 +75,7 @@ export default function SiteBanking() {
   const history = useQuery(api.bankingCustomer.bankingHistory, id ? { tenantId: id, limit: 50 } : "skip");
   const bens = useQuery(api.bankingCustomer.listBeneficiaries, id ? { tenantId: id } : "skip");
   const onboard = useQuery(api.bankingCustomer.onboardingMe, id ? { tenantId: id } : "skip");
-  const [tab, setTab] = useState<"overview" | "accounts" | "transfers" | "beneficiaries" | "statements">("overview");
+  const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState(false);
 
   // onboarding
@@ -68,57 +107,154 @@ export default function SiteBanking() {
   const [stmtAcc, setStmtAcc] = useState("");
   const stmt = useQuery(api.bankingCustomer.statement as any, stmtAcc && id ? { tenantId: id, accountId: stmtAcc as Id<"tenantAccounts"> } : "skip") as any;
 
-  const resolving = paramKind === "subdomain" && bySubdomain === undefined;
-  if (resolving) return <div className="p-8"><div className="animate-pulse text-slate-400">Loading…</div></div>;
-  if (!id) return <div className="max-w-3xl mx-auto p-8"><div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm"><div className="font-semibold">404 — Banking tenant not found</div><Link to="/business" className="underline">Back to Business</Link></div></div>;
-  if (publicT === undefined || member === undefined) return <div className="p-8"><div className="animate-pulse text-slate-400">Loading…</div></div>;
-  if (!publicT) return <div className="max-w-3xl mx-auto p-8"><div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm"><div className="font-semibold">404 — Banking tenant not found</div><Link to="/business" className="underline">Back to Business</Link></div></div>;
-  const currency = (publicT as any).currency ?? "USD";
-  const lifecycle = (publicT as any).status ?? "active";
-  const bankingUp = lifecycle === "active";
+  // Design kit applied from the banking template chosen at tenancy creation.
+  // Palette, radius, surfaces and the template's own copy drive the whole customer app.
+  const theme = bankTheme(publicT?.branding);
+  const { primary, accent, surface, panel, border, text, muted, radius, inputBg, divider } = theme;
+  const cur = (publicT as any)?.currency ?? "USD";
+  // Action colours that keep white label text legible on both light and dark kits.
+  const okColor = "#059669";
+  const dangerColor = "#DC2626";
 
-  if (!member) {
+  const fieldStyle = {
+    backgroundColor: inputBg,
+    border: `1px solid ${border}`,
+    color: text,
+    borderRadius: radius,
+  } as const;
+
+  if (paramKind === "subdomain" && bySubdomain === undefined) {
+    return <Shell theme={theme}><div className="p-10 animate-pulse text-sm" style={{ color: muted }}>Loading…</div></Shell>;
+  }
+  if (!id) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-10">
-        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
-          <ShieldCheck className="h-10 w-10 text-slate-400 mx-auto" />
-          <h1 className="text-xl font-bold mt-3">{publicT.siteName}</h1>
-          <p className="text-sm text-slate-500 mt-2">Banking portal is tenant-scoped. Sign in and join this tenant to continue. Branched from the existing Convex auth — no third-party auth introduced.</p>
-          <div className="mt-4 flex gap-2 justify-center flex-wrap">
-            <Link to={`/auth?returnTo=/site/${id}/banking`} className="rounded-xl bg-slate-900 text-white px-5 py-2 text-sm font-semibold">Sign in</Link>
-            <button onClick={async () => { setBusy(true); try { await joinMutation({ tenantId: id }); toast.success(`Joined ${publicT.siteName}`); } catch (e) { const msg = e instanceof Error ? e.message : String(e); if (msg.includes("TENANT_UNAVAILABLE")) toast.error("This tenant is unavailable (paused/disabled)."); else toast.error(msg); } finally { setBusy(false); } }} disabled={busy || !bankingUp} className="rounded-xl border border-slate-900 bg-white px-5 py-2 text-sm font-semibold text-slate-900 disabled:opacity-50">Join as customer</button>
-            <Link to={`/business/sites/${id}`} className="rounded-xl border border-slate-200 px-5 py-2 text-sm font-semibold">View in Business Suite</Link>
+      <Shell theme={theme}>
+        <div className="mx-auto max-w-3xl p-10">
+          <div className="p-6 text-sm" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+            <div className="font-semibold">404 — Banking tenant not found</div>
+            <Link to="/business" className="underline" style={{ color: accent }}>Back to Business Suite</Link>
           </div>
-          {!bankingUp && <div className="mt-3 text-xs text-amber-600">This tenant is {lifecycle} — joining and transactions are temporarily disabled. Historical records remain preserved.</div>}
         </div>
-      </div>
+      </Shell>
     );
   }
+  if (publicT === undefined || member === undefined) {
+    return <Shell theme={theme}><div className="p-10 animate-pulse text-sm" style={{ color: muted }}>Loading…</div></Shell>;
+  }
+  if (!publicT) {
+    return (
+      <Shell theme={theme}>
+        <div className="mx-auto max-w-3xl p-10">
+          <div className="p-6 text-sm" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+            <div className="font-semibold">404 — Banking tenant not found</div>
+            <Link to="/business" className="underline" style={{ color: accent }}>Back to Business Suite</Link>
+          </div>
+        </div>
+      </Shell>
+    );
+  }
+
+  const lifecycle = (publicT as any).status ?? "active";
+  const bankingUp = lifecycle === "active";
+  const brandName = (publicT as any).displayName ?? publicT.siteName;
+
+  // ── Join screen (not yet a member of this tenant) ──
+  if (!member) {
+    return (
+      <Shell theme={theme}>
+        <div className="mx-auto max-w-md px-4 py-16">
+          <div className="p-8 text-center" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl" style={{ backgroundColor: accent }}>
+              <ShieldCheck className="h-6 w-6 text-white" />
+            </div>
+            <h1 className="mt-4 text-xl font-bold tracking-tight">{brandName}</h1>
+            <p className="mt-1 text-sm" style={{ color: muted }}>
+              {theme.tagline ?? "Secure digital banking for the modern world."}
+            </p>
+            <p className="mt-4 text-xs" style={{ color: muted }}>
+              This portal is tenant-scoped. Sign in and join {brandName} to continue.
+            </p>
+            <div className="mt-6 space-y-2">
+              <button
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await joinMutation({ tenantId: id });
+                    toast.success(`Joined ${brandName}`);
+                  } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    if (msg.includes("TENANT_UNAVAILABLE")) toast.error("This tenant is unavailable (paused/disabled).");
+                    else toast.error(msg);
+                  } finally { setBusy(false); }
+                }}
+                disabled={busy || !bankingUp}
+                className="w-full py-3 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: primary, borderRadius: radius }}
+              >
+                Join as customer
+              </button>
+              <Link
+                to={`/auth?returnTo=/site/${id}/banking`}
+                className="block w-full py-3 text-sm font-semibold"
+                style={{ border: `1px solid ${border}`, borderRadius: radius, color: text }}
+              >
+                Sign in
+              </Link>
+              <Link to={`/business/sites/${id}`} className="block pt-2 text-xs" style={{ color: muted }}>
+                View in Business Suite
+              </Link>
+            </div>
+          </div>
+          {!bankingUp && (
+            <div className="mt-3 px-4 py-3 text-xs" style={{ ...bankTone(theme, "warning"), borderWidth: 1, borderStyle: "solid", borderRadius: radius }}>
+              This tenant is {lifecycle} — joining and transactions are temporarily disabled. Historical records remain preserved.
+            </div>
+          )}
+        </div>
+      </Shell>
+    );
+  }
+
+  // ── Member workspace ──
+  const acctOpts = (accounts ?? []) as any[];
+  const transfers: any[] = history?.transfers ?? [];
+  const deposits: any[] = history?.deposits ?? [];
+  const withdrawals: any[] = history?.withdrawals ?? [];
 
   const kycList = onboard?.kyc ?? [];
   const latestKyc = kycList[0];
   const pendingKyc = !latestKyc || latestKyc.status === "submitted" || latestKyc.status === "under_review";
+  const kycTone: BankTone = !latestKyc ? "neutral" : latestKyc.status === "approved" ? "success" : latestKyc.status === "rejected" ? "danger" : "warning";
+
+  const totalMinor = acctOpts.reduce((s: number, a: any) => s + (a.balanceMinor ?? 0), 0);
+  const activeAccounts = acctOpts.filter((a: any) => a.status === "active");
+  const day = Date.now() - 24 * 3600 * 1000;
+  const last24 = transfers.filter((t: any) => t.createdAt > day).length;
+  const pending = deposits.filter((d: any) => d.status === "pending" || d.status === "processing").length;
 
   const doKyc = async () => {
     if (!kName.trim()) { toast.error("Provide full name"); return; }
     setBusy(true);
-    try { await submitKycAny({ tenantId: id, fullName: kName.trim(), dateOfBirth: kDob || undefined }); toast.success("KYC submitted"); setKName(""); setKDob(""); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    try { await submitKycAny({ tenantId: id, fullName: kName.trim(), dateOfBirth: kDob || undefined }); toast.success("KYC submitted"); setKName(""); setKDob(""); }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
-
   const doOpen = async () => {
     if (!accountForm.name.trim()) return;
     setBusy(true);
-    try { await openAccount({ tenantId: id, name: accountForm.name.trim(), accountType: accountForm.accountType as any, currency: accountForm.currency || undefined }); toast.success("Account opened"); setAccountForm({ name: "", accountType: "checking", currency: "" }); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    try { await openAccount({ tenantId: id, name: accountForm.name.trim(), accountType: accountForm.accountType as any, currency: accountForm.currency || undefined }); toast.success("Account opened"); setAccountForm({ name: "", accountType: "checking", currency: "" }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   const doDep = async () => {
     const minor = Math.round(Number(dep.amount) * 100);
     setBusy(true);
-    try { await createDeposit({ tenantId: id, accountId: dep.accountId ? dep.accountId as Id<"tenantAccounts"> : undefined, amountMinor: minor, currency: currency, method: dep.method }); toast.success("Deposit created — pending"); setDep({ accountId: "", amount: "", method: "bank_transfer" }); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    try { await createDeposit({ tenantId: id, accountId: dep.accountId ? dep.accountId as Id<"tenantAccounts"> : undefined, amountMinor: minor, currency: cur, method: dep.method }); toast.success("Deposit created — pending"); setDep({ accountId: "", amount: "", method: "bank_transfer" }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   const doWth = async () => {
     const minor = Math.round(Number(wth.amount) * 100);
     setBusy(true);
-    try { await createWithdrawal({ tenantId: id, accountId: wth.accountId as Id<"tenantAccounts">, amountMinor: minor, destination: wth.destination || undefined }); toast.success("Withdrawal completed"); setWth({ accountId: "", amount: "", destination: "" }); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    try { await createWithdrawal({ tenantId: id, accountId: wth.accountId as Id<"tenantAccounts">, amountMinor: minor, destination: wth.destination || undefined }); toast.success("Withdrawal completed"); setWth({ accountId: "", amount: "", destination: "" }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   const doTx = async () => {
     const minor = Math.round(Number(tx.amount) * 100);
@@ -131,177 +267,454 @@ export default function SiteBanking() {
   };
   const doBen = async () => {
     setBusy(true);
-    try { await addBen({ tenantId: id, nickname: benForm.nickname.trim(), accountNumber: benForm.accountNumber.trim(), accountHolderName: benForm.holderName || undefined, isExternal: !!benForm.isExternal }); toast.success("Beneficiary added"); setBenForm({ nickname: "", accountNumber: "", holderName: "", isExternal: false }); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
+    try { await addBen({ tenantId: id, nickname: benForm.nickname.trim(), accountNumber: benForm.accountNumber.trim(), accountHolderName: benForm.holderName || undefined, isExternal: !!benForm.isExternal }); toast.success("Beneficiary added"); setBenForm({ nickname: "", accountNumber: "", holderName: "", isExternal: false }); }
+    catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
 
-  const acctOpts = accounts ?? [];
-  const transfers: any[] = history?.transfers ?? [];
-  const deposits: any[] = history?.deposits ?? [];
-  const withdrawals: any[] = history?.withdrawals ?? [];
+  const TABS: { k: Tab; label: string; Icon: typeof Wallet }[] = [
+    { k: "overview", label: "Overview", Icon: Wallet },
+    { k: "accounts", label: "Accounts", Icon: CreditCard },
+    { k: "transfers", label: "Move money", Icon: ArrowLeftRight },
+    { k: "beneficiaries", label: "Payees", Icon: Users },
+    { k: "statements", label: "Statements", Icon: FileText },
+  ];
 
-  const NavItem = ({ v, label, Icon }: any) => <button onClick={() => setTab(v)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${tab === v ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300"}`}><Icon className="h-4 w-4" /> {label}</button>;
+  const secTitle = "text-[11px] font-semibold uppercase tracking-wider";
+
+  const statusTone = (s: string): BankTone =>
+    s === "completed" || s === "approved" || s === "active" ? "success"
+      : s === "pending" || s === "processing" || s === "submitted" || s === "under_review" ? "warning"
+        : s === "failed" || s === "rejected" ? "danger" : "neutral";
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight flex items-center gap-2"><Landmark className="h-6 w-6" /> {(publicT as any).displayName ?? publicT.siteName} — Banking</h1>
-          <div className="text-sm text-slate-500">{(publicT as any).subdomain}.g0ki.com · {currency} · <span className={bankingUp ? "text-emerald-600" : "text-red-600"}>{lifecycle}</span> · realtime via Convex subscriptions</div>
-          <div className="flex gap-2 mt-2">
-            <Link to={`/site/${id}`} className="text-xs rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">Public banking site</Link>
-            <Link to={`/site/${id}/admin`} className="text-xs rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">Bank admin app</Link>
-          </div>
-        </div>
-        <div className="text-xs text-slate-400">Customer onboarding · KYC · Accounts · Ledger-backed balances · Transfers · Statements</div>
-      </div>
-
-      {!bankingUp && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm flex items-center gap-2"><AlertIcon /> This tenant is {lifecycle} — transactions and on-boarding are temporarily disabled. Historical records & ledger are preserved.</div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        <NavItem v="overview" label="Overview" Icon={Wallet} />
-        <NavItem v="accounts" label="Accounts" Icon={CreditCard} />
-        <NavItem v="transfers" label="Send / Deposit / Withdraw" Icon={ArrowLeftRight} />
-        <NavItem v="beneficiaries" label="Beneficiaries" Icon={Users} />
-        <NavItem v="statements" label="Statements" Icon={FileText} />
-      </div>
-
-      {tab === "overview" && (
-        <div className="space-y-4">
-          {/* Onboarding / KYC banner */}
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
-            <div className="text-sm font-semibold flex items-center gap-2"><ShieldCheck className={`h-4 w-4 ${pendingKyc ? "text-amber-600" : latestKyc?.status === "approved" ? "text-emerald-600" : "text-slate-400"}`} /> Onboarding & KYC {pendingKyc ? "— submit to unlock higher limits" : latestKyc?.status === "approved" ? "— verified" : null}</div>
-            {latestKyc && <div className="text-sm text-slate-600">Latest: {latestKyc.fullName} · <span className={`rounded-full px-2 py-0.5 text-xs ${latestKyc.status === "approved" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : latestKyc.status === "rejected" ? "bg-red-50 text-red-700 border border-red-200" : "bg-amber-50 text-amber-700 border border-amber-200"}`}>{latestKyc.status}</span> · {fmtDate(latestKyc.createdAt)}</div>}
-            <div className="flex flex-wrap gap-2">
-              <input value={kName} onChange={e => setKName(e.target.value)} placeholder="Full legal name" className="rounded-xl border border-slate-200 px-4 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
-              <input type="date" value={kDob} onChange={e => setKDob(e.target.value)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
-              <button disabled={busy || !kName.trim() || !bankingUp} onClick={doKyc} className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm disabled:opacity-50">Submit KYC</button>
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-3 gap-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="text-xs text-slate-500">Balance (sum of active accounts)</div><div className="text-2xl font-bold mt-1">{accounts === undefined ? "—" : <><Money minor={accounts.reduce((s: number, a: any) => s + ((a as any).balanceMinor ?? 0), 0)} currency={currency} /></>}</div></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="text-xs text-slate-500">Transfers</div><div className="text-xl font-mono mt-1">{transfers.length} · last 24h {transfers.filter((t: any) => (t as any).createdAt > Date.now() - 24 * 3600 * 1000).length}</div></div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5"><div className="text-xs text-slate-500">Notifications</div><div className="text-sm mt-1"><Link to="/notifications" className="underline">Notification center</Link> — banking events live via realtime</div></div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white divide-y divide-slate-100">
-            <div className="p-4 flex items-center gap-2 text-sm font-semibold"><Bell className="h-4 w-4" /> Recent transfers</div>
-            {transfers.length === 0 ? <div className="p-6 text-center text-sm text-slate-400">No transfers yet — try Send below.</div> : transfers.slice(0, 10).map((t: any) => (
-              <div key={t._id} className="p-4 flex items-center gap-3 text-sm"><span className="font-mono text-xs rounded-full bg-slate-100 px-2 py-1">{t.reference}</span><span className={`text-xs rounded-full px-2 py-0.5 ${t.status === "completed" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100"}`}>{t.status}</span><span className="flex-1"><Money minor={t.amountMinor} currency={t.currency} /></span><span className="text-xs text-slate-500 hidden sm:block">{fmtDate(t.createdAt)}</span></div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {tab === "accounts" && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <div className="text-sm font-semibold flex items-center gap-2"><CreditCard className="h-4 w-4" /> Open account</div>
-            <div className="flex flex-wrap gap-2">
-              <input value={accountForm.name} onChange={e => setAccountForm({ ...accountForm, name: e.target.value })} placeholder="Account name (e.g. Checking)" className="rounded-xl border border-slate-200 px-4 py-2 text-sm" />
-              <select value={accountForm.accountType} onChange={e => setAccountForm({ ...accountForm, accountType: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm"><option value="checking">checking</option><option value="savings">savings</option><option value="credit">credit</option></select>
-              <input value={accountForm.currency} onChange={e => setAccountForm({ ...accountForm, currency: e.target.value.toUpperCase() })} placeholder={currency} className="w-20 rounded-xl border border-slate-200 px-4 py-2 text-sm" />
-              <button disabled={busy || !accountForm.name.trim() || !bankingUp} onClick={doOpen} className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm disabled:opacity-50"><Plus className="inline h-3.5 w-3.5" /> Open</button>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <div className="text-sm font-semibold">My accounts</div>
-            {accounts === undefined ? <div className="text-sm text-slate-400 animate-pulse">Loading…</div> : accounts.length === 0 ? <div className="text-sm text-slate-400">No accounts yet — open one above.</div> : <div className="grid sm:grid-cols-2 gap-4">
-              {accounts.map((a: any) => (
-                <div key={a._id} className="rounded-xl border border-slate-200 p-4">
-                  <div className="font-medium">{a.name} <span className={`ml-2 text-[11px] rounded-full px-2 py-0.5 ${a.status === "active" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : a.status === "frozen" ? "bg-amber-50 text-amber-700" : "bg-slate-100"}`}>{a.status}</span></div>
-                  <div className="text-xs text-slate-500 font-mono">{a.accountNumber}</div>
-                  <div className="text-lg font-bold mt-1"><Money minor={a.balanceMinor} currency={a.currency} /></div>
-                  <div className="text-xs text-slate-400">Ledger-backed · double-entry</div>
-                </div>
-              ))}
-            </div>}
-          </div>
-        </div>
-      )}
-
-      {tab === "transfers" && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <div className="text-sm font-semibold flex items-center gap-2"><ArrowLeftRight className="h-4 w-4" /> Internal transfer (tenant → tenant)</div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <select value={tx.sourceAccountId} onChange={e => setTx({ ...tx, sourceAccountId: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"><option value="">Source account…</option>{acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} — <Money minor={a.balanceMinor} currency={a.currency} /> · {a.accountNumber}</option>)}</select>
-              <select value={tx.destAccountId} onChange={e => setTx({ ...tx, destAccountId: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"><option value="">Destination account…</option>{acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}</select>
-              <input type="number" step="0.01" placeholder="Amount" value={tx.amount} onChange={e => setTx({ ...tx, amount: e.target.value })} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
-              <button disabled={busy || !tx.sourceAccountId || !tx.destAccountId || !tx.amount || !bankingUp} onClick={doTx} className="rounded-xl bg-slate-900 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-50">Send transfer (atomic, fee-aware)</button>
-            </div>
-            <div className="text-xs text-slate-400">Beneficiary/external flows: use Beneficiaries tab then retry with a beneficiary. External integrations are designed additively (do not rewrite the ledger).</div>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-              <div className="text-sm font-semibold flex items-center gap-2"><ArrowDownLeft className="h-4 w-4 text-emerald-600" /> Deposit</div>
-              <select value={dep.accountId} onChange={e => setDep({ ...dep, accountId: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"><option value="">Account (optional)…</option>{acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}</select>
-              <input type="number" step="0.01" value={dep.amount} onChange={e => setDep({ ...dep, amount: e.target.value })} placeholder="Amount" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
-              <select value={dep.method} onChange={e => setDep({ ...dep, method: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="card">Card</option><option value="crypto">Crypto (blocked without provider)</option></select>
-              <button disabled={busy || !dep.amount || !bankingUp} onClick={doDep} className="w-full rounded-xl bg-emerald-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50">Create deposit (pending → admin reconcile)</button>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-              <div className="text-sm font-semibold flex items-center gap-2"><ArrowUpRight className="h-4 w-4 text-red-600" /> Withdrawal</div>
-              <select value={wth.accountId} onChange={e => setWth({ ...wth, accountId: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"><option value="">Source account…</option>{acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} — <Money minor={a.balanceMinor} currency={a.currency} /></option>)}</select>
-              <input type="number" step="0.01" value={wth.amount} onChange={e => setWth({ ...wth, amount: e.target.value })} placeholder="Amount" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
-              <input value={wth.destination} onChange={e => setWth({ ...wth, destination: e.target.value })} placeholder="Destination / method" className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm" />
-              <button disabled={busy || !wth.accountId || !wth.amount || !bankingUp} onClick={doWth} className="w-full rounded-xl bg-slate-900 text-white px-5 py-2.5 text-sm font-semibold disabled:opacity-50">Withdraw (atomic fee + balance check)</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === "beneficiaries" && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <div className="text-sm font-semibold flex items-center gap-2"><Users className="h-4 w-4" /> Add beneficiary</div>
-            <div className="flex flex-wrap gap-2">
-              <input value={benForm.nickname} onChange={e => setBenForm({ ...benForm, nickname: e.target.value })} placeholder="Nickname" className="rounded-xl border border-slate-200 px-4 py-2 text-sm" />
-              <input value={benForm.accountNumber} onChange={e => setBenForm({ ...benForm, accountNumber: e.target.value })} placeholder="External account number" className="rounded-xl border border-slate-200 px-4 py-2 text-sm" />
-              <input value={benForm.holderName} onChange={e => setBenForm({ ...benForm, holderName: e.target.value })} placeholder="Holder name (optional)" className="rounded-xl border border-slate-200 px-4 py-2 text-sm" />
-              <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={benForm.isExternal} onChange={e => setBenForm({ ...benForm, isExternal: e.target.checked })} /> external bank</label>
-              <button disabled={busy || !benForm.nickname.trim() || !benForm.accountNumber.trim() || !bankingUp} onClick={doBen} className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm disabled:opacity-50">Add</button>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="text-sm font-semibold">Saved beneficiaries</div>
-            {bens === undefined ? <div className="text-sm text-slate-400 animate-pulse mt-2">Loading…</div> : bens.length === 0 ? <div className="text-sm text-slate-400 mt-2">No beneficiaries yet.</div> : <ul className="divide-y divide-slate-100 mt-2">
-              {bens.map((b: any) => (
-                <li key={b._id} className="py-2 flex items-center gap-3 text-sm"><span className="font-medium">{b.nickname}</span><span className="text-slate-500 font-mono text-xs">{b.accountNumber}</span><span className="text-xs rounded-full bg-slate-100 px-2 py-0.5">{b.isExternal ? "external" : "internal"}</span><span className="ml-auto" /><button onClick={async () => { try { await rmBen({ tenantId: id, beneficiaryId: b._id }); toast.success("Removed"); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } }} className="text-xs text-red-600 hover:underline">Remove</button></li>
-              ))}
-            </ul>}
-          </div>
-        </div>
-      )}
-
-      {tab === "statements" && (
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
-            <div className="text-sm font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Statement — authoritative ledger (balances never from client input)</div>
-            <div className="flex flex-wrap gap-2">
-              <select value={stmtAcc} onChange={e => setStmtAcc(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm"><option value="">Pick account…</option>{acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}</select>
-            </div>
-            {!stmt ? <div className="text-sm text-slate-400">Select an account above; balances and lines are derived from double-entry ledger entries on the server.</div> : (
-              <div className="space-y-3">
-                <div className="grid sm:grid-cols-3 gap-4 text-sm">
-                  <div className="rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Opening</div><div className="font-mono font-semibold"><Money minor={(stmt as any).openingBalanceMinor} currency={currency} /></div></div>
-                  <div className="rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Closing (computed from ledger)</div><div className="font-mono font-semibold"><Money minor={(stmt as any).closingBalanceMinor} currency={currency} /></div></div>
-                  <div className="rounded-xl border border-slate-200 p-4"><div className="text-xs text-slate-500">Authoritative account balance</div><div className="font-mono font-semibold"><Money minor={(stmt as any).authoritativeBalanceMinor} currency={currency} /></div></div>
-                </div>
-                <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
-                  {(stmt as any).posts?.length ? (stmt as any).posts.map((p: any) => (
-                    <div key={p._id} className="p-3 flex items-center gap-3 text-sm"><span className={`text-xs rounded-full px-2 py-0.5 ${p.creditMinor > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>{p.creditMinor > 0 ? `+ <Money minor=${p.creditMinor} />` : `- ${p.debitMinor}`} {currency}</span><span className="flex-1">{p.description}</span><span className="text-xs text-slate-400 hidden sm:block">{fmtDate(p.createdAt)}</span></div>
-                  )) : <div className="p-6 text-center text-sm text-slate-400">No ledger entries in this window.</div>}
-                </div>
+    <Shell theme={theme}>
+      {/* ── App bar ── */}
+      <header style={{ backgroundColor: primary }}>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <div className="flex h-16 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: accent }}>
+                <Landmark className="h-5 w-5 text-white" />
               </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold tracking-tight text-white">{brandName}</p>
+                <p className="truncate text-[11px] text-white/55">
+                  {theme.tagline ?? "Digital banking"}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="hidden rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/80 sm:inline">
+                {cur}
+              </span>
+              <span className="hidden rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium capitalize text-white/80 md:inline">
+                {lifecycle}
+              </span>
+              <Link to={`/site/${id}/dashboard`} className="rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/25">
+                Classic view
+              </Link>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Balance hero (the only gradient surface in the app) ── */}
+      <div style={{ backgroundImage: `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)` }}>
+        <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">Total balance</p>
+              <p className="mt-1 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                {accounts === undefined ? "—" : <Money minor={totalMinor} currency={cur} />}
+              </p>
+              <p className="mt-1 text-xs text-white/60">
+                {activeAccounts.length} active account{activeAccounts.length === 1 ? "" : "s"} · ledger-backed
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: "Deposit", Icon: ArrowDownLeft, t: "transfers" as Tab },
+                { label: "Send", Icon: ArrowLeftRight, t: "transfers" as Tab },
+                { label: "Withdraw", Icon: ArrowUpRight, t: "transfers" as Tab },
+              ].map((a) => (
+                <button
+                  key={a.label}
+                  onClick={() => setTab(a.t)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-medium text-white backdrop-blur-sm transition-colors hover:bg-white/25"
+                >
+                  <a.Icon className="h-4 w-4" /> {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        {!bankingUp && (
+          <div className="mb-5 flex items-center gap-2 px-4 py-3 text-sm"
+            style={{ ...bankTone(theme, "warning"), borderWidth: 1, borderStyle: "solid", borderRadius: radius }}>
+            This tenant is {lifecycle} — transactions and onboarding are temporarily disabled. Historical records and the ledger are preserved.
+          </div>
+        )}
+
+        <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+          {/* ── Rail (desktop) / scroller (mobile) ── */}
+          <nav className="lg:sticky lg:top-6 lg:self-start">
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0">
+              {TABS.map(({ k, label, Icon }) => {
+                const active = tab === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setTab(k)}
+                    className="inline-flex shrink-0 items-center gap-2 px-3.5 py-2.5 text-sm font-medium transition-colors lg:w-full"
+                    style={{
+                      borderRadius: radius,
+                      backgroundColor: active ? theme.accentSoft : "transparent",
+                      color: active ? accent : muted,
+                      border: `1px solid ${active ? theme.accentSoft : "transparent"}`,
+                    }}
+                  >
+                    <Icon className="h-4 w-4" /> {label}
+                    {active && <ChevronRight className="ml-auto hidden h-3.5 w-3.5 lg:block" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* KYC state lives in the rail so it is always visible */}
+            <div className="mt-3 hidden p-3 lg:block" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+              <p className={secTitle} style={{ color: muted }}>Verification</p>
+              <div className="mt-2">
+                <Pill theme={theme} tone={kycTone}>{pendingKyc ? (latestKyc ? latestKyc.status.replace(/_/g, " ") : "not started") : latestKyc?.status}</Pill>
+              </div>
+              <p className="mt-2 text-[11px]" style={{ color: muted }}>
+                {latestKyc?.status === "approved" ? "Full limits unlocked." : "Submit KYC to unlock higher limits."}
+              </p>
+            </div>
+          </nav>
+
+          {/* ── Panel area ── */}
+          <div className="min-w-0 space-y-5">
+            {tab === "overview" && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  {[
+                    { label: "Accounts", value: String(acctOpts.length), sub: `${activeAccounts.length} active` },
+                    { label: "Transfers (24h)", value: String(last24), sub: `${transfers.length} lifetime` },
+                    { label: "Pending deposits", value: String(pending), sub: "awaiting reconciliation" },
+                  ].map((k) => (
+                    <Panel theme={theme} key={k.label} className="p-5">
+                      <p className={secTitle} style={{ color: muted }}>{k.label}</p>
+                      <p className="mt-1.5 text-2xl font-bold tracking-tight">{k.value}</p>
+                      <p className="text-[11px]" style={{ color: muted }}>{k.sub}</p>
+                    </Panel>
+                  ))}
+                </div>
+
+                <Panel theme={theme}>
+                  <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${divider}` }}>
+                    <p className="flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4" style={{ color: accent }} /> Onboarding & KYC</p>
+                    <Pill theme={theme} tone={kycTone}>{latestKyc ? latestKyc.status.replace(/_/g, " ") : "not started"}</Pill>
+                  </div>
+                  <div className="space-y-3 p-5">
+                    {latestKyc && (
+                      <p className="text-xs" style={{ color: muted }}>
+                        Latest submission: {latestKyc.fullName} · {fmtDate(latestKyc.createdAt)}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <input value={kName} onChange={(e) => setKName(e.target.value)} placeholder="Full legal name"
+                        className="flex-1 px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                      <input type="date" value={kDob} onChange={(e) => setKDob(e.target.value)}
+                        className="px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                      <button disabled={busy || !kName.trim() || !bankingUp} onClick={doKyc}
+                        className="px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                        style={{ backgroundColor: primary, borderRadius: radius }}>
+                        Submit KYC
+                      </button>
+                    </div>
+                  </div>
+                </Panel>
+
+                <Panel theme={theme}>
+                  <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${divider}` }}>
+                    <p className="flex items-center gap-2 text-sm font-semibold"><Bell className="h-4 w-4" style={{ color: accent }} /> Recent transfers</p>
+                    <button onClick={() => setTab("transfers")} className="text-xs font-medium" style={{ color: accent }}>Move money →</button>
+                  </div>
+                  {transfers.length === 0 ? (
+                    <div className="p-8 text-center text-sm" style={{ color: muted }}>No transfers yet — deposit first, then send.</div>
+                  ) : (
+                    <div>
+                      {transfers.slice(0, 8).map((t: any) => (
+                        <div key={t._id} className="flex items-center gap-3 px-5 py-3.5 text-sm" style={{ borderTop: `1px solid ${divider}` }}>
+                          <span className="shrink-0 rounded-md px-2 py-1 font-mono text-[11px]" style={{ backgroundColor: theme.subtle, color: muted }}>{t.reference}</span>
+                          <Pill theme={theme} tone={statusTone(t.status)}>{t.status}</Pill>
+                          <span className="ml-auto font-semibold"><Money minor={t.amountMinor} currency={t.currency} /></span>
+                          <span className="hidden text-[11px] sm:block" style={{ color: muted }}>{fmtDate(t.createdAt)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Panel>
+              </>
+            )}
+
+            {tab === "accounts" && (
+              <>
+                <Panel theme={theme} className="space-y-3 p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold"><Plus className="h-4 w-4" style={{ color: accent }} /> Open an account</p>
+                  <div className="flex flex-wrap gap-2">
+                    <input value={accountForm.name} onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })}
+                      placeholder="Account name (e.g. Everyday Checking)" className="min-w-[200px] flex-1 px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <select value={accountForm.accountType} onChange={(e) => setAccountForm({ ...accountForm, accountType: e.target.value })}
+                      className="px-3.5 py-2.5 text-sm capitalize outline-none" style={fieldStyle}>
+                      <option value="checking">checking</option>
+                      <option value="savings">savings</option>
+                      <option value="credit">credit</option>
+                    </select>
+                    <input value={accountForm.currency} onChange={(e) => setAccountForm({ ...accountForm, currency: e.target.value.toUpperCase() })}
+                      placeholder={cur} className="w-24 px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <button disabled={busy || !accountForm.name.trim() || !bankingUp} onClick={doOpen}
+                      className="px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: primary, borderRadius: radius }}>
+                      Open
+                    </button>
+                  </div>
+                </Panel>
+
+                {accounts === undefined ? (
+                  <Panel theme={theme} className="animate-pulse p-6 text-sm" ><span style={{ color: muted }}>Loading accounts…</span></Panel>
+                ) : acctOpts.length === 0 ? (
+                  <Panel theme={theme} className="p-10 text-center text-sm"><CreditCard className="mx-auto mb-2 h-8 w-8" style={{ color: muted }} /><span style={{ color: muted }}>No accounts yet — open one above.</span></Panel>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {acctOpts.map((a: any) => (
+                      <Panel theme={theme} key={a._id} className="p-5">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">{a.name}</p>
+                            <p className="font-mono text-[11px]" style={{ color: muted }}>{a.accountNumber}</p>
+                          </div>
+                          <Pill theme={theme} tone={statusTone(a.status)}>{a.status}</Pill>
+                        </div>
+                        <p className="mt-4 text-2xl font-bold tracking-tight"><Money minor={a.balanceMinor} currency={a.currency} /></p>
+                        <p className="mt-1 text-[11px]" style={{ color: muted }}>Balance derived from double-entry ledger entries</p>
+                      </Panel>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {tab === "transfers" && (
+              <>
+                <Panel theme={theme} className="space-y-3 p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold"><ArrowLeftRight className="h-4 w-4" style={{ color: accent }} /> Transfer between accounts</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <select value={tx.sourceAccountId} onChange={(e) => setTx({ ...tx, sourceAccountId: e.target.value })}
+                      className="px-3.5 py-2.5 text-sm outline-none" style={fieldStyle}>
+                      <option value="">Source account…</option>
+                      {acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}
+                    </select>
+                    <select value={tx.destAccountId} onChange={(e) => setTx({ ...tx, destAccountId: e.target.value })}
+                      className="px-3.5 py-2.5 text-sm outline-none" style={fieldStyle}>
+                      <option value="">Destination account…</option>
+                      {acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}
+                    </select>
+                    <input type="number" step="0.01" placeholder={`Amount (${cur})`} value={tx.amount} onChange={(e) => setTx({ ...tx, amount: e.target.value })}
+                      className="px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <button disabled={busy || !tx.sourceAccountId || !tx.destAccountId || !tx.amount || !bankingUp} onClick={doTx}
+                      className="px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: primary, borderRadius: radius }}>
+                      Send transfer
+                    </button>
+                  </div>
+                  <p className="text-[11px]" style={{ color: muted }}>
+                    Transfers post balanced double-entry lines atomically and are fee-snapshotted at execution time.
+                  </p>
+                </Panel>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Panel theme={theme} className="space-y-3 p-5">
+                    <p className="flex items-center gap-2 text-sm font-semibold"><ArrowDownLeft className="h-4 w-4" style={{ color: bankTone(theme, "success").fg }} /> Deposit</p>
+                    <select value={dep.accountId} onChange={(e) => setDep({ ...dep, accountId: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-sm outline-none" style={fieldStyle}>
+                      <option value="">Account (optional)…</option>
+                      {acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}
+                    </select>
+                    <input type="number" step="0.01" value={dep.amount} onChange={(e) => setDep({ ...dep, amount: e.target.value })}
+                      placeholder={`Amount (${cur})`} className="w-full px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <select value={dep.method} onChange={(e) => setDep({ ...dep, method: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-sm outline-none" style={fieldStyle}>
+                      <option value="bank_transfer">Bank transfer</option>
+                      <option value="cash">Cash</option>
+                      <option value="card">Card</option>
+                      <option value="crypto">Crypto (needs a provider)</option>
+                    </select>
+                    <button disabled={busy || !dep.amount || !bankingUp} onClick={doDep}
+                      className="w-full py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: okColor, borderRadius: radius }}>
+                      Create deposit
+                    </button>
+                    <p className="text-[11px]" style={{ color: muted }}>Deposits land as pending until an operator reconciles them.</p>
+                  </Panel>
+
+                  <Panel theme={theme} className="space-y-3 p-5">
+                    <p className="flex items-center gap-2 text-sm font-semibold"><ArrowUpRight className="h-4 w-4" style={{ color: bankTone(theme, "danger").fg }} /> Withdraw</p>
+                    <select value={wth.accountId} onChange={(e) => setWth({ ...wth, accountId: e.target.value })}
+                      className="w-full px-3.5 py-2.5 text-sm outline-none" style={fieldStyle}>
+                      <option value="">Source account…</option>
+                      {acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}
+                    </select>
+                    <input type="number" step="0.01" value={wth.amount} onChange={(e) => setWth({ ...wth, amount: e.target.value })}
+                      placeholder={`Amount (${cur})`} className="w-full px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <input value={wth.destination} onChange={(e) => setWth({ ...wth, destination: e.target.value })}
+                      placeholder="Destination / method" className="w-full px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <button disabled={busy || !wth.accountId || !wth.amount || !bankingUp} onClick={doWth}
+                      className="w-full py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: primary, borderRadius: radius }}>
+                      Withdraw
+                    </button>
+                    <p className="text-[11px]" style={{ color: muted }}>Fee and available balance are re-checked server-side.</p>
+                  </Panel>
+                </div>
+
+                <Panel theme={theme}>
+                  <p className="px-5 py-4 text-sm font-semibold" style={{ borderBottom: `1px solid ${divider}` }}>Banking history</p>
+                  {deposits.length === 0 && withdrawals.length === 0 ? (
+                    <div className="p-8 text-center text-sm" style={{ color: muted }}>Nothing recorded yet.</div>
+                  ) : (
+                    <div>
+                      {[...deposits.map((d) => ({ ...d, kind: "deposit" })), ...withdrawals.map((w) => ({ ...w, kind: "withdrawal" }))]
+                        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+                        .slice(0, 12)
+                        .map((r: any) => (
+                          <div key={r._id} className="flex items-center gap-3 px-5 py-3.5 text-sm" style={{ borderTop: `1px solid ${divider}` }}>
+                            <span className="capitalize" style={{ color: muted }}>{r.kind}</span>
+                            <Pill theme={theme} tone={statusTone(r.status)}>{r.status}</Pill>
+                            <span className="ml-auto font-semibold"><Money minor={r.amountMinor} currency={r.currency ?? cur} /></span>
+                            <span className="hidden text-[11px] sm:block" style={{ color: muted }}>{fmtDate(r.createdAt)}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </Panel>
+              </>
+            )}
+
+            {tab === "beneficiaries" && (
+              <>
+                <Panel theme={theme} className="space-y-3 p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4" style={{ color: accent }} /> Add a payee</p>
+                  <div className="flex flex-wrap gap-2">
+                    <input value={benForm.nickname} onChange={(e) => setBenForm({ ...benForm, nickname: e.target.value })} placeholder="Nickname"
+                      className="min-w-[140px] flex-1 px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <input value={benForm.accountNumber} onChange={(e) => setBenForm({ ...benForm, accountNumber: e.target.value })} placeholder="Account number"
+                      className="min-w-[160px] flex-1 px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <input value={benForm.holderName} onChange={(e) => setBenForm({ ...benForm, holderName: e.target.value })} placeholder="Holder name (optional)"
+                      className="min-w-[160px] flex-1 px-3.5 py-2.5 text-sm outline-none" style={fieldStyle} />
+                    <label className="inline-flex items-center gap-2 px-3 py-2.5 text-sm" style={fieldStyle}>
+                      <input type="checkbox" checked={benForm.isExternal} onChange={(e) => setBenForm({ ...benForm, isExternal: e.target.checked })} />
+                      External bank
+                    </label>
+                    <button disabled={busy || !benForm.nickname.trim() || !benForm.accountNumber.trim() || !bankingUp} onClick={doBen}
+                      className="px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{ backgroundColor: primary, borderRadius: radius }}>
+                      Add
+                    </button>
+                  </div>
+                </Panel>
+
+                <Panel theme={theme}>
+                  <p className="px-5 py-4 text-sm font-semibold" style={{ borderBottom: `1px solid ${divider}` }}>Saved payees</p>
+                  {bens === undefined ? (
+                    <div className="animate-pulse p-6 text-sm" style={{ color: muted }}>Loading…</div>
+                  ) : bens.length === 0 ? (
+                    <div className="p-8 text-center text-sm" style={{ color: muted }}>No payees saved yet.</div>
+                  ) : (
+                    <div>
+                      {bens.map((b: any) => (
+                        <div key={b._id} className="flex items-center gap-3 px-5 py-3.5 text-sm" style={{ borderTop: `1px solid ${divider}` }}>
+                          <span className="font-medium">{b.nickname}</span>
+                          <span className="font-mono text-[11px]" style={{ color: muted }}>{b.accountNumber}</span>
+                          <Pill theme={theme} tone="neutral">{b.isExternal ? "external" : "internal"}</Pill>
+                          <button
+                            onClick={async () => { try { await rmBen({ tenantId: id, beneficiaryId: b._id }); toast.success("Removed"); } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } }}
+                            className="ml-auto text-xs font-medium hover:underline" style={{ color: dangerColor }}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Panel>
+              </>
+            )}
+
+            {tab === "statements" && (
+              <Panel theme={theme} className="space-y-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="flex items-center gap-2 text-sm font-semibold"><FileText className="h-4 w-4" style={{ color: accent }} /> Statement</p>
+                  <select value={stmtAcc} onChange={(e) => setStmtAcc(e.target.value)}
+                    className="px-3.5 py-2.5 text-sm outline-none" style={fieldStyle}>
+                    <option value="">Pick an account…</option>
+                    {acctOpts.map((a: any) => <option key={a._id} value={a._id}>{a.name} · {a.accountNumber}</option>)}
+                  </select>
+                </div>
+
+                {!stmt ? (
+                  <p className="text-sm" style={{ color: muted }}>
+                    Balances and lines are derived from the double-entry ledger on the server — never from client input.
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {[
+                        { label: "Opening", value: stmt.openingBalanceMinor },
+                        { label: "Closing (from ledger)", value: stmt.closingBalanceMinor },
+                        { label: "Authoritative balance", value: stmt.authoritativeBalanceMinor },
+                      ].map((r) => (
+                        <div key={r.label} className="p-4" style={{ backgroundColor: theme.subtle, border: `1px solid ${border}`, borderRadius: radius }}>
+                          <p className={secTitle} style={{ color: muted }}>{r.label}</p>
+                          <p className="mt-1 font-mono text-sm font-semibold"><Money minor={r.value ?? 0} currency={cur} /></p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ border: `1px solid ${border}`, borderRadius: radius, overflow: "hidden" }}>
+                      {stmt.posts?.length ? (
+                        stmt.posts.map((p: any) => {
+                          const credit = (p.creditMinor ?? 0) > 0;
+                          return (
+                            <div key={p._id} className="flex items-center gap-3 px-4 py-3 text-sm" style={{ borderTop: `1px solid ${divider}` }}>
+                              <Pill theme={theme} tone={credit ? "success" : "danger"}>
+                                {credit
+                                  ? <><span>+</span><Money minor={p.creditMinor} currency={cur} /></>
+                                  : <><span>−</span><Money minor={p.debitMinor} currency={cur} /></>}
+                              </Pill>
+                              <span className="min-w-0 flex-1 truncate">{p.description}</span>
+                              <span className="hidden text-[11px] sm:block" style={{ color: muted }}>{fmtDate(p.createdAt)}</span>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="p-8 text-center text-sm" style={{ color: muted }}>No ledger entries in this window.</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Panel>
             )}
           </div>
         </div>
-      )}
-    </div>
+
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-3 pb-10 text-[11px]" style={{ color: muted }}>
+          <span>{brandName} · {cur} · powered by Cloudie</span>
+          <span className="inline-flex items-center gap-1"><Check className="h-3 w-3" style={{ color: accent }} /> realtime via Convex subscriptions</span>
+        </footer>
+      </div>
+    </Shell>
   );
 }
-
-function AlertIcon() { return <DollarSign className="h-4 w-4 text-amber-600" />; }

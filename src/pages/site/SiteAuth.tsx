@@ -4,7 +4,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { useState } from "react";
-import { Landmark, Eye, EyeOff, ArrowRight, UserPlus, LogIn } from "lucide-react";
+import { Landmark, Eye, EyeOff, ArrowRight, UserPlus, LogIn, Lock } from "lucide-react";
+import { bankTheme, bankTone } from "@/lib/tenantBankTheme";
 
 export default function SiteAuth() {
   const { siteId } = useParams<{ siteId: string }>();
@@ -18,8 +19,24 @@ export default function SiteAuth() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const primary = site?.branding?.primaryColor || "#003087";
-  const accent = site?.branding?.accentColor || "#0050a0";
+  // Design kit from the banking template applied at tenancy creation.
+  const theme = bankTheme(site?.branding);
+  const { primary, accent, panel, border, muted, radius, inputBg, subtle } = theme;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      // Authentication itself is handled by Cloudie's auth system, tenant-scoped
+      // via the return path — the customer lands back in this tenant's portal.
+      navigate(`/auth?returnTo=/site/${siteId}/dashboard`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (site === undefined) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
@@ -35,85 +52,77 @@ export default function SiteAuth() {
     );
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      // The auth is handled by Cloudie's auth system — we redirect to Cloudie auth
-      // and return back to the site dashboard
-      navigate(`/auth?returnTo=/site/${siteId}/dashboard`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fieldStyle = { backgroundColor: inputBg, border: `1px solid ${border}`, color: theme.text, borderRadius: radius } as const;
+  const labelStyle = { color: muted } as const;
 
   return (
     <SiteLayout>
-      <div className="min-h-[70vh] flex items-center justify-center py-12 px-4">
+      <div className="flex min-h-[70vh] items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
           {/* Logo + Title */}
-          <div className="text-center mb-8">
-            <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl mb-4 shadow-lg" style={{ backgroundColor: primary }}>
+          <div className="mb-8 text-center">
+            <div className="mb-4 inline-flex h-16 w-16 items-center justify-center shadow-lg" style={{ backgroundColor: primary, borderRadius: radius }}>
               <Landmark className="h-8 w-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold tracking-tight">
               {mode === "login" ? `Sign in to ${site.siteName}` : `Open Account at ${site.siteName}`}
             </h1>
-            <p className="mt-2 text-sm text-gray-500">
-              {mode === "login"
+            <p className="mt-2 text-sm" style={{ color: muted }}>
+              {theme.tagline ?? (mode === "login"
                 ? "Access your accounts and manage your finances."
-                : "Create your account to get started with digital banking."}
+                : "Create your account to get started with digital banking.")}
             </p>
           </div>
 
           {/* Form Card */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="p-6 shadow-sm" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === "signup" && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Full Name</label>
+                  <label className="mb-1.5 block text-sm font-medium" style={labelStyle}>Full Name</label>
                   <input
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="John Doe"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all"
-                    style={{ outlineColor: primary }}
+                    placeholder="Ada Lovelace"
+                    className="w-full px-4 py-3 text-sm outline-none transition-all focus:ring-2"
+                    style={fieldStyle}
                     required
                   />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+                <label className="mb-1.5 block text-sm font-medium" style={labelStyle}>Email</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                  className="w-full px-4 py-3 text-sm outline-none transition-all focus:ring-2"
+                  style={fieldStyle}
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+                <label className="mb-1.5 block text-sm font-medium" style={labelStyle}>Password</label>
                 <div className="relative">
                   <input
                     type={showPw ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:border-transparent transition-all"
+                    className="w-full px-4 py-3 pr-10 text-sm outline-none transition-all focus:ring-2"
+                    style={fieldStyle}
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPw(!showPw)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label={showPw ? "Hide password" : "Show password"}
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
+                    style={{ color: muted }}
                   >
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -121,7 +130,7 @@ export default function SiteAuth() {
               </div>
 
               {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                <div className="px-4 py-3 text-sm" style={{ ...bankTone(theme, "danger"), borderWidth: 1, borderStyle: "solid", borderRadius: radius }}>
                   {error}
                 </div>
               )}
@@ -129,11 +138,11 @@ export default function SiteAuth() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold text-white transition-all hover:scale-[1.01] disabled:opacity-50 shadow-lg"
-                style={{ backgroundColor: primary }}
+                className="flex w-full items-center justify-center gap-2 py-3 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.01] disabled:opacity-50"
+                style={{ backgroundColor: primary, borderRadius: radius }}
               >
                 {loading ? (
-                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                 ) : (
                   <>
                     {mode === "login" ? <LogIn className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
@@ -147,8 +156,8 @@ export default function SiteAuth() {
             <div className="mt-6 text-center">
               <button
                 onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
-                className="text-sm font-medium hover:underline transition-colors"
-                style={{ color: primary }}
+                className="text-sm font-medium hover:underline"
+                style={{ color: accent }}
               >
                 {mode === "login"
                   ? "Don't have an account? Open one now"
@@ -157,7 +166,15 @@ export default function SiteAuth() {
             </div>
           </div>
 
-          <p className="mt-6 text-center text-xs text-gray-400">
+          <div className="mt-4 flex items-start gap-2 p-3 text-xs" style={{ backgroundColor: subtle, border: `1px solid ${border}`, borderRadius: radius, color: muted }}>
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: accent }} />
+            <span>
+              Sign-in is handled by Cloudie's audited auth service and returns you to {site.siteName}.
+              All access attempts are logged.
+            </span>
+          </div>
+
+          <p className="mt-6 text-center text-xs" style={{ color: muted }}>
             By continuing, you agree to {site.siteName}'s Terms of Service and Privacy Policy.
           </p>
         </div>

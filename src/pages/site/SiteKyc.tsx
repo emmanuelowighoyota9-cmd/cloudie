@@ -8,17 +8,18 @@ import { toast } from "sonner";
 import {
   ShieldCheck, CheckCircle, XCircle, Clock, FileText, AlertTriangle,
 } from "lucide-react";
+import { bankTheme, bankTone, type BankTone } from "@/lib/tenantBankTheme";
 
 function fmtDate(ts: number) {
   return new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  approved: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  rejected: "bg-red-100 text-red-700 border-red-200",
-  submitted: "bg-amber-100 text-amber-700 border-amber-200",
-  under_review: "bg-blue-100 text-blue-700 border-blue-200",
-  resubmission_required: "bg-orange-100 text-orange-700 border-orange-200",
+const STATUS_TONE: Record<string, BankTone> = {
+  approved: "success",
+  rejected: "danger",
+  submitted: "warning",
+  under_review: "info",
+  resubmission_required: "warning",
 };
 
 export default function SiteKyc() {
@@ -26,13 +27,17 @@ export default function SiteKyc() {
   const site = useQuery(api.tenants.publicGet, siteId ? { id: siteId as Id<"tenantSites"> } : "skip");
   const kyc = useQuery(api.tenants.myKyc, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
   const submitKyc = useMutation(api.tenants.customerSubmitKyc);
-  const primary = site?.branding?.primaryColor || "#003087";
-  if (!site) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Site not found</div></div>;
+
+  // Design kit from the banking template applied at tenancy creation.
+  const theme = bankTheme(site?.branding);
+  const { primary, panel, border, text, muted, radius, inputBg, divider, subtle } = theme;
 
   const [formOpen, setFormOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [dob, setDob] = useState("");
   const [busy, setBusy] = useState(false);
+
+  if (!site) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Site not found</div></div>;
 
   const latest = kyc?.[0] ?? null;
   const canSubmit = !latest || latest.status === "resubmission_required";
@@ -52,56 +57,67 @@ export default function SiteKyc() {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
   }
 
+  const fieldStyle = { backgroundColor: inputBg, border: `1px solid ${border}`, color: text, borderRadius: radius } as const;
+  const latestTone: BankTone = latest ? STATUS_TONE[latest.status] ?? "neutral" : "neutral";
+  const tone = bankTone(theme, latestTone);
+
   return (
     <SiteLayout authenticated>
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 space-y-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Identity Verification</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-bold tracking-tight">Identity Verification</h1>
+          <p className="mt-1 text-sm" style={{ color: muted }}>
             Verify your identity to unlock full {site.siteName} features.
           </p>
         </div>
 
         {/* Current Status */}
         {latest ? (
-          <div className="rounded-2xl border bg-white p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                latest.status === "approved" ? "bg-emerald-100" : latest.status === "rejected" ? "bg-red-100" : "bg-amber-100"
-              }`}>
-                {latest.status === "approved" ? <CheckCircle className="h-5 w-5 text-emerald-600" /> :
-                 latest.status === "rejected" ? <XCircle className="h-5 w-5 text-red-600" /> :
-                 <Clock className="h-5 w-5 text-amber-600" />}
+          <div className="p-6" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full" style={{ backgroundColor: tone.bg }}>
+                {latest.status === "approved" ? <CheckCircle className="h-5 w-5" style={{ color: tone.fg }} /> :
+                  latest.status === "rejected" ? <XCircle className="h-5 w-5" style={{ color: tone.fg }} /> :
+                    <Clock className="h-5 w-5" style={{ color: tone.fg }} />}
               </div>
               <div>
-                <p className="font-bold text-gray-900 capitalize">{latest.status.replace(/_/g, " ")}</p>
-                <p className="text-xs text-gray-400">Submitted {fmtDate(latest.createdAt)}</p>
+                <p className="font-bold capitalize">{latest.status.replace(/_/g, " ")}</p>
+                <p className="text-xs" style={{ color: muted }}>Submitted {fmtDate(latest.createdAt)}</p>
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 text-sm">
-              <div><span className="text-gray-400">Full Name</span><p className="font-medium text-gray-900">{latest.fullName}</p></div>
-              {latest.dateOfBirth && <div><span className="text-gray-400">Date of Birth</span><p className="font-medium text-gray-900">{latest.dateOfBirth}</p></div>}
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <span className="text-xs" style={{ color: muted }}>Full Name</span>
+                <p className="font-medium">{latest.fullName}</p>
+              </div>
+              {latest.dateOfBirth && (
+                <div>
+                  <span className="text-xs" style={{ color: muted }}>Date of Birth</span>
+                  <p className="font-medium">{latest.dateOfBirth}</p>
+                </div>
+              )}
             </div>
 
             {latest.notes && (
-              <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm text-gray-700">
+              <div className="mt-4 p-3 text-sm" style={{ backgroundColor: subtle, border: `1px solid ${border}`, borderRadius: radius }}>
                 <span className="font-medium">Reviewer notes: </span>{latest.notes}
               </div>
             )}
 
             {latest.status === "resubmission_required" && (
-              <div className="mt-4 rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm text-orange-700 flex items-center gap-2">
+              <div className="mt-4 flex items-center gap-2 p-3 text-sm"
+                style={{ ...bankTone(theme, "warning"), borderWidth: 1, borderStyle: "solid", borderRadius: radius }}>
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 Additional information is required. Please submit an updated application.
               </div>
             )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
-            <ShieldCheck className="mx-auto h-14 w-14 text-gray-300" />
-            <h3 className="mt-4 text-lg font-bold text-gray-900">Not Verified</h3>
-            <p className="mt-2 text-sm text-gray-500 max-w-sm mx-auto">
+          <div className="p-12 text-center" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+            <ShieldCheck className="mx-auto h-14 w-14" style={{ color: muted }} />
+            <h3 className="mt-4 text-lg font-bold">Not Verified</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm" style={{ color: muted }}>
               Submit your identity to access all features including higher transaction limits and account management.
             </p>
           </div>
@@ -113,29 +129,34 @@ export default function SiteKyc() {
             {!formOpen ? (
               <button
                 onClick={() => setFormOpen(true)}
-                className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-bold text-white shadow-lg transition-all hover:scale-[1.01]"
-                style={{ backgroundColor: primary }}
+                className="flex w-full items-center justify-center gap-2 py-3.5 text-sm font-bold text-white shadow-lg transition-transform hover:scale-[1.01]"
+                style={{ backgroundColor: primary, borderRadius: radius }}
               >
                 <FileText className="h-4 w-4" />
                 {latest?.status === "resubmission_required" ? "Resubmit KYC" : "Start Verification"}
               </button>
             ) : (
-              <div className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
-                <h3 className="font-bold text-gray-900">Identity Information</h3>
+              <div className="space-y-4 p-6" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+                <h3 className="font-bold">Identity Information</h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Legal Name *</label>
+                  <label className="mb-1 block text-sm font-medium" style={{ color: muted }}>Full Legal Name *</label>
                   <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)}
                     placeholder="As it appears on your ID" required autoFocus
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2" />
+                    className="w-full px-4 py-3 text-sm outline-none" style={fieldStyle} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                  <label className="mb-1 block text-sm font-medium" style={{ color: muted }}>Date of Birth</label>
                   <input type="date" value={dob} onChange={(e) => setDob(e.target.value)}
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2" />
+                    className="w-full px-4 py-3 text-sm outline-none" style={fieldStyle} />
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setFormOpen(false)} className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium hover:bg-gray-50">Cancel</button>
-                  <button onClick={handleSubmit} disabled={busy || !fullName.trim()} className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50 shadow-lg" style={{ backgroundColor: primary }}>
+                  <button onClick={() => setFormOpen(false)} className="flex-1 py-2.5 text-sm font-medium"
+                    style={{ border: `1px solid ${border}`, borderRadius: radius, color: muted }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleSubmit} disabled={busy || !fullName.trim()}
+                    className="flex-1 py-2.5 text-sm font-bold text-white shadow-lg disabled:opacity-50"
+                    style={{ backgroundColor: primary, borderRadius: radius }}>
                     {busy ? "Submitting..." : "Submit"}
                   </button>
                 </div>
@@ -147,22 +168,28 @@ export default function SiteKyc() {
         {/* History */}
         {kyc && kyc.length > 1 && (
           <div>
-            <h3 className="text-sm font-bold text-gray-900 mb-3">Verification History</h3>
+            <h3 className="mb-3 text-sm font-bold">Verification History</h3>
             <div className="space-y-2">
-              {kyc.slice(1).map((k) => (
-                <div key={k._id} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4">
-                  <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${STATUS_STYLES[k.status] || "bg-gray-100 text-gray-600"}`}>
-                    {k.status.replace(/_/g, " ")}
+              {kyc.slice(1).map((k) => {
+                const t = bankTone(theme, STATUS_TONE[k.status] ?? "neutral");
+                return (
+                  <div key={k._id} className="flex items-center gap-3 p-4"
+                    style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+                    <span className="rounded-full px-2 py-0.5 text-[10px] font-bold capitalize"
+                      style={{ backgroundColor: t.bg, color: t.fg, border: `1px solid ${t.border}` }}>
+                      {k.status.replace(/_/g, " ")}
+                    </span>
+                    <div className="flex-1">
+                      <p className="text-sm">{k.fullName}</p>
+                      <p className="text-xs" style={{ color: muted }}>{fmtDate(k.createdAt)}</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">{k.fullName}</p>
-                    <p className="text-xs text-gray-400">{fmtDate(k.createdAt)}</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
+        <div style={{ borderTop: `1px solid ${divider}` }} />
       </div>
     </SiteLayout>
   );

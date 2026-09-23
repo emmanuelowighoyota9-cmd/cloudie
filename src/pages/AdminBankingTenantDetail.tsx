@@ -4,7 +4,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ShieldCheck, Activity, Users, CreditCard, Lock, Unlock, Pause, FileText, DollarSign, Landmark, Paintbrush, Settings2 } from "lucide-react";
+import { ShieldCheck, Activity, Users, CreditCard, Lock, Unlock, Pause, FileText, DollarSign, Landmark, Paintbrush, Palette, Check, MonitorSmartphone, LayoutDashboard, Sun, Moon, ExternalLink } from "lucide-react";
 
 function Money({ minor, currency = "USD" }: { minor: number; currency?: string }) {
   const sym = currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency + " ";
@@ -20,11 +20,18 @@ export default function AdminBankingTenantDetail() {
   const fee = useQuery(api.bankingTenant.getBankingFeeConfig, { tenantId: id });
   const [history, setHistory] = useState<any>(null);
   const hist = useQuery(api.bankingCustomer.adminTenantHistory, tenantId ? { tenantId: id, limit: 50 } : "skip") as any;
-  const [tab, setTab] = useState<"overview" | "customers" | "transfers" | "settings">("overview");
+  const [tab, setTab] = useState<"overview" | "customers" | "transfers" | "design" | "settings">("overview");
   const [busy, setBusy] = useState(false);
   const setLifecycle = useMutation(api.bankingTenant.setTenantLifecycle);
   const update = useMutation(api.bankingTenant.updateBankingTenant);
   const [reason, setReason] = useState("");
+
+  // Design kits: each template themes both surfaces this tenant gets — the
+  // customer banking app and its admin console — so a rebrand is one action.
+  const templates = useQuery(api.bankingTenant.listTemplates);
+  const applyTemplate = useMutation(api.bankingTenant.applyBankingTemplateToTenant);
+  const [applyDefaults, setApplyDefaults] = useState(false);
+  const [pendingSlug, setPendingSlug] = useState<string | null>(null);
 
   const [feeForm, setFeeForm] = useState({ transferFeeMinor: "", withdrawalFeeMinor: "", perTransactionLimitMinor: "", dailyTransferLimitMinor: "", dailyWithdrawalLimitMinor: "", minTransactionMinor: "" });
 
@@ -79,6 +86,17 @@ export default function AdminBankingTenantDetail() {
     finally { setBusy(false); }
   };
 
+  const activeKit: string = (tenant as any)?.branding?.templateSlug ?? "";
+  const doApplyTemplate = async (slug: string) => {
+    setBusy(true);
+    setPendingSlug(slug);
+    try {
+      const r = await applyTemplate({ tenantId: id, templateSlug: slug, applyOperatingDefaults: applyDefaults });
+      toast.success(`${r.template.name} kit applied to ${tenant.siteName}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); setPendingSlug(null); }
+  };
+
   const NavItem = ({ v, label, icon: Icon }: any) => (
     <button onClick={() => setTab(v)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${tab === v ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300"}`}>
       <Icon className="h-4 w-4" /> {label}
@@ -109,6 +127,7 @@ export default function AdminBankingTenantDetail() {
         <NavItem v="overview" label="Overview" icon={Activity} />
         <NavItem v="customers" label="Customers & accounts" icon={Users} />
         <NavItem v="transfers" label="Transactions" icon={CreditCard} />
+        <NavItem v="design" label="Design kit" icon={Palette} />
         <NavItem v="settings" label="Settings & fees" icon={Paintbrush} />
       </div>
 
@@ -196,6 +215,95 @@ export default function AdminBankingTenantDetail() {
               </div>
             </div>
           </div>}
+        </div>
+      )}
+
+      {tab === "design" && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold flex items-center gap-2"><Palette className="h-4 w-4 text-sky-500" /> Banking design kit</div>
+                <p className="text-xs text-slate-500 mt-1">
+                  A kit themes both surfaces this tenant gets — the customer banking app and its admin console — and can pull the template's
+                  operating defaults (plan, region, support contacts). Applied changes are audited.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Link to={`/site/${id}/banking`} className="inline-flex items-center gap-1 text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                  <MonitorSmartphone className="h-3.5 w-3.5" /> Preview customer app
+                </Link>
+                <Link to={`/site/${id}/admin`} className="inline-flex items-center gap-1 text-xs rounded-full border border-slate-200 px-3 py-1.5 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                  <LayoutDashboard className="h-3.5 w-3.5" /> Preview console
+                </Link>
+              </div>
+            </div>
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+              <input type="checkbox" checked={applyDefaults} onChange={e => setApplyDefaults(e.target.checked)} />
+              Also apply the template's operating defaults (plan, country, timezone, support email)
+            </label>
+          </div>
+
+          {templates === undefined ? (
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 animate-pulse text-sm text-slate-400">Loading kits…</div>
+          ) : templates.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 p-8 text-center text-sm text-slate-500">
+              No kits loaded yet — install them from <Link to="/admin/tenants/new" className="underline">New banking tenant</Link>.
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {templates.map((tpl: any) => {
+                const applied = activeKit === tpl.slug;
+                const isDark = tpl.themeMode === "dark";
+                return (
+                  <div key={tpl._id}
+                    className={`rounded-2xl border p-4 space-y-3 ${applied ? "border-slate-900 dark:border-white" : "border-slate-200 dark:border-slate-800"} bg-white dark:bg-slate-900`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold truncate">{tpl.name}</span>
+                          {applied && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold"><Check className="h-3 w-3" /> Applied</span>}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-slate-500 line-clamp-2">{tpl.description}</p>
+                      </div>
+                      <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 px-2 py-0.5 text-[10px] text-slate-500">
+                        {isDark ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}{isDark ? "Dark" : "Light"}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-2 text-[11px] sm:grid-cols-2">
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5">
+                        <p className="font-semibold uppercase tracking-wider text-slate-400 text-[10px]">Customer app</p>
+                        <p className="mt-0.5 text-slate-600 dark:text-slate-300">{tpl.customerAppStyle}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-2.5">
+                        <p className="font-semibold uppercase tracking-wider text-slate-400 text-[10px]">Admin console</p>
+                        <p className="mt-0.5 text-slate-600 dark:text-slate-300">{tpl.adminConsoleStyle}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {[tpl.primaryColor, tpl.accentColor, tpl.surfaceColor].filter(Boolean).map((c: string, i: number) => (
+                        <span key={i} className="h-4 w-4 rounded-full border border-black/10" style={{ backgroundColor: c }} />
+                      ))}
+                      <span className="text-[10px] text-slate-400">{tpl.currency} · radius {tpl.radius}</span>
+                      <button
+                        disabled={busy || applied}
+                        onClick={() => doApplyTemplate(tpl.slug)}
+                        className="ml-auto rounded-xl bg-slate-900 text-white px-3.5 py-2 text-xs font-semibold disabled:opacity-40 dark:bg-white dark:text-slate-900"
+                      >
+                        {pendingSlug === tpl.slug ? "Applying…" : applied ? "Applied" : "Apply kit"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="text-xs text-slate-400 flex items-center gap-1">
+            <ExternalLink className="h-3 w-3" /> Applying a kit never deletes tenant data — it restyles both surfaces and is recorded in the audit log.
+          </div>
         </div>
       )}
 

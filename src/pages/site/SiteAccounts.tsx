@@ -9,12 +9,8 @@ import {
   Landmark, PiggyBank, CreditCard, ArrowDownLeft, ArrowUpRight,
   Plus, Wallet,
 } from "lucide-react";
+import { bankTheme } from "@/lib/tenantBankTheme";
 
-const ACCOUNT_COLORS: Record<string, string> = {
-  checking: "from-[#003087] to-[#0050a0]",
-  savings: "from-[#00695c] to-[#00897b]",
-  credit: "from-[#b71c1c] to-[#c62828]",
-};
 const ACCOUNT_ICONS: Record<string, typeof Landmark> = {
   checking: Landmark,
   savings: PiggyBank,
@@ -33,8 +29,10 @@ export default function SiteAccounts() {
   const accounts = useQuery(api.tenants.myAccounts, siteId ? { tenantId: siteId as Id<"tenantSites"> } : "skip");
   const depositMut = useMutation(api.tenants.depositToAccount);
   const withdrawMut = useMutation(api.tenants.withdrawFromAccount);
-  const primary = site?.branding?.primaryColor || "#003087";
-  if (!site) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Site not found</div></div>;
+
+  // Design kit from the banking template applied at tenancy creation.
+  const theme = bankTheme(site?.branding);
+  const { primary, accent, panel, border, text, muted, radius, inputBg, isDark } = theme;
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -42,6 +40,8 @@ export default function SiteAccounts() {
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [busy, setBusy] = useState(false);
+
+  if (!site) return <div className="min-h-screen flex items-center justify-center"><div className="text-gray-400">Site not found</div></div>;
 
   const handleDeposit = async () => {
     if (!selectedAcct || !amount || !siteId) return;
@@ -69,51 +69,115 @@ export default function SiteAccounts() {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-gray-400">Loading...</div></div>;
   }
 
+  // Card faces follow the tenant palette; credit stays deliberately distinct.
+  const accountGradient = (type: string) =>
+    type === "checking"
+      ? `linear-gradient(135deg, ${primary} 0%, ${accent} 100%)`
+      : type === "savings"
+        ? `linear-gradient(135deg, ${accent} 0%, ${primary} 118%)`
+        : "linear-gradient(135deg, #7f1d1d 0%, #b91c1c 100%)";
+
+  const fieldStyle = { backgroundColor: inputBg, border: `1px solid ${border}`, color: text, borderRadius: radius } as const;
+
+  const dialog = (
+    kind: "deposit" | "withdraw",
+    onClose: () => void,
+    onSubmit: () => void,
+  ) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="w-full max-w-md p-6 shadow-2xl"
+        style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius, color: text }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold mb-4">{kind === "deposit" ? "Make a Deposit" : "Make a Withdrawal"}</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: muted }}>Amount</label>
+            <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
+              className="w-full px-4 py-3 text-sm outline-none" style={fieldStyle} autoFocus />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium" style={{ color: muted }}>Description (optional)</label>
+            <input type="text" value={desc} onChange={(e) => setDesc(e.target.value)}
+              placeholder={kind === "deposit" ? "e.g. Paycheck" : "e.g. ATM withdrawal"}
+              className="w-full px-4 py-3 text-sm outline-none" style={fieldStyle} />
+          </div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm font-medium"
+            style={{ border: `1px solid ${border}`, borderRadius: radius, color: muted }}>
+            Cancel
+          </button>
+          <button onClick={onSubmit} disabled={busy || !amount}
+            className="flex-1 py-2.5 text-sm font-bold text-white shadow-lg disabled:opacity-50"
+            style={{ backgroundColor: kind === "deposit" ? primary : "#DC2626", borderRadius: radius }}>
+            {busy ? "Processing..." : kind === "deposit" ? "Deposit" : "Withdraw"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <SiteLayout active="accounts" authenticated>
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 space-y-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Accounts</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage your {site.siteType === "bank" ? "banking" : "investment"} accounts.</p>
+            <h1 className="text-2xl font-bold tracking-tight">My Accounts</h1>
+            <p className="mt-1 text-sm" style={{ color: muted }}>
+              Manage your {site.siteType === "bank" ? "banking" : "investment"} accounts.
+            </p>
           </div>
         </div>
 
         {!accounts || accounts.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-16 text-center">
-            <Wallet className="mx-auto h-14 w-14 text-gray-300" />
-            <h3 className="mt-4 text-lg font-bold text-gray-900">No accounts yet</h3>
-            <p className="mt-2 text-sm text-gray-500">Contact the bank administrator to open your first account.</p>
+          <div className="p-16 text-center" style={{ backgroundColor: panel, border: `1px solid ${border}`, borderRadius: radius }}>
+            <Wallet className="mx-auto h-14 w-14" style={{ color: muted }} />
+            <h3 className="mt-4 text-lg font-bold">No accounts yet</h3>
+            <p className="mx-auto mt-2 max-w-sm text-sm" style={{ color: muted }}>
+              Contact the bank administrator to open your first account.
+            </p>
           </div>
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {accounts.map((acct) => {
               const Icon = ACCOUNT_ICONS[acct.accountType] || Landmark;
               return (
-                <div key={acct._id} className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${ACCOUNT_COLORS[acct.accountType]} p-6 text-white shadow-lg hover:shadow-xl transition-shadow`}>
-                  <div className="flex items-start justify-between">
+                <div
+                  key={acct._id}
+                  className="relative overflow-hidden p-6 text-white shadow-lg transition-shadow hover:shadow-xl"
+                  style={{ backgroundImage: accountGradient(acct.accountType), borderRadius: radius }}
+                >
+                  {isDark && (
+                    <div className="pointer-events-none absolute inset-0"
+                      style={{ backgroundImage: "radial-gradient(120% 120% at 100% 0%, rgba(255,255,255,0.14) 0%, transparent 60%)" }} />
+                  )}
+                  <div className="relative flex items-start justify-between">
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <span className="text-[10px] font-bold bg-white/15 rounded-full px-2.5 py-1 uppercase tracking-wider">{acct.accountType}</span>
+                    <span className="rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider">
+                      {acct.accountType}
+                    </span>
                   </div>
-                  <p className="mt-5 text-sm text-white/80">{acct.name}</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tight">{fmtCurrency(acct.balance)}</p>
-                  <div className="mt-3 border-t border-white/15 pt-3 flex items-center justify-between">
+                  <p className="relative mt-5 text-sm text-white/80">{acct.name}</p>
+                  <p className="relative mt-1 text-3xl font-bold tracking-tight">{fmtCurrency(acct.balance)}</p>
+                  <div className="relative mt-3 flex items-center justify-between border-t border-white/15 pt-3">
                     <p className="font-mono text-[11px] text-white/50">{maskAccount(acct.accountNumber)}</p>
                     {!acct.isActive && <span className="text-[10px] font-bold text-red-300 uppercase">Closed</span>}
                   </div>
                   {acct.isActive && (
-                    <div className="mt-4 flex gap-2">
+                    <div className="relative mt-4 flex gap-2">
                       <button
                         onClick={() => { setSelectedAcct(acct._id); setDepositOpen(true); }}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 py-2 text-xs font-semibold hover:bg-white/25 transition-colors"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 py-2 text-xs font-semibold transition-colors hover:bg-white/25"
                       >
                         <ArrowDownLeft className="h-3.5 w-3.5" /> Deposit
                       </button>
                       <button
                         onClick={() => { setSelectedAcct(acct._id); setWithdrawOpen(true); }}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 py-2 text-xs font-semibold hover:bg-white/25 transition-colors"
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-white/15 py-2 text-xs font-semibold transition-colors hover:bg-white/25"
                       >
                         <ArrowUpRight className="h-3.5 w-3.5" /> Withdraw
                       </button>
@@ -125,59 +189,8 @@ export default function SiteAccounts() {
           </div>
         )}
 
-        {/* Deposit Dialog */}
-        {depositOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setDepositOpen(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Make a Deposit</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                  <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2" autoFocus />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
-                  <input type="text" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Paycheck"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2" />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setDepositOpen(false)} className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button onClick={handleDeposit} disabled={busy || !amount} className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white disabled:opacity-50 shadow-lg" style={{ backgroundColor: primary }}>
-                  {busy ? "Processing..." : "Deposit"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Withdraw Dialog */}
-        {withdrawOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setWithdrawOpen(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Make a Withdrawal</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                  <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2" autoFocus />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
-                  <input type="text" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. ATM withdrawal"
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2" />
-                </div>
-              </div>
-              <div className="flex gap-3 mt-6">
-                <button onClick={() => setWithdrawOpen(false)} className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-                <button onClick={handleWithdraw} disabled={busy || !amount} className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 shadow-lg">
-                  {busy ? "Processing..." : "Withdraw"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {depositOpen && dialog("deposit", () => setDepositOpen(false), handleDeposit)}
+        {withdrawOpen && dialog("withdraw", () => setWithdrawOpen(false), handleWithdraw)}
       </div>
     </SiteLayout>
   );
