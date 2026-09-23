@@ -108,7 +108,27 @@ export const deletePaymentProviderKey = mutation({
 });
 
 /**
+ * Environment variables the payment runtime reads for each provider key.
+ * `convex/paystack.ts` checks these first, so an env value is the live one.
+ */
+const PROVIDER_ENV_VARS: Record<string, string[]> = {
+  paystack_secret_key: ["PAYSTACK_SECRET_KEY"],
+  paystack_public_key: ["VITE_PAYSTACK_PUBLIC_KEY", "PAYSTACK_PUBLIC_KEY"],
+  paystack_webhook_secret: ["PAYSTACK_WEBHOOK_SECRET"],
+  paystack_test_secret: [],
+  paystack_test_public: [],
+};
+
+function maskKey(value: string): string {
+  return value.length > 8
+    ? value.substring(0, 4) + "••••" + value.substring(value.length - 4)
+    : "••••••••";
+}
+
+/**
  * Get all payment provider keys (masked) for the admin page.
+ * `source` tells the admin which value is actually live: a key saved through
+ * this dashboard, or one supplied through the project environment.
  */
 export const getPaymentProviderKeys = query({
   args: {},
@@ -126,13 +146,33 @@ export const getPaymentProviderKeys = query({
       "paystack_webhook_secret",
     ];
 
-    const results: { key: string; isSet: boolean; masked: string; updatedAt: number | null; updatedBy: string | null }[] = [];
+    const results: {
+      key: string;
+      isSet: boolean;
+      /** "dashboard" = saved here and live, "environment" = supplied via project env, "none" = missing. */
+      source: "dashboard" | "environment" | "none";
+      masked: string;
+      updatedAt: number | null;
+      updatedBy: string | null;
+    }[] = [];
     for (const key of keys) {
       const row = await ctx.db
         .query("adminSettings")
         .withIndex("by_key", (q) => q.eq("key", key))
         .first();
-      if (row) {
+      const envVar = (PROVIDER_ENV_VARS[key] ?? []).find((name) => !!process.env[name]);
+      const envValue = envVar ? process.env[envVar] : undefined;
+      if (envVar) {
+        // The runtime reads the environment first, so report that as the live value.
+        results.push({
+          key,
+          isSet: true,
+          source: "environment",
+          masked: maskKey(envValue ?? ""),
+          updatedAt: row?.updatedAt ?? null,
+          updatedBy: row?.updatedBy ?? null,
+        });
+      } else if (row) {
         const val = String(row.value);
         const masked = val.length > 8
           ? val.substring(0, 4) + "••••" + val.substring(val.length - 4)
@@ -140,12 +180,13 @@ export const getPaymentProviderKeys = query({
         results.push({
           key,
           isSet: true,
+          source: "dashboard",
           masked,
           updatedAt: row.updatedAt,
           updatedBy: row.updatedBy ?? null,
         });
       } else {
-        results.push({ key, isSet: false, masked: "", updatedAt: null, updatedBy: null });
+        results.push({ key, isSet: false, source: "none", masked: "", updatedAt: null, updatedBy: null });
       }
     }
     return results;

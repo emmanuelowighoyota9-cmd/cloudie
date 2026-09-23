@@ -25,6 +25,19 @@ import { useState } from "react";
 import { AdminPageHeader, AdminSkeleton } from "@/components/admin/shared";
 import { motion } from "framer-motion";
 
+/**
+ * Convex serves HTTP endpoints — including the Paystack webhook — from the
+ * deployment's `.site` domain, not the website origin. Deriving it from the
+ * Convex URL keeps the copied webhook correct in preview and production.
+ */
+function convexSiteOrigin(): string {
+  const cloud = (import.meta.env.VITE_CONVEX_URL as string | undefined)?.trim();
+  if (cloud) {
+    return cloud.replace(/\/+$/, "").replace(/\.convex\.cloud$/, ".convex.site");
+  }
+  return typeof window !== "undefined" ? window.location.origin : "";
+}
+
 const PAYSTACK_KEYS = [
   {
     key: "paystack_secret_key",
@@ -71,7 +84,14 @@ function KeyInput({
   saving,
 }: {
   config: typeof PAYSTACK_KEYS[0];
-  stored: { key: string; isSet: boolean; masked: string; updatedAt: number | null } | undefined;
+  stored: {
+    key: string;
+    isSet: boolean;
+    masked: string;
+    updatedAt: number | null;
+    /** Which value is actually live — dashboard-saved or project environment. */
+    source?: string;
+  } | undefined;
   onSave: (key: string, value: string) => Promise<void>;
   onDelete: (key: string) => Promise<void>;
   saving: string | null;
@@ -101,8 +121,22 @@ function KeyInput({
                 Not set
               </Badge>
             )}
+            {stored?.source === "environment" && (
+              <Badge
+                variant="outline"
+                className="border-amber-300 bg-amber-50 text-[10px] text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+              >
+                Project environment
+              </Badge>
+            )}
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{config.description}</p>
+          {stored?.source === "environment" && (
+            <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+              Supplied through the project environment, which the payment runtime reads first — a
+              value saved here would not take effect while it is set.
+            </p>
+          )}
           {stored?.isSet && (
             <div className="mt-2 flex items-center gap-2">
               <code className="font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300">
@@ -216,9 +250,12 @@ export default function AdminPaymentProviders() {
     }
   };
 
-  const webhookUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/api/webhooks/paystack`
-    : "/api/webhooks/paystack";
+  // The webhook is hosted by Convex, while the checkout callback returns the
+  // buyer to the app. Paystack needs each of these separately.
+  const webhookUrl = `${convexSiteOrigin()}/api/webhooks/paystack`;
+  const callbackUrl = `${
+    typeof window !== "undefined" ? window.location.origin : ""
+  }/buy-points`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(
@@ -343,17 +380,20 @@ export default function AdminPaymentProviders() {
       <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base text-slate-900 dark:text-white">
-            <Webhook className="h-4 w-4 text-slate-500" /> Webhook Configuration
+            <Webhook className="h-4 w-4 text-slate-500" /> Live URLs
           </CardTitle>
           <p className="text-xs text-slate-500">
-            Configure this URL in your Paystack dashboard to receive payment notifications.
+            Paste these exact values into Paystack — both are required for live payments to settle
+            and be credited automatically.
           </p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-5">
           <div>
-            <Label className="text-xs text-slate-500">Webhook URL</Label>
+            <Label className="text-xs text-slate-500">
+              Webhook URL — Paystack → Settings → API Keys &amp; Webhooks → Webhook URL
+            </Label>
             <div className="mt-1 flex items-center gap-2">
-              <code className="flex-1 rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <code className="flex-1 overflow-x-auto rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 {webhookUrl}
               </code>
               <Button
@@ -364,6 +404,32 @@ export default function AdminPaymentProviders() {
                 <Copy className="h-3.5 w-3.5" />
               </Button>
             </div>
+            <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              Served by your Convex deployment, not the website domain. Pointing this at the app URL
+              means live payments are never confirmed or credited.
+            </p>
+          </div>
+
+          <div>
+            <Label className="text-xs text-slate-500">
+              Checkout callback URL — where Paystack returns the buyer
+            </Label>
+            <div className="mt-1 flex items-center gap-2">
+              <code className="flex-1 overflow-x-auto rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                {callbackUrl}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => copyToClipboard(callbackUrl)}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              Sent automatically with every checkout, so no dashboard change is required — if
+              Paystack asks for a callback URL, use this value.
+            </p>
           </div>
 
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 dark:bg-amber-950/20 dark:border-amber-800">

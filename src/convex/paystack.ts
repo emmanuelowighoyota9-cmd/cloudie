@@ -350,9 +350,14 @@ export const verifyWebhookSignature = action({
  */
 export const getPublicKey = action({
   args: {},
-  handler: async () => {
+  // Explicit return type breaks TypeScript's inference cycle through
+  // `_generated/api` (which imports this file) for the stored-key lookup below.
+  handler: async (ctx): Promise<string> => {
     const key = process.env.VITE_PAYSTACK_PUBLIC_KEY ?? process.env.PAYSTACK_PUBLIC_KEY;
-    if (!key) throw new Error("PAYSTACK_PUBLIC_KEY is not configured. Add it in the project Keys tab.");
-    return key;
+    if (key) return key;
+    // Fall back to a key saved in Admin → Payment Providers, mirroring getSecretKey.
+    const stored: string | null = await ctx.runQuery(internal.paymentConfig.getStoredKey, { key: "paystack_public_key" });
+    if (stored) return stored;
+    throw new Error("PAYSTACK_PUBLIC_KEY is not configured. Add it in the project Keys tab or Admin > Payment Providers.");
   },
 });
