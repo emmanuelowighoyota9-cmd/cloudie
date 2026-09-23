@@ -1,11 +1,12 @@
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
-import { Home, CreditCard, Truck, FileText, Building2 } from "lucide-react";
+import { Home, CreditCard, Truck, FileText, Building2, FileStack } from "lucide-react";
 
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
   { label: "Shipments", icon: Truck, to: "/shipments" },
+  { label: "Docs", icon: FileStack, to: "/documents" },
   { label: "Tickets", icon: FileText, to: "/ticketing" },
   { label: "SaaS", icon: Building2, to: "/business" },
 ];

@@ -4,7 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers } from "lucide-react";
+import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
 
@@ -179,8 +179,9 @@ export default function Dashboard() {
           <p className="text-xs text-slate-400">Everything else lives in one of these.</p>
         </CardHeader>
         <CardContent className="p-2">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {[
+              { icon: FileStack, title: "Documents", desc: "Generate branded PDFs and images from dynamic templates.", to: "/documents", color: "bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400" },
               { icon: Package, title: "Shipments", desc: "Create and track parcels end to end.", to: "/shipments", color: "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
               { icon: FileText, title: "Ticketing", desc: "Flights, hotels, invoices and receipts.", to: "/ticketing", color: "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" },
               { icon: Building2, title: "Business Suite", desc: "Spin up and manage your bank and investment sites.", to: "/business", color: "bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" },

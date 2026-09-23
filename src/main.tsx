@@ -47,6 +47,12 @@ const CustomsDocument = lazy(() => import("./pages/CustomsDocument.tsx"));
 const BusinessSuite = lazy(() => import("./pages/BusinessSuite.tsx"));
 const NewSite = lazy(() => import("./pages/NewSite.tsx"));
 const SiteDetail = lazy(() => import("./pages/SiteDetail.tsx"));
+const DocumentsPage = lazy(() => import("./pages/Documents.tsx"));
+const DocumentTemplates = lazy(() => import("./pages/DocumentTemplates.tsx"));
+const DocumentBuilder = lazy(() => import("./pages/DocumentBuilder.tsx"));
+const DocumentDetail = lazy(() => import("./pages/DocumentDetail.tsx"));
+const PublicDocument = lazy(() => import("./pages/PublicDocument.tsx"));
+const AdminDocumentTemplates = lazy(() => import("./pages/AdminDocumentTemplates.tsx"));
 const Services = lazy(() => import("./pages/Services.tsx"));
 const EmailCampaign = lazy(() => import("./pages/EmailCampaign.tsx"));
 const RenderStudio = lazy(() => import("./pages/RenderStudio.tsx"));
@@ -167,6 +173,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/track/:trackingNumber" element={<PublicTracking />} />
                 <Route path="/tracking" element={<PublicTracking />} />
                 <Route path="/tracking/:trackingNumber" element={<PublicTracking />} />
+                <Route path="/d/:slug" element={<React.Suspense fallback={<RouteLoading />}><PublicDocument /></React.Suspense>} />
 
                 {/* Tenant banking via wildcard subdomain — *.g0ki.com/banking (dynamic tenant context) */}
                 <Route path="/banking" element={<React.Suspense fallback={<RouteLoading />}><TenantBankingHost /></React.Suspense>} />
@@ -208,6 +215,10 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/business/sites" element={<BusinessSuite />} />
                   <Route path="/business/sites/new" element={<NewSite />} />
                   <Route path="/business/sites/:siteId" element={<SiteDetail />} />
+                  <Route path="/documents" element={<DocumentsPage />} />
+                  <Route path="/documents/templates" element={<DocumentTemplates />} />
+                  <Route path="/documents/new/:templateId" element={<DocumentBuilder />} />
+                  <Route path="/documents/:documentId" element={<DocumentDetail />} />
                   <Route path="/services" element={<Services />} />
                   <Route path="/services/email" element={<EmailCampaign />} />
                   <Route path="/services/render" element={<RenderStudio />} />
@@ -241,6 +252,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="locations" element={<AdminLocations tab="locations" />} />
                   <Route path="facilities" element={<AdminLocations tab="facilities" />} />
                   <Route path="documents" element={<AdminDocuments />} />
+                  <Route path="document-templates" element={<AdminDocumentTemplates />} />
                   <Route path="tenants" element={<AdminTenants />} />
                   <Route path="tenants/new" element={<AdminBankingCreateTenant />} />
                   <Route path="tenants/banking" element={<AdminBankingTenants />} />

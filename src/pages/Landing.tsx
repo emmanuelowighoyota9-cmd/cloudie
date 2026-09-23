@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { buildPreviewSvg, categoryDef, defaultValues, svgToDataUrl } from "@/lib/docTemplateEngine";
+import { STARTER_TEMPLATES } from "@/lib/starterTemplates";
 import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPrompt";
 import { toast } from "sonner";
 import {
@@ -28,12 +30,13 @@ import {
   QrCode,
   Truck,
   Landmark,
+  FileStack,
 } from "lucide-react";
 
 const features = [
   { icon: Landmark, title: "Banking Tenants", desc: "Provision islands like Crestline Capital — ledger-backed accounts, deposits, transfers, KYC & statements." },
   { icon: Package, title: "Shipment Management", desc: "Create, track, and manage shipments with real-time status updates and public tracking." },
-  { icon: FileText, title: "Document Generation", desc: "Generate flight itineraries, hotel reservations, invoices, and customs documents." },
+  { icon: FileStack, title: "SoftBaker Document Studio", desc: "Dynamic templates with live preview, high-resolution PNG and multi-page PDF export, storage and share links." },
   { icon: Building2, title: "Business Suite", desc: "White-label tenant portal for banking and investment platforms with KYC." },
   { icon: Layers, title: "Email & Rendering", desc: "Run email campaigns and create stunning images with our rendering studio." },
   { icon: ShoppingBag, title: "Marketplace", desc: "Buy and sell point packages from verified vendors in our marketplace." },
@@ -50,6 +53,21 @@ const stats = [
 export default function Landing() {
   const navigate = useNavigate();
   const [trackingNumber, setTrackingNumber] = useState("");
+
+  // Real template previews, rendered by the same engine the studio uses.
+  const softbakerShowcase = useMemo(
+    () =>
+      STARTER_TEMPLATES.slice(0, 3).map((template) => ({
+        name: template.name,
+        category: categoryDef(template.documentType).label,
+        src: svgToDataUrl(
+          buildPreviewSvg(template.configuration, template.schema, defaultValues(template.schema), {
+            sensitive: template.sensitivity === "sensitive",
+          }),
+        ),
+      })),
+    [],
+  );
 
   const handleTrack = (event: React.FormEvent) => {
     event.preventDefault();
@@ -292,6 +310,78 @@ export default function Landing() {
                 <div className="flex justify-between text-chart-2"><span>Referral Reward</span><span>+50</span></div>
                 <div className="flex justify-between border-t border-border pt-2 font-bold text-foreground"><span>Balance</span><span>4,750</span></div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SoftBaker document studio */}
+      <section className="border-y border-border bg-card py-20">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1fr]">
+            <div>
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
+                <FileStack className="h-3.5 w-3.5 text-primary" />
+                SoftBaker document studio
+              </div>
+              <h2 className="text-3xl font-bold tracking-tight text-foreground">
+                Dynamic templates in, print-ready documents out
+              </h2>
+              <p className="mt-4 leading-relaxed text-muted-foreground">
+                Pick a template and fill a schema-driven form — the preview re-renders on every keystroke from the
+                same engine that produces the export. Cloudie rasterizes a high-resolution PNG and assembles a
+                multi-page PDF, stores both, and returns an unguessable share link.
+              </p>
+              <ul className="mt-6 space-y-3">
+                {[
+                  "Live preview sharing one render engine with exports",
+                  "Versioned templates — generated documents never change",
+                  "Non-removable DEMO watermark on sensitive layouts",
+                  "Share links with expiry, revocation and view counts",
+                ].map((item) => (
+                  <li key={item} className="flex items-center gap-2 text-sm">
+                    <Check className="h-4 w-4 shrink-0 text-chart-2" />
+                    <span className="text-foreground">{item}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button asChild size="lg" className="gap-2">
+                  <Link to="/documents">
+                    Open the document studio <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link to="/documents/templates">Browse templates</Link>
+                </Button>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {softbakerShowcase.map((item, i) => (
+                <motion.div
+                  key={item.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 * i, duration: 0.4 }}
+                  className={i === 0 ? "sm:col-span-2" : ""}
+                >
+                  <div className="overflow-hidden rounded-xl border border-border bg-background p-3 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10">
+                    <img
+                      src={item.src}
+                      alt={`${item.name} template preview`}
+                      loading="lazy"
+                      className="mx-auto block h-auto w-full rounded-lg"
+                      style={{ maxHeight: i === 0 ? 300 : 200, objectFit: "contain" }}
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2 px-1">
+                      <p className="truncate text-[11px] font-medium text-foreground">{item.name}</p>
+                      <p className="shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        {item.category}
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
             </div>
           </div>
         </div>
