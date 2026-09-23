@@ -45,6 +45,13 @@ type FormValues = {
 
 type SmtpValues = { host: string; port: string; secure: boolean; username: string };
 
+/** The three relays Elastic Email documents, with the TLS mode each one expects. */
+const SMTP_PRESETS = [
+  { label: "2525 · STARTTLS", port: 2525, secure: false },
+  { label: "587 · STARTTLS", port: 587, secure: false },
+  { label: "465 · TLS", port: 465, secure: true },
+] as const;
+
 type StatusKey =
   | "not_configured"
   | "disabled"
@@ -580,6 +587,25 @@ export default function AdminEmailSettings() {
 
             {transport === "smtp" && (
               <div className="space-y-4 rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Relay presets</span>
+                  {SMTP_PRESETS.map((preset) => {
+                    const active = smtp.port === String(preset.port) && smtp.secure === preset.secure;
+                    return (
+                      <Button
+                        key={preset.port}
+                        type="button"
+                        size="sm"
+                        variant={active ? "default" : "outline"}
+                        className="h-7 px-2.5 text-[11px]"
+                        onClick={() => updateSmtp({ port: String(preset.port), secure: preset.secure })}
+                      >
+                        {preset.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="smtp-host" className="text-xs text-slate-600 dark:text-slate-400">
