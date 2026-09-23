@@ -472,6 +472,8 @@ const paystackWebhookHandler = httpAction(async (ctx, req) => {
       amountKobo: amountMinor,
       paystackStatus: String(data.status ?? "success"),
       metadata: meta,
+      paidSubunit: amountMinor,
+      paidCurrency: currency,
     });
 
     return json({ ok: true, reference, credited: !result.startsWith("already:") });

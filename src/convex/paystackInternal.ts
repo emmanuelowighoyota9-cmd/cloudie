@@ -128,6 +128,8 @@ export const recordPaymentAndCredit = internalMutation({
     amountKobo: v.number(),
     paystackStatus: v.string(),
     metadata: v.any(),
+    paidSubunit: v.optional(v.number()),
+    paidCurrency: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Idempotency + buyer resolution via the pending order (session-free path).
@@ -160,6 +162,12 @@ export const recordPaymentAndCredit = internalMutation({
     const packageId = existing?.packageId ?? args.packageId;
     const amountSubunit = existing?.amountSubunit ?? args.amountKobo;
 
+    // What Paystack actually settled. A variance is recorded (never used to
+    // withhold points) so genuine pricing/currency drift is visible in admin.
+    const paidSubunit = args.paidSubunit ?? args.amountKobo;
+    const paidCurrency = (args.paidCurrency ?? args.currency ?? "USD").toUpperCase();
+    const amountVariance = paidSubunit - amountSubunit;
+
     // Resolve the buyer: pending order first (webhook path), session second.
     let userId = existing?.buyerId;
     if (!userId) {
@@ -188,6 +196,9 @@ export const recordPaymentAndCredit = internalMutation({
         status: "paid",
         paidAt: now,
         verifiedAt: now,
+        paidSubunit,
+        paidCurrency,
+        amountVariance,
         updatedAt: now,
       });
     } else {
@@ -203,6 +214,9 @@ export const recordPaymentAndCredit = internalMutation({
         paystackReference: args.reference,
         paidAt: now,
         verifiedAt: now,
+        paidSubunit,
+        paidCurrency,
+        amountVariance,
         createdAt: now,
         updatedAt: now,
       });
@@ -230,6 +244,9 @@ export const recordPaymentAndCredit = internalMutation({
         amountNgn: args.amountNgn,
         currency,
         paystackReference: args.reference,
+        paidSubunit,
+        paidCurrency,
+        amountVariance,
       },
       createdAt: now,
     });

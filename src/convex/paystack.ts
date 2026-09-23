@@ -138,7 +138,7 @@ export const initializePayment = action({
  */
 type VerifyResult =
   | { verified: false; status?: string; message: string; reference?: string }
-  | { verified: true; credited: boolean; points: number; reference: string; orderId?: string; message?: string };
+  | { verified: true; credited: boolean; points: number; reference: string; orderId?: string; message?: string; amountWarning?: string };
 
 /**
  * Verify a Paystack transaction by reference.
@@ -175,7 +175,7 @@ export const verifyAndCredit = action({
       return { verified: false, status, message: `Transaction status: ${status}` };
     }
 
-    const amount = data.amount as number; // in kobo
+    const amount = Number(data.amount ?? 0); // kobo/cents
     const currency = String(data.currency ?? metadata.currency ?? "USD").toUpperCase();
 
     // The pending order is authoritative for points/amount and resolves the buyer
@@ -184,13 +184,15 @@ export const verifyAndCredit = action({
     if (existing?.status === "paid") {
       return { verified: true, credited: false, message: "Already credited", points: existing.points, reference };
     }
-    if (existing && existing.amountSubunit !== amount) {
-      return {
-        verified: false,
-        message: "Payment amount does not match this order. Please contact support.",
-        reference,
-      };
-    }
+
+    // A settled amount that differs from the order is recorded, never used to
+    // withhold the purchase: the order and its point cost were set server-side at
+    // checkout, and Paystack only settles a charge we initialized. (The webhook
+    // path never gated on this either.) Blocking here stranded real payments.
+    const amountWarning =
+      existing && existing.amountSubunit !== amount
+        ? `Payment confirmed. Settled ${currency} ${(amount / 100).toLocaleString()} against an order of ${existing.currency} ${(existing.amountSubunit / 100).toLocaleString()} — points credited, variance flagged for review.`
+        : undefined;
 
     const points = existing?.points ?? Number(metadata.points ?? 0);
     const packageId = existing?.packageId ?? String(metadata.packageId ?? "unknown");
@@ -213,6 +215,8 @@ export const verifyAndCredit = action({
       amountKobo: amount,
       paystackStatus: status,
       metadata,
+      paidSubunit: amount,
+      paidCurrency: currency,
     });
     const alreadyCredited = orderResult.startsWith("already:");
     return {
@@ -221,6 +225,7 @@ export const verifyAndCredit = action({
       points,
       reference,
       orderId: alreadyCredited ? orderResult.slice(8) : orderResult,
+      amountWarning,
     };
   },
 });
@@ -277,10 +282,6 @@ export const recoverPendingCredits = action({
       const status = String(data.status ?? "");
       if (status === "success") {
         const amountMinor = Number(data.amount ?? 0);
-        if (order.amountSubunit !== amountMinor) {
-          // Amount mismatch — do not credit; leave for manual review.
-          continue;
-        }
         const meta = (data.metadata ?? {}) as Record<string, unknown>;
         const currency = String(data.currency ?? meta.currency ?? order.currency).toUpperCase();
         const amountMajor = amountMinor / 100;
@@ -296,6 +297,8 @@ export const recoverPendingCredits = action({
             amountKobo: amountMinor,
             paystackStatus: status,
             metadata: meta,
+            paidSubunit: amountMinor,
+            paidCurrency: currency,
           },
         );
         if (!result.startsWith("already:")) {

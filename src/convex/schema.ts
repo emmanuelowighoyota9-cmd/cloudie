@@ -1014,6 +1014,11 @@ const schema = defineSchema(
       authorizationUrl: v.optional(v.string()),
       verifiedAt: v.optional(v.number()),
       paidAt: v.optional(v.number()),
+      // What Paystack actually settled (subunit + currency) and how far it
+      // drifted from the order's server-set expectation. Purely for audit.
+      paidSubunit: v.optional(v.number()),
+      paidCurrency: v.optional(v.string()),
+      amountVariance: v.optional(v.number()),
       failureReason: v.optional(v.string()),
       creditedLedgerId: v.optional(v.id("pointLedger")),
       createdAt: v.number(),
