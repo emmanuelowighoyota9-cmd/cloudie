@@ -54,7 +54,7 @@ export default function DocumentTemplates() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search templates…"
             aria-label="Search templates"
-            className="pl-9"
+            className="h-11 pl-9 sm:h-9"
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -62,7 +62,7 @@ export default function DocumentTemplates() {
             type="button"
             onClick={() => setCategory("")}
             className={cn(
-              "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+              "min-h-11 rounded-full border px-4 text-xs font-medium transition-colors sm:min-h-0 sm:px-3 sm:py-1.5",
               activeCategory === ""
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-border text-muted-foreground hover:bg-muted",
@@ -76,7 +76,7 @@ export default function DocumentTemplates() {
               type="button"
               onClick={() => setCategory(c.key)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                "min-h-11 rounded-full border px-4 text-xs font-medium transition-colors sm:min-h-0 sm:px-3 sm:py-1.5",
                 activeCategory === c.key
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border text-muted-foreground hover:bg-muted",

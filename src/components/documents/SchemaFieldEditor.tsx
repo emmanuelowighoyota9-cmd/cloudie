@@ -29,7 +29,9 @@ interface SchemaFieldEditorProps {
 
 const NEEDS_OPTIONS: FieldType[] = ["select", "radio", "status"];
 
-const inputClass = "h-8 text-xs";
+// 44px on touch, compact from `sm` up — the editor stays dense on desktop
+// without making phone targets too small to hit.
+const inputClass = "h-11 text-xs sm:h-8";
 
 function parseOptions(raw: string): Array<{ label: string; value: string }> {
   return raw
@@ -91,16 +93,16 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Form fields · {fields.length}/{60}
         </p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <select
             aria-label="New field type"
             value={newType}
             onChange={(e) => setNewType(e.target.value as FieldType)}
-            className="h-7 rounded-md border border-border bg-background px-1.5 text-[11px] capitalize text-foreground"
+            className="h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs capitalize text-foreground sm:h-7 sm:flex-none sm:px-1.5 sm:text-[11px]"
           >
             {FIELD_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -108,7 +110,7 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
               </option>
             ))}
           </select>
-          <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={addField}>
+          <Button size="sm" variant="outline" className="h-11 shrink-0 gap-1 px-3 text-xs sm:h-7 sm:px-2 sm:text-[11px]" onClick={addField}>
             <Plus className="h-3 w-3" /> Add
           </Button>
         </div>
@@ -130,7 +132,7 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
               <button
                 type="button"
                 onClick={() => setOpenIndex(open ? null : index)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left"
+                className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left sm:min-h-0 sm:py-2"
               >
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-bold text-muted-foreground">
                   {index + 1}
@@ -160,8 +162,8 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                     className="overflow-hidden"
                   >
                     <div className="space-y-2.5 border-t border-border px-3 py-3">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Label</Label>
                           <Input
                             value={field.label}
@@ -169,7 +171,7 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                             className={inputClass}
                           />
                         </div>
-                        <div className="space-y-1">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
                             Id (binding key)
                           </Label>
@@ -189,14 +191,14 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                         </p>
                       )}
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Type</Label>
                           <select
                             aria-label="Field type"
                             value={field.type}
                             onChange={(e) => update(index, { type: e.target.value as FieldType })}
-                            className="h-8 w-full rounded-md border border-border bg-background px-2 text-xs capitalize"
+                            className="h-11 w-full min-w-0 rounded-md border border-border bg-background px-2 text-xs capitalize sm:h-8"
                           >
                             {FIELD_TYPES.map((t) => (
                               <option key={t} value={t}>
@@ -205,7 +207,7 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                             ))}
                           </select>
                         </div>
-                        <div className="space-y-1">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Default</Label>
                           <Input
                             value={typeof field.default === "boolean" ? String(field.default) : (field.default ?? "")}
@@ -242,8 +244,8 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                         </div>
                       )}
 
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="space-y-1">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Max length</Label>
                           <Input
                             type="number"
@@ -254,7 +256,7 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                             className={inputClass}
                           />
                         </div>
-                        <div className="space-y-1">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Min</Label>
                           <Input
                             type="number"
@@ -265,7 +267,7 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                             className={inputClass}
                           />
                         </div>
-                        <div className="space-y-1">
+                        <div className="min-w-0 space-y-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Max</Label>
                           <Input
                             type="number"
@@ -289,20 +291,20 @@ export function SchemaFieldEditor({ schema, onChange }: SchemaFieldEditorProps) 
                         />
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <label className="flex min-h-11 items-center gap-2 text-[11px] text-muted-foreground sm:min-h-0">
                           <input
                             type="checkbox"
                             checked={!!field.required}
                             onChange={(e) => update(index, { required: e.target.checked })}
-                            className="h-3.5 w-3.5 accent-[var(--primary)]"
+                            className="h-4 w-4 accent-[var(--primary)]"
                           />
                           Required
                         </label>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 gap-1 px-2 text-[11px] text-destructive"
+                          className="h-11 gap-1 px-3 text-xs text-destructive sm:h-7 sm:px-2 sm:text-[11px]"
                           onClick={() => remove(index)}
                         >
                           <Trash2 className="h-3 w-3" /> Delete field

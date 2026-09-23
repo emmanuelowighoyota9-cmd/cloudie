@@ -100,86 +100,72 @@ export default function AdminDocumentTemplates() {
               No templates yet — they install automatically when the first user opens Documents.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Template</th>
-                    <th className="px-4 py-3 font-medium">Category</th>
-                    <th className="px-4 py-3 font-medium">Version</th>
-                    <th className="px-4 py-3 font-medium">Fields</th>
-                    <th className="px-4 py-3 font-medium">Pages</th>
-                    <th className="px-4 py-3 font-medium">Credits</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {templates.map((template) => (
-                    <tr key={template._id} className="border-b border-border last:border-0 hover:bg-muted/40">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-foreground">{template.name}</p>
-                        <p className="font-mono text-[10px] text-muted-foreground">{template.slug}</p>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-muted-foreground">{template.categoryLabel}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">
-                        v{template.currentVersion}
-                      </td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{template.fieldCount}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-muted-foreground">{template.pageCount}</td>
-                      <td className="px-4 py-3 text-xs tabular-nums text-foreground">{template.requiredCredits}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={STATUS_VARIANT[template.status] ?? "secondary"} className="text-[10px]">
-                          {template.status}
-                        </Badge>
-                        {template.sensitivity === "sensitive" && (
-                          <Badge variant="outline" className="ml-1 border-destructive/40 text-[10px] text-destructive">
-                            demo
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="sm" variant="ghost" className="h-7 gap-1 text-[11px]" asChild>
-                            <Link to={`/admin/document-templates/${template._id}/edit`}>
-                              <Pencil className="h-3.5 w-3.5" /> Edit
-                            </Link>
-                          </Button>
-                          {template.status !== "active" ? (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 gap-1 text-[11px]"
-                              onClick={() => change(template._id, "active")}
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Activate
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 gap-1 text-[11px]"
-                              onClick={() => change(template._id, "disabled")}
-                            >
-                              <PauseCircle className="h-3.5 w-3.5" /> Disable
-                            </Button>
-                          )}
-                          {template.status !== "archived" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 gap-1 text-[11px] text-destructive"
-                              onClick={() => change(template._id, "archived")}
-                            >
-                              <Archive className="h-3.5 w-3.5" /> Archive
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              {templates.map((template) => (
+                <div
+                  key={template._id}
+                  className="flex flex-col gap-3 border-b border-border p-4 last:border-0 hover:bg-muted/40 sm:flex-row sm:items-center"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{template.name}</p>
+                    <p className="truncate font-mono text-[10px] text-muted-foreground">{template.slug}</p>
+                    <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+                      {template.categoryLabel} · v{template.currentVersion} ·{" "}
+                      {template.fieldCount} field{template.fieldCount === 1 ? "" : "s"} ·{" "}
+                      {template.pageCount} page{template.pageCount === 1 ? "" : "s"} ·{" "}
+                      {template.requiredCredits} pts
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    <Badge variant={STATUS_VARIANT[template.status] ?? "secondary"} className="text-[10px]">
+                      {template.status}
+                    </Badge>
+                    {template.sensitivity === "sensitive" && (
+                      <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
+                        demo
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1 sm:justify-end">
+                    <Button size="sm" variant="ghost" className="h-10 gap-1 px-2.5 text-[11px] sm:h-7 sm:px-2" asChild>
+                      <Link to={`/admin/document-templates/${template._id}/edit`}>
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Link>
+                    </Button>
+                    {template.status !== "active" ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-10 gap-1 px-2.5 text-[11px] sm:h-7 sm:px-2"
+                        onClick={() => change(template._id, "active")}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Activate
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-10 gap-1 px-2.5 text-[11px] sm:h-7 sm:px-2"
+                        onClick={() => change(template._id, "disabled")}
+                      >
+                        <PauseCircle className="h-3.5 w-3.5" /> Disable
+                      </Button>
+                    )}
+                    {template.status !== "archived" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-10 gap-1 px-2.5 text-[11px] text-destructive sm:h-7 sm:px-2"
+                        onClick={() => change(template._id, "archived")}
+                      >
+                        <Archive className="h-3.5 w-3.5" /> Archive
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -196,7 +182,7 @@ export default function AdminDocumentTemplates() {
             {stats.byCategory.map((row) => (
               <div
                 key={row.key}
-                className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg border border-border px-3 py-2"
               >
                 <span className="text-xs font-medium text-foreground">{row.label}</span>
                 <span className="text-[11px] text-muted-foreground">

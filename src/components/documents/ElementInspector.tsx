@@ -25,11 +25,11 @@ interface ElementInspectorProps {
 }
 
 const selectClass =
-  "h-9 w-full rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-primary";
+  "h-11 w-full min-w-0 rounded-md border border-border bg-background px-2 text-xs text-foreground outline-none focus:border-primary sm:h-9";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
+    <div className="min-w-0 space-y-1">
       <Label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</Label>
       {children}
     </div>
@@ -71,7 +71,7 @@ function NumberInput({
           const parsed = Number(raw);
           if (Number.isFinite(parsed)) onChange(parsed);
         }}
-        className="h-8 text-xs"
+        className="h-11 w-full min-w-0 text-xs sm:h-8"
       />
     </Row>
   );
@@ -86,12 +86,12 @@ function ColorInput({ label, value, onChange }: { label: string; value: string; 
           aria-label={label}
           value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#0f172a"}
           onChange={(e) => onChange(e.target.value)}
-          className="h-8 w-9 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5"
+          className="h-11 w-11 shrink-0 cursor-pointer rounded-md border border-border bg-background p-0.5 sm:h-8 sm:w-9"
         />
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="h-8 font-mono text-[11px]"
+          className="h-11 min-w-0 flex-1 font-mono text-[11px] sm:h-8"
         />
       </div>
     </Row>
@@ -152,7 +152,7 @@ export function ElementInspector({
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7"
+            className="h-11 w-11 sm:h-7 sm:w-7"
             title="Bring forward"
             disabled={index >= total - 1}
             onClick={() => onReorder(1)}
@@ -162,20 +162,20 @@ export function ElementInspector({
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7"
+            className="h-11 w-11 sm:h-7 sm:w-7"
             title="Send backward"
             disabled={index <= 0}
             onClick={() => onReorder(-1)}
           >
             <MoveDown className="h-3.5 w-3.5" />
           </Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" title="Duplicate" onClick={onDuplicate}>
+          <Button size="icon" variant="ghost" className="h-11 w-11 sm:h-7 sm:w-7" title="Duplicate" onClick={onDuplicate}>
             <Copy className="h-3.5 w-3.5" />
           </Button>
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-destructive"
+            className="h-11 w-11 text-destructive sm:h-7 sm:w-7"
             title="Delete"
             onClick={onDelete}
           >

@@ -83,7 +83,7 @@ function slugify(value: string): string {
 }
 
 const selectClass =
-  "h-9 w-full rounded-md border border-border bg-background px-2.5 text-xs text-foreground outline-none focus:border-primary";
+  "h-11 w-full min-w-0 rounded-md border border-border bg-background px-2.5 text-xs text-foreground outline-none focus:border-primary sm:h-9";
 
 /**
  * Visual document-template editor.
@@ -409,8 +409,10 @@ export default function AdminDocumentTemplateEditor() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_320px]">
-        {/* ── Left: settings + fields ── */}
-        <div className="space-y-4">
+        {/* ── Left: settings + fields ──
+            On phones the canvas leads: it is the workspace, and the settings
+            form is long enough that starting there buries it. */}
+        <div className="order-2 space-y-4 lg:order-1">
           <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Template settings
@@ -418,7 +420,7 @@ export default function AdminDocumentTemplateEditor() {
 
             <div className="space-y-1">
               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} className="h-9 text-sm" placeholder="Invoice" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} className="h-11 text-sm sm:h-9" placeholder="Invoice" />
             </div>
 
             <div className="space-y-1">
@@ -430,7 +432,7 @@ export default function AdminDocumentTemplateEditor() {
                   setSlug(slugify(e.target.value));
                 }}
                 disabled={editing}
-                className="h-9 font-mono text-xs"
+                className="h-11 font-mono text-xs sm:h-9"
                 placeholder="invoice"
               />
             </div>
@@ -463,18 +465,18 @@ export default function AdminDocumentTemplateEditor() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
+            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+              <div className="min-w-0 space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Credits</Label>
                 <Input
                   type="number"
                   min={0}
                   value={requiredCredits}
                   onChange={(e) => setRequiredCredits(Math.max(0, Number(e.target.value) || 0))}
-                  className="h-9 text-xs"
+                  className="h-11 text-xs sm:h-9"
                 />
               </div>
-              <div className="space-y-1">
+              <div className="min-w-0 space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Sensitivity</Label>
                 <select
                   aria-label="Sensitivity"
@@ -494,22 +496,22 @@ export default function AdminDocumentTemplateEditor() {
                 : "Sensitive templates get a non-removable DEMO watermark on every page."}
             </p>
 
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4">
+              <label className="flex min-h-11 items-center gap-2 text-[11px] text-muted-foreground sm:min-h-0">
                 <input
                   type="checkbox"
                   checked={formats.png}
                   onChange={(e) => setFormats((f) => ({ ...f, png: e.target.checked }))}
-                  className="h-3.5 w-3.5 accent-[var(--primary)]"
+                  className="h-4 w-4 accent-[var(--primary)]"
                 />
                 PNG
               </label>
-              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <label className="flex min-h-11 items-center gap-2 text-[11px] text-muted-foreground sm:min-h-0">
                 <input
                   type="checkbox"
                   checked={formats.pdf}
                   onChange={(e) => setFormats((f) => ({ ...f, pdf: e.target.checked }))}
-                  className="h-3.5 w-3.5 accent-[var(--primary)]"
+                  className="h-4 w-4 accent-[var(--primary)]"
                 />
                 PDF
               </label>
@@ -522,8 +524,8 @@ export default function AdminDocumentTemplateEditor() {
         </div>
 
         {/* ── Centre: canvas ── */}
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-border bg-card p-2 shadow-sm">
+        <div className="order-1 space-y-3 lg:order-2">
+          <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-card p-2 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:gap-1.5">
             {ELEMENT_KINDS.map((kind) => {
               const Icon = ELEMENT_ICONS[kind];
               return (
@@ -531,21 +533,21 @@ export default function AdminDocumentTemplateEditor() {
                   key={kind}
                   size="sm"
                   variant="outline"
-                  className="h-8 gap-1.5 px-2 text-[11px]"
+                  className="h-11 gap-1.5 px-1.5 text-[10px] sm:h-8 sm:px-2 sm:text-[11px]"
                   onClick={() => addElement(kind)}
                   title={`Add ${ELEMENT_LABELS[kind].toLowerCase()}`}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  {ELEMENT_LABELS[kind]}
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{ELEMENT_LABELS[kind]}</span>
                 </Button>
               );
             })}
 
-            <div className="ml-auto flex items-center gap-1">
+            <div className="col-span-3 flex items-center gap-2 sm:ml-auto sm:gap-1">
               <Button
                 size="sm"
                 variant={mode === "layout" ? "default" : "outline"}
-                className="h-8 gap-1.5 px-2 text-[11px]"
+                className="h-11 flex-1 gap-1.5 px-2 text-[11px] sm:h-8 sm:flex-none sm:px-2"
                 onClick={() => setMode("layout")}
               >
                 <MousePointerSquareDashed className="h-3.5 w-3.5" /> Layout
@@ -553,7 +555,7 @@ export default function AdminDocumentTemplateEditor() {
               <Button
                 size="sm"
                 variant={mode === "preview" ? "default" : "outline"}
-                className="h-8 gap-1.5 px-2 text-[11px]"
+                className="h-11 flex-1 gap-1.5 px-2 text-[11px] sm:h-8 sm:flex-none sm:px-2"
                 onClick={() => setMode("preview")}
               >
                 <Eye className="h-3.5 w-3.5" /> Preview
@@ -561,7 +563,7 @@ export default function AdminDocumentTemplateEditor() {
               <Button
                 size="icon"
                 variant={showGrid ? "default" : "outline"}
-                className="h-8 w-8"
+                className="h-11 w-11 sm:h-8 sm:w-8"
                 title="Toggle grid"
                 onClick={() => setShowGrid((v) => !v)}
               >
@@ -570,7 +572,7 @@ export default function AdminDocumentTemplateEditor() {
               <Button
                 size="sm"
                 variant={snapToGrid ? "default" : "outline"}
-                className="h-8 px-2 text-[11px]"
+                className="h-11 flex-1 px-2 text-[11px] sm:h-8 sm:flex-none"
                 onClick={() => setSnapToGrid((v) => !v)}
                 title="Snap to a 4px grid"
               >
@@ -618,7 +620,7 @@ export default function AdminDocumentTemplateEditor() {
                   setSelectedIndex(null);
                 }}
                 className={cn(
-                  "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                  "min-h-11 rounded-md border px-3 py-2 text-[11px] font-medium transition-colors sm:min-h-0 sm:px-2 sm:py-1",
                   i === activePage
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border text-muted-foreground hover:bg-muted",
@@ -627,19 +629,19 @@ export default function AdminDocumentTemplateEditor() {
                 {i + 1} · {p.width}×{p.height}
               </button>
             ))}
-            <Button size="sm" variant="outline" className="h-7 gap-1 px-2 text-[11px]" onClick={addPage}>
+            <Button size="sm" variant="outline" className="h-11 gap-1 px-3 text-xs sm:h-7 sm:px-2 sm:text-[11px]" onClick={addPage}>
               <Plus className="h-3 w-3" /> Page
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 gap-1 px-2 text-[11px] text-destructive"
+              className="h-11 gap-1 px-3 text-xs text-destructive sm:h-7 sm:px-2 sm:text-[11px]"
               onClick={() => removePage(activePage)}
             >
               <Trash2 className="h-3 w-3" /> Remove
             </Button>
 
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
               <select
                 aria-label="Page size preset"
                 value=""
@@ -647,7 +649,7 @@ export default function AdminDocumentTemplateEditor() {
                   const preset = PAGE_PRESETS.find((p) => p.label === e.target.value);
                   if (preset) updatePage({ width: preset.width, height: preset.height });
                 }}
-                className="h-7 rounded-md border border-border bg-background px-1.5 text-[11px]"
+                className="h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[11px] sm:h-7 sm:flex-none sm:px-1.5"
               >
                 <option value="">Preset…</option>
                 {PAGE_PRESETS.map((p) => (
@@ -661,13 +663,13 @@ export default function AdminDocumentTemplateEditor() {
                 aria-label="Page background"
                 value={page?.background ?? "#ffffff"}
                 onChange={(e) => updatePage({ background: e.target.value })}
-                className="h-7 w-10 cursor-pointer p-0.5"
+                className="h-11 w-12 cursor-pointer p-0.5 sm:h-7 sm:w-10"
               />
               <select
                 aria-label="Render scale"
                 value={String(renderScale)}
                 onChange={(e) => setRenderScale(Number(e.target.value))}
-                className="h-7 rounded-md border border-border bg-background px-1.5 text-[11px]"
+                className="h-11 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[11px] sm:h-7 sm:flex-none sm:px-1.5"
               >
                 {[1, 2, 3].map((s) => (
                   <option key={s} value={s}>
@@ -680,7 +682,7 @@ export default function AdminDocumentTemplateEditor() {
         </div>
 
         {/* ── Right: inspector ── */}
-        <div className="xl:sticky xl:top-6 xl:self-start">
+        <div className="order-3 xl:sticky xl:top-6 xl:self-start">
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Inspector

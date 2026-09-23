@@ -39,7 +39,6 @@ interface ElementCanvasProps {
   snapToGrid?: boolean;
 }
 
-const HANDLE = 11;
 
 export function ElementCanvas({
   page,
@@ -248,7 +247,7 @@ export function ElementCanvas({
                 )}
               />
               {isClipped && (
-                <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap rounded bg-destructive/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
+                <span className="pointer-events-none absolute right-1 top-1 whitespace-nowrap rounded bg-destructive/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-white">
                   Off page
                 </span>
               )}
@@ -257,10 +256,11 @@ export function ElementCanvas({
                   <span
                     role="presentation"
                     onPointerDown={(e) => beginDrag(e, index, "resize")}
-                    className="absolute -bottom-1 -right-1 z-30 cursor-nwse-resize rounded-sm border border-background bg-primary"
-                    style={{ width: HANDLE, height: HANDLE }}
-                  />
-                  <span className="pointer-events-none absolute -top-5 left-0 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-foreground">
+                    className="absolute -bottom-3 -right-3 z-30 flex h-6 w-6 cursor-nwse-resize touch-none items-center justify-center sm:-bottom-1 sm:-right-1 sm:h-3 sm:w-3"
+                  >
+                    <span className="h-2.5 w-2.5 rounded-sm border border-background bg-primary sm:h-2 sm:w-2" />
+                  </span>
+                  <span className="pointer-events-none absolute left-1 top-1 whitespace-nowrap rounded bg-primary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-primary-foreground">
                     {el.kind}
                   </span>
                 </>
