@@ -171,8 +171,8 @@ export default function PublicDocument() {
               <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-3">
                 <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                 <p className="text-[11px] leading-relaxed text-destructive">
-                  <span className="font-semibold">Simulation output.</span> This document is watermarked and shows
-                  fictional data. It is not a real credential, receipt or financial record.
+                  <span className="font-semibold">Specimen document.</span> Every page carries a non-removable stamp
+                  and shows fictional data. It is not a real credential, receipt or financial record.
                 </p>
               </div>
             )}

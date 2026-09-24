@@ -142,7 +142,7 @@ export default function DocumentUploadDialog({ className }: { className?: string
             <DialogTitle>Add your own document</DialogTitle>
             <DialogDescription>
               Upload a PDF or an image you already have — a contract, an invoice, a scan. It lands in your workspace
-              exactly as-is, with no watermark.
+              exactly as-is.
             </DialogDescription>
           </DialogHeader>
 

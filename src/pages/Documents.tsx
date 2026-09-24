@@ -142,7 +142,8 @@ export default function Documents() {
                 <p className="text-sm font-semibold text-foreground">New clean document</p>
               </div>
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Design your own layout from scratch. No demo watermark, and it is issued under your organization name.
+                Design your own layout from scratch. Nothing is stamped on it, and it is issued under your organization
+                name.
               </p>
               <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
                 <ShieldCheck className="h-3.5 w-3.5" /> Always clean output
@@ -213,7 +214,7 @@ export default function Documents() {
                     <p className="truncate text-sm font-semibold text-foreground">{category.label}</p>
                     {category.sensitive && (
                       <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-destructive">
-                        demo
+                        stamped
                       </span>
                     )}
                   </div>

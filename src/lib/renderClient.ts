@@ -72,7 +72,7 @@ async function svgToCanvas(svg: string): Promise<HTMLCanvasElement> {
 
 /**
  * Render every page of a template configuration into downloadable artifacts.
- * `options.sensitive` forces the engine's DEMO watermark (server-owned flag —
+ * `options.sensitive` forces the engine's non-removable stamp (server-owned flag —
  * pass the template's sensitivity, never user input).
  */
 export async function renderDocumentArtifacts(

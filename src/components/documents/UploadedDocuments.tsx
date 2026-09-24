@@ -189,7 +189,7 @@ export default function UploadedDocuments() {
       ) : documents.length === 0 ? (
         <EmptyBlock
           title="No uploaded documents yet"
-          message="Bring in the PDFs and images you already have — contracts, invoices, scans or photos. They stay exactly as you uploaded them, with no demo watermark."
+          message="Bring in the PDFs and images you already have — contracts, invoices, scans or photos. They stay exactly as you uploaded them, with nothing added."
           action={<DocumentUploadDialog />}
         />
       ) : (

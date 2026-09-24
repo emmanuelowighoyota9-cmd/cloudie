@@ -125,7 +125,7 @@ export default function DocumentTemplates() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">New clean document</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Your own layout — no demo watermark, issued under your organization name.
+                  Your own layout, issued under your organization name — never stamped.
                 </p>
               </div>
             </Link>
@@ -194,7 +194,7 @@ export default function DocumentTemplates() {
                   )}
                   {template.isSensitive && (
                     <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-destructive/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                      <ShieldAlert className="h-2.5 w-2.5" /> demo
+                      <ShieldAlert className="h-2.5 w-2.5" /> stamped
                     </span>
                   )}
                 </div>

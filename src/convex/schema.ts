@@ -912,7 +912,7 @@ const schema = defineSchema(
       renderer: v.optional(v.string()), // "svg"
       status: v.optional(v.string()), // draft | active | disabled | archived
       visibility: v.optional(v.string()), // public | unlisted | private
-      // "sensitive" templates ALWAYS render a forced DEMO/SAMPLE watermark —
+      // "sensitive" templates ALWAYS render a forced SPECIMEN / NOT VALID stamp —
       // the flag is server-owned and never part of user-editable layout.
       sensitivity: v.optional(v.string()), // standard | sensitive
       requiredCredits: v.optional(v.number()), // points charged per PDF render

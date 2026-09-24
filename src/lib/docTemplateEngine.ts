@@ -10,8 +10,8 @@
  * SVG-build time; image slots only accept `data:` URLs or platform-resolved
  * storage bytes (never arbitrary https URLs — that would give librsvg an SSRF
  * primitive). Templates flagged `sensitivity: "sensitive"` ALWAYS get a forced
- * DEMO/SAMPLE/SIMULATION watermark appended last, so layout code cannot cover
- * or remove it.
+ * SPECIMEN / NOT VALID stamp appended last, so layout code cannot cover or
+ * remove it.
  */
 
 import { qrToSvgPath } from "./qr";
@@ -32,17 +32,17 @@ export interface CategoryDef {
   key: CategoryKey;
   label: string;
   description: string;
-  /** Sensitive categories render a non-removable DEMO watermark. */
+  /** Sensitive categories render a non-removable stamp. */
   sensitive: boolean;
   enabledByDefault: boolean;
 }
 
 export const CATEGORIES: CategoryDef[] = [
-  { key: "banking_ui", label: "Banking Websites", description: "Demo banking dashboards and interface mockups for design, training and QA.", sensitive: true, enabledByDefault: true },
-  { key: "tracking", label: "Flight & Package Tracking", description: "Simulated tracking status cards and shipment timelines.", sensitive: false, enabledByDefault: true },
-  { key: "flight_itinerary", label: "Flight Itineraries", description: "Sample travel itineraries with fictional airlines and references.", sensitive: true, enabledByDefault: true },
+  { key: "banking_ui", label: "Banking Websites", description: "Banking dashboards and interface mockups for design, training and QA.", sensitive: true, enabledByDefault: true },
+  { key: "tracking", label: "Flight & Package Tracking", description: "Tracking status cards and shipment timelines.", sensitive: false, enabledByDefault: true },
+  { key: "flight_itinerary", label: "Flight Itineraries", description: "Travel itineraries with fictional airlines and references.", sensitive: true, enabledByDefault: true },
   { key: "financial", label: "Financial & Payment Verification", description: "Fictional payment receipts and verification statements for testing.", sensitive: true, enabledByDefault: true },
-  { key: "certificates", label: "Certificates & Records", description: "Completion certificates and record cards with sample data.", sensitive: true, enabledByDefault: true },
+  { key: "certificates", label: "Certificates & Records", description: "Completion certificates and record cards for training and award programmes.", sensitive: true, enabledByDefault: true },
   { key: "corporate", label: "Corporate Documents", description: "Invoices, memos, letters and business paperwork.", sensitive: false, enabledByDefault: true },
   { key: "general", label: "General Templates", description: "Everything else — badges, covers, one-pagers and more.", sensitive: false, enabledByDefault: true },
 ];
@@ -537,12 +537,12 @@ export interface BuildSvgOptions {
   sensitive?: boolean;
   /** Resolved data URLs for image fields (server resolves storage → bytes). */
   images?: Record<string, string>;
-  /** Watermark wording override (defaults shown below). */
+  /** Stamp wording override (defaults shown below). */
   watermarkText?: string;
 }
 
-const DEFAULT_WATERMARK = "DEMO · SAMPLE · SIMULATION";
-const WATERMARK_NOTICE = "SIMULATION OUTPUT — NOT A REAL DOCUMENT, CREDENTIAL OR FINANCIAL RECORD";
+const DEFAULT_WATERMARK = "SPECIMEN · NOT VALID";
+const WATERMARK_NOTICE = "SPECIMEN COPY — NOT A REAL DOCUMENT, CREDENTIAL OR FINANCIAL RECORD";
 
 function renderTextElement(el: Extract<LayoutElement, { kind: "text" }>, values: DocumentValues, schema: TemplateSchema): string {
   const field = schema.fields.find((f) => f.id === el.bind);
@@ -638,7 +638,7 @@ function renderBarcode(el: Extract<LayoutElement, { kind: "barcode" }>, values: 
   }
 }
 
-/** Forced watermark block — appended AFTER layout elements so nothing covers it. */
+/** Forced stamp block — appended AFTER layout elements so nothing covers it. */
 function renderWatermark(page: TemplatePage, text: string): string {
   const cx = page.width / 2;
   const cy = page.height / 2;

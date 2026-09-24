@@ -121,11 +121,11 @@ export function elementDisplayText(
 
 // ─── Editor preview values ────────────────────────────────────────────────────
 
-/** Type-appropriate sample content, so a layout can be judged with real text. */
+/** Type-appropriate placeholder content, so a layout can be judged with real text. */
 const SAMPLE_BY_TYPE: Record<string, string> = {
-  text: "Sample text",
+  text: "Body text",
   textarea:
-    "Sample body copy used to judge line length, wrapping and vertical rhythm while the layout is being designed.",
+    "Body copy used to judge line length, wrapping and vertical rhythm while the layout is being designed.",
   number: "1250",
   currency: "1250.00",
   date: "2026-03-14",
@@ -147,7 +147,7 @@ const SAMPLE_BY_TYPE: Record<string, string> = {
  *
  * Real drafts start from `defaultValues`, which is mostly empty strings — you
  * cannot judge a layout against nothing, so the editor uses declared defaults
- * where they exist and realistic samples everywhere else.
+ * where they exist and realistic placeholder content everywhere else.
  */
 export function previewValues(schema: TemplateSchema): DocumentValues {
   const out: DocumentValues = {};
@@ -169,7 +169,7 @@ export function previewValues(schema: TemplateSchema): DocumentValues {
       out[f.id] = String(Math.min(Math.max(f.min ?? 0, 1), f.max ?? Number.MAX_SAFE_INTEGER));
       continue;
     }
-    out[f.id] = SAMPLE_BY_TYPE[f.type] ?? "Sample";
+    out[f.id] = SAMPLE_BY_TYPE[f.type] ?? "Body text";
   }
   return out;
 }

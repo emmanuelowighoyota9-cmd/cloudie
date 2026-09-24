@@ -338,7 +338,7 @@ export default function Landing() {
                 {[
                   "Live preview sharing one render engine with exports",
                   "Versioned templates — generated documents never change",
-                  "Non-removable DEMO watermark on sensitive layouts",
+                  "Non-removable safety stamp on sensitive layouts",
                   "Share links with expiry, revocation and view counts",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm">

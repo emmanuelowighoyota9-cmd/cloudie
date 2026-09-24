@@ -268,10 +268,10 @@ export default function DocumentBuilder() {
         <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-3">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div className="text-[11px] leading-relaxed text-destructive">
-            <p className="font-semibold">Sensitive template — demo output</p>
+            <p className="font-semibold">Sensitive template — stamped output</p>
             <p className="mt-0.5 text-destructive/80">
-              Every page is stamped with a non-removable DEMO · SAMPLE · SIMULATION watermark and a notice bar. Use
-              fictional names, references and amounts only.
+              Every page carries a non-removable SPECIMEN · NOT VALID stamp and a notice bar. Use fictional names,
+              references and amounts only.
             </p>
           </div>
         </div>

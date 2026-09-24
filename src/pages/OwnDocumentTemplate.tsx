@@ -8,7 +8,7 @@ import DocumentTemplateEditor from "@/pages/AdminDocumentTemplateEditor";
  * "Add your own document".
  *
  * The customer-facing designer: build a document from scratch, always clean
- * (no demo watermark). The organization name is read before mounting so the
+ * (never stamped). The organization name is read before mounting so the
  * letterhead field starts from the right value.
  */
 export default function OwnDocumentTemplate() {

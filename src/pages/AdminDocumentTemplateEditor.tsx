@@ -448,7 +448,7 @@ export default function DocumentTemplateEditor({
       ? "New document"
       : "New document template";
   const headerDescription = isOwn
-    ? "Design your own document from scratch: arrange the layout, define the fields you want to fill in later, then save. Your documents always render clean — no demo watermark — and are issued under your organization name."
+    ? "Design your own document from scratch: arrange the layout, define the fields you want to fill in later, then save. Your documents render clean — never stamped — and are issued under your organization name."
     : "Design the layout visually, define the dynamic form, then publish. Saving an existing template creates a new immutable version.";
 
   return (
@@ -498,8 +498,8 @@ export default function DocumentTemplateEditor({
           <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p className="text-[11px] leading-relaxed text-primary">
             Your uploaded file is the page background and is never stored inside the layout. Add text, badges, QR
-            codes or images from the toolbar and drag them onto the blanks — everything renders clean, with no
-            watermark.
+            codes or images from the toolbar and drag them onto the blanks — everything renders clean, with nothing
+            stamped over it.
           </p>
         </div>
       )}
@@ -576,7 +576,7 @@ export default function DocumentTemplateEditor({
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Sensitivity</Label>
                 {isOwn ? (
                   <div className="flex h-11 items-center rounded-md border border-border bg-muted/40 px-2.5 text-[11px] font-medium text-muted-foreground sm:h-9">
-                    Clean · no watermark
+                    Clean · never stamped
                   </div>
                 ) : (
                   <select
@@ -587,17 +587,17 @@ export default function DocumentTemplateEditor({
                     className={cn(selectClass, categoryIsSensitive && "opacity-60")}
                   >
                     <option value="standard">Standard</option>
-                    <option value="sensitive">Sensitive (watermark)</option>
+                    <option value="sensitive">Sensitive (stamped)</option>
                   </select>
                 )}
               </div>
             </div>
             <p className="text-[10px] leading-relaxed text-muted-foreground">
               {isOwn
-                ? "Your own documents are always clean: the \u201cIssued by\u201d field defaults to your organization name (change it in Settings) and no demo watermark is ever added."
+                ? "Your own documents are always clean: the \u201cIssued by\u201d field defaults to your organization name (change it in Settings) and nothing is ever stamped on them."
                 : categoryIsSensitive
-                  ? "This category always renders a non-removable DEMO watermark — sensitive categories cannot be downgraded."
-                  : "Sensitive templates get a non-removable DEMO watermark on every page."}
+                  ? "This category always renders a non-removable SPECIMEN · NOT VALID stamp — sensitive categories cannot be downgraded."
+                  : "Sensitive templates get a non-removable SPECIMEN · NOT VALID stamp on every page."}
             </p>
 
             <div className="flex flex-wrap items-center gap-x-4">

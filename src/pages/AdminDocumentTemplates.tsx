@@ -123,7 +123,7 @@ export default function AdminDocumentTemplates() {
                     </Badge>
                     {template.sensitivity === "sensitive" && (
                       <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
-                        demo
+                        stamped
                       </Badge>
                     )}
                   </div>

@@ -906,7 +906,7 @@ export const publicViewDocument = mutation({
  *
  * A customer can design their own document from scratch instead of picking a
  * starter: it lives in a non-sensitive category only, so nothing authored here
- * can ever carry the platform's forced DEMO/SAMPLE watermark. Rows are private
+ * can ever carry the platform's forced SPECIMEN / NOT VALID stamp. Rows are private
  * to their creator and never appear in another customer's library.
  */
 
@@ -1037,7 +1037,7 @@ export const createMyTemplate = mutation({
     const name = sanitizeText(args.name.trim(), 80);
     if (!name) throw new Error("A document name is required");
 
-    // Always clean: no owner-authored document is ever watermarked.
+    // Always clean: no owner-authored document is ever stamped.
     assertOwnDocument(args.documentType, args.schema, args.configuration);
 
     // Artwork may only be one of your own image uploads — never someone else's
@@ -1407,7 +1407,7 @@ export const adminCreateTemplate = mutation({
     if (clash) throw new Error(`The slug "${slug}" is already taken`);
 
     // A sensitive category can never be downgraded to standard: the forced
-    // DEMO watermark is a platform guarantee, not a per-template preference.
+    // The forced stamp is a platform guarantee, not a per-template preference.
     const forcedSensitive = categoryDef(args.documentType).sensitive;
     const sensitivity = forcedSensitive ? "sensitive" : (args.sensitivity ?? "standard");
     const requiredCredits = Math.max(0, Math.round(args.requiredCredits ?? 0));

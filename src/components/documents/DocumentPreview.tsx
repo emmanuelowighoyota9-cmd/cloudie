@@ -103,7 +103,7 @@ export function DocumentPreview({
 
         {sensitive && (
           <span className="flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-destructive">
-            <AlertTriangle className="h-3 w-3" /> Demo watermark
+            <AlertTriangle className="h-3 w-3" /> Stamped
           </span>
         )}
       </div>

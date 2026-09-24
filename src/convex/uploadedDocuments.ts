@@ -11,7 +11,7 @@ import { api } from "./_generated/api";
  * contract, a scanned invoice, a photographed receipt. Bytes go through the
  * shared storage policy (MIME + size limits, ownership, audit); this module is
  * the workspace record the library lists. Uploaded files are always clean —
- * nothing here is ever stamped with a demo watermark.
+ * nothing here is ever stamped.
  */
 
 const MAX_UPLOADS = 200;
