@@ -1,11 +1,11 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowDownRight, ArrowUpRight, Download, Search } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Download, Search, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, downloadCsv, fmtDate } from "@/components/admin/shared";
 import { usePricing, formatNgn } from "@/lib/pricing";
@@ -136,58 +136,75 @@ export default function AdminTransactions() {
         </Select>
       </div>
 
-      <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-slate-500">
-            {filtered === undefined ? "Loading…" : `${filtered.length.toLocaleString()} entries`}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {filtered === undefined ? (
-            <div className="p-4"><AdminSkeleton rows={8} /></div>
-          ) : filtered.length === 0 ? (
-            <div className="p-4"><AdminEmpty message="No ledger entries match your filters." /></div>
-          ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {paged!.map((l) => {
-                const u = userMap.get(l.userId);
-                return (
-                  <div
-                    key={l._id}
-                    className="flex flex-col gap-2 p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-6 dark:hover:bg-slate-800/50"
-                  >
-                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 text-sm font-bold ${l.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                          {l.amount > 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-                          {l.amount > 0 ? "+" : ""}{l.amount.toLocaleString()}
-                        </span>
-                        <span className="text-[11px] text-slate-400">{formatNgn(l.amount * ngnPerPoint)}</span>
-                        <StatusBadge status={l.type} />
+      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <Wallet className="h-3.5 w-3.5" />
+        {filtered === undefined ? "Loading…" : `${filtered.length.toLocaleString()} entries`}
+        {filtered && filtered.length > 0 && <span className="text-slate-300 dark:text-slate-600">·</span>}
+        {filtered && filtered.length > 0 && <span>Page {page + 1} of {totalPages}</span>}
+      </div>
+
+      {filtered === undefined ? (
+        <AdminSkeleton rows={6} />
+      ) : filtered.length === 0 ? (
+        <AdminEmpty message="No ledger entries match your filters." />
+      ) : (
+        <div className="space-y-3">
+          {paged!.map((l) => {
+            const u = userMap.get(l.userId);
+            const isCredit = l.amount > 0;
+            return (
+              <Card key={l._id} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
+                <CardContent className="p-4">
+                  {/* Top: amount + badge */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isCredit ? "bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400"}`}>
+                        {isCredit ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                      </span>
+                      <div>
+                        <p className={`text-sm font-bold leading-none ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {isCredit ? "+" : ""}{l.amount.toLocaleString()} pts
+                        </p>
+                        <p className="mt-0.5 text-[11px] font-medium text-slate-500">{formatNgn(l.amount * ngnPerPoint)}</p>
                       </div>
-                      <p className="break-all text-xs text-slate-700 dark:text-slate-300">
-                        {u?.email ?? l.userId.slice(-8)}
-                      </p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">{l.description}</p>
                     </div>
-                    <div className="shrink-0 text-[11px] text-slate-400 sm:text-right">
-                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Balance {l.balanceAfter.toLocaleString()} pts
-                      </p>
-                      <p>{formatNgn(l.balanceAfter * ngnPerPoint)}</p>
-                      <p>{fmtDate(l.createdAt)}</p>
-                    </div>
+                    <StatusBadge status={l.type} />
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+                  {/* Middle: user + description */}
+                  <div className="mt-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                    <p className="break-all text-xs font-medium text-slate-700 dark:text-slate-300">
+                      {u?.email ?? u?.name ?? l.userId.slice(-12)}
+                    </p>
+                    {u?.name && u.email && (
+                      <p className="mt-0.5 break-all text-[11px] text-slate-500">{u.name}</p>
+                    )}
+                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-400">{l.description}</p>
+                    {l.referenceId && (
+                      <p className="mt-1.5 break-all font-mono text-[10px] text-slate-400">Ref: {l.referenceId}</p>
+                    )}
+                  </div>
+
+                  {/* Bottom: balance + date */}
+                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                    <div className="text-[11px]">
+                      <p className="font-medium text-slate-700 dark:text-slate-300">Balance {l.balanceAfter.toLocaleString()} pts</p>
+                      <p className="text-slate-400">{formatNgn(l.balanceAfter * ngnPerPoint)}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      {fmtDate(l.createdAt)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {filtered && filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm">
-          <p className="text-slate-500">Page {page + 1} of {totalPages}</p>
+        <div className="flex items-center justify-between gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
+          <p className="text-sm text-slate-500">Page {page + 1} of {totalPages} · {filtered.length.toLocaleString()} total</p>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>Previous</Button>
             <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>Next</Button>

@@ -869,52 +869,59 @@ export default function AdminEmailSettings() {
           </CardContent>
         </Card>
 
-        {/* ── Delivery logs ─────────────────────────────────────────────── */}
-        <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base text-slate-900 dark:text-white">Recent email deliveries</CardTitle>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+        {/* ── Delivery logs — mobile card list ─────────────────────────── */}
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Recent email deliveries</h3>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
               Recipients are partially masked. Message bodies, tokens, and credentials are never displayed.
             </p>
-          </CardHeader>
-          <CardContent>
-            {logs === undefined ? (
-              <AdminSkeleton rows={3} />
-            ) : logs.length === 0 ? (
-              <AdminEmpty message="No email has been sent yet" hint="Send a test email to confirm your configuration." />
-            ) : (
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {logs.map((log) => (
-                  <div
-                    key={log._id}
-                    className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
-                  >
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <p className="break-all font-mono text-xs text-slate-600 dark:text-slate-300">
+          </div>
+          {logs === undefined ? (
+            <AdminSkeleton rows={3} />
+          ) : logs.length === 0 ? (
+            <AdminEmpty message="No email has been sent yet" hint="Send a test email to confirm your configuration." />
+          ) : (
+            <div className="space-y-3">
+              {logs.map((log) => (
+                <Card key={log._id} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="min-w-0 flex-1 break-all font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
                         {log.recipient}
                       </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {log.emailType.replace(/_/g, " ")} · {log.providerLabel}
+                      <StatusBadge status={log.status === "sent" ? "delivered" : log.status} />
+                    </div>
+
+                    <div className="mt-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+                      <p className="text-xs font-medium capitalize text-slate-700 dark:text-slate-300">
+                        {log.emailType.replace(/_/g, " ")}
                       </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">{log.providerLabel}</p>
                       {log.providerMessageId && (
-                        <p className="break-all font-mono text-[10px] text-slate-400">
+                        <p className="mt-1.5 break-all font-mono text-[10px] text-slate-400">
                           {log.providerMessageId}
                         </p>
                       )}
                       {log.failureReason && (
-                        <p className="text-[11px] text-red-500">{log.failureReason}</p>
+                        <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400">
+                          {log.failureReason}
+                        </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end sm:gap-1">
-                      <StatusBadge status={log.status === "sent" ? "delivered" : log.status} />
-                      <span className="text-[11px] text-slate-400">{fmtDate(log.sentAt ?? log.createdAt)}</span>
+
+                    <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-slate-800">
+                      <span className="text-[11px] text-slate-400">{log.providerLabel}</span>
+                      <span className="shrink-0 rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white dark:bg-white dark:text-slate-900">
+                        {fmtDate(log.sentAt ?? log.createdAt)}
+                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       </motion.div>
     </div>
   );

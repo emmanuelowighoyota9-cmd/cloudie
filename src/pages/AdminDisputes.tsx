@@ -78,7 +78,7 @@ export default function AdminDisputes() {
         description="Review marketplace disputes, gather evidence, and resolve with refunds or rejection. Every resolution is audited."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <StatCardLike label="Open" value={counts.open} tone="text-red-600" />
         <StatCardLike label="Under review" value={counts.underReview} tone="text-amber-600" />
         <StatCardLike label="Resolved" value={counts.resolved} tone="text-green-600" />
@@ -89,38 +89,39 @@ export default function AdminDisputes() {
       ) : disputes.length === 0 ? (
         <AdminEmpty message="No disputes filed." hint="Disputes appear when buyers contest a marketplace order." />
       ) : (
-        <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {disputes.map((d) => (
-                <div
-                  key={d._id}
-                  className="flex flex-col gap-3 p-4 transition-colors hover:bg-slate-50 lg:flex-row lg:items-start lg:justify-between lg:gap-6 dark:hover:bg-slate-800/50"
-                >
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    <p className="text-sm text-slate-900 dark:text-white" title={d.reason}>
-                      {d.reason}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
-                      <span className="font-mono">#{d._id.slice(-8)}</span>
-                      <span>
-                        Order{" "}
-                        <span className="font-mono text-slate-500">
-                          {orderMap.get(d.orderId)?._id.slice(-8) ?? d.orderId.slice(-8)}
-                        </span>
-                      </span>
-                      <span>{orderMap.get(d.orderId)?.totalPoints ?? "—"} pts</span>
-                      <span>{fmtDate(d.createdAt)}</span>
-                    </div>
-                  </div>
+        <div className="space-y-3">
+          {disputes.map((d) => (
+            <Card key={d._id} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-900 dark:text-white" title={d.reason}>
+                    {d.reason}
+                  </p>
+                  <StatusBadge status={d.status} />
+                </div>
 
-                  <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
-                    <StatusBadge status={d.status} />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] uppercase tracking-wider text-slate-400 lg:hidden">Priority</span>
+                <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60 sm:grid-cols-4">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Dispute</p>
+                    <p className="mt-1 truncate font-mono text-xs font-medium text-slate-700 dark:text-slate-200">#{d._id.slice(-8)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Order</p>
+                    <p className="mt-1 truncate font-mono text-xs font-medium text-slate-700 dark:text-slate-200">
+                      {orderMap.get(d.orderId)?._id.slice(-8) ?? d.orderId.slice(-8)}
+                    </p>
+                    <p className="text-[11px] text-slate-500">{orderMap.get(d.orderId)?.totalPoints ?? "—"} pts</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Date</p>
+                    <p className="mt-1 text-xs font-medium text-slate-700 dark:text-slate-200">{fmtDate(d.createdAt)}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Priority</p>
+                    <div className="mt-1">
                       <select
                         aria-label="Dispute priority"
-                        className="h-11 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 sm:h-9 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        className="h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200"
                         value={d.priority ?? ""}
                         onChange={async (e) => {
                           const v = e.target.value as "low" | "medium" | "high" | "critical" | "";
@@ -133,27 +134,29 @@ export default function AdminDisputes() {
                           }
                         }}
                       >
-                        <option value="" disabled>Set…</option>
+                        <option value="" disabled>Set priority</option>
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
                         <option value="high">High</option>
                         <option value="critical">Critical</option>
                       </select>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-11 sm:h-9"
-                      onClick={() => setOpenId(d._id)}
-                    >
-                      Review
-                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+
+                <div className="mt-3 flex items-center justify-end">
+                  <Button
+                    size="sm"
+                    className="h-9 w-full bg-slate-900 text-white hover:bg-slate-800 sm:w-auto dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+                    onClick={() => setOpenId(d._id)}
+                  >
+                    Review dispute
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       {dispute && (
