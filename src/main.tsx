@@ -57,6 +57,7 @@ const DocumentDetail = lazy(() => import("./pages/DocumentDetail.tsx"));
 const PublicDocument = lazy(() => import("./pages/PublicDocument.tsx"));
 const AdminDocumentTemplates = lazy(() => import("./pages/AdminDocumentTemplates.tsx"));
 const AdminDocumentTemplateEditor = lazy(() => import("./pages/AdminDocumentTemplateEditor.tsx"));
+const AdminTemplateClassifier = lazy(() => import("./pages/AdminTemplateClassifier.tsx"));
 const Services = lazy(() => import("./pages/Services.tsx"));
 const EmailCampaign = lazy(() => import("./pages/EmailCampaign.tsx"));
 const RenderStudio = lazy(() => import("./pages/RenderStudio.tsx"));
@@ -264,6 +265,8 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="document-templates" element={<AdminDocumentTemplates />} />
                   <Route path="document-templates/new" element={<AdminDocumentTemplateEditor />} />
                   <Route path="document-templates/:templateId/edit" element={<AdminDocumentTemplateEditor />} />
+                  <Route path="document-templates/classify" element={<AdminTemplateClassifier />} />
+                  <Route path="template-classifier" element={<AdminTemplateClassifier />} />
                   <Route path="tenants" element={<AdminTenants />} />
                   <Route path="tenants/new" element={<AdminBankingCreateTenant />} />
                   <Route path="tenants/banking" element={<AdminBankingTenants />} />
