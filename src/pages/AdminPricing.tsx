@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { BadgeDollarSign, Plus, Trash2, Calculator, Package as PackageIcon } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router";
 import { AdminPageHeader, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { formatNgn, formatUsd, type PointPackage } from "@/lib/pricing";
 
@@ -245,6 +246,11 @@ export default function AdminPricing() {
       <AdminPageHeader
         title="Pricing Control"
         description="Set the naira value of a point, the packages customers buy, and the point cost per service. Changes take effect immediately and are audited."
+        actions={
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/admin/catalog">Catalog & prices</Link>
+          </Button>
+        }
       />
 
       {/* Point value / currency */}

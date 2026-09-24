@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { requireAdmin, auditLog } from "./adminApi";
 
 // ─── Vendors ───
 export const registerVendor = mutation({
@@ -287,6 +288,37 @@ export const adminApproveProduct = mutation({
     });
 
     return { success: true };
+  },
+});
+
+// Admin: re-price a marketplace listing from the catalog (points only).
+export const adminSetProductPrice = mutation({
+  args: {
+    productId: v.id("marketplaceProducts"),
+    pointsPrice: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const product = await ctx.db.get(args.productId);
+    if (!product) throw new Error("PRODUCT_NOT_FOUND");
+    if (!Number.isFinite(args.pointsPrice) || args.pointsPrice < 0) {
+      throw new Error("INVALID_PRICE");
+    }
+
+    const pointsPrice = Math.round(args.pointsPrice);
+    const before = { pointsPrice: product.pointsPrice };
+    await ctx.db.patch(args.productId, { pointsPrice });
+
+    await auditLog(ctx, adminId, {
+      action: "PRODUCT_PRICE_CHANGED",
+      resource: "marketplaceProduct",
+      resourceId: args.productId,
+      before,
+      after: { pointsPrice },
+      reason: `Re-priced ${product.name} to ${pointsPrice} points`,
+    });
+
+    return { pointsPrice };
   },
 });
 

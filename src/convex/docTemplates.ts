@@ -1258,6 +1258,35 @@ export const adminSetTemplateStatus = mutation({
   },
 });
 
+/** Admin: re-price a template in the catalog without republishing its layout. */
+export const adminSetTemplatePrice = mutation({
+  args: {
+    templateId: v.id("documentTemplates"),
+    requiredCredits: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Not found");
+    if (!Number.isFinite(args.requiredCredits)) throw new Error("INVALID_PRICE");
+
+    const requiredCredits = Math.min(Math.max(0, Math.round(args.requiredCredits)), 1000);
+    const before = { requiredCredits: template.requiredCredits ?? 0 };
+    await ctx.db.patch(args.templateId, { requiredCredits, updatedAt: Date.now() });
+
+    await auditLog(ctx, adminId, {
+      action: "DOCUMENT_TEMPLATE_PRICE_CHANGED",
+      resource: "documentTemplates",
+      resourceId: args.templateId,
+      before,
+      after: { requiredCredits },
+      reason: `Priced ${template.name} at ${requiredCredits} points`,
+    });
+
+    return { requiredCredits };
+  },
+});
+
 /** Admin: publish a new version of a template (schema + layout validated first). */
 export const adminPublishTemplateVersion = mutation({
   args: {

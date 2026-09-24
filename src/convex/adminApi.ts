@@ -64,6 +64,12 @@ export const getPricing = query({
   },
 });
 
+/** Catalog copy is trimmed and capped; blank means "use the platform default". */
+function catalogText(value: string | undefined, max: number): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed.slice(0, max) : undefined;
+}
+
 export const upsertPricing = mutation({
   args: {
     service: v.string(),
@@ -72,6 +78,9 @@ export const upsertPricing = mutation({
     /** Optional per-service price override (blank = derive from point rate). */
     priceNgn: v.optional(v.number()),
     priceUsd: v.optional(v.number()),
+    /** Customer-facing catalog name + description shown in the admin catalog. */
+    label: v.optional(v.string()),
+    description: v.optional(v.string()),
     isActive: v.boolean(),
   },
   handler: async (ctx, args) => {
@@ -108,6 +117,8 @@ export const upsertPricing = mutation({
       };
       await ctx.db.patch(existing._id, {
         ...after,
+        label: catalogText(args.label, 60),
+        description: catalogText(args.description, 180),
         workspace: args.workspace,
         updatedBy: adminId,
         updatedAt: now,
@@ -125,6 +136,8 @@ export const upsertPricing = mutation({
       id = await ctx.db.insert("pointPricing", {
         service: args.service,
         workspace: args.workspace,
+        label: catalogText(args.label, 60),
+        description: catalogText(args.description, 180),
         pointsCost: args.pointsCost,
         priceNgn: args.priceNgn,
         priceUsd: args.priceUsd,
@@ -165,15 +178,16 @@ export const getPublicPricing = query({
  * Admins may override the cost of any entry; new services can be added too.
  */
 const DEFAULT_PRICING: { service: string; workspace: string; pointsCost: number }[] = [
-  { service: "shipment_create", workspace: "shipments", pointsCost: 50 },
+  { service: "shipment_create", workspace: "shipments", pointsCost: 100 },
   { service: "shipment_tracking_update", workspace: "shipments", pointsCost: 25 },
   { service: "shipment_event_add", workspace: "shipments", pointsCost: 15 },
-  { service: "flight_pdf", workspace: "ticketing", pointsCost: 25 },
-  { service: "hotel_pdf", workspace: "ticketing", pointsCost: 25 },
-  { service: "commercial_invoice", workspace: "ticketing", pointsCost: 20 },
-  { service: "customs_document", workspace: "ticketing", pointsCost: 20 },
+  { service: "document_render", workspace: "documents", pointsCost: 40 },
+  { service: "flight_pdf", workspace: "ticketing", pointsCost: 150 },
+  { service: "hotel_pdf", workspace: "ticketing", pointsCost: 120 },
+  { service: "commercial_invoice", workspace: "ticketing", pointsCost: 80 },
+  { service: "customs_document", workspace: "ticketing", pointsCost: 100 },
   { service: "email_per_recipient", workspace: "services", pointsCost: 10 },
-  { service: "image_render", workspace: "services", pointsCost: 15 },
+  { service: "image_render", workspace: "services", pointsCost: 50 },
   { service: "tenant_site_create", workspace: "business", pointsCost: 250 },
   { service: "marketplace_purchase_fee", workspace: "platform", pointsCost: 0 },
 ];
@@ -231,6 +245,8 @@ export const bulkUpsertPricing = mutation({
         pointsCost: v.number(),
         priceNgn: v.optional(v.number()),
         priceUsd: v.optional(v.number()),
+        label: v.optional(v.string()),
+        description: v.optional(v.string()),
         isActive: v.boolean(),
       }),
     ),
@@ -267,6 +283,8 @@ export const bulkUpsertPricing = mutation({
           pointsCost: entry.pointsCost,
           priceNgn: entry.priceNgn,
           priceUsd: entry.priceUsd,
+          label: catalogText(entry.label, 60),
+          description: catalogText(entry.description, 180),
           isActive: entry.isActive,
           workspace: entry.workspace,
           updatedBy: adminId,
@@ -276,6 +294,8 @@ export const bulkUpsertPricing = mutation({
         await ctx.db.insert("pointPricing", {
           service,
           workspace: entry.workspace,
+          label: catalogText(entry.label, 60),
+          description: catalogText(entry.description, 180),
           pointsCost: entry.pointsCost,
           priceNgn: entry.priceNgn,
           priceUsd: entry.priceUsd,

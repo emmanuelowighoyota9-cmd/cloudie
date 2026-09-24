@@ -684,6 +684,9 @@ const schema = defineSchema(
     pointPricing: defineTable({
       service: v.string(),
       workspace: v.string(),
+      /** Customer-facing catalog copy. Blank falls back to the platform default. */
+      label: v.optional(v.string()),
+      description: v.optional(v.string()),
       pointsCost: v.number(),
       /** Per-service price overrides. When unset the point rate is used. */
       priceNgn: v.optional(v.number()),

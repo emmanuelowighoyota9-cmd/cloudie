@@ -36,6 +36,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Sun,
+  Tags,
   Truck,
   Users,
 } from "lucide-react";
@@ -60,6 +61,7 @@ const NAV = [
   { to: "/admin/audit", label: "Audit Logs", icon: ShieldAlert },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/system-health", label: "System Health", icon: Activity },
+  { to: "/admin/catalog", label: "Catalog & Prices", icon: Tags },
   { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign },
   { to: "/admin/payments", label: "Payment Providers", icon: CreditCard },
   { to: "/admin/settings/email", label: "Email Settings", icon: Mail },
