@@ -111,6 +111,7 @@ export default function SiteDetail() {
   const createAccount = useMutation(api.tenants.createAccount);
   const depositMutation = useMutation(api.tenants.depositToAccount);
   const withdrawMutation = useMutation(api.tenants.withdrawFromAccount);
+  const transferMutation = useMutation(api.tenantTransfers.transferBetweenAccounts);
 
   const [tab, setTab] = useState("accounts");
   const [showBalances, setShowBalances] = useState(true);
@@ -128,6 +129,11 @@ export default function SiteDetail() {
   const [depositDesc, setDepositDesc] = useState("");
   const [withdrawAmt, setWithdrawAmt] = useState("");
   const [withdrawDesc, setWithdrawDesc] = useState("");
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferFrom, setTransferFrom] = useState("");
+  const [transferTo, setTransferTo] = useState("");
+  const [transferAmt, setTransferAmt] = useState("");
+  const [transferDesc, setTransferDesc] = useState("");
   const [kycForm, setKycForm] = useState({ fullName: "", dateOfBirth: "" });
   const [addUserEmail, setAddUserEmail] = useState("");
   const [settingsForm, setSettingsForm] = useState({ siteName: "", contactEmail: "", contactPhone: "", primaryColor: "", accentColor: "" });
@@ -147,6 +153,7 @@ export default function SiteDetail() {
   }
 
   const totalBalance = accounts?.filter((a) => a.isActive).reduce((s, a) => s + a.balance, 0) ?? 0;
+  const activeAccounts = accounts?.filter((a) => a.isActive) ?? [];
   const latestKyc = kycRecords?.[0] ?? null;
 
   if (tab === "settings" && !settingsLoaded && site) {
@@ -198,6 +205,34 @@ export default function SiteDetail() {
       await withdrawMutation({ tenantId: site._id, accountId: selectedAccount as Id<"tenantAccounts">, amount: Number(withdrawAmt), description: withdrawDesc || undefined });
       toast.success("Withdrawal processed");
       setWithdrawOpen(false); setWithdrawAmt(""); setWithdrawDesc(""); setSelectedAccount("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const openTransfer = (fromId?: string) => {
+    if (activeAccounts.length < 2) { toast.error("Open a second active account to transfer funds"); return; }
+    const from = fromId && activeAccounts.some((a) => a._id === fromId) ? fromId : activeAccounts[0]._id;
+    setTransferFrom(from);
+    setTransferTo((prev) => (prev && prev !== from ? prev : activeAccounts.find((a) => a._id !== from)!._id));
+    setTransferOpen(true);
+  };
+
+  const handleTransfer = async () => {
+    if (!transferFrom || !transferTo || !transferAmt) return;
+    if (transferFrom === transferTo) { toast.error("Choose two different accounts"); return; }
+    const amount = Number(transferAmt);
+    if (!Number.isFinite(amount) || amount <= 0) { toast.error("Enter an amount greater than zero"); return; }
+    setBusy(true);
+    try {
+      await transferMutation({
+        tenantId: site._id,
+        fromAccountId: transferFrom as Id<"tenantAccounts">,
+        toAccountId: transferTo as Id<"tenantAccounts">,
+        amount,
+        description: transferDesc || undefined,
+      });
+      toast.success("Transfer complete");
+      setTransferOpen(false); setTransferAmt(""); setTransferDesc("");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
     finally { setBusy(false); }
   };
@@ -279,7 +314,7 @@ export default function SiteDetail() {
           <div className="flex gap-3 pb-5 overflow-x-auto">
             {[
               { icon: ArrowDownLeft, label: "Deposit", color: "bg-emerald-500", action: () => { if (accounts?.length) { setSelectedAccount(accounts[0]._id); setDepositOpen(true); } else toast.error("Create an account first"); } },
-              { icon: Send, label: "Transfer", color: "bg-blue-400", action: () => toast.info("Transfers coming soon") },
+              { icon: Send, label: "Transfer", color: "bg-blue-400", action: () => openTransfer() },
               { icon: Receipt, label: "Statements", color: "bg-purple-500", action: () => setTab("overview") },
               { icon: ShieldCheck, label: "Verify ID", color: "bg-amber-500", action: () => setTab("kyc") },
               { icon: Settings, label: "Settings", color: "bg-slate-400", action: () => { setTab("settings"); setSettingsLoaded(false); } },
@@ -373,6 +408,12 @@ export default function SiteDetail() {
                             className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-white/15 py-1.5 text-[11px] font-medium hover:bg-white/25 transition-colors"
                           >
                             <ArrowDownLeft className="h-3 w-3" /> Deposit
+                          </button>
+                          <button
+                            onClick={() => openTransfer(acct._id)}
+                            className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-white/15 py-1.5 text-[11px] font-medium hover:bg-white/25 transition-colors"
+                          >
+                            <Send className="h-3 w-3" /> Transfer
                           </button>
                           <button
                             onClick={() => { setSelectedAccount(acct._id); setWithdrawOpen(true); }}
@@ -664,6 +705,42 @@ export default function SiteDetail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setWithdrawOpen(false)}>Cancel</Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleWithdraw} disabled={busy || !withdrawAmt || !selectedAccount}>{busy ? "Processing…" : "Withdraw"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Transfer Dialog ── */}
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Transfer Between Accounts</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">From Account *</Label>
+              <Select value={transferFrom} onValueChange={(v) => { setTransferFrom(v); if (v === transferTo) setTransferTo(activeAccounts.find((a) => a._id !== v)?._id ?? ""); }}>
+                <SelectTrigger><SelectValue placeholder="Select source account" /></SelectTrigger>
+                <SelectContent>
+                  {activeAccounts.map((a) => (
+                    <SelectItem key={a._id} value={a._id}>{a.name} ({fmtCurrency(a.balance)})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">To Account *</Label>
+              <Select value={transferTo} onValueChange={setTransferTo}>
+                <SelectTrigger><SelectValue placeholder="Select destination account" /></SelectTrigger>
+                <SelectContent>
+                  {activeAccounts.filter((a) => a._id !== transferFrom).map((a) => (
+                    <SelectItem key={a._id} value={a._id}>{a.name} ({maskAccount(a.accountNumber)})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Amount *</Label><Input type="number" min="0.01" step="0.01" value={transferAmt} onChange={(e) => setTransferAmt(e.target.value)} placeholder="0.00" autoFocus /></div>
+            <div className="space-y-1.5"><Label className="text-xs text-slate-500">Description</Label><Input value={transferDesc} onChange={(e) => setTransferDesc(e.target.value)} placeholder="e.g. Move to savings" /></div>
+            <p className="text-[11px] text-slate-400">Both accounts post to the same balanced double-entry ledger — the movement appears in each account's activity.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferOpen(false)}>Cancel</Button>
+            <Button className="bg-[#003087] hover:bg-[#002060] text-white" onClick={handleTransfer} disabled={busy || !transferAmt || !transferFrom || !transferTo || transferFrom === transferTo}>{busy ? "Transferring…" : "Transfer"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

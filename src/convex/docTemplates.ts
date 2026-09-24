@@ -233,6 +233,12 @@ export const getTemplate = query({
 // ─── Seeding ──────────────────────────────────────────────────────────────────
 
 const SEED_VERSION_KEY = "cloudie_seed_version";
+/**
+ * Key used by installs created before the Cloudie rebrand. It is only ever read
+ * to migrate that row onto SEED_VERSION_KEY, so no legacy identifier is written
+ * or displayed again.
+ */
+const LEGACY_SEED_VERSION_KEY = "softbaker_seed_version";
 
 /**
  * Idempotent platform seeding.
@@ -252,15 +258,22 @@ export const ensureStarterTemplates = mutation({
       .query("adminSettings")
       .withIndex("by_key", (q) => q.eq("key", SEED_VERSION_KEY))
       .first();
-    // Legacy deployments stored the marker under the previous key. Treat
-    // that value as the current version so existing data is not reseeded twice,
-    // then migrate it to the new Cloudie key on the next seed pass.
+    // Legacy deployments stored the marker under the product's previous key.
+    // Treat that value as the current version so existing data is not reseeded
+    // twice, and rename the row to the Cloudie key immediately so the old
+    // identifier never lingers in the database.
     const legacyMarker = marker
       ? null
       : await ctx.db
           .query("adminSettings")
-          .withIndex("by_key", (q) => q.eq("key", "softbaker_seed_version"))
+          .withIndex("by_key", (q) => q.eq("key", LEGACY_SEED_VERSION_KEY))
           .first();
+    if (!marker && legacyMarker) {
+      await ctx.db.patch(legacyMarker._id, {
+        key: SEED_VERSION_KEY,
+        updatedAt: Date.now(),
+      });
+    }
     const effectiveMarker = marker ?? legacyMarker;
     const seededVersion =
       typeof effectiveMarker?.value === "number" ? (effectiveMarker.value as number) : 0;

@@ -77,13 +77,6 @@ function FlightDocumentLayout({ data, title }: { data: Record<string, unknown>; 
 
   return (
     <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      {/* ── Watermark ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-30 text-[120px] font-black text-gray-900 whitespace-nowrap select-none">
-          CLOUDIE AIR
-        </div>
-      </div>
-
       {/* ── Branded Header Bar ── */}
       <div className="relative bg-[#0c4a6e] text-white px-8 py-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -302,13 +295,6 @@ function HotelDocumentLayout({ data, title }: { data: Record<string, unknown>; t
 
   return (
     <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      {/* ── Watermark ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.025]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-[100px] font-black text-gray-900 whitespace-nowrap select-none">
-          CLOUDIE HOSPITALITY
-        </div>
-      </div>
-
       {/* ── Elegant Header ── */}
       <div className="relative bg-gradient-to-r from-[#0c4a6e] via-[#075985] to-[#0c4a6e] text-white px-8 py-7">
         <div className="flex items-start justify-between">
@@ -477,13 +463,6 @@ function InvoiceDocumentLayout({ data, title }: { data: Record<string, unknown>;
 
   return (
     <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      {/* ── Watermark ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.02]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-[90px] font-black text-gray-900 whitespace-nowrap select-none">
-          CLOUDIE INVOICE
-        </div>
-      </div>
-
       {/* ── Header ── */}
       <div className="flex items-stretch">
         <div className="flex-1 bg-[#0c4a6e] text-white px-8 py-6">
@@ -636,13 +615,6 @@ function CustomsDocumentLayout({ data, title }: { data: Record<string, unknown>;
 
   return (
     <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
-      {/* ── Watermark ── */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.02]">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-45 text-[100px] font-black text-gray-900 whitespace-nowrap select-none">
-          CUSTOMS DECLARATION
-        </div>
-      </div>
-
       {/* ── Official Header ── */}
       <div className="bg-gray-900 text-white px-8 py-5">
         <div className="flex items-center justify-between">
