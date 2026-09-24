@@ -22,7 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AdminPageHeader, AdminSkeleton, StatCard, StatusBadge, fmtDate } from "@/components/admin/shared";
 import { formatNgn, formatUsd } from "@/lib/pricing";
 import { toast } from "sonner";
-import { Layers, Plus, Save, Search, Store, Tags, Undo2, Wrench } from "lucide-react";
+import { Download, FileJson, FileSpreadsheet, Layers, Plus, Save, Search, Store, Tags, Undo2, Upload, Wrench } from "lucide-react";
 
 /**
  * Admin catalog: every sellable thing on the platform and what it costs.
@@ -117,6 +117,9 @@ export default function AdminCatalog() {
   const seedDefaults = useMutation(api.adminApi.seedDefaultPricing);
   const setTemplatePrice = useMutation(api.docTemplates.adminSetTemplatePrice);
   const setProductPrice = useMutation(api.marketplace.adminSetProductPrice);
+  const bulkImportProducts = useMutation(api.marketplace.adminBulkImportProducts);
+  const adminCreateProduct = useMutation(api.marketplace.adminCreateProduct);
+  const bulkImportTemplates = useMutation(api.docTemplates.adminBulkImportTemplates);
 
   const ngnPerPoint = billing?.ngnPerPoint ?? 15;
   const usdPerPoint = billing?.usdPerPoint ?? 0.01;
@@ -136,6 +139,16 @@ export default function AdminCatalog() {
   });
   const [templateEdits, setTemplateEdits] = useState<Record<string, string>>({});
   const [productEdits, setProductEdits] = useState<Record<string, string>>({});
+
+  // ── Upload / import state ─────────────────────────────────────────────
+  const [svcImportOpen, setSvcImportOpen] = useState(false);
+  const [svcImportBusy, setSvcImportBusy] = useState(false);
+  const [newProduct, setNewProduct] = useState({ name: "", category: "", pointsPrice: "", description: "", imageUrl: "" });
+  const [productImportOpen, setProductImportOpen] = useState(false);
+  const [productImportBusy, setProductImportBusy] = useState(false);
+  const [templateImportOpen, setTemplateImportOpen] = useState(false);
+  const [templateImportBusy, setTemplateImportBusy] = useState(false);
+  const [templatePaste, setTemplatePaste] = useState("");
 
   const dirty = Object.keys(drafts).length;
 
@@ -309,6 +322,128 @@ export default function AdminCatalog() {
     }
   };
 
+  // ── CSV helpers (services) — columns: service,label,workspace,pointsCost,priceNgn,isActive ──
+  function parseCsv(text: string): string[][] {
+    const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+    return lines.map((line) => {
+      // naive CSV split that honours quoted commas
+      const cells: string[] = [];
+      let cur = "";
+      let inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"' ) { inQuote = !inQuote; continue; }
+        if (c === "," && !inQuote) { cells.push(cur.trim()); cur = ""; continue; }
+        cur += c;
+      }
+      cells.push(cur.trim());
+      return cells;
+    });
+  }
+
+  const onSvcCsvFile = async (file: File | null) => {
+    if (!file) return;
+    setSvcImportBusy(true);
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      const header = rows[0]?.map((h) => h.toLowerCase()) ?? [];
+      const hasHeader = header.includes("service") || header.includes("label");
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+      const entries = dataRows.slice(0, 100).map((r) => {
+        const [service, label, workspace, pointsCost, priceNgn, isActive, description] = r;
+        return {
+          service: (service ?? "").trim(),
+          label: (label ?? "").trim() || undefined,
+          workspace: (workspace ?? "services").trim() || "services",
+          description: (description ?? "").trim() || undefined,
+          pointsCost: Number(pointsCost ?? 0),
+          priceNgn: priceOrUndefined(priceNgn ?? ""),
+          isActive: String(isActive ?? "true").toLowerCase() !== "false" && String(isActive ?? "").toLowerCase() !== "0",
+        };
+      }).filter((e) => e.service);
+      if (entries.length === 0) { toast.error("No valid rows found — include a 'service' column"); return; }
+      const res = await saveBatch({ entries });
+      toast.success(`${res.updated} service(s) imported`);
+      setSvcImportOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "CSV import failed");
+    } finally {
+      setSvcImportBusy(false);
+    }
+  };
+
+  const onCreateProduct = async () => {
+    if (!newProduct.name.trim() || !newProduct.category.trim()) { toast.error("Name and category are required"); return; }
+    const price = Number(newProduct.pointsPrice);
+    if (!Number.isFinite(price) || price < 0) { toast.error("Points price must be a number"); return; }
+    setBusy("__newProduct");
+    try {
+      await adminCreateProduct({
+        name: newProduct.name.trim(),
+        description: newProduct.description.trim() || newProduct.name.trim(),
+        category: newProduct.category.trim(),
+        pointsPrice: price,
+        imageUrl: newProduct.imageUrl.trim() || undefined,
+      });
+      toast.success(`${newProduct.name} added to the marketplace`);
+      setNewProduct({ name: "", category: "", pointsPrice: "", description: "", imageUrl: "" });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not add product");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onProductCsvFile = async (file: File | null) => {
+    if (!file) return;
+    setProductImportBusy(true);
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      const header = rows[0]?.map((h) => h.toLowerCase()) ?? [];
+      const hasHeader = header.includes("name") || header.includes("pointsprice");
+      const dataRows = hasHeader ? rows.slice(1) : rows;
+      const products = dataRows.slice(0, 50).map((r) => {
+        const [name, category, pointsPrice, description, imageUrl] = r;
+        return {
+          name: (name ?? "").trim(),
+          category: (category ?? "general").trim() || "general",
+          pointsPrice: Number(pointsPrice ?? 0),
+          description: (description ?? name ?? "").trim(),
+          imageUrl: (imageUrl ?? "").trim() || undefined,
+        };
+      }).filter((p) => p.name);
+      if (products.length === 0) { toast.error("No valid product rows — include name,category,pointsPrice"); return; }
+      const res = await bulkImportProducts({ products });
+      toast.success(`${res.created} product(s) imported`);
+      setProductImportOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setProductImportBusy(false);
+    }
+  };
+
+  const onTemplateJsonImport = async (file: File | null, pasted?: string) => {
+    const raw = pasted ?? (file ? await file.text() : "");
+    if (!raw.trim()) { toast.error("Paste JSON or choose a file"); return; }
+    setTemplateImportBusy(true);
+    try {
+      const j = JSON.parse(raw);
+      const arr = Array.isArray(j) ? j : [j];
+      if (arr.length > 20) { toast.error("Up to 20 templates per import"); return; }
+      const res = await bulkImportTemplates({ templates: arr as never });
+      toast.success(res.created > 0 ? `Imported ${res.created} template(s)${res.skipped ? ` · ${res.skipped} skipped` : ""}` : `No templates imported — ${res.errors.join("; ").slice(0, 160)}`);
+      if (res.created > 0) setTemplateImportOpen(false);
+      if (res.errors.length) toast.error(res.errors.slice(0, 3).join("; "));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "JSON import failed");
+    } finally {
+      setTemplateImportBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-24">
       <AdminPageHeader
@@ -363,6 +498,9 @@ export default function AdminCatalog() {
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" className="gap-1" onClick={syncDefaults} disabled={busy === "__seed"}>
                 {busy === "__seed" ? "Syncing…" : "Sync platform defaults"}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setSvcImportOpen(true)}>
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Import CSV
               </Button>
               <Button size="sm" className="gap-1" onClick={() => setAddOpen(true)}>
                 <Plus className="h-3.5 w-3.5" /> Add service
@@ -530,13 +668,20 @@ export default function AdminCatalog() {
         <TabsContent value="templates" className="space-y-4">
           <Card className="rounded-xl border-border shadow-sm">
             <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Layers className="h-4 w-4 text-primary" /> Document template library
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                What a customer pays to generate each document. Layout, fields and artwork are edited in the template
-                studio.
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                    <Layers className="h-4 w-4 text-primary" /> Document template library
+                  </CardTitle>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    What a customer pays to generate each document. Layout, fields and artwork are edited in the template
+                    studio. Bulk-import from JSON to add many templates at once.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setTemplateImportOpen(true)}>
+                  <FileJson className="h-3.5 w-3.5" /> Import JSON
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {templates === undefined ? (
@@ -607,14 +752,38 @@ export default function AdminCatalog() {
         {/* ── Marketplace ─────────────────────────────────────────────────── */}
         <TabsContent value="marketplace" className="space-y-4">
           <Card className="rounded-xl border-border shadow-sm">
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2">
+            <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                 <Store className="h-4 w-4 text-primary" /> Vendor listings
               </CardTitle>
-              <Button variant="outline" size="sm" asChild>
-                <Link to="/admin/marketplace">Approve & enable products</Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setProductImportOpen(true)}>
+                  <FileSpreadsheet className="h-3.5 w-3.5" /> Import CSV
+                </Button>
+                <Button variant="outline" size="sm" asChild>
+                  <Link to="/admin/marketplace">Approve & enable products</Link>
+                </Button>
+              </div>
             </CardHeader>
+            {/* Inline add-product */}
+            <div className="mx-4 mb-3 grid gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Upload a catalog product</Label>
+                <Input placeholder="Name — e.g. DHL Express Envelope" value={newProduct.name} onChange={(e) => setNewProduct((n) => ({ ...n, name: e.target.value }))} className="h-8 text-xs" />
+                <Input placeholder="Category — e.g. logistics" value={newProduct.category} onChange={(e) => setNewProduct((n) => ({ ...n, category: e.target.value }))} className="h-7 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Points price</Label>
+                <Input type="number" min={0} inputMode="numeric" placeholder="e.g. 120" value={newProduct.pointsPrice} onChange={(e) => setNewProduct((n) => ({ ...n, pointsPrice: e.target.value }))} className="h-8 text-xs" />
+                <Input placeholder="Image URL (optional)" value={newProduct.imageUrl} onChange={(e) => setNewProduct((n) => ({ ...n, imageUrl: e.target.value }))} className="h-7 text-xs" />
+              </div>
+              <div className="space-y-1">
+                <Input placeholder="Description (optional — defaults to name)" value={newProduct.description} onChange={(e) => setNewProduct((n) => ({ ...n, description: e.target.value }))} className="h-8 text-xs" />
+                <Button size="sm" className="gap-1 w-full" disabled={busy === "__newProduct"} onClick={onCreateProduct}>
+                  <Plus className="h-3.5 w-3.5" /> {busy === "__newProduct" ? "Adding…" : "Upload product"}
+                </Button>
+              </div>
+            </div>
             <CardContent className="p-0">
               {products === undefined ? (
                 <div className="p-4">
@@ -703,6 +872,135 @@ export default function AdminCatalog() {
           </div>
         </motion.div>
       )}
+
+      {/* ── Service CSV import ── */}
+      <Dialog open={svcImportOpen} onOpenChange={setSvcImportOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-primary" /> Import services from CSV</DialogTitle>
+            <DialogDescription>
+              Upload a CSV with columns <span className="font-mono text-xs">service,label,workspace,pointsCost,priceNgn,isActive,description</span>. First row may be a header. Up to 100 rows per upload — re-run for more.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-dashed border-border p-4 text-center">
+              <p className="text-xs text-muted-foreground">Example: <span className="font-mono">sms_send,SMS delivery,services,15,225,true,Sends one SMS</span></p>
+              <p className="mt-1 text-[11px] text-muted-foreground">Download a template then edit it and re-upload.</p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+                  const csv = "service,label,workspace,pointsCost,priceNgn,isActive,description\nsms_send,SMS delivery,services,15,,true,Sends one transactional SMS\nemail_per_recipient,Email delivery,services,10,150,true,Deliver one campaign email\n";
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "cloudie-services-template.csv"; document.body.appendChild(a); a.click(); a.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 2000);
+                }}>
+                  <Download className="h-3.5 w-3.5" /> Download CSV template
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">CSV file</Label>
+              <Input type="file" accept=".csv,text/csv" className="mt-1" onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                if (f) void onSvcCsvFile(f);
+                e.target.value = "";
+              }} disabled={svcImportBusy} />
+              {svcImportBusy && <p className="mt-2 text-xs text-muted-foreground">Importing…</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSvcImportOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Marketplace product CSV import ── */}
+      <Dialog open={productImportOpen} onOpenChange={setProductImportOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Store className="h-4 w-4 text-primary" /> Import marketplace products from CSV</DialogTitle>
+            <DialogDescription>
+              Columns: <span className="font-mono text-xs">name,category,pointsPrice,description,imageUrl</span>. First row may be a header. Up to 50 products per upload.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-xl border border-dashed border-border p-4 text-center">
+              <p className="text-xs text-muted-foreground">Example: <span className="font-mono text-[11px]">DHL Envelope,logistics,120,Next-day courier envelope,https://…</span></p>
+              <div className="mt-3 flex justify-center">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => {
+                  const csv = "name,category,pointsPrice,description,imageUrl\nDHL Express Envelope,logistics,120,Next-day courier envelope,\nPriority Parcel,logistics,250,Tracked priority parcel,\n";
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = "cloudie-products-template.csv"; document.body.appendChild(a); a.click(); a.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 2000);
+                }}>
+                  <Download className="h-3.5 w-3.5" /> Download CSV template
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">CSV file</Label>
+              <Input type="file" accept=".csv,text/csv" className="mt-1" onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                if (f) void onProductCsvFile(f);
+                e.target.value = "";
+              }} disabled={productImportBusy} />
+              {productImportBusy && <p className="mt-2 text-xs text-muted-foreground">Importing…</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProductImportOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Template JSON import (catalog) ── */}
+      <Dialog open={templateImportOpen} onOpenChange={setTemplateImportOpen}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><FileJson className="h-4 w-4 text-primary" /> Import document templates (JSON)</DialogTitle>
+            <DialogDescription>Paste or upload the same JSON array used on the Templates page. Up to 20 templates per import; validates layout and category server-side.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Input type="file" accept="application/json,.json" className="max-w-xs" onChange={async (e) => {
+                const f = e.target.files?.[0] ?? null;
+                if (f) {
+                  const text = await f.text();
+                  setTemplatePaste(text);
+                }
+                e.target.value = "";
+              }} />
+              <Button variant="outline" size="sm" onClick={() => {
+                const sample = JSON.stringify([{
+                  name: "Sample Invoice", slug: "sample-invoice", documentType: "corporate",
+                  description: "A minimal template.",
+                  requiredCredits: 20, supportedFormats: ["png","pdf"],
+                  schema: { fields: [{ id: "title", type: "text", label: "Title", default: "Invoice", required: true }] },
+                  configuration: { renderScale: 2, pages: [{ width: 794, height: 1123, background: "#ffffff", elements: [] }] }
+                }], null, 2);
+                const blob = new Blob([sample], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url; a.download = "cloudie-template-sample.json"; document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+              }}>Download sample</Button>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">JSON array or single object</Label>
+              <Textarea value={templatePaste} onChange={(e) => setTemplatePaste(e.target.value)} placeholder='[{"name":"Invoice","documentType":"corporate","schema":{"fields":[]},"configuration":{"pages":[]}}]' className="min-h-[180px] font-mono text-xs" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateImportOpen(false)} disabled={templateImportBusy}>Cancel</Button>
+            <Button onClick={() => onTemplateJsonImport(null, templatePaste)} disabled={templateImportBusy || !templatePaste.trim()} className="gap-1.5">
+              <Upload className="h-3.5 w-3.5" /> {templateImportBusy ? "Importing…" : "Import JSON"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add a catalog service */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

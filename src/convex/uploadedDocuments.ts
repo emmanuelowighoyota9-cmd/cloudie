@@ -3,6 +3,7 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { api } from "./_generated/api";
+import { requireAdmin, auditLog } from "./adminApi";
 
 /**
  * Documents a customer already owns.
@@ -189,6 +190,65 @@ export const remove = mutation({
       resourceId: args.documentId,
       before: { title: doc.title, fileName: doc.fileName, sizeBytes: doc.sizeBytes },
       createdAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
+// ─── Admin: every uploaded file across the workspace ────────────────────────
+
+export const adminListAll = query({
+  args: { limit: v.optional(v.number()), search: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const limit = Math.min(Math.max(args.limit ?? 60, 1), 100);
+    let rows = await ctx.db.query("uploadedDocuments").order("desc").take(limit);
+    const needle = args.search?.trim().toLowerCase();
+    if (needle) {
+      rows = rows.filter((r) => r.title.toLowerCase().includes(needle) || r.fileName.toLowerCase().includes(needle));
+    }
+    const active = rows.filter((r) => !r.isArchived);
+    const owners = await Promise.all(active.map((r) => ctx.db.get(r.ownerId)));
+    const files = await Promise.all(active.map((r) => ctx.db.get(r.fileId)));
+    const urls = await Promise.all(
+      files.map((f) => (f && !f.isDeleted ? ctx.storage.getUrl(f.storageId) : Promise.resolve(null))),
+    );
+    return active.map((row, index) => ({
+      _id: row._id,
+      fileId: row.fileId,
+      title: row.title,
+      fileName: row.fileName,
+      kind: row.kind,
+      mimeType: row.mimeType,
+      sizeBytes: row.sizeBytes,
+      notes: row.notes ?? "",
+      ownerId: row.ownerId,
+      ownerEmail: (owners[index] as any)?.email ?? null,
+      ownerName: (owners[index] as any)?.name ?? null,
+      url: urls[index],
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt ?? row.createdAt,
+    }));
+  },
+});
+
+export const adminRemoveAny = mutation({
+  args: { documentId: v.id("uploadedDocuments") },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const doc = await ctx.db.get(args.documentId);
+    if (!doc) throw new Error("Not found");
+    const file = await ctx.db.get(doc.fileId);
+    if (file && !file.isDeleted) {
+      await ctx.db.patch(file._id, { isDeleted: true, deletedAt: Date.now() });
+      await ctx.storage.delete(file.storageId);
+    }
+    await ctx.db.delete(args.documentId);
+    await auditLog(ctx, adminId, {
+      action: "uploaded_document_removed_by_admin",
+      resource: "uploadedDocuments",
+      resourceId: args.documentId,
+      before: { title: doc.title, fileName: doc.fileName, ownerId: doc.ownerId },
     });
     return { success: true };
   },

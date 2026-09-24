@@ -384,3 +384,121 @@ export const adminListAllProducts = query({
       .take(args.limit ?? 50);
   },
 });
+
+// Admin: create a catalog listing directly (no vendor account needed).
+export const adminCreateProduct = mutation({
+  args: {
+    name: v.string(),
+    description: v.string(),
+    pointsPrice: v.number(),
+    category: v.string(),
+    imageUrl: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+    isApproved: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    if (!args.name.trim()) throw new Error("Name required");
+    if (!args.description.trim()) throw new Error("Description required");
+    if (!Number.isFinite(args.pointsPrice) || args.pointsPrice < 0) throw new Error("INVALID_PRICE");
+    if (!args.category.trim()) throw new Error("Category required");
+    // Admin-owned system vendor — create once and reuse.
+    let systemVendor = await ctx.db.query("vendors").withIndex("by_status", (q) => q.eq("status", "approved")).first();
+    // Try to find an admin-linked vendor first by user.
+    const ownVendor = await ctx.db.query("vendors").withIndex("by_user", (q) => q.eq("userId", adminId)).first();
+    if (ownVendor) systemVendor = ownVendor;
+    let vendorId: any = systemVendor?._id;
+    if (!systemVendor) {
+      vendorId = await ctx.db.insert("vendors", {
+        userId: adminId,
+        businessName: "Platform catalog",
+        description: "Admin-managed listings",
+        status: "approved",
+        earnings: 0,
+        totalSales: 0,
+        createdAt: Date.now(),
+      });
+    }
+    const active = args.isApproved ?? true;
+    const id = await ctx.db.insert("marketplaceProducts", {
+      vendorId,
+      name: args.name.trim().slice(0, 120),
+      description: args.description.trim().slice(0, 800),
+      pointsPrice: Math.round(args.pointsPrice),
+      category: args.category.trim().slice(0, 40),
+      imageUrl: args.imageUrl?.trim() ? args.imageUrl.trim() : undefined,
+      isActive: args.isActive ?? active,
+      isApproved: active,
+      totalSold: 0,
+      createdAt: Date.now(),
+    });
+    await auditLog(ctx, adminId, {
+      action: "PRODUCT_CREATED_BY_ADMIN",
+      resource: "marketplaceProduct",
+      resourceId: id,
+      after: { name: args.name, pointsPrice: args.pointsPrice, category: args.category },
+    });
+    return { productId: id };
+  },
+});
+
+// Admin: bulk import many listings from a CSV/JSON payload (max 50 per call).
+export const adminBulkImportProducts = mutation({
+  args: {
+    products: v.array(
+      v.object({
+        name: v.string(),
+        description: v.string(),
+        pointsPrice: v.number(),
+        category: v.string(),
+        imageUrl: v.optional(v.string()),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    if (args.products.length === 0) throw new Error("No products supplied");
+    if (args.products.length > 50) throw new Error("TOO_MANY: max 50 per import");
+    let systemVendor = await ctx.db.query("vendors").withIndex("by_user", (q) => q.eq("userId", adminId)).first();
+    if (!systemVendor) {
+      const anyApproved = await ctx.db.query("vendors").withIndex("by_status", (q) => q.eq("status", "approved")).first();
+      systemVendor = anyApproved ?? null;
+    }
+    let vendorId: any = systemVendor?._id;
+    if (!systemVendor) {
+      vendorId = await ctx.db.insert("vendors", {
+        userId: adminId,
+        businessName: "Platform catalog",
+        description: "Admin bulk import",
+        status: "approved",
+        earnings: 0,
+        totalSales: 0,
+        createdAt: Date.now(),
+      });
+    }
+    let created = 0;
+    for (const p of args.products) {
+      if (!p.name.trim() || !p.category.trim()) continue;
+      if (!Number.isFinite(p.pointsPrice) || p.pointsPrice < 0) continue;
+      await ctx.db.insert("marketplaceProducts", {
+        vendorId,
+        name: p.name.trim().slice(0, 120),
+        description: (p.description || p.name).trim().slice(0, 800),
+        pointsPrice: Math.round(p.pointsPrice),
+        category: p.category.trim().slice(0, 40),
+        imageUrl: p.imageUrl?.trim() ? p.imageUrl.trim() : undefined,
+        isActive: true,
+        isApproved: true,
+        totalSold: 0,
+        createdAt: Date.now(),
+      });
+      created++;
+    }
+    await auditLog(ctx, adminId, {
+      action: "PRODUCTS_BULK_IMPORTED",
+      resource: "marketplaceProduct",
+      after: { count: created },
+    });
+    return { created };
+  },
+});

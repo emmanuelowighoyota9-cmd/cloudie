@@ -1503,3 +1503,120 @@ export const adminDocumentStats = query({
     };
   },
 });
+
+// ─── Admin bulk template import (JSON array) ────────────────────────────────
+
+export const adminBulkImportTemplates = mutation({
+  args: {
+    templates: v.array(
+      v.object({
+        name: v.string(),
+        slug: v.optional(v.string()),
+        documentType: v.string(),
+        description: v.optional(v.string()),
+        sensitivity: v.optional(v.string()),
+        requiredCredits: v.optional(v.number()),
+        supportedFormats: v.optional(v.array(v.string())),
+        schema: v.any(),
+        configuration: v.any(),
+      }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    if (args.templates.length === 0) throw new Error("No templates supplied");
+    if (args.templates.length > 20) throw new Error("TOO_MANY: max 20 templates per import");
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    for (const item of args.templates) {
+      try {
+        const name = sanitizeText(String(item.name ?? "").trim(), 80);
+        if (!name) throw new Error("missing name");
+        const known = CATEGORIES.some((c) => c.key === String(item.documentType ?? ""));
+        if (!known) throw new Error(`unknown category: ${item.documentType}`);
+        const issues = validateTemplateDefinition(item.schema, item.configuration);
+        if (issues.length > 0) throw new Error(issues.map((i) => `${i.field}: ${i.message}`).join("; "));
+        const slug = slugify((item.slug?.trim() || name).trim());
+        const clash = await ctx.db.query("documentTemplates").withIndex("by_slug", (q) => q.eq("slug", slug)).first();
+        if (clash) {
+          skipped++;
+          errors.push(`${name}: slug "${slug}" already taken`);
+          continue;
+        }
+        const forcedSensitive = categoryDef(String(item.documentType)).sensitive;
+        const sensitivity = forcedSensitive ? "sensitive" : (item.sensitivity ?? "standard");
+        const requiredCredits = Math.max(0, Math.round(item.requiredCredits ?? 0));
+        const supportedFormats = (item.supportedFormats ?? ["png", "pdf"]).filter((f) => f === "png" || f === "pdf");
+        const now = Date.now();
+        const templateId = await ctx.db.insert("documentTemplates", {
+          documentType: String(item.documentType),
+          name,
+          slug,
+          description: sanitizeText(String(item.description ?? "").trim(), 240),
+          renderer: "svg",
+          status: "active",
+          visibility: "public",
+          sensitivity,
+          requiredCredits,
+          supportedFormats: supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"],
+          schema: item.schema,
+          configuration: item.configuration,
+          createdById: adminId,
+          isActive: true,
+          currentVersion: 1,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.insert("documentTemplateVersions", {
+          templateId,
+          version: 1,
+          title: name,
+          blocks: {
+            schema: item.schema,
+            configuration: item.configuration,
+            sensitivity,
+            requiredCredits,
+            supportedFormats: supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"],
+          } satisfies VersionBlocks,
+          pointsCost: requiredCredits,
+          createdById: adminId,
+          createdAt: now,
+        });
+        created++;
+      } catch (e) {
+        skipped++;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (errors.length < 10) errors.push(`${String(item.name ?? "?")}: ${msg}`.slice(0, 160));
+      }
+    }
+    if (created > 0) {
+      await auditLog(ctx, adminId, {
+        action: "DOCUMENT_TEMPLATES_BULK_IMPORTED",
+        resource: "documentTemplates",
+        after: { created, skipped },
+      });
+    }
+    return { created, skipped, errors };
+  },
+});
+
+export const adminExportTemplates = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const rows = await ctx.db.query("documentTemplates").take(100);
+    return rows.map((t) => ({
+      name: t.name,
+      slug: t.slug,
+      documentType: t.documentType,
+      description: t.description ?? "",
+      sensitivity: t.sensitivity ?? "standard",
+      requiredCredits: t.requiredCredits ?? 0,
+      supportedFormats: t.supportedFormats ?? ["png", "pdf"],
+      status: t.status ?? "draft",
+      schema: t.schema ?? { fields: [] },
+      configuration: t.configuration ?? { pages: [] },
+    }));
+  },
+});

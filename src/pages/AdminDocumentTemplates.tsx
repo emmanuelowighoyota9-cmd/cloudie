@@ -2,13 +2,38 @@ import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Archive, CheckCircle2, Coins, FileStack, Layers, PauseCircle, Pencil, Plus, Share2 } from "lucide-react";
+import {
+  Archive,
+  CheckCircle2,
+  Coins,
+  Download,
+  FileJson,
+  FileStack,
+  Layers,
+  PauseCircle,
+  Pencil,
+  Plus,
+  Share2,
+  Upload,
+  X,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { formatDateTime } from "@/components/documents/ui";
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
@@ -22,7 +47,17 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 export default function AdminDocumentTemplates() {
   const templates = useQuery(api.docTemplates.adminListTemplates);
   const stats = useQuery(api.docTemplates.adminDocumentStats);
+  const exportRows = useQuery(api.docTemplates.adminExportTemplates);
   const setStatus = useMutation(api.docTemplates.adminSetTemplateStatus);
+  const bulkImport = useMutation(api.docTemplates.adminBulkImportTemplates);
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [parsed, setParsed] = useState<unknown[] | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [importBusy, setImportBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const change = async (
     templateId: Id<"documentTemplates">,
@@ -36,6 +71,113 @@ export default function AdminDocumentTemplates() {
     }
   };
 
+  const parseJson = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      setParsed(null);
+      setErrors(["Paste JSON or drop a .json file — an array of templates or a single template object."]);
+      return;
+    }
+    try {
+      const j = JSON.parse(trimmed);
+      const arr = Array.isArray(j) ? j : [j];
+      setParsed(arr);
+      setErrors([]);
+    } catch (e) {
+      setParsed(null);
+      setErrors([e instanceof Error ? e.message : "Invalid JSON"]);
+    }
+  };
+
+  const onFile = async (file: File | null) => {
+    if (!file) return;
+    setFileName(file.name);
+    const text = await file.text();
+    setPaste(text);
+    parseJson(text);
+  };
+
+  const onImport = async () => {
+    if (!parsed || parsed.length === 0) {
+      toast.error("Nothing to import — load a JSON file first");
+      return;
+    }
+    if (parsed.length > 20) {
+      toast.error("Import up to 20 templates at a time");
+      return;
+    }
+    setImportBusy(true);
+    try {
+      const res = await bulkImport({ templates: parsed as never });
+      toast.success(
+        res.created > 0
+          ? `Imported ${res.created} template${res.created === 1 ? "" : "s"}${res.skipped ? ` · ${res.skipped} skipped` : ""}`
+          : `No templates imported — ${res.errors.join("; ").slice(0, 200) || "check slugs and categories"}`,
+      );
+      if (res.errors.length > 0) setErrors(res.errors);
+      if (res.created > 0) {
+        setImportOpen(false);
+        setPaste("");
+        setFileName(null);
+        setParsed(null);
+        setErrors([]);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  const onExport = () => {
+    if (!exportRows || exportRows.length === 0) {
+      toast.error("No templates to export");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(exportRows, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cloudie-templates-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast.success(`Exported ${exportRows.length} template${exportRows.length === 1 ? "" : "s"}`);
+  };
+
+  const downloadSample = () => {
+    const sample = [
+      {
+        name: "Sample Invoice",
+        slug: "sample-invoice",
+        documentType: "corporate",
+        description: "A minimal invoice template — replace with your layout.",
+        requiredCredits: 20,
+        supportedFormats: ["png", "pdf"],
+        schema: {
+          fields: [
+            { id: "title", type: "text", label: "Title", default: "Invoice", required: true, maxLength: 60 },
+            { id: "reference", type: "reference", label: "Reference", default: "INV-0001", required: true },
+          ],
+        },
+        configuration: {
+          renderScale: 2,
+          pages: [{ width: 794, height: 1123, background: "#ffffff", elements: [] }],
+        },
+      },
+    ];
+    const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "cloudie-template-sample.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -46,12 +188,45 @@ export default function AdminDocumentTemplates() {
             and control what customers can generate.
           </p>
         </div>
-        <Button asChild className="gap-1.5">
-          <Link to="/admin/document-templates/new">
-            <Plus className="h-4 w-4" /> New template
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+            <Upload className="h-3.5 w-3.5" /> Import JSON
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={onExport} disabled={!exportRows?.length}>
+            <Download className="h-3.5 w-3.5" /> Export
+          </Button>
+          <Button asChild className="gap-1.5">
+            <Link to="/admin/document-templates/new">
+              <Plus className="h-4 w-4" /> New template
+            </Link>
+          </Button>
+        </div>
       </div>
+
+      {/* Import / export affordance */}
+      <Card className="rounded-xl border-dashed border-border bg-muted/20">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <FileJson className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Upload templates as JSON</p>
+              <p className="text-xs text-muted-foreground">
+                Import a JSON array (export format) to bulk-create templates. Validated server-side — bad rows are skipped and reported.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={downloadSample}>
+              Sample JSON
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setImportOpen(true)}>
+              <Upload className="h-3.5 w-3.5" /> Choose file
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
@@ -97,7 +272,7 @@ export default function AdminDocumentTemplates() {
             </div>
           ) : templates.length === 0 ? (
             <p className="p-6 text-center text-sm text-muted-foreground">
-              No templates yet — they install automatically when the first user opens Documents.
+              No templates yet — import a JSON bundle, create one in the studio, or wait for the starter library to install on first use.
             </p>
           ) : (
             <div>
@@ -216,6 +391,126 @@ export default function AdminDocumentTemplates() {
           </CardContent>
         </Card>
       )}
+
+      {/* JSON import dialog */}
+      <Dialog
+        open={importOpen}
+        onOpenChange={(o) => {
+          setImportOpen(o);
+          if (!o) {
+            setErrors([]);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileJson className="h-4 w-4 text-primary" /> Import templates from JSON
+            </DialogTitle>
+            <DialogDescription>
+              Upload a JSON file (array of templates) — the same shape as Export — or paste JSON below. Up to 20 at a time. Server validates every layout and rejects unknown categories; duplicates by slug are skipped.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">JSON file</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0] ?? null;
+                    void onFile(f);
+                    e.target.value = "";
+                  }}
+                />
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => inputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" /> Choose .json
+                </Button>
+                <Button variant="ghost" size="sm" className="gap-1.5" onClick={downloadSample}>
+                  <Download className="h-3.5 w-3.5" /> Sample file
+                </Button>
+                {fileName && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground">
+                    {fileName}
+                    <button
+                      type="button"
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setFileName(null);
+                        setPaste("");
+                        setParsed(null);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="tplPaste" className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Or paste JSON
+              </Label>
+              <Textarea
+                id="tplPaste"
+                value={paste}
+                onChange={(e) => {
+                  setPaste(e.target.value);
+                  parseJson(e.target.value);
+                }}
+                placeholder='[{"name":"Invoice","documentType":"corporate","schema":{"fields":[]},"configuration":{"pages":[]}}]'
+                className="min-h-[140px] font-mono text-xs"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tip: export once to get the correct shape, then duplicate and edit the JSON. Required: name, documentType, schema, configuration. Optional: slug, description, requiredCredits.
+              </p>
+            </div>
+
+            {parsed !== null && (
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <p className="text-xs font-medium text-foreground">
+                  Ready to import {parsed.length} template{parsed.length === 1 ? "" : "s"}
+                </p>
+                <ul className="mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                  {(parsed as Array<Record<string, unknown>>).slice(0, 6).map((t, i) => (
+                    <li key={i} className="truncate">
+                      {(t.name as string) ?? "Untitled"} · {(t.documentType as string) ?? "—"} · {(t.slug as string) ?? "auto slug"}
+                    </li>
+                  ))}
+                  {parsed.length > 6 && <li className="text-muted-foreground">+{parsed.length - 6} more…</li>}
+                </ul>
+              </div>
+            )}
+
+            {errors.length > 0 && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
+                <p className="font-medium">Couldn’t import some rows:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {errors.slice(0, 6).map((m, i) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                  {errors.length > 6 && <li>+{errors.length - 6} more…</li>}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportOpen(false)} disabled={importBusy}>
+              Cancel
+            </Button>
+            <Button onClick={onImport} disabled={importBusy || !parsed || parsed.length === 0} className="gap-1.5">
+              <Upload className="h-3.5 w-3.5" />
+              {importBusy ? "Importing…" : parsed ? `Import ${parsed.length} template${parsed.length === 1 ? "" : "s"}` : "Import"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
