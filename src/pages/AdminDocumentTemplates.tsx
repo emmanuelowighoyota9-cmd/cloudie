@@ -296,11 +296,6 @@ export default function AdminDocumentTemplates() {
                     <Badge variant={STATUS_VARIANT[template.status] ?? "secondary"} className="text-[10px]">
                       {template.status}
                     </Badge>
-                    {template.sensitivity === "sensitive" && (
-                      <Badge variant="outline" className="border-destructive/40 text-[10px] text-destructive">
-                        stamped
-                      </Badge>
-                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-1 sm:justify-end">

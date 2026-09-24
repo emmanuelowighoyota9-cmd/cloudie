@@ -125,7 +125,7 @@ export default function DocumentTemplates() {
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-foreground">New clean document</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Your own layout, issued under your organization name — never stamped.
+                  Your own layout, issued under your organization name.
                 </p>
               </div>
             </Link>
@@ -192,11 +192,7 @@ export default function DocumentTemplates() {
                   ) : (
                     <FileStack className="h-8 w-8 text-muted-foreground" />
                   )}
-                  {template.isSensitive && (
-                    <span className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-destructive/90 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white">
-                      <ShieldAlert className="h-2.5 w-2.5" /> stamped
-                    </span>
-                  )}
+
                 </div>
 
                 <div className="flex flex-1 flex-col p-4">

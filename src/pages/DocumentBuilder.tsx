@@ -4,13 +4,13 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import {
+  AlertTriangle,
   ArrowLeft,
   Coins,
   Download,
   Loader2,
   RefreshCw,
   Save,
-  ShieldAlert,
   Sparkles,
   Wand2,
 } from "lucide-react";
@@ -87,7 +87,6 @@ export default function DocumentBuilder() {
     () => ({ ...configuration, pages: artwork.pages }),
     [configuration, artwork.pages],
   );
-  const sensitive = template?.sensitivity === "sensitive";
   const cost = quote?.cost ?? template?.requiredCredits ?? 0;
   const balance = quote?.balance ?? 0;
   const affordable = quote?.affordable ?? balance >= cost;
@@ -155,7 +154,6 @@ export default function DocumentBuilder() {
     try {
       setStage("Rendering pages…");
       const artifacts = await renderDocumentArtifacts(renderConfiguration, schema, result.values, {
-        sensitive,
         images: imageDataUrls,
         title: title || template.name,
         creationDate: Date.now(),
@@ -256,24 +254,11 @@ export default function DocumentBuilder() {
 
       {artwork.failed && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
             The artwork file for this template could not be loaded, so the page background is missing. Your text and
             fields still render. Reload the page or re-attach the artwork in the editor.
           </p>
-        </div>
-      )}
-
-      {sensitive && (
-        <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-3">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-          <div className="text-[11px] leading-relaxed text-destructive">
-            <p className="font-semibold">Sensitive template — stamped output</p>
-            <p className="mt-0.5 text-destructive/80">
-              Every page carries a non-removable SPECIMEN · NOT VALID stamp and a notice bar. Use fictional names,
-              references and amounts only.
-            </p>
-          </div>
         </div>
       )}
 
@@ -323,7 +308,6 @@ export default function DocumentBuilder() {
               configuration={renderConfiguration}
               schema={schema}
               values={values}
-              sensitive={sensitive}
             />
           </div>
 

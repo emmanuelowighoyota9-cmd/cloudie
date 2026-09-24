@@ -89,7 +89,7 @@ const selectClass =
 export interface DocumentTemplateEditorProps {
   /**
    * "admin" edits platform templates; "own" authors a private document owned by
-   * the signed-in user, always in a clean (never watermarked) category.
+   * the signed-in user.
    */
   variant?: "admin" | "own";
   /** Organization name pre-filled on newly authored documents. */
@@ -139,7 +139,6 @@ export default function DocumentTemplateEditor({
   const [slugTouched, setSlugTouched] = useState(false);
   const [documentType, setDocumentType] = useState<string>("corporate");
   const [description, setDescription] = useState("");
-  const [sensitivity, setSensitivity] = useState<"standard" | "sensitive">("standard");
   const [requiredCredits, setRequiredCredits] = useState(25);
   const [formats, setFormats] = useState<{ png: boolean; pdf: boolean }>({ png: true, pdf: true });
   const [fields, setFields] = useState<FieldDef[]>(blank.schema.fields);
@@ -164,7 +163,6 @@ export default function DocumentTemplateEditor({
     setSlugTouched(true);
     setDocumentType(existing.documentType);
     setDescription(existing.description);
-    setSensitivity(existing.sensitivity === "sensitive" ? "sensitive" : "standard");
     setRequiredCredits(existing.requiredCredits);
     setFormats({
       png: existing.supportedFormats.includes("png"),
@@ -181,14 +179,8 @@ export default function DocumentTemplateEditor({
   }, [name, slugTouched, editing]);
 
   const category = categoryDef(documentType);
-  const categoryIsSensitive = !isOwn && category.sensitive;
-  const effectiveSensitivity = isOwn ? "standard" : categoryIsSensitive ? "sensitive" : sensitivity;
 
-  // A customer's own documents may only live in clean categories.
-  const categoryOptions = useMemo(
-    () => (isOwn ? CATEGORIES.filter((c) => !c.sensitive) : CATEGORIES),
-    [isOwn],
-  );
+  const categoryOptions = useMemo(() => CATEGORIES, []);
 
   const schema = useMemo(() => ({ fields }), [fields]);
   const configuration = useMemo(() => ({ renderScale, pages }), [renderScale, pages]);
@@ -373,7 +365,7 @@ export default function DocumentTemplateEditor({
             schema,
             configuration,
             requiredCredits,
-            sensitivity: effectiveSensitivity,
+            sensitivity: "standard",
           });
           toast.success(`Published version ${result.version}`);
           navigate(backTo);
@@ -397,7 +389,7 @@ export default function DocumentTemplateEditor({
           slug,
           documentType,
           description,
-          sensitivity: effectiveSensitivity,
+          sensitivity: "standard",
           requiredCredits,
           supportedFormats,
           schema,
@@ -448,7 +440,7 @@ export default function DocumentTemplateEditor({
       ? "New document"
       : "New document template";
   const headerDescription = isOwn
-    ? "Design your own document from scratch: arrange the layout, define the fields you want to fill in later, then save. Your documents render clean — never stamped — and are issued under your organization name."
+    ? "Design your own document from scratch: arrange the layout, define the fields you want to fill in later, then save. Your documents are issued under your organization name."
     : "Design the layout visually, define the dynamic form, then publish. Saving an existing template creates a new immutable version.";
 
   return (
@@ -498,8 +490,7 @@ export default function DocumentTemplateEditor({
           <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p className="text-[11px] leading-relaxed text-primary">
             Your uploaded file is the page background and is never stored inside the layout. Add text, badges, QR
-            codes or images from the toolbar and drag them onto the blanks — everything renders clean, with nothing
-            stamped over it.
+            codes or images from the toolbar and drag them onto the blanks.
           </p>
         </div>
       )}
@@ -574,31 +565,11 @@ export default function DocumentTemplateEditor({
               </div>
               <div className="min-w-0 space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Sensitivity</Label>
-                {isOwn ? (
-                  <div className="flex h-11 items-center rounded-md border border-border bg-muted/40 px-2.5 text-[11px] font-medium text-muted-foreground sm:h-9">
-                    Clean · never stamped
-                  </div>
-                ) : (
-                  <select
-                    aria-label="Sensitivity"
-                    value={effectiveSensitivity}
-                    disabled={categoryIsSensitive}
-                    onChange={(e) => setSensitivity(e.target.value as "standard" | "sensitive")}
-                    className={cn(selectClass, categoryIsSensitive && "opacity-60")}
-                  >
-                    <option value="standard">Standard</option>
-                    <option value="sensitive">Sensitive (stamped)</option>
-                  </select>
-                )}
+                <div className="flex h-11 items-center rounded-md border border-border bg-muted/40 px-2.5 text-[11px] font-medium text-muted-foreground sm:h-9">
+                  Standard
+                </div>
               </div>
             </div>
-            <p className="text-[10px] leading-relaxed text-muted-foreground">
-              {isOwn
-                ? "Your own documents are always clean: the \u201cIssued by\u201d field defaults to your organization name (change it in Settings) and nothing is ever stamped on them."
-                : categoryIsSensitive
-                  ? "This category always renders a non-removable SPECIMEN · NOT VALID stamp — sensitive categories cannot be downgraded."
-                  : "Sensitive templates get a non-removable SPECIMEN · NOT VALID stamp on every page."}
-            </p>
 
             <div className="flex flex-wrap items-center gap-x-4">
               <label className="flex min-h-11 items-center gap-2 text-[11px] text-muted-foreground sm:min-h-0">
@@ -692,7 +663,6 @@ export default function DocumentTemplateEditor({
                   page={canvasPage ?? page}
                   schema={schema}
                   values={values}
-                  sensitive={effectiveSensitivity === "sensitive"}
                   selectedIndex={selectedIndex}
                   onSelect={setSelectedIndex}
                   onChange={setElements}
@@ -704,7 +674,6 @@ export default function DocumentTemplateEditor({
                   configuration={{ renderScale, pages: [canvasPage ?? page] }}
                   schema={schema}
                   values={values}
-                  sensitive={effectiveSensitivity === "sensitive"}
                 />
               )
             ) : (

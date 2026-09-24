@@ -31,6 +31,7 @@ interface ElementCanvasProps {
   page: TemplatePage;
   schema: TemplateSchema;
   values: DocumentValues;
+  /** @deprecated No longer stamps. Kept for compatibility. */
   sensitive?: boolean;
   selectedIndex: number | null;
   onSelect: (index: number | null) => void;
@@ -44,7 +45,7 @@ export function ElementCanvas({
   page,
   schema,
   values,
-  sensitive = false,
+  sensitive: _sensitive = false,
   selectedIndex,
   onSelect,
   onChange,
@@ -114,8 +115,8 @@ export function ElementCanvas({
   );
 
   const baseSvg = useMemo(
-    () => buildPageSvg(page, schema, values, { sensitive }, 1),
-    [page, schema, values, sensitive],
+    () => buildPageSvg(page, schema, values, {}, 1),
+    [page, schema, values],
   );
 
   const beginDrag = useCallback(

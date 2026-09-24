@@ -9,9 +9,7 @@
  * SAFETY: this engine never interprets user HTML. Every value is escaped at
  * SVG-build time; image slots only accept `data:` URLs or platform-resolved
  * storage bytes (never arbitrary https URLs — that would give librsvg an SSRF
- * primitive). Templates flagged `sensitivity: "sensitive"` ALWAYS get a forced
- * SPECIMEN / NOT VALID stamp appended last, so layout code cannot cover or
- * remove it.
+ * primitive).
  */
 
 import { qrToSvgPath } from "./qr";
@@ -32,17 +30,17 @@ export interface CategoryDef {
   key: CategoryKey;
   label: string;
   description: string;
-  /** Sensitive categories render a non-removable stamp. */
+  /** @deprecated No longer controls output — all documents are clean. Kept for compatibility. */
   sensitive: boolean;
   enabledByDefault: boolean;
 }
 
 export const CATEGORIES: CategoryDef[] = [
-  { key: "banking_ui", label: "Banking Websites", description: "Banking dashboards and interface mockups for design, training and QA.", sensitive: true, enabledByDefault: true },
+  { key: "banking_ui", label: "Banking Websites", description: "Banking dashboards and interface mockups for design, training and QA.", sensitive: false, enabledByDefault: true },
   { key: "tracking", label: "Flight & Package Tracking", description: "Tracking status cards and shipment timelines.", sensitive: false, enabledByDefault: true },
-  { key: "flight_itinerary", label: "Flight Itineraries", description: "Travel itineraries with fictional airlines and references.", sensitive: true, enabledByDefault: true },
-  { key: "financial", label: "Financial & Payment Verification", description: "Fictional payment receipts and verification statements for testing.", sensitive: true, enabledByDefault: true },
-  { key: "certificates", label: "Certificates & Records", description: "Completion certificates and record cards for training and award programmes.", sensitive: true, enabledByDefault: true },
+  { key: "flight_itinerary", label: "Flight Itineraries", description: "Travel itineraries with fictional airlines and references.", sensitive: false, enabledByDefault: true },
+  { key: "financial", label: "Financial & Payment Verification", description: "Fictional payment receipts and verification statements for testing.", sensitive: false, enabledByDefault: true },
+  { key: "certificates", label: "Certificates & Records", description: "Completion certificates and record cards for training and award programmes.", sensitive: false, enabledByDefault: true },
   { key: "corporate", label: "Corporate Documents", description: "Invoices, memos, letters and business paperwork.", sensitive: false, enabledByDefault: true },
   { key: "general", label: "General Templates", description: "Everything else — badges, covers, one-pagers and more.", sensitive: false, enabledByDefault: true },
 ];
@@ -51,8 +49,9 @@ export function categoryDef(key: string): CategoryDef {
   return CATEGORIES.find((c) => c.key === key) ?? CATEGORIES[CATEGORIES.length - 1];
 }
 
-export function isSensitiveCategory(key: string): boolean {
-  return categoryDef(key).sensitive;
+/** @deprecated All categories are now clean — always returns false. */
+export function isSensitiveCategory(_key: string): boolean {
+  return false;
 }
 
 // ─── Field schema ─────────────────────────────────────────────────────────────
@@ -533,16 +532,13 @@ export function formatValueForField(field: FieldDef | undefined, value: unknown)
 // ─── SVG rendering ────────────────────────────────────────────────────────────
 
 export interface BuildSvgOptions {
-  /** Forced when template is sensitive; layout cannot opt out. */
+  /** @deprecated No longer stamps output — kept for backwards compatibility. */
   sensitive?: boolean;
   /** Resolved data URLs for image fields (server resolves storage → bytes). */
   images?: Record<string, string>;
-  /** Stamp wording override (defaults shown below). */
+  /** @deprecated Watermark removed — kept for backwards compatibility. */
   watermarkText?: string;
 }
-
-const DEFAULT_WATERMARK = "SPECIMEN · NOT VALID";
-const WATERMARK_NOTICE = "SPECIMEN COPY — NOT A REAL DOCUMENT, CREDENTIAL OR FINANCIAL RECORD";
 
 function renderTextElement(el: Extract<LayoutElement, { kind: "text" }>, values: DocumentValues, schema: TemplateSchema): string {
   const field = schema.fields.find((f) => f.id === el.bind);
@@ -638,20 +634,6 @@ function renderBarcode(el: Extract<LayoutElement, { kind: "barcode" }>, values: 
   }
 }
 
-/** Forced stamp block — appended AFTER layout elements so nothing covers it. */
-function renderWatermark(page: TemplatePage, text: string): string {
-  const cx = page.width / 2;
-  const cy = page.height / 2;
-  const noticeY = page.height - 26;
-  return [
-    `<g opacity="0.16" transform="rotate(-28 ${cx} ${cy})" pointer-events="none">`,
-    `<text x="${cx}" y="${cy}" font-family="${escapeXml(FONT_STACK.sans)}" font-size="${Math.max(46, page.width / 11)}" font-weight="800" fill="#dc2626" text-anchor="middle" letter-spacing="6">${escapeXml(text)}</text>`,
-    `</g>`,
-    `<rect x="0" y="${noticeY - 16}" width="${page.width}" height="42" fill="#dc2626" opacity="0.92"/>`,
-    `<text x="${cx}" y="${noticeY + 11}" font-family="${escapeXml(FONT_STACK.sans)}" font-size="13" font-weight="700" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">${escapeXml(WATERMARK_NOTICE)}</text>`,
-  ].join("");
-}
-
 /** Render one page to an SVG string. */
 export function buildPageSvg(
   page: TemplatePage,
@@ -678,7 +660,6 @@ export function buildPageSvg(
       }
     })
     .join("");
-  const watermark = options.sensitive ? renderWatermark(page, options.watermarkText ?? DEFAULT_WATERMARK) : "";
   const bg = page.background ?? "#ffffff";
   // Artwork underlay: only a validated `data:` image URL ever reaches the SVG.
   const underlay =
@@ -690,7 +671,6 @@ export function buildPageSvg(
     `<rect width="100%" height="100%" fill="${escapeXml(bg)}"/>`,
     underlay,
     body,
-    watermark,
     `</svg>`,
   ].join("");
 }

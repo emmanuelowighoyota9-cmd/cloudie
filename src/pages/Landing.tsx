@@ -63,9 +63,7 @@ export default function Landing() {
         name: template.name,
         category: categoryDef(template.documentType).label,
         src: svgToDataUrl(
-          buildPreviewSvg(template.configuration, template.schema, defaultValues(template.schema), {
-            sensitive: template.sensitivity === "sensitive",
-          }),
+          buildPreviewSvg(template.configuration, template.schema, defaultValues(template.schema)),
         ),
       })),
     [],
@@ -338,8 +336,8 @@ export default function Landing() {
                 {[
                   "Live preview sharing one render engine with exports",
                   "Versioned templates — generated documents never change",
-                  "Non-removable safety stamp on sensitive layouts",
                   "Share links with expiry, revocation and view counts",
+                  "Clean output — no watermarks",
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm">
                     <Check className="h-4 w-4 shrink-0 text-chart-2" />

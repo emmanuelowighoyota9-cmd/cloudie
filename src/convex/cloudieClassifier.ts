@@ -26,23 +26,18 @@ function slugify(value: string): string {
 
 function mapCloudieToInternal(category: string, subcategory: string): { documentType: string; sensitivity: string } {
   const c = category as CloudieCategory;
-  // Identity -> certificates (always sensitive)
-  if (c === "Identity & Personal Documents") return { documentType: "certificates", sensitivity: "sensitive" };
-  // Financial -> financial (always sensitive)
-  if (c === "Financial & Payment Artifacts") return { documentType: "financial", sensitivity: "sensitive" };
-  // Logistics
+  if (c === "Identity & Personal Documents") return { documentType: "certificates", sensitivity: "standard" };
+  if (c === "Financial & Payment Artifacts") return { documentType: "financial", sensitivity: "standard" };
   if (c === "Logistics & Travel") {
     const lower = (subcategory + " " + category).toLowerCase();
     if (lower.includes("flight") || lower.includes("itinerary") || lower.includes("boarding")) {
-      return { documentType: "flight_itinerary", sensitivity: "sensitive" };
+      return { documentType: "flight_itinerary", sensitivity: "standard" };
     }
     return { documentType: "tracking", sensitivity: "standard" };
   }
-  // General & Official
-  // certificates vs general vs corporate based on subcategory
   const genLower = subcategory.toLowerCase();
   if (genLower.includes("certificate") || genLower.includes("death") || genLower.includes("nursing") || genLower.includes("contract award")) {
-    return { documentType: "certificates", sensitivity: "sensitive" };
+    return { documentType: "certificates", sensitivity: "standard" };
   }
   if (genLower.includes("letter") || genLower.includes("invoice") || genLower.includes("corporate")) {
     return { documentType: "corporate", sensitivity: "standard" };

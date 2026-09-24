@@ -912,9 +912,8 @@ const schema = defineSchema(
       renderer: v.optional(v.string()), // "svg"
       status: v.optional(v.string()), // draft | active | disabled | archived
       visibility: v.optional(v.string()), // public | unlisted | private
-      // "sensitive" templates ALWAYS render a forced SPECIMEN / NOT VALID stamp —
-      // the flag is server-owned and never part of user-editable layout.
-      sensitivity: v.optional(v.string()), // standard | sensitive
+      // Legacy: kept for document metadata only. Watermark has been removed.
+      sensitivity: v.optional(v.string()), // standard | sensitive (no longer renders a stamp)
       requiredCredits: v.optional(v.number()), // points charged per PDF render
       supportedFormats: v.optional(v.array(v.string())), // ["png", "pdf"]
       schema: v.optional(v.any()), // { fields: FieldDef[] }

@@ -11,8 +11,7 @@ import { requireAdmin, auditLog } from "./adminApi";
  * "Add your own document" also means bringing files you already have: a signed
  * contract, a scanned invoice, a photographed receipt. Bytes go through the
  * shared storage policy (MIME + size limits, ownership, audit); this module is
- * the workspace record the library lists. Uploaded files are always clean —
- * nothing here is ever stamped.
+ * the workspace record the library lists.
  */
 
 const MAX_UPLOADS = 200;

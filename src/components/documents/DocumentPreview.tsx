@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   buildPageSvg,
@@ -23,6 +23,7 @@ interface DocumentPreviewProps {
   configuration: TemplateConfiguration;
   schema: TemplateSchema;
   values: DocumentValues;
+  /** @deprecated No longer renders a watermark. Kept for compatibility. */
   sensitive?: boolean;
   className?: string;
   compact?: boolean;
@@ -32,13 +33,13 @@ export function DocumentPreview({
   configuration,
   schema,
   values,
-  sensitive = false,
+  sensitive: _sensitive = false,
   className,
   compact = false,
 }: DocumentPreviewProps) {
   const [page, setPage] = useState(0);
 
-  const options: BuildSvgOptions = useMemo(() => ({ sensitive, images: {} }), [sensitive]);
+  const options: BuildSvgOptions = useMemo(() => ({ images: {} }), []);
 
   const pages = useMemo(() => {
     return (configuration.pages ?? []).map((p) => buildPageSvg(p, schema, values, options, 1));
@@ -101,11 +102,7 @@ export function DocumentPreview({
           </span>
         )}
 
-        {sensitive && (
-          <span className="flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-destructive">
-            <AlertTriangle className="h-3 w-3" /> Stamped
-          </span>
-        )}
+
       </div>
     </div>
   );

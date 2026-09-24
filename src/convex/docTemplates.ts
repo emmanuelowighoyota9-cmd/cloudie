@@ -121,7 +121,8 @@ export const listCategories = query({
       key: c.key,
       label: c.label,
       description: c.description,
-      sensitive: c.sensitive,
+      // @deprecated All documents are clean — kept for backwards compatibility.
+      sensitive: false as boolean,
       count: counts.get(c.key) ?? 0,
     }));
   },
@@ -161,15 +162,13 @@ export const listTemplates = query({
       .map((t) => {
         const schema = (t.schema as TemplateSchema | undefined) ?? { fields: [] };
         const configuration = (t.configuration as TemplateConfiguration | undefined) ?? { pages: [] };
-        const isSensitive =
-          t.sensitivity === "sensitive" || categoryDef(t.documentType).sensitive;
+        // All documents are clean — thumbnails never carry a watermark.
+        const isSensitive = false as boolean;
         // Thumbnails are built from the template's own defaults, so the library
         // shows an authentic preview without shipping full layouts to the client.
         let previewSvg = "";
         try {
-          previewSvg = buildPreviewSvg(configuration, schema, defaultValues(schema), {
-            sensitive: isSensitive,
-          });
+          previewSvg = buildPreviewSvg(configuration, schema, defaultValues(schema), {});
         } catch {
           previewSvg = "";
         }
@@ -907,7 +906,8 @@ export const publicViewDocument = mutation({
       fileName: doc.fileName,
       pageCount: doc.pageCount,
       category: (meta.category as string) ?? "general",
-      sensitive: meta.sensitivity === "sensitive",
+      // @deprecated All shares are clean — kept for backwards compatibility.
+      sensitive: false as boolean,
       viewCount: (doc.viewCount ?? 0) + 1,
       createdAt: doc.createdAt,
       expiresAt: doc.expiresAt ?? null,
@@ -923,15 +923,15 @@ export const publicViewDocument = mutation({
  * Owner-authored documents.
  *
  * A customer can design their own document from scratch instead of picking a
- * starter: it lives in a non-sensitive category only, so nothing authored here
- * can ever carry the platform's forced SPECIMEN / NOT VALID stamp. Rows are private
+ * starter: it lives in a clean category only. Rows are private
  * to their creator and never appear in another customer's library.
  */
 
 const MAX_OWN_TEMPLATES = 25;
 
-function isOwnerAuthoredCategory(key: string): boolean {
-  return !categoryDef(key).sensitive;
+function isOwnerAuthoredCategory(_key: string): boolean {
+  // All categories are clean — every category is owner-authorable.
+  return true;
 }
 
 function ownerSlug(name: string): string {
@@ -1325,7 +1325,8 @@ export const adminPublishTemplateVersion = mutation({
     }
 
     const nextVersion = template.currentVersion + 1;
-    const sensitivity = template.sensitivity ?? "standard";
+    // All documents are clean — version sensitivity is always "standard".
+    const sensitivity = "standard" as string;
     await ctx.db.insert("documentTemplateVersions", {
       templateId: template._id,
       version: nextVersion,
@@ -1333,7 +1334,7 @@ export const adminPublishTemplateVersion = mutation({
       blocks: {
         schema: args.schema,
         configuration: args.configuration,
-        sensitivity: args.sensitivity ?? sensitivity,
+        sensitivity,
         requiredCredits: args.requiredCredits ?? template.requiredCredits ?? 0,
         supportedFormats: template.supportedFormats ?? ["png", "pdf"],
       } satisfies VersionBlocks,
@@ -1424,10 +1425,8 @@ export const adminCreateTemplate = mutation({
       .first();
     if (clash) throw new Error(`The slug "${slug}" is already taken`);
 
-    // A sensitive category can never be downgraded to standard: the forced
-    // The forced stamp is a platform guarantee, not a per-template preference.
-    const forcedSensitive = categoryDef(args.documentType).sensitive;
-    const sensitivity = forcedSensitive ? "sensitive" : (args.sensitivity ?? "standard");
+    // All documents are clean — sensitivity is always "standard".
+    const sensitivity = "standard" as string;
     const requiredCredits = Math.max(0, Math.round(args.requiredCredits ?? 0));
     const supportedFormats = (args.supportedFormats ?? ["png", "pdf"]).filter(
       (f) => f === "png" || f === "pdf",
@@ -1562,8 +1561,7 @@ export const adminBulkImportTemplates = mutation({
           errors.push(`${name}: slug "${slug}" already taken`);
           continue;
         }
-        const forcedSensitive = categoryDef(String(item.documentType)).sensitive;
-        const sensitivity = forcedSensitive ? "sensitive" : (item.sensitivity ?? "standard");
+        const sensitivity = "standard" as string;
         const requiredCredits = Math.max(0, Math.round(item.requiredCredits ?? 0));
         const supportedFormats = (item.supportedFormats ?? ["png", "pdf"]).filter((f) => f === "png" || f === "pdf");
         const now = Date.now();

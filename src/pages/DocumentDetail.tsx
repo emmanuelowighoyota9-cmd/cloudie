@@ -181,11 +181,6 @@ export default function DocumentDetail() {
 
       <div className="flex flex-wrap items-center gap-2">
         <StatusPill status={doc.status} />
-        {doc.sensitivity === "sensitive" && (
-          <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-destructive">
-            <ShieldAlert className="h-3 w-3" /> stamped
-          </span>
-        )}
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <Coins className="h-3 w-3" /> {doc.pointsCost} pts
         </span>
@@ -253,7 +248,6 @@ export default function DocumentDetail() {
               configuration={doc.configuration}
               schema={schema}
               values={values}
-              sensitive={doc.sensitivity === "sensitive"}
             />
           )}
         </motion.div>

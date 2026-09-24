@@ -142,11 +142,11 @@ export default function Documents() {
                 <p className="text-sm font-semibold text-foreground">New clean document</p>
               </div>
               <p className="text-[11px] leading-relaxed text-muted-foreground">
-                Design your own layout from scratch. Nothing is stamped on it, and it is issued under your organization
+                Design your own layout from scratch. It is issued under your organization
                 name.
               </p>
               <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
-                <ShieldCheck className="h-3.5 w-3.5" /> Always clean output
+                <ShieldCheck className="h-3.5 w-3.5" /> Clean output
               </span>
             </Link>
 
@@ -212,11 +212,7 @@ export default function Documents() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-semibold text-foreground">{category.label}</p>
-                    {category.sensitive && (
-                      <span className="rounded-full bg-destructive/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-destructive">
-                        stamped
-                      </span>
-                    )}
+
                   </div>
                   <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
                     {category.description}

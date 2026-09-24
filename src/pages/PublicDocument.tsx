@@ -7,7 +7,6 @@ import {
   Download,
   Eye,
   FileWarning,
-  ShieldAlert,
   Sparkles,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -167,15 +166,7 @@ export default function PublicDocument() {
               </div>
             </div>
 
-            {doc.sensitive && (
-              <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-3">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                <p className="text-[11px] leading-relaxed text-destructive">
-                  <span className="font-semibold">Specimen document.</span> Every page carries a non-removable stamp
-                  and shows fictional data. It is not a real credential, receipt or financial record.
-                </p>
-              </div>
-            )}
+
 
             <div className="overflow-hidden rounded-xl border border-border bg-background p-4 shadow-sm">
               {doc.imageUrl ? (

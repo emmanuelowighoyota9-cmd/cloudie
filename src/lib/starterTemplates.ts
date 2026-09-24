@@ -7,8 +7,7 @@
  * frontend preview, so nothing here may touch the DOM or the network.
  *
  * Every template is deliberately fictional: names, accounts, references and
- * amounts are illustrative. Sensitive categories additionally receive a forced
- * SPECIMEN / NOT VALID stamp from the engine (see docTemplateEngine.renderWatermark).
+ * amounts are illustrative.
  */
 
 import type {
@@ -80,7 +79,7 @@ function barcode(x: number, y: number, bind: string, opts: Record<string, unknow
   return { kind: "barcode", x, y, bind, ...opts } as El;
 }
 
-// ─── 1. Banking interface mockup (sensitive) ──────────────────────────────────
+// ─── 1. Banking interface mockup ──────────────────────────────────
 
 const bankingDashboard: StarterTemplate = {
   slug: "banking-dashboard-mockup",
@@ -88,7 +87,7 @@ const bankingDashboard: StarterTemplate = {
   documentType: "banking_ui",
   description:
     "A dark, realistic digital-banking dashboard screen for design reviews, QA fixtures and interface training. All data is fictional.",
-  sensitivity: "sensitive",
+  sensitivity: "standard",
   requiredCredits: 45,
   supportedFormats: ["png", "pdf"],
   schema: {
@@ -190,7 +189,7 @@ const bankingDashboard: StarterTemplate = {
   },
 };
 
-// ─── 2. Flight itinerary (sensitive) ──────────────────────────────────────────
+// ─── 2. Flight itinerary ──────────────────────────────────────────
 
 const flightItinerary: StarterTemplate = {
   slug: "flight-itinerary",
@@ -198,7 +197,7 @@ const flightItinerary: StarterTemplate = {
   documentType: "flight_itinerary",
   description:
     "A complete return-trip itinerary with fictional airline, airports and booking reference — ideal for travel design work and layout testing.",
-  sensitivity: "sensitive",
+  sensitivity: "standard",
   requiredCredits: 40,
   supportedFormats: ["png", "pdf"],
   schema: {
@@ -414,7 +413,7 @@ const trackingCard: StarterTemplate = {
   },
 };
 
-// ─── 4. Payment verification statement (sensitive) ────────────────────────────
+// ─── 4. Payment verification statement ────────────────────────────
 
 const paymentVerification: StarterTemplate = {
   slug: "payment-verification-statement",
@@ -422,7 +421,7 @@ const paymentVerification: StarterTemplate = {
   documentType: "financial",
   description:
     "A fictional settlement/verification statement with reference, payer, beneficiary and fee breakdown for finance QA fixtures.",
-  sensitivity: "sensitive",
+  sensitivity: "standard",
   requiredCredits: 40,
   supportedFormats: ["png", "pdf"],
   schema: {
@@ -500,8 +499,7 @@ const paymentVerification: StarterTemplate = {
           txt(200, 894, "Reference must match your ledger", { size: 11, color: MUTED }),
           txt(200, 916, "Records are illustrative only", { size: 11, color: MUTED }),
           val(644, 872, "reference", { size: 11, weight: 700, color: INK, align: "right", w: 94 }),
-          rule(56, 1000, 738, 1000),
-          txt(56, 1026, "SPECIMEN · NO FUNDS MOVED · NOT A REAL FINANCIAL RECORD", {
+          rule(56, 1000, 738, 1000),            txt(56, 1026, "Illustrative data only — no funds moved", {
             size: 9, weight: 600, color: MUTED, letterSpacing: 1,
           }),
         ],
@@ -510,7 +508,7 @@ const paymentVerification: StarterTemplate = {
   },
 };
 
-// ─── 5. Certificate of completion (sensitive) ─────────────────────────────────
+// ─── 5. Certificate of completion ─────────────────────────────────
 
 const certificate: StarterTemplate = {
   slug: "certificate-of-completion",
@@ -518,7 +516,7 @@ const certificate: StarterTemplate = {
   documentType: "certificates",
   description:
     "A framed landscape award certificate with signatory block, credential ID and verification code for training and academy records.",
-  sensitivity: "sensitive",
+  sensitivity: "standard",
   requiredCredits: 35,
   supportedFormats: ["png", "pdf"],
   schema: {
@@ -708,7 +706,7 @@ const commercialInvoice: StarterTemplate = {
  * fixes reach deployments that already installed an earlier set. Already
  * generated documents keep their frozen version snapshot and never change.
  */
-export const STARTER_SET_VERSION = 4;
+export const STARTER_SET_VERSION = 5;
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   bankingDashboard,
