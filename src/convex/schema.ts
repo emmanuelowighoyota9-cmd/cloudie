@@ -978,6 +978,24 @@ const schema = defineSchema(
       .index("by_publicSlug", ["publicSlug"])
       .index("by_status", ["status"]),
 
+    // ─── Customer uploads ───
+    // Documents a customer already owns (PDFs and images) brought into their
+    // workspace. Stored bytes live in storageFiles; this is the workspace
+    // record (title, kind, provenance) the library lists.
+    uploadedDocuments: defineTable({
+      ownerId: v.id("users"),
+      fileId: v.id("storageFiles"),
+      title: v.string(),
+      fileName: v.string(),
+      kind: v.union(v.literal("pdf"), v.literal("image")),
+      mimeType: v.string(),
+      sizeBytes: v.number(),
+      notes: v.optional(v.string()),
+      isArchived: v.optional(v.boolean()),
+      createdAt: v.number(),
+      updatedAt: v.optional(v.number()),
+    }).index("by_owner", ["ownerId", "createdAt"]),
+
     // ─── Rate limiting (no Redis: fixed windows persisted in Convex) ───
     rateLimitBuckets: defineTable({
       key: v.string(), // "public_view:<slug>" | "render:<userId>" | …
