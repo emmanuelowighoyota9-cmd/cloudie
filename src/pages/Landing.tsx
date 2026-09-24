@@ -37,7 +37,7 @@ import {
 const features = [
   { icon: Landmark, title: "Banking Tenants", desc: "Provision islands like Crestline Capital — ledger-backed accounts, deposits, transfers, KYC & statements." },
   { icon: Package, title: "Shipment Management", desc: "Create, track, and manage shipments with real-time status updates and public tracking." },
-  { icon: FileStack, title: "SoftBaker Document Studio", desc: "Dynamic templates with live preview, high-resolution PNG and multi-page PDF export, storage and share links." },
+  { icon: FileStack, title: "Cloudie Document Studio", desc: "Dynamic templates with live preview, high-resolution PNG and multi-page PDF export, storage and share links." },
   { icon: Building2, title: "Business Suite", desc: "White-label tenant portal for banking and investment platforms with KYC." },
   { icon: Layers, title: "Email & Rendering", desc: "Run email campaigns and create stunning images with our rendering studio." },
   { icon: ShoppingBag, title: "Marketplace", desc: "Buy and sell point packages from verified vendors in our marketplace." },
@@ -57,7 +57,7 @@ export default function Landing() {
   const [trackingNumber, setTrackingNumber] = useState("");
 
   // Real template previews, rendered by the same engine the studio uses.
-  const softbakerShowcase = useMemo(
+  const documentShowcase = useMemo(
     () =>
       STARTER_TEMPLATES.slice(0, 3).map((template) => ({
         name: template.name,
@@ -317,14 +317,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* SoftBaker document studio */}
+      {/* Cloudie document studio */}
       <section className="border-y border-border bg-card py-20">
         <div className="mx-auto max-w-6xl px-4">
           <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1fr]">
             <div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
                 <FileStack className="h-3.5 w-3.5 text-primary" />
-                SoftBaker document studio
+                Cloudie document studio
               </div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">
                 Dynamic templates in, print-ready documents out
@@ -359,7 +359,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              {softbakerShowcase.map((item, i) => (
+              {documentShowcase.map((item, i) => (
                 <motion.div
                   key={item.name}
                   initial={{ opacity: 0, y: 20 }}

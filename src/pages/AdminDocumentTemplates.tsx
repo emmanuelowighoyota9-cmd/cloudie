@@ -184,7 +184,7 @@ export default function AdminDocumentTemplates() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Document Templates</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Platform catalogue for SoftBaker document generation. Build layouts visually, publish immutable versions,
+            Platform catalogue for Cloudie document generation. Build layouts visually, publish immutable versions,
             and control what customers can generate.
           </p>
         </div>

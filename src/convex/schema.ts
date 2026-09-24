@@ -900,7 +900,7 @@ const schema = defineSchema(
       .index("by_storage", ["storageId"]),
 
     // ─── Document engine: templates → versions → render → stored bytes ───
-    // Schema-driven SoftBaker templates. The renderer consumes a frozen
+    // Schema-driven Cloudie templates. The renderer consumes a frozen
     // version snapshot (documentTemplateVersions.blocks) so a generated
     // document never changes appearance when the live template is edited.
     documentTemplates: defineTable({

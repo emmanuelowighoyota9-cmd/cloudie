@@ -32,7 +32,7 @@ import {
 import UploadedDocuments from "@/components/documents/UploadedDocuments";
 
 /**
- * SoftBaker workspace overview.
+ * Cloudie workspace overview.
  *
  * Everything here is a live Convex subscription — creating or generating a
  * document anywhere in the app updates these numbers without a refresh.
@@ -72,7 +72,7 @@ export default function Documents() {
     <div className="space-y-8">
       <PageHeader
         title="Documents"
-        description="SoftBaker turns dynamic templates into print-ready PNG and PDF documents — with live preview, storage and share links."
+        description="Cloudie turns dynamic templates into print-ready PNG and PDF documents — with live preview, storage and share links."
         actions={
           <>
             <Button variant="outline" asChild>

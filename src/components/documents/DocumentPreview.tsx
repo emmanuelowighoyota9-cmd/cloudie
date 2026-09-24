@@ -12,7 +12,7 @@ import {
 } from "@/lib/docTemplateEngine";
 
 /**
- * Live preview of a SoftBaker template.
+ * Live preview of a Cloudie template.
  *
  * Re-renders synchronously on every keystroke: the same engine that produces
  * the exported artifacts builds the SVG here, so what the user sees is exactly

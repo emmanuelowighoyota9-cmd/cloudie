@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { DocumentValues, FieldDef, TemplateSchema } from "@/lib/docTemplateEngine";
 
 /**
- * Renders a SoftBaker template's `schema.fields` as a working form.
+ * Renders a Cloudie template's `schema.fields` as a working form.
  *
  * Native selects/checkboxes are used deliberately: template options are
  * dynamic and every option value is non-empty by validation, so the shadcn

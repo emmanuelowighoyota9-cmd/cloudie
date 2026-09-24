@@ -1,5 +1,5 @@
 /**
- * SoftBaker client render pipeline.
+ * Cloudie client render pipeline.
  *
  * The document engine produces SVG (pure, shared with the server). Here we
  * turn that SVG into the delivered artifacts entirely in the browser:
@@ -108,7 +108,7 @@ export async function renderDocumentArtifacts(
 
   const pdf = buildRasterPdf(pages, sizes, {
     title: options.title ?? "Document",
-    author: "Cloudie SoftBaker",
+    author: "Cloudie",
     subject: "Generated document",
     creationDate: options.creationDate,
   });

@@ -60,7 +60,7 @@ async function download(url: string, fileName: string) {
   }
 }
 
-/** Public, unauthenticated view of a shared SoftBaker document. */
+/** Public, unauthenticated view of a shared Cloudie document. */
 export default function PublicDocument() {
   const { slug } = useParams<{ slug: string }>();
   const view = useMutation(api.docTemplates.publicViewDocument);
@@ -98,7 +98,7 @@ export default function PublicDocument() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
               <Sparkles className="h-3.5 w-3.5" />
             </span>
-            <span className="text-sm font-bold tracking-tight text-foreground">Cloudie SoftBaker</span>
+            <span className="text-sm font-bold tracking-tight text-foreground">Cloudie</span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
             <Link to="/">Create your own</Link>
@@ -196,7 +196,7 @@ export default function PublicDocument() {
 
             <p className="text-center text-[11px] text-muted-foreground">
               {doc.pageCount} page{doc.pageCount === 1 ? "" : "s"} ·{" "}
-              {doc.pdfUrl ? "PDF export available" : `PNG only`} · generated with Cloudie SoftBaker
+              {doc.pdfUrl ? "PDF export available" : `PNG only`} · generated with Cloudie
             </p>
           </motion.div>
         ) : (

@@ -1,5 +1,5 @@
 /**
- * SoftBaker document template engine — shared, runtime-neutral.
+ * Cloudie document template engine — shared, runtime-neutral.
  *
  * Consumed by BOTH the React frontend (live preview, dynamic forms) and Convex
  * functions (server-side rendering, validation, public sharing). Nothing here

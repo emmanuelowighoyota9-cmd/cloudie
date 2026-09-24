@@ -27,7 +27,7 @@ import {
 import { STARTER_SET_VERSION, STARTER_TEMPLATES } from "../lib/starterTemplates";
 
 /**
- * SoftBaker document workspace.
+ * Cloudie document workspace.
  *
  * Templates are versioned: every generated document points at a frozen
  * `documentTemplateVersions.blocks` snapshot, so editing a live template never
@@ -233,7 +233,7 @@ export const getTemplate = query({
 
 // ─── Seeding ──────────────────────────────────────────────────────────────────
 
-const SEED_VERSION_KEY = "softbaker_seed_version";
+const SEED_VERSION_KEY = "cloudie_seed_version";
 
 /**
  * Idempotent platform seeding.
@@ -253,7 +253,18 @@ export const ensureStarterTemplates = mutation({
       .query("adminSettings")
       .withIndex("by_key", (q) => q.eq("key", SEED_VERSION_KEY))
       .first();
-    const seededVersion = typeof marker?.value === "number" ? (marker.value as number) : 0;
+    // Legacy deployments stored the marker under the previous key. Treat
+    // that value as the current version so existing data is not reseeded twice,
+    // then migrate it to the new Cloudie key on the next seed pass.
+    const legacyMarker = marker
+      ? null
+      : await ctx.db
+          .query("adminSettings")
+          .withIndex("by_key", (q) => q.eq("key", "softbaker_seed_version"))
+          .first();
+    const effectiveMarker = marker ?? legacyMarker;
+    const seededVersion =
+      typeof effectiveMarker?.value === "number" ? (effectiveMarker.value as number) : 0;
     if (seededVersion >= STARTER_SET_VERSION) return { created: 0, updated: 0 };
 
     const now = Date.now();
@@ -337,6 +348,13 @@ export const ensureStarterTemplates = mutation({
 
     if (marker) {
       await ctx.db.patch(marker._id, {
+        value: STARTER_SET_VERSION,
+        updatedBy: userId,
+        updatedAt: now,
+      });
+    } else if (legacyMarker) {
+      await ctx.db.patch(legacyMarker._id, {
+        key: SEED_VERSION_KEY,
         value: STARTER_SET_VERSION,
         updatedBy: userId,
         updatedAt: now,
