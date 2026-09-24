@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { AdminPageHeader, AdminSkeleton, StatCard, StatusBadge, fmtDate } from "@/components/admin/shared";
 import { formatNgn, formatUsd } from "@/lib/pricing";
+import { usePublishPendingChanges } from "@/lib/pendingChanges";
 import { toast } from "sonner";
 import { Download, FileJson, FileSpreadsheet, Layers, Plus, Save, Search, Store, Tags, Undo2, Upload, Wrench } from "lucide-react";
 
@@ -151,6 +152,14 @@ export default function AdminCatalog() {
   const [templatePaste, setTemplatePaste] = useState("");
 
   const dirty = Object.keys(drafts).length;
+
+  // Unpublished = anything edited here but not yet written to the database.
+  // Publishes to the sidebar badge; cleared automatically when this page closes.
+  const pendingChanges =
+    dirty +
+    Object.values(templateEdits).filter((v) => v.trim() !== "").length +
+    Object.values(productEdits).filter((v) => v.trim() !== "").length;
+  usePublishPendingChanges("catalog", pendingChanges);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();

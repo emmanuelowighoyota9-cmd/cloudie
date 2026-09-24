@@ -12,6 +12,7 @@ import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { AdminPageHeader, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { formatNgn, formatUsd, type PointPackage } from "@/lib/pricing";
+import { usePublishPendingChanges } from "@/lib/pendingChanges";
 
 type PricingRow = {
   _id: string;
@@ -104,6 +105,15 @@ export default function AdminPricing() {
   const patchPkg = (index: number, patch: Partial<PackageDraft>) => {
     setPkgDraft(packages.map((p, i) => (i === index ? { ...p, ...patch } : p)));
   };
+
+  // Unpublished = edits made here that have not been saved to the database yet.
+  // Feeds the admin sidebar badge and resets when this page unmounts.
+  const pendingChanges =
+    (rateDraft ? 1 : 0) +
+    (pkgDraft ? 1 : 0) +
+    Object.values(edits).filter((v) => v.trim() !== "").length +
+    Object.values(priceEdits).filter((v) => v.trim() !== "").length;
+  usePublishPendingChanges("pricing", pendingChanges);
 
   const saveRate = async () => {
     const ngn = Number(ngnInput);
