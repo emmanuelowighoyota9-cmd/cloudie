@@ -82,13 +82,13 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
-      <header className="sticky top-0 z-50 border-b border-border bg-card/85 backdrop-blur-md">
+      <header className="sticky top-0 z-50 border-b border-border/80 bg-card/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <Cloud className="h-4 w-4" />
             </div>
-            <span className="text-lg font-bold text-foreground">{brand.name}</span>
+            <span className="font-display text-lg font-bold tracking-tight text-foreground">{brand.name}</span>
           </div>            <div className="flex items-center gap-2">
             <PwaInstallButton />
             <Link to="/auth">
@@ -104,7 +104,7 @@ export default function Landing() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden border-b border-border bg-card">
+      <section className="landing-hero relative overflow-hidden border-b border-border">
         <div className="mx-auto grid min-h-[82vh] max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-[1fr_0.9fr] md:py-24">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -115,7 +115,7 @@ export default function Landing() {
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               Live logistics, documents, and points in one workspace
             </div>
-            <h1 className="text-4xl font-bold leading-tight tracking-tight text-foreground md:text-6xl">
+            <h1 className="max-w-3xl font-display text-5xl font-semibold leading-[1.02] tracking-[-0.055em] text-foreground md:text-7xl">
               Coordinate every
               <br />
               operating line in <span className="text-primary">Cloudie</span>
@@ -138,7 +138,7 @@ export default function Landing() {
             </form>
             <div className="mt-3 flex gap-2">
               <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm">Logistics suite</Button></Link>
-              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="bg-slate-900 text-white border-slate-900">Business banking</Button></Link>
+              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="border-sidebar bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent">Business banking</Button></Link>
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
               <Link to="/auth">
@@ -187,7 +187,7 @@ export default function Landing() {
             transition={{ delay: 0.15, duration: 0.55 }}
             className="relative"
           >
-            <div className="rounded-xl border border-border bg-background p-4 shadow-2xl shadow-primary/10">
+            <div className="surface-lift rounded-2xl border border-border bg-background/95 p-4 shadow-2xl">
               <div className="flex items-center justify-between border-b border-border pb-4">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ops Console</p>
@@ -229,16 +229,8 @@ export default function Landing() {
           </motion.div>
         </div>
 
-        <div className="pointer-events-none absolute inset-0 -z-10">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute h-px w-full bg-border/40"
-              style={{ top: `${120 + i * 32}px` }}
-            />
-          ))}
-          <div className="absolute bottom-0 left-[72px] top-0 w-px bg-destructive/15" />
-        </div>
+        <div className="landing-grid pointer-events-none absolute inset-0 -z-10 opacity-80" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-px landing-rule" />
       </section>
 
       {/* Stats */}
@@ -270,7 +262,7 @@ export default function Landing() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * i, duration: 0.4 }}
               >
-                <div className="h-full rounded-xl border border-border bg-card p-6 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10">
+                <div className="h-full rounded-2xl border border-border bg-card p-6 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                     <f.icon className="h-5 w-5 text-primary" />
                   </div>

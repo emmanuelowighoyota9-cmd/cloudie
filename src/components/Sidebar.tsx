@@ -78,30 +78,30 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r border-slate-200 bg-white transition-all duration-200",
+        "flex h-screen flex-col border-r border-border bg-card transition-all duration-200",
         collapsed ? "w-16" : "w-60",
-        "dark:border-slate-700 dark:bg-slate-800",
+        "dark:border-border dark:bg-card",
       )}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center border-b border-slate-200 dark:border-slate-700 px-4">
+      <div className="flex h-14 items-center border-b border-border px-4">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600">
-            <Cloud className="h-4 w-4 text-white" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+            <Cloud className="h-4 w-4 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-primary-foreground">
               {brand.name}
             </span>
           )}
         </Link>
         <button
           onClick={onToggle}
-          className="ml-auto hidden lg:flex h-6 w-6 items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700"
+          className="ml-auto hidden lg:flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
         >
           <ChevronLeft
             className={cn(
-              "h-4 w-4 text-slate-400 transition-transform",
+              "h-4 w-4 text-muted-foreground transition-transform",
               collapsed && "rotate-180",
             )}
           />
@@ -110,16 +110,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* User Profile */}
       {!collapsed && (
-        <div className="border-b border-slate-200 dark:border-slate-700 px-4 py-3">
+        <div className="border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-xs font-semibold text-blue-700 dark:text-blue-300">
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+              <p className="text-sm font-medium text-slate-900 dark:text-primary-foreground truncate">
                 {user?.name || user?.email || "User"}
               </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+              <p className="text-[11px] text-slate-500 dark:text-muted-foreground truncate">
                 {user?.email || ""}
               </p>
             </div>
@@ -136,8 +136,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                 isActive(item.to)
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-200",
+                  ? "bg-primary/10 text-primary"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-muted-foreground dark:hover:bg-slate-700/50 dark:hover:text-slate-200",
               )}
             >
               <item.icon className="h-4 w-4 shrink-0" />
@@ -151,7 +151,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <div className={cn(
               "mb-1 text-[10px] font-semibold uppercase tracking-widest",
               collapsed ? "text-center" : "px-3",
-              "text-slate-400",
+              "text-muted-foreground",
             )}>
               {collapsed ? "•" : "Admin"}
             </div>
@@ -163,8 +163,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                     isActive(item.to)
-                      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700/50 dark:hover:text-slate-200",
+                      ? "bg-accent/20 text-accent-foreground"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-muted-foreground dark:hover:bg-slate-700/50 dark:hover:text-slate-200",
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
@@ -177,12 +177,12 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </ScrollArea>
 
       {/* Logout */}
-      <div className="border-t border-slate-200 dark:border-slate-700 p-2">
+      <div className="border-t border-border p-2">
         <button
           onClick={() => signOut()}
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            "text-slate-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/30 dark:hover:text-red-400",
+            "text-slate-500 hover:bg-red-50 hover:text-red-600 dark:text-muted-foreground dark:hover:bg-red-950/30 dark:hover:text-red-400",
           )}
         >
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
