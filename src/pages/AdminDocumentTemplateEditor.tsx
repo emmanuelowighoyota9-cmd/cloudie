@@ -50,6 +50,7 @@ import {
   previewValues,
   type ElementKind,
 } from "@/lib/documentLayout";
+import { useTemplateArtwork } from "@/hooks/use-template-artwork";
 import { ElementCanvas } from "@/components/documents/ElementCanvas";
 import { ElementInspector } from "@/components/documents/ElementInspector";
 import { SchemaFieldEditor } from "@/components/documents/SchemaFieldEditor";
@@ -191,11 +192,15 @@ export default function DocumentTemplateEditor({
 
   const schema = useMemo(() => ({ fields }), [fields]);
   const configuration = useMemo(() => ({ renderScale, pages }), [renderScale, pages]);
+  // The stored layout never contains artwork — only the editing surfaces do.
+  const artwork = useTemplateArtwork(pages, existing?.artworkUrl);
+  const previewPages = artwork.pages;
   // Samples rather than empty defaults: a layout can only be judged against
   // realistic content, and empty values render nothing at all.
   const values = useMemo(() => previewValues(schema), [schema]);
 
   const page = pages[activePage];
+  const canvasPage = previewPages[activePage] ?? page;
   const elements = page?.elements ?? [];
 
   const setElements = (next: LayoutElement[]) => {
@@ -488,6 +493,17 @@ export default function DocumentTemplateEditor({
         </div>
       )}
 
+      {isOwn && existing?.artworkUrl && (
+        <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/[0.05] px-4 py-3">
+          <ImageIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <p className="text-[11px] leading-relaxed text-primary">
+            Your uploaded file is the page background and is never stored inside the layout. Add text, badges, QR
+            codes or images from the toolbar and drag them onto the blanks — everything renders clean, with no
+            watermark.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_320px]">
         {/* ── Left: settings + fields ──
             On phones the canvas leads: it is the workspace, and the settings
@@ -673,7 +689,7 @@ export default function DocumentTemplateEditor({
             {page ? (
               mode === "layout" ? (
                 <ElementCanvas
-                  page={page}
+                  page={canvasPage ?? page}
                   schema={schema}
                   values={values}
                   sensitive={effectiveSensitivity === "sensitive"}
@@ -685,7 +701,7 @@ export default function DocumentTemplateEditor({
                 />
               ) : (
                 <DocumentPreview
-                  configuration={{ renderScale, pages: [page] }}
+                  configuration={{ renderScale, pages: [canvasPage ?? page] }}
                   schema={schema}
                   values={values}
                   sensitive={effectiveSensitivity === "sensitive"}

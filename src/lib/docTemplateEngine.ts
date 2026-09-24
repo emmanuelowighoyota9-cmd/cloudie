@@ -101,6 +101,14 @@ export interface TemplatePage {
   width: number;
   height: number;
   background?: string;
+  /**
+   * Full-bleed artwork drawn *under* the elements — a `data:` image URL.
+   *
+   * It is never persisted inside the layout: the template references an artwork
+   * file, and the render surfaces inject the resolved data URL per page so a
+   * scanned form or letterhead can be traced without bloating the layout JSON.
+   */
+  backgroundImage?: string;
   elements: LayoutElement[];
 }
 
@@ -672,9 +680,15 @@ export function buildPageSvg(
     .join("");
   const watermark = options.sensitive ? renderWatermark(page, options.watermarkText ?? DEFAULT_WATERMARK) : "";
   const bg = page.background ?? "#ffffff";
+  // Artwork underlay: only a validated `data:` image URL ever reaches the SVG.
+  const underlay =
+    page.backgroundImage && isSafeImageDataUrl(page.backgroundImage)
+      ? `<image x="0" y="0" width="${page.width}" height="${page.height}" href="${page.backgroundImage}" preserveAspectRatio="xMidYMid slice"/>`
+      : "";
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${page.width} ${page.height}">`,
     `<rect width="100%" height="100%" fill="${escapeXml(bg)}"/>`,
+    underlay,
     body,
     watermark,
     `</svg>`,

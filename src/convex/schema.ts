@@ -916,6 +916,9 @@ const schema = defineSchema(
       supportedFormats: v.optional(v.array(v.string())), // ["png", "pdf"]
       schema: v.optional(v.any()), // { fields: FieldDef[] }
       configuration: v.optional(v.any()), // { pages: TemplatePage[], background, renderScale }
+      // Artwork traced from a customer upload (their own PDF/image turned into
+      // a reusable template). Referenced, never inlined into the layout.
+      artworkFileId: v.optional(v.id("storageFiles")),
       createdById: v.id("users"),
       tenantId: v.optional(v.id("tenantSites")),
       isActive: v.boolean(),

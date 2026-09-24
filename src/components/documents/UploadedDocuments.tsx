@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -7,6 +8,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  LayoutTemplate,
   Loader2,
   Pencil,
   Trash2,
@@ -37,9 +39,12 @@ import { Label } from "@/components/ui/label";
 import { EmptyBlock, SectionHeader, formatDateTime } from "@/components/documents/ui";
 import DocumentUploadDialog from "@/components/documents/DocumentUploadDialog";
 import { formatBytes } from "@/lib/renderClient";
+import { artworkDataUrl, imageDimensions } from "@/lib/templateArtwork";
+import type { FieldDef } from "@/lib/docTemplateEngine";
 
 interface UploadedDocument {
   _id: Id<"uploadedDocuments">;
+  fileId: Id<"storageFiles">;
   title: string;
   fileName: string;
   kind: "pdf" | "image";
@@ -60,14 +65,80 @@ interface UploadedDocument {
  */
 export default function UploadedDocuments() {
   const documents = useQuery(api.uploadedDocuments.list, { limit: 24 });
+  const organization = useQuery(api.organization.getMyOrganization, {});
   const renameDocument = useMutation(api.uploadedDocuments.rename);
   const removeDocument = useMutation(api.uploadedDocuments.remove);
+  const createMyTemplate = useMutation(api.docTemplates.createMyTemplate);
+  const navigate = useNavigate();
 
   const [viewing, setViewing] = useState<UploadedDocument | null>(null);
   const [renaming, setRenaming] = useState<UploadedDocument | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleting, setDeleting] = useState<UploadedDocument | null>(null);
+  const [converting, setConverting] = useState<Id<"uploadedDocuments"> | null>(null);
   const [working, setWorking] = useState(false);
+
+  /**
+   * Trace an uploaded file into a reusable template.
+   *
+   * The file becomes the page artwork at render time (never inlined into the
+   * layout), the page is sized to the file, and a small set of fields is added
+   * so the template produces new clean documents straight away.
+   */
+  const onUseAsTemplate = async (doc: UploadedDocument) => {
+    if (doc.kind !== "image" || !doc.url) {
+      toast.error("Only uploaded images can be traced as template artwork today.");
+      return;
+    }
+    setConverting(doc._id);
+    try {
+      const dataUrl = await artworkDataUrl(doc.url);
+      const size = await imageDimensions(dataUrl);
+      const naturalWidth = size?.width ?? 794;
+      const naturalHeight = size?.height ?? 1123;
+      const landscape = naturalWidth > naturalHeight;
+      const pageWidth = landscape ? 1123 : 794;
+      const pageHeight = Math.min(Math.max(Math.round(pageWidth * (naturalHeight / naturalWidth)), 200), 4000);
+
+      const fields: FieldDef[] = [
+        { id: "title", type: "text", label: "Document title", default: doc.title.slice(0, 60), required: true, maxLength: 60 },
+        { id: "reference", type: "reference", label: "Reference", default: "DOC-0001", required: true },
+        { id: "notes", type: "textarea", label: "Notes", default: "", maxLength: 400 },
+      ];
+      const organizationName = organization?.organizationName ?? "";
+      if (organizationName) {
+        fields.splice(1, 0, {
+          id: "organization",
+          type: "text",
+          label: "Issued by",
+          default: organizationName,
+          maxLength: 60,
+          help: "Shown when you place it on the page. Defaults to your organization name.",
+        });
+      }
+
+      const result = await createMyTemplate({
+        name: doc.title.slice(0, 80),
+        documentType: "corporate",
+        description: `Traced from ${doc.fileName} — your own clean document.`,
+        requiredCredits: 0,
+        supportedFormats: ["png", "pdf"],
+        schema: { fields },
+        configuration: {
+          renderScale: 2,
+          pages: [{ width: pageWidth, height: pageHeight, background: "#ffffff", elements: [] }],
+        },
+        artworkFileId: doc.fileId,
+      });
+
+      toast.success("Template created — add text or codes on top of your file");
+      navigate(`/documents/own/${result.templateId}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create a template from this file");
+    } finally {
+      setConverting(null);
+    }
+  };
 
   const onRename = async () => {
     if (!renaming) return;
@@ -162,9 +233,28 @@ export default function UploadedDocuments() {
                     {formatBytes(doc.sizeBytes)} · {formatDateTime(doc.createdAt)}
                   </p>
                 </div>
-                <div className="mt-auto flex items-center gap-1.5">
+                <div className="mt-auto flex flex-wrap items-center gap-1.5">
                   <Button size="sm" variant="outline" className="h-8 gap-1.5 px-2" onClick={() => setViewing(doc)}>
                     <ExternalLink className="h-3.5 w-3.5" /> Open
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 px-2"
+                    disabled={doc.kind !== "image" || converting === doc._id}
+                    title={
+                      doc.kind === "image"
+                        ? "Reuse this file as the page artwork of a new template"
+                        : "PDF pages can't be traced as artwork yet — upload the page as an image instead"
+                    }
+                    onClick={() => onUseAsTemplate(doc)}
+                  >
+                    {converting === doc._id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <LayoutTemplate className="h-3.5 w-3.5" />
+                    )}
+                    Template
                   </Button>
                   {doc.url && (
                     <Button size="sm" variant="outline" className="h-8 px-2" asChild>

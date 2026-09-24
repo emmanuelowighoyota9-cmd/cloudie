@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { requireAdmin, auditLog } from "./adminApi";
@@ -226,6 +226,7 @@ export const getTemplate = query({
       schema: blocks?.schema ?? { fields: [] },
       configuration: blocks?.configuration ?? { pages: [] },
       defaults: defaultValues(blocks?.schema ?? { fields: [] }),
+      artworkUrl: await artworkUrl(ctx, template.artworkFileId, userId),
     };
   },
 });
@@ -920,6 +921,24 @@ function ownerSlug(name: string): string {
   return `own-${base}`;
 }
 
+/**
+ * Resolve a template's artwork file to a signed URL, owner/admin only.
+ *
+ * Artwork comes from a customer upload, so the URL is never exposed to anyone
+ * but the person who owns the file.
+ */
+async function artworkUrl(
+  ctx: QueryCtx | MutationCtx,
+  fileId: Id<"storageFiles"> | undefined,
+  viewerId: Id<"users">,
+): Promise<string | null> {
+  if (!fileId) return null;
+  const file = await ctx.db.get(fileId);
+  if (!file || file.isDeleted) return null;
+  if (file.ownerId !== viewerId) return null;
+  return await ctx.storage.getUrl(file.storageId);
+}
+
 /** Owner-authored documents visible only to their creator. */
 export const listMyTemplates = query({
   args: {},
@@ -947,6 +966,7 @@ export const listMyTemplates = query({
           fieldCount: schema.fields.length,
           pageCount: configuration.pages.length,
           isActive: t.isActive,
+          hasArtwork: Boolean(t.artworkFileId),
           updatedAt: t.updatedAt,
         };
       });
@@ -974,6 +994,7 @@ export const getMyTemplate = query({
       currentVersion: template.currentVersion,
       schema: template.schema ?? { fields: [] },
       configuration: template.configuration ?? { pages: [] },
+      artworkUrl: await artworkUrl(ctx, template.artworkFileId, userId),
     };
   },
 });
@@ -1007,6 +1028,7 @@ export const createMyTemplate = mutation({
     supportedFormats: v.optional(v.array(v.string())),
     schema: v.any(),
     configuration: v.any(),
+    artworkFileId: v.optional(v.id("storageFiles")),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -1017,6 +1039,15 @@ export const createMyTemplate = mutation({
 
     // Always clean: no owner-authored document is ever watermarked.
     assertOwnDocument(args.documentType, args.schema, args.configuration);
+
+    // Artwork may only be one of your own image uploads — never someone else's
+    // file, and never a template that renders outside the platform's reach.
+    if (args.artworkFileId) {
+      const file = await ctx.db.get(args.artworkFileId);
+      if (!file || file.isDeleted || file.ownerId !== userId || !file.mimeType.startsWith("image/")) {
+        throw new Error("Artwork must be an image you uploaded yourself");
+      }
+    }
 
     const mine = await ctx.db
       .query("documentTemplates")
@@ -1059,6 +1090,7 @@ export const createMyTemplate = mutation({
       supportedFormats: formats,
       schema: args.schema,
       configuration: args.configuration,
+      artworkFileId: args.artworkFileId,
       createdById: userId,
       isActive: true,
       currentVersion: 1,
@@ -1289,7 +1321,7 @@ export const adminPublishTemplateVersion = mutation({
 export const adminGetTemplate = query({
   args: { templateId: v.id("documentTemplates") },
   handler: async (ctx, args) => {
-    await requireAdmin(ctx);
+    const { adminId } = await requireAdmin(ctx);
     const template = await ctx.db.get(args.templateId);
     if (!template) return null;
     return {
@@ -1306,6 +1338,7 @@ export const adminGetTemplate = query({
       currentVersion: template.currentVersion,
       schema: template.schema ?? { fields: [] },
       configuration: template.configuration ?? { pages: [] },
+      artworkUrl: await artworkUrl(ctx, template.artworkFileId, adminId),
     };
   },
 });

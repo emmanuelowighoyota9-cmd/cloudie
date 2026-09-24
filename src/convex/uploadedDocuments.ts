@@ -56,6 +56,7 @@ export const list = query({
     );
     return active.map((row, index) => ({
       _id: row._id,
+      fileId: row.fileId,
       title: row.title,
       fileName: row.fileName,
       kind: row.kind,

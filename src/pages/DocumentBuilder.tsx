@@ -32,6 +32,7 @@ import {
   renderDocumentArtifacts,
   uploadArtifact,
 } from "@/lib/renderClient";
+import { useTemplateArtwork } from "@/hooks/use-template-artwork";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
 import { TemplateForm } from "@/components/documents/TemplateForm";
 import { PageHeader } from "@/components/documents/ui";
@@ -79,6 +80,13 @@ export default function DocumentBuilder() {
 
   const schema = template?.schema ?? { fields: [] };
   const configuration = template?.configuration ?? { pages: [] };
+  // Artwork traced from an upload is injected at render time, never stored in
+  // the layout. Export waits for it so a page never loses its background.
+  const artwork = useTemplateArtwork(configuration.pages, template?.artworkUrl);
+  const renderConfiguration = useMemo(
+    () => ({ ...configuration, pages: artwork.pages }),
+    [configuration, artwork.pages],
+  );
   const sensitive = template?.sensitivity === "sensitive";
   const cost = quote?.cost ?? template?.requiredCredits ?? 0;
   const balance = quote?.balance ?? 0;
@@ -146,7 +154,7 @@ export default function DocumentBuilder() {
     setGenerating(true);
     try {
       setStage("Rendering pages…");
-      const artifacts = await renderDocumentArtifacts(configuration, schema, result.values, {
+      const artifacts = await renderDocumentArtifacts(renderConfiguration, schema, result.values, {
         sensitive,
         images: imageDataUrls,
         title: title || template.name,
@@ -234,13 +242,27 @@ export default function DocumentBuilder() {
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Save draft
             </Button>
-            <Button onClick={onGenerate} disabled={generating || !affordable} className="gap-1.5">
+            <Button
+              onClick={onGenerate}
+              disabled={generating || !affordable || !artwork.ready}
+              className="gap-1.5"
+            >
               {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               Generate ({cost} pts)
             </Button>
           </>
         }
       />
+
+      {artwork.failed && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3">
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-400">
+            The artwork file for this template could not be loaded, so the page background is missing. Your text and
+            fields still render. Reload the page or re-attach the artwork in the editor.
+          </p>
+        </div>
+      )}
 
       {sensitive && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.06] px-4 py-3">
@@ -298,7 +320,7 @@ export default function DocumentBuilder() {
               </span>
             </div>
             <DocumentPreview
-              configuration={configuration}
+              configuration={renderConfiguration}
               schema={schema}
               values={values}
               sensitive={sensitive}
@@ -317,9 +339,13 @@ export default function DocumentBuilder() {
               <span className="font-semibold tabular-nums text-foreground">{balance.toLocaleString()}</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button onClick={onGenerate} disabled={generating || !affordable} className="flex-1 gap-1.5">
+              <Button
+                onClick={onGenerate}
+                disabled={generating || !affordable || !artwork.ready}
+                className="flex-1 gap-1.5"
+              >
                 {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                {generating ? stage || "Generating…" : "Generate document"}
+                {generating ? stage || "Generating…" : artwork.ready ? "Generate document" : "Preparing artwork…"}
               </Button>
               {!affordable && (
                 <Button variant="outline" asChild>
