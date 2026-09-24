@@ -29,7 +29,6 @@ import {
   StatusPill,
   formatDateTime,
 } from "@/components/documents/ui";
-import UploadedDocuments from "@/components/documents/UploadedDocuments";
 
 /**
  * Cloudie workspace overview.
@@ -115,8 +114,6 @@ export default function Documents() {
           index={5}
         />
       </div>
-
-      <UploadedDocuments />
 
       <section className="space-y-3">
         <SectionHeader
