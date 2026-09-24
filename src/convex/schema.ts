@@ -162,6 +162,8 @@ const schema = defineSchema(
       isTerminated: v.optional(v.boolean()),
       terminatedAt: v.optional(v.number()),
       lastActiveAt: v.optional(v.number()),
+      // Custom organization name the user issues their own documents under.
+      organizationName: v.optional(v.string()),
       createdAt: v.optional(v.number()),
     })
       .index("email", ["email"])

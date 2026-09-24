@@ -9,8 +9,10 @@ import {
   HardDrive,
   LayoutGrid,
   Link2,
+  Pencil,
   Plus,
   Share2,
+  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
@@ -38,6 +40,7 @@ export default function Documents() {
   const stats = useQuery(api.docTemplates.getStudioStats);
   const categories = useQuery(api.docTemplates.listCategories);
   const recent = useQuery(api.docTemplates.listMyDocuments, { limit: 8 });
+  const mine = useQuery(api.docTemplates.listMyTemplates, {});
   const ensureStarterTemplates = useMutation(api.docTemplates.ensureStarterTemplates);
   const seeded = useRef(false);
 
@@ -111,6 +114,75 @@ export default function Documents() {
           index={5}
         />
       </div>
+
+      <section className="space-y-3">
+        <SectionHeader
+          title="Your own documents"
+          action={
+            <Link to="/documents/own/new" className="text-xs font-medium text-primary hover:underline">
+              Design a document
+            </Link>
+          }
+        />
+        {mine === undefined ? (
+          <Skeleton className="h-28" />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Link
+              to="/documents/own/new"
+              className="group flex h-full flex-col justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/[0.04] p-4 transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Plus className="h-4 w-4" />
+                </span>
+                <p className="text-sm font-semibold text-foreground">New clean document</p>
+              </div>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                Design your own layout from scratch. No demo watermark, and it is issued under your organization name.
+              </p>
+              <span className="flex items-center gap-1 text-[11px] font-medium text-primary">
+                <ShieldCheck className="h-3.5 w-3.5" /> Always clean output
+              </span>
+            </Link>
+
+            {mine.map((template, index) => (
+              <motion.div
+                key={template._id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: index * 0.04 }}
+                className="flex h-full flex-col justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold text-foreground">{template.name}</p>
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      clean
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {template.categoryLabel} · {template.fieldCount} fields · {template.pageCount} page
+                    {template.pageCount === 1 ? "" : "s"} · {template.requiredCredits} pts
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1 gap-1.5" asChild>
+                    <Link to={`/documents/new/${template._id}`}>
+                      <Sparkles className="h-3.5 w-3.5" /> Generate
+                    </Link>
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1.5" asChild>
+                    <Link to={`/documents/own/${template._id}`}>
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </Link>
+                  </Button>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3">
         <SectionHeader

@@ -1,9 +1,88 @@
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { toast } from "sonner";
+import { Building2, Loader2, Moon, Sun, User, Shield } from "lucide-react";
+import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/components/ThemeProvider";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Moon, Sun, User, Shield } from "lucide-react";
+import { Input } from "@/components/ui/input";
+
+/** Custom organization name — used on the documents you author yourself. */
+function OrganizationCard() {
+  const org = useQuery(api.organization.getMyOrganization, {});
+  const saveOrganization = useMutation(api.organization.setMyOrganization);
+
+  const [name, setName] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (hydrated || org === undefined) return;
+    setHydrated(true);
+    setName(org.organizationName);
+  }, [org, hydrated]);
+
+  const saved = org?.organizationName ?? "";
+  const dirty = hydrated && name.trim() !== saved;
+
+  const onSave = async () => {
+    setSaving(true);
+    try {
+      const result = await saveOrganization({ organizationName: name.trim() });
+      setName(result.organizationName);
+      toast.success(
+        result.organizationName
+          ? `Organization name set to ${result.organizationName}`
+          : "Organization name cleared",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the organization name");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="notebook-card">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Building2 className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Organization
+          </CardTitle>
+        </div>
+        <CardDescription>
+          Your own documents are issued under this name — it pre-fills the “Issued by” field on any document you
+          design, and you can still change it per document.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={80}
+            placeholder="e.g. Northwind Trading Ltd"
+            aria-label="Organization name"
+            className="h-11 sm:h-9"
+          />
+          <Button onClick={onSave} disabled={saving || !dirty} className="h-11 gap-1.5 sm:h-9 sm:w-28">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {saved
+            ? "Shown on the documents you author yourself. Platform templates are unaffected."
+            : "Optional — leave blank to keep documents unsigned."}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Settings() {
   const { user } = useAuth();
@@ -34,6 +113,9 @@ export default function Settings() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Organization */}
+      <OrganizationCard />
 
       {/* Appearance */}
       <Card className="notebook-card">

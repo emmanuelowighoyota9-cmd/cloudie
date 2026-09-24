@@ -85,25 +85,52 @@ function slugify(value: string): string {
 const selectClass =
   "h-11 w-full min-w-0 rounded-md border border-border bg-background px-2.5 text-xs text-foreground outline-none focus:border-primary sm:h-9";
 
+export interface DocumentTemplateEditorProps {
+  /**
+   * "admin" edits platform templates; "own" authors a private document owned by
+   * the signed-in user, always in a clean (never watermarked) category.
+   */
+  variant?: "admin" | "own";
+  /** Organization name pre-filled on newly authored documents. */
+  organizationName?: string;
+}
+
 /**
  * Visual document-template editor.
  *
  * Arranges the exact `LayoutElement` structure the renderer consumes, so the
  * canvas, the live preview and the exported PNG/PDF are all the same document.
+ * The same editor powers the admin library and a customer's own clean
+ * documents — only the persistence target and the allowed categories differ.
  */
-export default function AdminDocumentTemplateEditor() {
+export default function DocumentTemplateEditor({
+  variant = "admin",
+  organizationName = "",
+}: DocumentTemplateEditorProps) {
+  const isOwn = variant === "own";
   const { templateId } = useParams<{ templateId?: string }>();
   const editing = Boolean(templateId);
   const navigate = useNavigate();
 
-  const existing = useQuery(
+  const adminExisting = useQuery(
     api.docTemplates.adminGetTemplate,
-    templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
+    !isOwn && templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
   );
+  const ownExisting = useQuery(
+    api.docTemplates.getMyTemplate,
+    isOwn && templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
+  );
+  const existing = isOwn ? ownExisting : adminExisting;
   const createTemplate = useMutation(api.docTemplates.adminCreateTemplate);
   const publishVersion = useMutation(api.docTemplates.adminPublishTemplateVersion);
+  const createOwnTemplate = useMutation(api.docTemplates.createMyTemplate);
+  const updateOwnTemplate = useMutation(api.docTemplates.updateMyTemplate);
+  const backTo = isOwn ? "/documents" : "/admin/document-templates";
 
-  const blank = useMemo(() => blankTemplateDraft(), []);
+  const blank = useMemo(
+    () => (isOwn ? blankTemplateDraft({ organization: organizationName }) : blankTemplateDraft()),
+    [isOwn, organizationName],
+  );
 
   const [hydrated, setHydrated] = useState(false);
   const [name, setName] = useState("");
@@ -153,8 +180,14 @@ export default function AdminDocumentTemplateEditor() {
   }, [name, slugTouched, editing]);
 
   const category = categoryDef(documentType);
-  const categoryIsSensitive = category.sensitive;
-  const effectiveSensitivity = categoryIsSensitive ? "sensitive" : sensitivity;
+  const categoryIsSensitive = !isOwn && category.sensitive;
+  const effectiveSensitivity = isOwn ? "standard" : categoryIsSensitive ? "sensitive" : sensitivity;
+
+  // A customer's own documents may only live in clean categories.
+  const categoryOptions = useMemo(
+    () => (isOwn ? CATEGORIES.filter((c) => !c.sensitive) : CATEGORIES),
+    [isOwn],
+  );
 
   const schema = useMemo(() => ({ fields }), [fields]);
   const configuration = useMemo(() => ({ renderScale, pages }), [renderScale, pages]);
@@ -315,17 +348,46 @@ export default function AdminDocumentTemplateEditor() {
     setSaving(true);
     try {
       if (editing && templateId) {
-        const result = await publishVersion({
-          templateId: templateId as Id<"documentTemplates">,
+        const id = templateId as Id<"documentTemplates">;
+        if (isOwn) {
+          const result = await updateOwnTemplate({
+            templateId: id,
+            name: trimmedName,
+            documentType,
+            description,
+            requiredCredits,
+            supportedFormats,
+            schema,
+            configuration,
+          });
+          toast.success(`Saved version ${result.version}`);
+          navigate(backTo);
+        } else {
+          const result = await publishVersion({
+            templateId: id,
+            schema,
+            configuration,
+            requiredCredits,
+            sensitivity: effectiveSensitivity,
+          });
+          toast.success(`Published version ${result.version}`);
+          navigate(backTo);
+        }
+      } else if (isOwn) {
+        const result = await createOwnTemplate({
+          name: trimmedName,
+          slug,
+          documentType,
+          description,
+          requiredCredits,
+          supportedFormats,
           schema,
           configuration,
-          requiredCredits,
-          sensitivity: effectiveSensitivity,
         });
-        toast.success(`Published version ${result.version}`);
-        navigate("/admin/document-templates");
+        toast.success("Your document is ready — fill the form to generate it");
+        navigate(`/documents/new/${result.templateId}`);
       } else {
-        const result = await createTemplate({
+        await createTemplate({
           name: trimmedName,
           slug,
           documentType,
@@ -337,7 +399,7 @@ export default function AdminDocumentTemplateEditor() {
           configuration,
         });
         toast.success("Template created");
-        navigate("/admin/document-templates");
+        navigate(backTo);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the template");
@@ -349,7 +411,7 @@ export default function AdminDocumentTemplateEditor() {
   if (editing && existing === undefined) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Template editor" description="Loading…" />
+        <PageHeader title={isOwn ? "Document editor" : "Template editor"} description="Loading…" />
         <div className="grid gap-5 lg:grid-cols-[320px_1fr_320px]">
           <Skeleton className="h-[560px]" />
           <Skeleton className="h-[560px]" />
@@ -362,31 +424,49 @@ export default function AdminDocumentTemplateEditor() {
   if (editing && existing === null) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Template not found" description="It may have been deleted." />
+        <PageHeader
+          title={isOwn ? "Document not found" : "Template not found"}
+          description="It may have been deleted, or it belongs to someone else."
+        />
         <Button asChild variant="outline">
-          <Link to="/admin/document-templates" className="gap-1.5">
-            <ArrowLeft className="h-4 w-4" /> Back to templates
+          <Link to={backTo} className="gap-1.5">
+            <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>
       </div>
     );
   }
 
+  const headerTitle = editing
+    ? `Edit — ${existing?.name ?? ""}`
+    : isOwn
+      ? "New document"
+      : "New document template";
+  const headerDescription = isOwn
+    ? "Design your own document from scratch: arrange the layout, define the fields you want to fill in later, then save. Your documents always render clean — no demo watermark — and are issued under your organization name."
+    : "Design the layout visually, define the dynamic form, then publish. Saving an existing template creates a new immutable version.";
+
   return (
     <div className="space-y-5">
       <PageHeader
-        title={editing ? `Edit — ${existing?.name ?? ""}` : "New document template"}
-        description="Design the layout visually, define the dynamic form, then publish. Saving an existing template creates a new immutable version."
+        title={headerTitle}
+        description={headerDescription}
         actions={
           <>
             <Button variant="outline" asChild>
-              <Link to="/admin/document-templates" className="gap-1.5">
-                <ArrowLeft className="h-4 w-4" /> Templates
+              <Link to={backTo} className="gap-1.5">
+                <ArrowLeft className="h-4 w-4" /> {isOwn ? "Documents" : "Templates"}
               </Link>
             </Button>
             <Button onClick={onSave} disabled={saving} className="gap-1.5">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {editing ? "Publish version" : "Create template"}
+              {editing
+                ? isOwn
+                  ? "Save version"
+                  : "Publish version"
+                : isOwn
+                  ? "Create document"
+                  : "Create template"}
             </Button>
           </>
         }
@@ -445,7 +525,7 @@ export default function AdminDocumentTemplateEditor() {
                 onChange={(e) => setDocumentType(e.target.value)}
                 className={selectClass}
               >
-                {CATEGORIES.map((c) => (
+                {categoryOptions.map((c) => (
                   <option key={c.key} value={c.key}>
                     {c.label}
                   </option>
@@ -478,22 +558,30 @@ export default function AdminDocumentTemplateEditor() {
               </div>
               <div className="min-w-0 space-y-1">
                 <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Sensitivity</Label>
-                <select
-                  aria-label="Sensitivity"
-                  value={effectiveSensitivity}
-                  disabled={categoryIsSensitive}
-                  onChange={(e) => setSensitivity(e.target.value as "standard" | "sensitive")}
-                  className={cn(selectClass, categoryIsSensitive && "opacity-60")}
-                >
-                  <option value="standard">Standard</option>
-                  <option value="sensitive">Sensitive (watermark)</option>
-                </select>
+                {isOwn ? (
+                  <div className="flex h-11 items-center rounded-md border border-border bg-muted/40 px-2.5 text-[11px] font-medium text-muted-foreground sm:h-9">
+                    Clean · no watermark
+                  </div>
+                ) : (
+                  <select
+                    aria-label="Sensitivity"
+                    value={effectiveSensitivity}
+                    disabled={categoryIsSensitive}
+                    onChange={(e) => setSensitivity(e.target.value as "standard" | "sensitive")}
+                    className={cn(selectClass, categoryIsSensitive && "opacity-60")}
+                  >
+                    <option value="standard">Standard</option>
+                    <option value="sensitive">Sensitive (watermark)</option>
+                  </select>
+                )}
               </div>
             </div>
             <p className="text-[10px] leading-relaxed text-muted-foreground">
-              {categoryIsSensitive
-                ? "This category always renders a non-removable DEMO watermark — sensitive categories cannot be downgraded."
-                : "Sensitive templates get a non-removable DEMO watermark on every page."}
+              {isOwn
+                ? "Your own documents are always clean: the \u201cIssued by\u201d field defaults to your organization name (change it in Settings) and no demo watermark is ever added."
+                : categoryIsSensitive
+                  ? "This category always renders a non-removable DEMO watermark — sensitive categories cannot be downgraded."
+                  : "Sensitive templates get a non-removable DEMO watermark on every page."}
             </p>
 
             <div className="flex flex-wrap items-center gap-x-4">

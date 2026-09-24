@@ -112,7 +112,11 @@ export const listCategories = query({
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .take(500);
     const counts = new Map<string, number>();
-    for (const t of templates) counts.set(t.documentType, (counts.get(t.documentType) ?? 0) + 1);
+    // Private rows are a single customer's own documents — never counted here.
+    for (const t of templates) {
+      if (t.visibility === "private") continue;
+      counts.set(t.documentType, (counts.get(t.documentType) ?? 0) + 1);
+    }
     return CATEGORIES.filter((c) => c.enabledByDefault).map((c) => ({
       key: c.key,
       label: c.label,
@@ -146,6 +150,8 @@ export const listTemplates = query({
     const needle = args.search?.trim().toLowerCase() ?? "";
     return rows
       .filter((t) => t.isActive && (!args.documentType || t.status === "active"))
+      // Customer-authored documents live in their own section, never the grid.
+      .filter((t) => t.visibility !== "private")
       .filter((t) =>
         needle.length === 0
           ? true
@@ -372,6 +378,12 @@ export const createDocument = mutation({
     const blocks = version.blocks as VersionBlocks;
     const schema = blocks?.schema ?? { fields: [] };
     const values = sanitizeValues(schema, args.values);
+    // A customer's own documents are issued under their organization name:
+    // the letterhead field starts from their profile setting when left blank.
+    if (schema.fields.some((f) => f.id === "organization") && !String(values.organization ?? "").trim()) {
+      const org = (await ctx.db.get(userId))?.organizationName?.trim();
+      if (org) values.organization = sanitizeText(org, 60);
+    }
     const title = sanitizeText(args.title?.trim() || template.name, 120);
     const now = Date.now();
 
@@ -883,6 +895,281 @@ export const publicViewDocument = mutation({
       imageUrl: await urlFor(doc.imageFileId),
       pdfUrl: await urlFor(doc.pdfFileId),
     };
+  },
+});
+
+// ─── Your own documents — owner-authored, always clean ────────────────────────
+
+/**
+ * Owner-authored documents.
+ *
+ * A customer can design their own document from scratch instead of picking a
+ * starter: it lives in a non-sensitive category only, so nothing authored here
+ * can ever carry the platform's forced DEMO/SAMPLE watermark. Rows are private
+ * to their creator and never appear in another customer's library.
+ */
+
+const MAX_OWN_TEMPLATES = 25;
+
+function isOwnerAuthoredCategory(key: string): boolean {
+  return !categoryDef(key).sensitive;
+}
+
+function ownerSlug(name: string): string {
+  const base = slugify(name).slice(0, 48) || "document";
+  return `own-${base}`;
+}
+
+/** Owner-authored documents visible only to their creator. */
+export const listMyTemplates = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const rows = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_creator", (q) => q.eq("createdById", userId))
+      .order("desc")
+      .take(MAX_OWN_TEMPLATES);
+    return rows
+      .filter((t) => t.visibility === "private")
+      .map((t) => {
+        const schema = (t.schema as TemplateSchema | undefined) ?? { fields: [] };
+        const configuration = (t.configuration as TemplateConfiguration | undefined) ?? { pages: [] };
+        return {
+          _id: t._id,
+          name: t.name,
+          slug: t.slug,
+          description: t.description ?? "",
+          documentType: t.documentType,
+          categoryLabel: categoryDef(t.documentType).label,
+          requiredCredits: t.requiredCredits ?? 0,
+          fieldCount: schema.fields.length,
+          pageCount: configuration.pages.length,
+          isActive: t.isActive,
+          updatedAt: t.updatedAt,
+        };
+      });
+  },
+});
+
+/** Owner-only editor read: the live schema + layout of one of your documents. */
+export const getMyTemplate = query({
+  args: { templateId: v.id("documentTemplates") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const template = await ctx.db.get(args.templateId);
+    if (!template || template.createdById !== userId || template.visibility !== "private") return null;
+    return {
+      _id: template._id,
+      name: template.name,
+      slug: template.slug,
+      description: template.description ?? "",
+      documentType: template.documentType,
+      categoryLabel: categoryDef(template.documentType).label,
+      sensitivity: "standard",
+      requiredCredits: template.requiredCredits ?? 0,
+      supportedFormats: template.supportedFormats ?? ["png", "pdf"],
+      currentVersion: template.currentVersion,
+      schema: template.schema ?? { fields: [] },
+      configuration: template.configuration ?? { pages: [] },
+    };
+  },
+});
+
+/** Shared validation for owner-authored saves: clean categories, valid layout. */
+function assertOwnDocument(
+  documentType: string,
+  schema: unknown,
+  configuration: unknown,
+): void {
+  if (!CATEGORIES.some((c) => c.key === documentType)) {
+    throw new Error(`Unknown category: ${documentType}`);
+  }
+  if (!isOwnerAuthoredCategory(documentType)) {
+    throw new Error("That category is reserved for platform templates");
+  }
+  const issues = validateTemplateDefinition(schema, configuration);
+  if (issues.length > 0) {
+    throw new Error(issues.map((i) => `${i.field}: ${i.message}`).join("; ").slice(0, 400));
+  }
+}
+
+/** Create a clean, owner-authored document template. */
+export const createMyTemplate = mutation({
+  args: {
+    name: v.string(),
+    slug: v.optional(v.string()),
+    documentType: v.string(),
+    description: v.optional(v.string()),
+    requiredCredits: v.optional(v.number()),
+    supportedFormats: v.optional(v.array(v.string())),
+    schema: v.any(),
+    configuration: v.any(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const name = sanitizeText(args.name.trim(), 80);
+    if (!name) throw new Error("A document name is required");
+
+    // Always clean: no owner-authored document is ever watermarked.
+    assertOwnDocument(args.documentType, args.schema, args.configuration);
+
+    const mine = await ctx.db
+      .query("documentTemplates")
+      .withIndex("by_creator", (q) => q.eq("createdById", userId))
+      .take(MAX_OWN_TEMPLATES + 1);
+    if (mine.filter((t) => t.visibility === "private").length >= MAX_OWN_TEMPLATES) {
+      throw new Error(`You can keep up to ${MAX_OWN_TEMPLATES} of your own documents`);
+    }
+
+    const base = ownerSlug(args.slug?.trim() || name);
+    let slug = base;
+    let suffix = 1;
+    while (
+      await ctx.db
+        .query("documentTemplates")
+        .withIndex("by_slug", (q) => q.eq("slug", slug))
+        .first()
+    ) {
+      suffix += 1;
+      slug = `${base}-${suffix}`;
+    }
+
+    const requiredCredits = Math.min(Math.max(0, Math.round(args.requiredCredits ?? 0)), 1000);
+    const supportedFormats = (args.supportedFormats ?? ["png", "pdf"]).filter(
+      (f) => f === "png" || f === "pdf",
+    );
+    const formats = supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"];
+    const now = Date.now();
+
+    const templateId = await ctx.db.insert("documentTemplates", {
+      documentType: args.documentType,
+      name,
+      slug,
+      description: sanitizeText(args.description?.trim() ?? "", 240),
+      renderer: "svg",
+      status: "active",
+      visibility: "private",
+      sensitivity: "standard",
+      requiredCredits,
+      supportedFormats: formats,
+      schema: args.schema,
+      configuration: args.configuration,
+      createdById: userId,
+      isActive: true,
+      currentVersion: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("documentTemplateVersions", {
+      templateId,
+      version: 1,
+      title: name,
+      blocks: {
+        schema: args.schema,
+        configuration: args.configuration,
+        sensitivity: "standard",
+        requiredCredits,
+        supportedFormats: formats,
+      } satisfies VersionBlocks,
+      pointsCost: requiredCredits,
+      createdById: userId,
+      createdAt: now,
+    });
+
+    await auditLog(ctx, userId, {
+      action: "DOCUMENT_TEMPLATE_CREATED",
+      resource: "documentTemplates",
+      resourceId: templateId,
+      after: { name, slug, documentType: args.documentType, requiredCredits },
+      reason: "Created an own document",
+    });
+
+    return { templateId, slug };
+  },
+});
+
+/** Publish a new version of one of your own documents. */
+export const updateMyTemplate = mutation({
+  args: {
+    templateId: v.id("documentTemplates"),
+    name: v.optional(v.string()),
+    documentType: v.optional(v.string()),
+    description: v.optional(v.string()),
+    requiredCredits: v.optional(v.number()),
+    supportedFormats: v.optional(v.array(v.string())),
+    schema: v.any(),
+    configuration: v.any(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const template = await ctx.db.get(args.templateId);
+    if (!template) throw new Error("Not found");
+    if (template.createdById !== userId || template.visibility !== "private") {
+      throw new Error("Forbidden");
+    }
+
+    const documentType = args.documentType ?? template.documentType;
+    assertOwnDocument(documentType, args.schema, args.configuration);
+
+    const name = args.name ? sanitizeText(args.name.trim(), 80) || template.name : template.name;
+    const requiredCredits = Math.min(
+      Math.max(0, Math.round(args.requiredCredits ?? template.requiredCredits ?? 0)),
+      1000,
+    );
+    const supportedFormats = (args.supportedFormats ?? template.supportedFormats ?? ["png", "pdf"]).filter(
+      (f) => f === "png" || f === "pdf",
+    );
+    const formats = supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"];
+    const nextVersion = template.currentVersion + 1;
+    const now = Date.now();
+
+    await ctx.db.insert("documentTemplateVersions", {
+      templateId: template._id,
+      version: nextVersion,
+      title: name,
+      blocks: {
+        schema: args.schema,
+        configuration: args.configuration,
+        sensitivity: "standard",
+        requiredCredits,
+        supportedFormats: formats,
+      } satisfies VersionBlocks,
+      pointsCost: requiredCredits,
+      createdById: userId,
+      createdAt: now,
+    });
+
+    await ctx.db.patch(template._id, {
+      documentType,
+      name,
+      description: sanitizeText(args.description?.trim() ?? template.description ?? "", 240),
+      sensitivity: "standard",
+      requiredCredits,
+      supportedFormats: formats,
+      schema: args.schema,
+      configuration: args.configuration,
+      currentVersion: nextVersion,
+      isActive: true,
+      status: "active",
+      updatedAt: now,
+    });
+
+    await auditLog(ctx, userId, {
+      action: "DOCUMENT_TEMPLATE_VERSION_PUBLISHED",
+      resource: "documentTemplates",
+      resourceId: template._id,
+      after: { version: nextVersion },
+      reason: "Published a new version of an own document",
+    });
+
+    return { version: nextVersion };
   },
 });
 

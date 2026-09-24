@@ -10,6 +10,7 @@
 import {
   formatValueForField,
   type DocumentValues,
+  type FieldDef,
   type LayoutElement,
   type TemplateConfiguration,
   type TemplatePage,
@@ -296,18 +297,54 @@ export function duplicateElement(el: LayoutElement): LayoutElement {
 }
 
 /** A minimal, already-valid template so a new document starts from something real. */
-export function blankTemplateDraft(): {
+export function blankTemplateDraft(options?: { organization?: string }): {
   schema: TemplateSchema;
   configuration: TemplateConfiguration;
 } {
+  const organization = (options?.organization ?? "").trim().slice(0, 60);
+
+  const fields: FieldDef[] = [
+    { id: "title", type: "text", label: "Document title", default: "Untitled document", required: true, maxLength: 60 },
+    { id: "reference", type: "reference", label: "Reference", default: "DOC-0001", required: true },
+    { id: "body", type: "textarea", label: "Body copy", default: "Write the document content here.", maxLength: 400 },
+  ];
+  const headerElements: LayoutElement[] = [
+    { kind: "rect", x: 0, y: 0, w: 794, h: 128, fill: "#0f172a" },
+    { kind: "text", x: 56, y: 78, bind: "title", size: 26, weight: 800, color: "#ffffff", maxChars: 40 },
+    // No `w` here on purpose: text with an explicit width is stretched to
+    // exactly that width by the renderer, which would squash the value.
+    { kind: "text", x: 738, y: 74, align: "right", bind: "reference", size: 12, color: "#94a3b8" },
+    { kind: "text", x: 56, y: 196, bind: "body", size: 13, color: "#334155", lineHeight: 22, maxChars: 200 },
+    { kind: "line", x1: 56, y1: 172, x2: 738, y2: 172, stroke: "#e2e8f0", strokeWidth: 1 },
+  ];
+
+  // Owner-authored documents are custom-branded: the customer's organization
+  // name becomes a normal, editable field on the letterhead.
+  if (organization) {
+    fields.splice(1, 0, {
+      id: "organization",
+      type: "text",
+      label: "Issued by",
+      default: organization,
+      maxLength: 60,
+      help: "Shown on the document letterhead. Defaults to your organization name.",
+    });
+    headerElements.splice(2, 0, {
+      kind: "text",
+      x: 56,
+      y: 106,
+      bind: "organization",
+      size: 11,
+      weight: 600,
+      color: "#94a3b8",
+      uppercase: true,
+      letterSpacing: 1.5,
+      maxChars: 44,
+    });
+  }
+
   return {
-    schema: {
-      fields: [
-        { id: "title", type: "text", label: "Document title", default: "Untitled document", required: true, maxLength: 60 },
-        { id: "reference", type: "reference", label: "Reference", default: "DOC-0001", required: true },
-        { id: "body", type: "textarea", label: "Body copy", default: "Write the document content here.", maxLength: 400 },
-      ],
-    },
+    schema: { fields },
     configuration: {
       renderScale: 2,
       pages: [
@@ -315,15 +352,7 @@ export function blankTemplateDraft(): {
           width: 794,
           height: 1123,
           background: "#ffffff",
-          elements: [
-            { kind: "rect", x: 0, y: 0, w: 794, h: 128, fill: "#0f172a" },
-            { kind: "text", x: 56, y: 78, bind: "title", size: 26, weight: 800, color: "#ffffff", maxChars: 40 },
-            // No `w` here on purpose: text with an explicit width is stretched to
-            // exactly that width by the renderer, which would squash the value.
-            { kind: "text", x: 738, y: 74, align: "right", bind: "reference", size: 12, color: "#94a3b8" },
-            { kind: "text", x: 56, y: 196, bind: "body", size: 13, color: "#334155", lineHeight: 22, maxChars: 200 },
-            { kind: "line", x1: 56, y1: 172, x2: 738, y2: 172, stroke: "#e2e8f0", strokeWidth: 1 },
-          ],
+          elements: headerElements,
         },
       ],
     },

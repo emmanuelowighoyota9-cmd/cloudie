@@ -2,7 +2,18 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useQuery } from "convex/react";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Coins, FileStack, Search, ShieldAlert } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Coins,
+  FileStack,
+  Pencil,
+  Plus,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +33,7 @@ export default function DocumentTemplates() {
     search: search.trim() || undefined,
     limit: 60,
   });
+  const mine = useQuery(api.docTemplates.listMyTemplates, {});
 
   const categories = useMemo(() => CATEGORIES.filter((c) => c.enabledByDefault), []);
 
@@ -87,6 +99,62 @@ export default function DocumentTemplates() {
           ))}
         </div>
       </div>
+
+      {activeCategory === "" && search.trim() === "" && mine !== undefined && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <h2 className="text-sm font-semibold text-foreground">Your own documents</h2>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                clean output
+              </span>
+            </div>
+            <Link to="/documents/own/new" className="text-xs font-medium text-primary hover:underline">
+              Design a document
+            </Link>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <Link
+              to="/documents/own/new"
+              className="flex items-center gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/[0.04] p-4 transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Plus className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground">New clean document</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Your own layout — no demo watermark, issued under your organization name.
+                </p>
+              </div>
+            </Link>
+            {mine.map((template) => (
+              <div
+                key={template._id}
+                className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">{template.name}</p>
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {template.categoryLabel} · {template.fieldCount} fields · {template.requiredCredits} pts
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" className="shrink-0 gap-1.5" asChild>
+                  <Link to={`/documents/own/${template._id}`}>
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </Link>
+                </Button>
+                <Button size="sm" className="shrink-0 gap-1.5" asChild>
+                  <Link to={`/documents/new/${template._id}`}>
+                    <Sparkles className="h-3.5 w-3.5" /> Use
+                  </Link>
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {templates === undefined ? (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
