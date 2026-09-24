@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { buildPreviewSvg, categoryDef, defaultValues, svgToDataUrl } from "@/lib/docTemplateEngine";
 import { STARTER_TEMPLATES } from "@/lib/starterTemplates";
 import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPrompt";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { toast } from "sonner";
 import {
   Cloud,
@@ -52,6 +53,7 @@ const stats = [
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { brand, support } = usePlatformConfig();
   const [trackingNumber, setTrackingNumber] = useState("");
 
   // Real template previews, rendered by the same engine the studio uses.
@@ -88,7 +90,7 @@ export default function Landing() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
               <Cloud className="h-4 w-4" />
             </div>
-            <span className="text-lg font-bold text-foreground">Cloudie</span>
+            <span className="text-lg font-bold text-foreground">{brand.name}</span>
           </div>            <div className="flex items-center gap-2">
             <PwaInstallButton />
             <Link to="/auth">
@@ -459,7 +461,7 @@ export default function Landing() {
             Ready to get started?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Join Cloudie and start managing your operations today.
+            Join {brand.name} and start managing your operations today.
           </p>
           <Link to="/auth" className="mt-8 inline-block">
             <Button size="lg" className="gap-2 px-8">
@@ -473,12 +475,34 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 sm:flex-row">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-center sm:flex-row sm:text-left">
           <div className="flex items-center gap-2">
             <Cloud className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold text-foreground">Cloudie</span>
+            <span className="text-sm font-semibold text-foreground">{brand.name}</span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 Cloudie. Built for modern operations.</p>
+          {(support.email || support.phone || support.helpCenterUrl) && (
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              {support.email && (
+                <a href={`mailto:${support.email}`} className="transition-colors hover:text-foreground">
+                  {support.email}
+                </a>
+              )}
+              {support.phone && (
+                <a href={`tel:${support.phone.replace(/[^0-9+]/g, "")}`} className="transition-colors hover:text-foreground">
+                  {support.phone}
+                </a>
+              )}
+              {support.helpCenterUrl && (
+                <a href={support.helpCenterUrl} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground">
+                  Help centre
+                </a>
+              )}
+              {support.hours && <span className="hidden sm:inline">{support.hours}</span>}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            © {new Date().getFullYear()} {brand.name}. {brand.footerNote}
+          </p>
         </div>
       </footer>
     </div>

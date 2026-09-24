@@ -5,6 +5,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { Building2, LogIn, UserPlus, Landmark, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { bankTheme, bankThemeVars } from "@/lib/tenantBankTheme";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 type LayoutProps = {
   children: React.ReactNode;
@@ -21,6 +22,7 @@ export function useTenantSite() {
 
 export function SiteLayout({ children, active, authenticated }: LayoutProps) {
   const { site } = useTenantSite();
+  const { brand, support } = usePlatformConfig();
   const [mobileOpen, setMobileOpen] = useState(false);
   // Design kit applied from the banking template chosen at tenancy creation.
   const theme = bankTheme(site?.branding);
@@ -193,6 +195,24 @@ export function SiteLayout({ children, active, authenticated }: LayoutProps) {
               <div className="space-y-1 text-sm" style={{ color: theme.muted }}>
                 {site.contactEmail && <p>{site.contactEmail}</p>}
                 {site.contactPhone && <p>{site.contactPhone}</p>}
+                {(support.email || support.phone || support.helpCenterUrl) && (
+                  <p className="pt-2">
+                    Platform support:{" "}
+                    {support.email ? (
+                      <a href={`mailto:${support.email}`} className="hover:underline">
+                        {support.email}
+                      </a>
+                    ) : support.phone ? (
+                      <a href={`tel:${support.phone.replace(/[^0-9+]/g, "")}`} className="hover:underline">
+                        {support.phone}
+                      </a>
+                    ) : (
+                      <a href={support.helpCenterUrl} target="_blank" rel="noreferrer" className="hover:underline">
+                        Help centre
+                      </a>
+                    )}
+                  </p>
+                )}
                 <p className="mt-2">Member FDIC · Equal Housing Lender</p>
               </div>
             </div>
@@ -201,7 +221,7 @@ export function SiteLayout({ children, active, authenticated }: LayoutProps) {
             className="mt-8 pt-4 text-center text-xs"
             style={{ color: theme.muted, borderTop: `1px solid ${border}` }}
           >
-            © {new Date().getFullYear()} {site.siteName}. All rights reserved. Powered by Cloudie.
+            © {new Date().getFullYear()} {site.siteName}. All rights reserved. Powered by {brand.name}.
           </div>
         </div>
       </footer>

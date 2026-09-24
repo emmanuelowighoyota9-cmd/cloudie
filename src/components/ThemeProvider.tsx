@@ -23,10 +23,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
-    localStorage.setItem("cloudie-theme", theme);
   }, [theme]);
 
-  const toggle = () => setTheme((t) => (t === "light" ? "dark" : "light"));
+  // Only an explicit user choice is persisted. With nothing stored, the
+  // admin-configured default colour scheme is applied (see PlatformBranding)
+  // and later overridden as soon as the visitor toggles the theme.
+  const toggle = () => {
+    setTheme((current) => {
+      const next = current === "light" ? "dark" : "light";
+      localStorage.setItem("cloudie-theme", next);
+      return next;
+    });
+  };
 
   return (
     <ThemeContext.Provider value={{ theme, toggle }}>

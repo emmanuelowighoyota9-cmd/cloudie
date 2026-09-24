@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   LayoutDashboard,
@@ -62,6 +63,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const { brand } = usePlatformConfig();
   const isAdmin = user?.role === "admin";
 
   const isActive = (path: string) => {
@@ -89,7 +91,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
           {!collapsed && (
             <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-              Cloudie
+              {brand.name}
             </span>
           )}
         </Link>

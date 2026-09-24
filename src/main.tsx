@@ -1,4 +1,6 @@
 import { Toaster } from "@/components/ui/sonner";
+import { PlatformBranding } from "@/components/PlatformBranding";
+import { SupportWidget } from "@/components/SupportWidget";
 import { RequireAuth } from "@/components/RequireAuth";
 import { RequireAdmin } from "@/components/RequireAdmin";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -89,6 +91,7 @@ const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
 const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
 const AdminPricing = lazy(() => import("./pages/AdminPricing.tsx"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
+const AdminAppearance = lazy(() => import("./pages/AdminAppearance.tsx"));
 const AdminPaymentProviders = lazy(() => import("./pages/AdminPaymentProviders.tsx"));
 const AdminEmailSettings = lazy(() => import("./pages/AdminEmailSettings.tsx"));
 const AdminAdministrators = lazy(() => import("./pages/AdminAdministrators.tsx"));
@@ -163,6 +166,7 @@ createRoot(document.getElementById("root")!).render(
       <ConvexAuthProvider client={convex}>
         <ThemeProvider>
           <BrowserRouter>
+            <PlatformBranding />
             <RouteSyncer />
             <Suspense fallback={<RouteLoading />}>
               <TenantGateLazy>
@@ -270,6 +274,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="infrastructure" element={<AdminInfrastructure />} />
                   <Route path="pricing" element={<AdminPricing />} />
                   <Route path="settings" element={<AdminSettings />} />
+                  <Route path="appearance" element={<AdminAppearance />} />
                   <Route path="settings/email" element={<AdminEmailSettings />} />
                   <Route path="email" element={<AdminEmailSettings />} />
                   <Route path="payments" element={<AdminPaymentProviders />} />
@@ -280,6 +285,8 @@ createRoot(document.getElementById("root")!).render(
               </Routes>
               </TenantGateLazy>
             </Suspense>
+            {/* Config-driven support launcher — hidden on admin + tenant banking surfaces */}
+            <SupportWidget />
           </BrowserRouter>
           <Toaster />
         </ThemeProvider>

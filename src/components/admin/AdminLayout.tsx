@@ -28,6 +28,7 @@ import {
   MapPin,
   Moon,
   Package,
+  Palette,
   Search,
   Settings,
   Shield,
@@ -62,6 +63,7 @@ const NAV = [
   { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign },
   { to: "/admin/payments", label: "Payment Providers", icon: CreditCard },
   { to: "/admin/settings/email", label: "Email Settings", icon: Mail },
+  { to: "/admin/appearance", label: "Appearance & Support", icon: Palette },
   { to: "/admin/settings", label: "Settings", icon: Settings, exact: true },
 ];
 
