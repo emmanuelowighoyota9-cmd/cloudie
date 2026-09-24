@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { BadgeDollarSign, Plus, Trash2, Calculator, Package as PackageIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { cn } from "@/lib/utils";
 import { AdminPageHeader, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { formatNgn, formatUsd, type PointPackage } from "@/lib/pricing";
 
@@ -35,6 +36,22 @@ type PackageDraft = {
 };
 
 const WORKSPACES = ["shipments", "ticketing", "business", "services", "platform"] as const;
+
+/**
+ * Labelled control wrapper used by both pricing lists. Keeping the label above
+ * the control lets each row stack into a readable card on phones instead of
+ * forcing a horizontally scrolling table.
+ */
+function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
+  return (
+    <div className={cn("min-w-0 space-y-1.5", className)}>
+      <span className="block text-[10px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+        {label}
+      </span>
+      {children}
+    </div>
+  );
+}
 
 const SEED_SERVICES: { service: string; workspace: string }[] = [
   { service: "shipment_create", workspace: "shipments" },
@@ -329,114 +346,107 @@ export default function AdminPricing() {
           {!billing ? (
             <div className="p-4"><AdminSkeleton rows={3} /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Key</th>
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Points</th>
-                    <th className="px-4 py-3 font-medium">Price ₦</th>
-                    <th className="px-4 py-3 font-medium">Price $</th>
-                    <th className="px-4 py-3 font-medium">Popular</th>
-                    <th className="px-4 py-3" />
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {packages.map((pkg, index) => (
-                    <tr key={`${pkg.id}-${index}`} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                      <td className="px-4 py-2.5">
-                        <Input
-                          className="h-8 w-28 font-mono text-xs"
-                          aria-label={`Package key ${index + 1}`}
-                          value={pkg.id}
-                          placeholder="starter"
-                          onChange={(e) => patchPkg(index, { id: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Input
-                          className="h-8 w-32"
-                          aria-label={`Package name ${index + 1}`}
-                          value={pkg.name}
-                          placeholder="Starter"
-                          onChange={(e) => patchPkg(index, { name: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Input
-                          type="number"
-                          min={1}
-                          className="h-8 w-24"
-                          aria-label={`Package points ${index + 1}`}
-                          value={pkg.points}
-                          placeholder="1000"
-                          onChange={(e) => patchPkg(index, { points: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Input
-                          type="number"
-                          min={0}
-                          className="h-8 w-28"
-                          aria-label={`Package naira price ${index + 1}`}
-                          value={pkg.priceNgn}
-                          placeholder="15000"
-                          onChange={(e) => patchPkg(index, { priceNgn: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="h-8 w-24"
-                          aria-label={`Package dollar price ${index + 1}`}
-                          value={pkg.priceUsd}
-                          placeholder="10"
-                          onChange={(e) => patchPkg(index, { priceUsd: e.target.value })}
-                        />
-                      </td>
-                      <td className="px-4 py-2.5">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {packages.map((pkg, index) => (
+                <div
+                  key={`${pkg.id}-${index}`}
+                  className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[9rem_minmax(0,1.2fr)_6.5rem_7.5rem_6.5rem_auto] lg:items-end lg:gap-2"
+                >
+                  <Field label="Key">
+                    <Input
+                      className="h-11 w-full font-mono text-xs sm:h-9"
+                      aria-label={`Package key ${index + 1}`}
+                      value={pkg.id}
+                      placeholder="starter"
+                      onChange={(e) => patchPkg(index, { id: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Name">
+                    <Input
+                      className="h-11 w-full sm:h-9"
+                      aria-label={`Package name ${index + 1}`}
+                      value={pkg.name}
+                      placeholder="Starter"
+                      onChange={(e) => patchPkg(index, { name: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Points">
+                    <Input
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      className="h-11 w-full sm:h-9"
+                      aria-label={`Package points ${index + 1}`}
+                      value={pkg.points}
+                      placeholder="1000"
+                      onChange={(e) => patchPkg(index, { points: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Price ₦">
+                    <Input
+                      type="number"
+                      min={0}
+                      inputMode="decimal"
+                      className="h-11 w-full sm:h-9"
+                      aria-label={`Package naira price ${index + 1}`}
+                      value={pkg.priceNgn}
+                      placeholder="15000"
+                      onChange={(e) => patchPkg(index, { priceNgn: e.target.value })}
+                    />
+                  </Field>
+                  <Field label="Price $">
+                    <Input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      inputMode="decimal"
+                      className="h-11 w-full sm:h-9"
+                      aria-label={`Package dollar price ${index + 1}`}
+                      value={pkg.priceUsd}
+                      placeholder="10"
+                      onChange={(e) => patchPkg(index, { priceUsd: e.target.value })}
+                    />
+                  </Field>
+
+                  <div className="flex flex-wrap items-end justify-between gap-3 sm:col-span-2 lg:col-span-1 lg:justify-end">
+                    <Field label="Popular">
+                      <div className="flex h-11 items-center sm:h-9">
                         <Switch
                           checked={pkg.popular}
                           aria-label={`Mark ${pkg.name || "package"} popular`}
                           onCheckedChange={(checked) => patchPkg(index, { popular: checked })}
                         />
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-xs text-slate-500"
-                          disabled={!pkg.points}
-                          onClick={() =>
-                            patchPkg(index, {
-                              priceNgn: String(Math.round(Number(pkg.points) * ngnRate)),
-                              priceUsd: String(Math.round(Number(pkg.points) * usdRate * 100) / 100),
-                            })
-                          }
-                        >
-                          Use rate
-                        </Button>
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-red-600"
-                          aria-label={`Remove ${pkg.name || "package"}`}
-                          disabled={packages.length <= 1}
-                          onClick={() => setPkgDraft(packages.filter((_, i) => i !== index))}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </Field>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-11 text-xs sm:h-9"
+                        disabled={!pkg.points}
+                        onClick={() =>
+                          patchPkg(index, {
+                            priceNgn: String(Math.round(Number(pkg.points) * ngnRate)),
+                            priceUsd: String(Math.round(Number(pkg.points) * usdRate * 100) / 100),
+                          })
+                        }
+                      >
+                        Use rate
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-11 text-red-600 sm:h-9"
+                        aria-label={`Remove ${pkg.name || "package"}`}
+                        disabled={packages.length <= 1}
+                        onClick={() => setPkgDraft(packages.filter((_, i) => i !== index))}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -476,110 +486,114 @@ export default function AdminPricing() {
           {pricing === undefined ? (
             <div className="p-4"><AdminSkeleton rows={6} /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Service</th>
-                    <th className="px-4 py-3 font-medium">Workspace</th>
-                    <th className="px-4 py-3 font-medium">Points</th>
-                    <th className="px-4 py-3 font-medium">Price ₦</th>
-                    <th className="px-4 py-3 font-medium">Price $</th>
-                    <th className="px-4 py-3 font-medium">Active</th>
-                    <th className="px-4 py-3 font-medium">Updated</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const isNew = row._id.startsWith("placeholder-");
-                    const pending = edits[row.service];
-                    const pointsValue = pending !== undefined && pending !== "" ? Number(pending) : isNew ? 0 : row.pointsCost;
-                    const ngnValue = Number.isFinite(pointsValue) ? pointsValue * ngnRate : 0;
-                    return (
-                      <tr key={row._id} className={`border-b border-slate-100 last:border-0 dark:border-slate-800 ${isNew ? "bg-slate-50/60 dark:bg-slate-800/30" : ""}`}>
-                        <td className="px-4 py-2.5 font-mono text-xs text-slate-900 dark:text-white">{row.service}{isNew && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">not configured</span>}</td>
-                        <td className="px-4 py-2.5 text-xs text-slate-500">{row.workspace}</td>
-                        <td className="px-4 py-2.5">
-                          <Input
-                            type="number"
-                            min={0}
-                            inputMode="numeric"
-                            aria-label={`Points cost for ${row.service}`}
-                            className="h-8 w-24"
-                            value={edits[row.service] ?? (isNew ? "" : String(row.pointsCost))}
-                            placeholder={isNew ? "cost" : undefined}
-                            onChange={(e) => setEdits((s) => ({ ...s, [row.service]: e.target.value }))}
-                          />
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            inputMode="decimal"
-                            aria-label={`Naira price for ${row.service}`}
-                            className="h-8 w-28"
-                            placeholder={pointsValue > 0 ? String(Math.round(ngnValue)) : "auto"}
-                            value={
-                              priceEdits[`${row.service}|ngn`] ??
-                              (row.priceNgn != null ? String(row.priceNgn) : "")
-                            }
-                            onChange={(e) =>
-                              setPriceEdits((p) => ({ ...p, [`${row.service}|ngn`]: e.target.value }))
-                            }
-                          />
-                          <p className="mt-0.5 text-[10px] text-slate-400">
-                            {row.priceNgn != null ? "custom" : "auto from rate"}
-                          </p>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Input
-                            type="number"
-                            min={0}
-                            step="0.001"
-                            inputMode="decimal"
-                            aria-label={`Dollar price for ${row.service}`}
-                            className="h-8 w-24"
-                            placeholder={pointsValue > 0 ? String(Math.round(pointsValue * usdRate * 1000) / 1000) : "auto"}
-                            value={
-                              priceEdits[`${row.service}|usd`] ??
-                              (row.priceUsd != null ? String(row.priceUsd) : "")
-                            }
-                            onChange={(e) =>
-                              setPriceEdits((p) => ({ ...p, [`${row.service}|usd`]: e.target.value }))
-                            }
-                          />
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Switch
-                            checked={!isNew && row.isActive}
-                            disabled={isNew || saving === row.service}
-                            onCheckedChange={() => toggleActive(row)}
-                            aria-label={`Toggle ${row.service}`}
-                          />
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-slate-400">{isNew ? "—" : fmtDate(row.updatedAt)}</td>
-                        <td className="px-4 py-2.5 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={
-                              saving === row.service ||
-                              ((edits[row.service] ?? "") === "" &&
-                                (priceEdits[`${row.service}|ngn`] ?? "") === "" &&
-                                (priceEdits[`${row.service}|usd`] ?? "") === "")
-                            }
-                            onClick={() => save(row)}
-                          >
-                            Save
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {rows.map((row) => {
+                const isNew = row._id.startsWith("placeholder-");
+                const pending = edits[row.service];
+                const pointsValue = pending !== undefined && pending !== "" ? Number(pending) : isNew ? 0 : row.pointsCost;
+                const ngnValue = Number.isFinite(pointsValue) ? pointsValue * ngnRate : 0;
+                return (
+                  <div
+                    key={row._id}
+                    className={cn(
+                      "grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[6.5rem_minmax(0,1fr)_minmax(0,1fr)_auto_auto] lg:items-end lg:gap-2",
+                      isNew && "bg-slate-50/60 dark:bg-slate-800/30",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2 lg:col-span-5">
+                      <p className="min-w-0 break-all font-mono text-xs text-slate-900 dark:text-white">
+                        {row.service}
+                        {isNew && (
+                          <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                            not configured
+                          </span>
+                        )}
+                      </p>
+                      <p className="shrink-0 text-[10px] uppercase tracking-wider text-slate-400">
+                        {row.workspace} · {isNew ? "new" : `updated ${fmtDate(row.updatedAt)}`}
+                      </p>
+                    </div>
+
+                    <Field label="Points">
+                      <Input
+                        type="number"
+                        min={0}
+                        inputMode="numeric"
+                        aria-label={`Points cost for ${row.service}`}
+                        className="h-11 w-full sm:h-9"
+                        value={edits[row.service] ?? (isNew ? "" : String(row.pointsCost))}
+                        placeholder={isNew ? "cost" : undefined}
+                        onChange={(e) => setEdits((s) => ({ ...s, [row.service]: e.target.value }))}
+                      />
+                    </Field>
+                    <Field label="Price ₦">
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        inputMode="decimal"
+                        aria-label={`Naira price for ${row.service}`}
+                        className="h-11 w-full sm:h-9"
+                        placeholder={pointsValue > 0 ? String(Math.round(ngnValue)) : "auto"}
+                        value={
+                          priceEdits[`${row.service}|ngn`] ??
+                          (row.priceNgn != null ? String(row.priceNgn) : "")
+                        }
+                        onChange={(e) =>
+                          setPriceEdits((p) => ({ ...p, [`${row.service}|ngn`]: e.target.value }))
+                        }
+                      />
+                      <p className="text-[10px] text-slate-400">
+                        {row.priceNgn != null ? "custom price" : "auto from point rate"}
+                      </p>
+                    </Field>
+                    <Field label="Price $">
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.001"
+                        inputMode="decimal"
+                        aria-label={`Dollar price for ${row.service}`}
+                        className="h-11 w-full sm:h-9"
+                        placeholder={pointsValue > 0 ? String(Math.round(pointsValue * usdRate * 1000) / 1000) : "auto"}
+                        value={
+                          priceEdits[`${row.service}|usd`] ??
+                          (row.priceUsd != null ? String(row.priceUsd) : "")
+                        }
+                        onChange={(e) =>
+                          setPriceEdits((p) => ({ ...p, [`${row.service}|usd`]: e.target.value }))
+                        }
+                      />
+                    </Field>
+                    <Field label="Active">
+                      <div className="flex h-11 items-center sm:h-9">
+                        <Switch
+                          checked={!isNew && row.isActive}
+                          disabled={isNew || saving === row.service}
+                          onCheckedChange={() => toggleActive(row)}
+                          aria-label={`Toggle ${row.service}`}
+                        />
+                      </div>
+                    </Field>
+                    <div className="flex items-end justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-11 sm:h-9"
+                        disabled={
+                          saving === row.service ||
+                          ((edits[row.service] ?? "") === "" &&
+                            (priceEdits[`${row.service}|ngn`] ?? "") === "" &&
+                            (priceEdits[`${row.service}|usd`] ?? "") === "")
+                        }
+                        onClick={() => save(row)}
+                      >
+                        {saving === row.service ? "Saving…" : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -590,35 +604,49 @@ export default function AdminPricing() {
           <CardTitle className="text-base text-slate-900 dark:text-white">Add service pricing</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto_auto]">
-            <div className="space-y-1.5">
-              <Label htmlFor="svc" className="text-xs text-slate-600 dark:text-slate-400">Service key</Label>
-              <Input id="svc" value={draft.service} onChange={(e) => setDraft((d) => ({ ...d, service: e.target.value }))} placeholder="e.g. sms_send" />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ws" className="text-xs text-slate-600 dark:text-slate-400">Workspace</Label>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_auto_auto_auto_auto] lg:items-end">
+            <Field label="Service key">
+              <Input
+                id="svc"
+                className="h-11 w-full sm:h-9"
+                value={draft.service}
+                onChange={(e) => setDraft((d) => ({ ...d, service: e.target.value }))}
+                placeholder="e.g. sms_send"
+              />
+            </Field>
+            <Field label="Workspace">
               <select
                 id="ws"
                 aria-label="Workspace"
-                className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-800"
+                className="h-11 w-full rounded-md border border-slate-200 bg-white px-3 text-sm sm:h-9 dark:border-slate-700 dark:bg-slate-800"
                 value={draft.workspace}
                 onChange={(e) => setDraft((d) => ({ ...d, workspace: e.target.value }))}
               >
                 {WORKSPACES.map((w) => <option key={w} value={w}>{w}</option>)}
               </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="cost" className="text-xs text-slate-600 dark:text-slate-400">Points cost</Label>
-              <Input id="cost" type="number" min={0} value={draft.cost} onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value }))} className="w-28" />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-600 dark:text-slate-400">Price (₦)</Label>
-              <div className="flex h-9 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-300">
+            </Field>
+            <Field label="Points cost">
+              <Input
+                id="cost"
+                type="number"
+                min={0}
+                inputMode="numeric"
+                value={draft.cost}
+                onChange={(e) => setDraft((d) => ({ ...d, cost: e.target.value }))}
+                className="h-11 w-full sm:h-9 lg:w-28"
+              />
+            </Field>
+            <Field label="Price (₦)">
+              <div className="flex h-11 items-center rounded-md border border-slate-200 px-3 text-sm font-semibold text-slate-700 sm:h-9 dark:border-slate-700 dark:text-slate-300">
                 {draft.cost !== "" && Number.isFinite(Number(draft.cost)) ? formatNgn(Number(draft.cost) * ngnRate) : "—"}
               </div>
-            </div>
+            </Field>
             <div className="flex items-end">
-              <Button onClick={createPricing} disabled={saving === "__new" || !draft.service.trim() || draft.cost === ""} className="gap-1">
+              <Button
+                onClick={createPricing}
+                disabled={saving === "__new" || !draft.service.trim() || draft.cost === ""}
+                className="h-11 w-full gap-1 sm:h-9 lg:w-auto"
+              >
                 <Plus className="h-3.5 w-3.5" /> Add
               </Button>
             </div>
