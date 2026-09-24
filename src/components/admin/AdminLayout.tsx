@@ -8,6 +8,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { cn } from "@/lib/utils";
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
+import { usePendingChanges } from "@/lib/pendingChanges";
 import { toast } from "sonner";
 import {
   Activity,
@@ -65,8 +66,8 @@ const NAV = [
   { to: "/admin/audit", label: "Audit Logs", icon: ShieldAlert },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/admin/system-health", label: "System Health", icon: Activity },
-  { to: "/admin/catalog", label: "Catalog & Prices", icon: Tags },
-  { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign },
+  { to: "/admin/catalog", label: "Catalog & Prices", icon: Tags, pendingScope: "catalog" as const },
+  { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign, pendingScope: "pricing" as const },
   { to: "/admin/payments", label: "Payment Providers", icon: CreditCard },
   { to: "/admin/settings/email", label: "Email Settings", icon: Mail },
   { to: "/admin/appearance", label: "Appearance & Support", icon: Palette },
@@ -217,6 +218,8 @@ function AdminShell() {
   const { user, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const badges = useQuery(api.adminApi.adminBadgeCounts);
+  const pendingCatalogChanges = usePendingChanges("catalog");
+  const pendingPricingChanges = usePendingChanges("pricing");
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -230,15 +233,24 @@ function AdminShell() {
     }
   };
 
-  const badgeFor = (key?: "pendingVendors" | "openDisputes" | "openFlags" | "pendingKyc") => {
+  const badgeFor = (
+    key?: "pendingVendors" | "openDisputes" | "openFlags" | "pendingKyc",
+  ) => {
     if (!key || !badges) return 0;
     return badges[key] ?? 0;
+  };
+
+  const pendingCountFor = (scope?: "catalog" | "pricing") => {
+    if (scope === "catalog") return pendingCatalogChanges;
+    if (scope === "pricing") return pendingPricingChanges;
+    return 0;
   };
 
   const navList = (
     <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Admin navigation">
       {NAV.map((item) => {
         const count = badgeFor(item.badge);
+        const pendingCount = pendingCountFor(item.pendingScope);
         return (
           <NavLink
             key={item.to}
@@ -259,6 +271,15 @@ function AdminShell() {
             {count > 0 && (
               <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-900/60 dark:text-red-300">
                 {count}
+              </span>
+            )}
+            {pendingCount > 0 && (
+              <span
+                className="inline-flex min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/60 dark:text-amber-300"
+                title={`${pendingCount} unpublished change${pendingCount === 1 ? "" : "s"}`}
+                aria-label={`${pendingCount} unpublished changes`}
+              >
+                {pendingCount}
               </span>
             )}
           </NavLink>
