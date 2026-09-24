@@ -128,36 +128,29 @@ export default function AdminAuditLogs() {
           ) : filtered.length === 0 ? (
             <div className="p-4"><AdminEmpty message="No audit records match your filters." /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Timestamp</th>
-                    <th className="px-4 py-3 font-medium">Actor</th>
-                    <th className="px-4 py-3 font-medium">Action</th>
-                    <th className="px-4 py-3 font-medium">Resource</th>
-                    <th className="px-4 py-3 font-medium">Reason</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged!.map((log) => (
-                    <tr key={log._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">{fmtDate(log.createdAt)}</td>
-                      <td className="max-w-[180px] truncate px-4 py-3 text-xs text-slate-700 dark:text-slate-300">{log.actorEmail ?? "system"}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline" className="text-[10px] font-mono">{log.action}</Badge>
-                      </td>
-                      <td className="max-w-[200px] px-4 py-3">
-                        <p className="truncate text-xs text-slate-600 dark:text-slate-400">{log.resource}</p>
-                        {log.resourceId && <p className="truncate font-mono text-[10px] text-slate-400">{log.resourceId}</p>}
-                      </td>
-                      <td className="max-w-[220px] px-4 py-3">
-                        <p className="truncate text-xs text-slate-600 dark:text-slate-400">{log.reason ?? "—"}</p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {paged!.map((log) => (
+                <div
+                  key={log._id}
+                  className="flex flex-col gap-2 p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-6 dark:hover:bg-slate-800/50"
+                >
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] font-mono">{log.action}</Badge>
+                      <span className="text-[11px] text-slate-400 sm:hidden">{fmtDate(log.createdAt)}</span>
+                    </div>
+                    <p className="break-all text-xs text-slate-600 dark:text-slate-400">{log.resource}</p>
+                    {log.resourceId && (
+                      <p className="break-all font-mono text-[10px] text-slate-400">{log.resourceId}</p>
+                    )}
+                  </div>
+                  <div className="min-w-0 shrink-0 space-y-1 text-[11px] text-slate-400 sm:max-w-[210px] sm:text-right">
+                    <p className="break-all text-xs text-slate-700 dark:text-slate-300">{log.actorEmail ?? "system"}</p>
+                    <p className="hidden sm:block">{fmtDate(log.createdAt)}</p>
+                    {log.reason && <p className="break-all">{log.reason}</p>}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

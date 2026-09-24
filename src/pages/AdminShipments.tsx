@@ -149,70 +149,77 @@ export default function AdminShipments() {
               />
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wider text-slate-400 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Tracking</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="hidden px-4 py-3 font-medium md:table-cell">Route</th>
-                    <th className="hidden px-4 py-3 font-medium lg:table-cell">Service</th>
-                    <th className="hidden px-4 py-3 font-medium sm:table-cell">ETA</th>
-                    <th className="px-4 py-3 text-right font-medium">Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.page.map((s) => (
-                    <tr
-                      key={s._id}
-                      className="cursor-pointer border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50"
-                      onClick={() => navigate(`/admin/shipments/${s._id}`)}
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {results.page.map((s) => (
+                <div
+                  key={s._id}
+                  role="button"
+                  tabIndex={0}
+                  className="cursor-pointer p-4 transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none dark:hover:bg-slate-800/50 dark:focus-visible:bg-slate-800/50"
+                  onClick={() => navigate(`/admin/shipments/${s._id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      navigate(`/admin/shipments/${s._id}`);
+                    }
+                  }}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
+                        {s.trackingNumber}
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {s.senderName} → {s.recipientName}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(s.status)}`}
                     >
-                      <td className="px-4 py-3">
-                        <p className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
-                          {s.trackingNumber}
-                        </p>
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {s.senderName} → {s.recipientName}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(s.status)}`}
-                        >
-                          {statusLabel(s.status)}
-                        </span>
-                      </td>
-                      <td className="hidden px-4 py-3 text-xs text-slate-500 md:table-cell">
+                      {statusLabel(s.status)}
+                    </span>
+                  </div>
+
+                  <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[11px] sm:grid-cols-3">
+                    <div className="min-w-0">
+                      <dt className="uppercase tracking-wider text-slate-400">Route</dt>
+                      <dd className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
                         {[s.senderCity ?? "—", s.recipientCity ?? "—"].join(" → ")}
-                      </td>
-                      <td className="hidden px-4 py-3 text-xs text-slate-500 lg:table-cell">
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="uppercase tracking-wider text-slate-400">Service</dt>
+                      <dd className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
                         {s.serviceTypeName ?? "—"}
-                      </td>
-                      <td className="hidden px-4 py-3 text-xs text-slate-500 sm:table-cell">
+                      </dd>
+                    </div>
+                    <div className="min-w-0">
+                      <dt className="uppercase tracking-wider text-slate-400">
+                        {s.status === "DELIVERED" && s.deliveredAt ? "Delivered" : "ETA"}
+                      </dt>
+                      <dd className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
                         {s.status === "DELIVERED" && s.deliveredAt
-                          ? `Delivered ${fmtDate(s.deliveredAt)}`
+                          ? fmtDate(s.deliveredAt)
                           : s.estimatedDelivery
                             ? fmtDate(s.estimatedDelivery)
                             : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                            <div
-                              className="h-full rounded-full bg-blue-600"
-                              style={{ width: `${s.progress}%` }}
-                            />
-                          </div>
-                          <span className="w-9 text-right text-xs font-medium text-slate-500">
-                            {s.progress}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
+                      <div
+                        className="h-full rounded-full bg-blue-600"
+                        style={{ width: `${s.progress}%` }}
+                      />
+                    </div>
+                    <span className="w-9 shrink-0 text-right text-xs font-medium text-slate-500">
+                      {s.progress}%
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

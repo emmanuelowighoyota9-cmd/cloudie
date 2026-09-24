@@ -148,47 +148,38 @@ export default function AdminTransactions() {
           ) : filtered.length === 0 ? (
             <div className="p-4"><AdminEmpty message="No ledger entries match your filters." /></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Amount (pts / ₦)</th>
-                    <th className="px-4 py-3 font-medium">User</th>
-                    <th className="px-4 py-3 font-medium">Type</th>
-                    <th className="px-4 py-3 font-medium">Description</th>
-                    <th className="px-4 py-3 font-medium">Balance after</th>
-                    <th className="px-4 py-3 font-medium">Created</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged!.map((l) => {
-                    const u = userMap.get(l.userId);
-                    return (
-                      <tr key={l._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1 font-bold ${l.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                            {l.amount > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                            {l.amount > 0 ? "+" : ""}{l.amount.toLocaleString()}
-                          </span>
-                          <p className="text-[11px] text-slate-400">{formatNgn(l.amount * ngnPerPoint)}</p>
-                        </td>
-                        <td className="max-w-[180px] px-4 py-3">
-                          <p className="truncate text-xs text-slate-700 dark:text-slate-300">{u?.email ?? l.userId.slice(-8)}</p>
-                        </td>
-                        <td className="px-4 py-3"><StatusBadge status={l.type} /></td>
-                        <td className="max-w-[260px] px-4 py-3">
-                          <p className="truncate text-xs text-slate-600 dark:text-slate-400">{l.description}</p>
-                        </td>
-                        <td className="px-4 py-3 text-xs font-medium text-slate-700 dark:text-slate-300">
-                          {l.balanceAfter.toLocaleString()}
-                          <span className="ml-1 text-slate-400">· {formatNgn(l.balanceAfter * ngnPerPoint)}</span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-500">{fmtDate(l.createdAt)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {paged!.map((l) => {
+                const u = userMap.get(l.userId);
+                return (
+                  <div
+                    key={l._id}
+                    className="flex flex-col gap-2 p-4 transition-colors hover:bg-slate-50 sm:flex-row sm:items-start sm:justify-between sm:gap-6 dark:hover:bg-slate-800/50"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`inline-flex items-center gap-1 text-sm font-bold ${l.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+                          {l.amount > 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
+                          {l.amount > 0 ? "+" : ""}{l.amount.toLocaleString()}
+                        </span>
+                        <span className="text-[11px] text-slate-400">{formatNgn(l.amount * ngnPerPoint)}</span>
+                        <StatusBadge status={l.type} />
+                      </div>
+                      <p className="break-all text-xs text-slate-700 dark:text-slate-300">
+                        {u?.email ?? l.userId.slice(-8)}
+                      </p>
+                      <p className="text-xs text-slate-600 dark:text-slate-400">{l.description}</p>
+                    </div>
+                    <div className="shrink-0 text-[11px] text-slate-400 sm:text-right">
+                      <p className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                        Balance {l.balanceAfter.toLocaleString()} pts
+                      </p>
+                      <p>{formatNgn(l.balanceAfter * ngnPerPoint)}</p>
+                      <p>{fmtDate(l.createdAt)}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

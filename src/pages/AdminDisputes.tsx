@@ -91,62 +91,66 @@ export default function AdminDisputes() {
       ) : (
         <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-[11px] uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                    <th className="px-4 py-3 font-medium">Dispute</th>
-                    <th className="px-4 py-3 font-medium">Order</th>
-                    <th className="px-4 py-3 font-medium">Points</th>
-                    <th className="px-4 py-3 font-medium">Priority</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
-                    <th className="px-4 py-3 font-medium">Opened</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {disputes.map((d) => (
-                    <tr key={d._id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/50">
-                      <td className="max-w-[240px] px-4 py-3">
-                        <p className="truncate text-slate-900 dark:text-white" title={d.reason}>{d.reason}</p>
-                        <p className="truncate text-[11px] text-slate-400 font-mono">{d._id.slice(-8)}</p>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-xs text-slate-500">{orderMap.get(d.orderId)?._id.slice(-8) ?? d.orderId.slice(-8)}</td>
-                      <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{orderMap.get(d.orderId)?.totalPoints ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <select
-                          aria-label="Dispute priority"
-                          className="rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                          value={d.priority ?? ""}
-                          onChange={async (e) => {
-                            const v = e.target.value as "low" | "medium" | "high" | "critical" | "";
-                            if (!v) return;
-                            try {
-                              await setPriority({ disputeId: d._id as never, priority: v });
-                              toast.success("Priority updated");
-                            } catch (err) {
-                              toast.error(err instanceof Error ? err.message : "Failed");
-                            }
-                          }}
-                        >
-                          <option value="" disabled>Set…</option>
-                          <option value="low">Low</option>
-                          <option value="medium">Medium</option>
-                          <option value="high">High</option>
-                          <option value="critical">Critical</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
-                      <td className="px-4 py-3 text-xs text-slate-500">{fmtDate(d.createdAt)}</td>
-                      <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="outline" onClick={() => setOpenId(d._id)}>
-                          Review
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {disputes.map((d) => (
+                <div
+                  key={d._id}
+                  className="flex flex-col gap-3 p-4 transition-colors hover:bg-slate-50 lg:flex-row lg:items-start lg:justify-between lg:gap-6 dark:hover:bg-slate-800/50"
+                >
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="text-sm text-slate-900 dark:text-white" title={d.reason}>
+                      {d.reason}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">
+                      <span className="font-mono">#{d._id.slice(-8)}</span>
+                      <span>
+                        Order{" "}
+                        <span className="font-mono text-slate-500">
+                          {orderMap.get(d.orderId)?._id.slice(-8) ?? d.orderId.slice(-8)}
+                        </span>
+                      </span>
+                      <span>{orderMap.get(d.orderId)?.totalPoints ?? "—"} pts</span>
+                      <span>{fmtDate(d.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
+                    <StatusBadge status={d.status} />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-400 lg:hidden">Priority</span>
+                      <select
+                        aria-label="Dispute priority"
+                        className="h-11 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700 sm:h-9 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        value={d.priority ?? ""}
+                        onChange={async (e) => {
+                          const v = e.target.value as "low" | "medium" | "high" | "critical" | "";
+                          if (!v) return;
+                          try {
+                            await setPriority({ disputeId: d._id as never, priority: v });
+                            toast.success("Priority updated");
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : "Failed");
+                          }
+                        }}
+                      >
+                        <option value="" disabled>Set…</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                      </select>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-11 sm:h-9"
+                      onClick={() => setOpenId(d._id)}
+                    >
+                      Review
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

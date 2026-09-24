@@ -883,34 +883,34 @@ export default function AdminEmailSettings() {
             ) : logs.length === 0 ? (
               <AdminEmpty message="No email has been sent yet" hint="Send a test email to confirm your configuration." />
             ) : (
-              <div className="-mx-2 overflow-x-auto">
-                <table className="w-full min-w-[720px] text-left text-sm">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wider text-slate-400">
-                      <th className="px-2 py-2 font-medium">Recipient</th>
-                      <th className="px-2 py-2 font-medium">Type</th>
-                      <th className="px-2 py-2 font-medium">Status</th>
-                      <th className="px-2 py-2 font-medium">Provider</th>
-                      <th className="px-2 py-2 font-medium">Sent</th>
-                      <th className="px-2 py-2 font-medium">Provider message id</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {logs.map((log) => (
-                      <tr key={log._id} className="border-t border-slate-100 dark:border-slate-800">
-                        <td className="px-2 py-2 font-mono text-xs text-slate-600 dark:text-slate-300">{log.recipient}</td>
-                        <td className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400">{log.emailType.replace(/_/g, " ")}</td>
-                        <td className="px-2 py-2">
-                          <StatusBadge status={log.status === "sent" ? "delivered" : log.status} />
-                          {log.failureReason && <p className="mt-1 max-w-[240px] text-[11px] text-red-500">{log.failureReason}</p>}
-                        </td>
-                        <td className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400">{log.providerLabel}</td>
-                        <td className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400">{fmtDate(log.sentAt ?? log.createdAt)}</td>
-                        <td className="max-w-[180px] truncate px-2 py-2 font-mono text-[11px] text-slate-400">{log.providerMessageId ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {logs.map((log) => (
+                  <div
+                    key={log._id}
+                    className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="break-all font-mono text-xs text-slate-600 dark:text-slate-300">
+                        {log.recipient}
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {log.emailType.replace(/_/g, " ")} · {log.providerLabel}
+                      </p>
+                      {log.providerMessageId && (
+                        <p className="break-all font-mono text-[10px] text-slate-400">
+                          {log.providerMessageId}
+                        </p>
+                      )}
+                      {log.failureReason && (
+                        <p className="text-[11px] text-red-500">{log.failureReason}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end sm:gap-1">
+                      <StatusBadge status={log.status === "sent" ? "delivered" : log.status} />
+                      <span className="text-[11px] text-slate-400">{fmtDate(log.sentAt ?? log.createdAt)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
