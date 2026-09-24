@@ -30,12 +30,12 @@ export interface StarterTemplate {
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
-const INK = "#0f172a";
-const MUTED = "#64748b";
-const FAINT = "#94a3b8";
-const RULE = "#e2e8f0";
+const INK = "#102b28";
+const MUTED = "#5c7771";
+const FAINT = "#739a91";
+const RULE = "#cbded8";
 const PAPER = "#ffffff";
-const SURFACE = "#f8fafc";
+const SURFACE = "#f2f7f4";
 
 // ─── Element builders (kept terse; all return LayoutElement) ──────────────────
 
@@ -114,8 +114,8 @@ const bankingDashboard: StarterTemplate = {
       { id: "tx3Label", type: "text", label: "Transaction 3", default: "Salary — Lumen Ltd", maxLength: 34 },
       { id: "tx3Amount", type: "currency", label: "Amount 3", currency: "USD", default: "4200.00" },
       { id: "chartLabel", type: "text", label: "Chart caption", default: "Spending · last 6 months", maxLength: 40 },
-      { id: "themeColor", type: "color", label: "Surface color", default: "#0b1120" },
-      { id: "accentColor", type: "color", label: "Accent color", default: "#38bdf8" },
+      { id: "themeColor", type: "color", label: "Surface color", default: "#0b211e" },
+      { id: "accentColor", type: "color", label: "Accent color", default: "#64d6c3" },
       { id: "qrValue", type: "text", label: "QR payload", default: "northwind.example/dashboard/0001", maxLength: 120 },
     ],
   },
@@ -125,64 +125,64 @@ const bankingDashboard: StarterTemplate = {
       {
         width: 1000,
         height: 620,
-        background: "#070c17",
+        background: "#071513",
         elements: [
-          box(0, 0, 1000, 620, "#070c17", 0),
+          box(0, 0, 1000, 620, "#071513", 0),
           // Left navigation rail
-          box(0, 0, 92, 620, "#0b1120", 0),
-          box(26, 34, 40, 40, "#38bdf8", 12),
-          txt(38, 60, "N", { size: 20, weight: 800, color: "#0b1120" }),
-          box(30, 104, 32, 8, "#334155", 4),
-          box(30, 136, 32, 8, "#38bdf8", 4),
-          box(30, 168, 32, 8, "#334155", 4),
-          box(30, 200, 32, 8, "#334155", 4),
-          box(30, 232, 32, 8, "#334155", 4),
+          box(0, 0, 92, 620, "#0b211e", 0),
+          box(26, 34, 40, 40, "#64d6c3", 12),
+          txt(38, 60, "N", { size: 20, weight: 800, color: "#0b211e" }),
+          box(30, 104, 32, 8, "#31524e", 4),
+          box(30, 136, 32, 8, "#64d6c3", 4),
+          box(30, 168, 32, 8, "#31524e", 4),
+          box(30, 200, 32, 8, "#31524e", 4),
+          box(30, 232, 32, 8, "#31524e", 4),
           // Header
-          cap(130, 48, "Institution", { color: "#475569" }),
-          val(130, 74, "bankName", { size: 22, weight: 700, color: "#e2e8f0" }),
-          val(760, 74, "accountNumber", { size: 12, color: "#64748b", align: "right", w: 116 }),
-          box(600, 92, 276, 1, "#1e293b", 0),
+          cap(130, 48, "Institution", { color: "#52756d" }),
+          val(130, 74, "bankName", { size: 22, weight: 700, color: "#eaf7f1" }),
+          val(760, 74, "accountNumber", { size: 12, color: "#5c7771", align: "right", w: 116 }),
+          box(600, 92, 276, 1, "#28504a", 0),
           // Balance panel
-          box(130, 118, 452, 190, "#0f172a", 20, "#1e293b"),
-          val(158, 160, "cardLabel", { size: 11, color: "#64748b" }),
-          box(158, 190, 396, 1, "#1e293b", 0),
+          box(130, 118, 452, 190, "#102a28", 20, "#28504a"),
+          val(158, 160, "cardLabel", { size: 11, color: "#5c7771" }),
+          box(158, 190, 396, 1, "#28504a", 0),
           val(158, 246, "balance", { size: 42, weight: 800, color: "#ffffff", family: "serif" }),
-          val(158, 276, "cardBrand", { size: 12, color: "#94a3b8", letterSpacing: 2, uppercase: true }),
+          val(158, 276, "cardBrand", { size: 12, color: "#91b0a7", letterSpacing: 2, uppercase: true }),
           badge(452, 130, "accountStatus", { size: 11 }),
           // Side stats
-          box(604, 118, 272, 88, "#0f172a", 20, "#1e293b"),
-          cap(628, 148, "Transaction 3", { color: "#475569" }),
-          val(628, 176, "tx3Label", { size: 14, color: "#e2e8f0", weight: 600, maxChars: 30 }),
-          val(628, 198, "tx3Amount", { size: 13, color: "#4ade80", weight: 700 }),
-          box(604, 220, 272, 88, "#0f172a", 20, "#1e293b"),
-          txt(628, 250, "Instant transfer", { size: 13, weight: 600, color: "#e2e8f0" }),
-          txt(628, 272, "No fees until Friday", { size: 11, color: "#475569" }),
-          box(628, 284, 96, 16, "#38bdf8", 8),
-          txt(642, 296, "Send", { size: 10, weight: 700, color: "#0b1120" }),
+          box(604, 118, 272, 88, "#102a28", 20, "#28504a"),
+          cap(628, 148, "Transaction 3", { color: "#52756d" }),
+          val(628, 176, "tx3Label", { size: 14, color: "#eaf7f1", weight: 600, maxChars: 30 }),
+          val(628, 198, "tx3Amount", { size: 13, color: "#9fce8a", weight: 700 }),
+          box(604, 220, 272, 88, "#102a28", 20, "#28504a"),
+          txt(628, 250, "Instant transfer", { size: 13, weight: 600, color: "#eaf7f1" }),
+          txt(628, 272, "No fees until Friday", { size: 11, color: "#52756d" }),
+          box(628, 284, 96, 16, "#64d6c3", 8),
+          txt(642, 296, "Send", { size: 10, weight: 700, color: "#0b211e" }),
           // Chart
-          val(130, 344, "chartLabel", { size: 9.5, weight: 700, color: "#64748b", letterSpacing: 1.2, uppercase: true }),
-          box(130, 366, 746, 1, "#1e293b", 0),
-          box(146, 400, 46, 92, "#1e293b", 6),
-          box(216, 372, 46, 120, "#1e293b", 6),
-          box(286, 418, 46, 74, "#1e293b", 6),
-          box(356, 392, 46, 100, "#38bdf8", 6),
-          box(426, 358, 46, 134, "#1e293b", 6),
-          box(496, 404, 46, 88, "#1e293b", 6),
+          val(130, 344, "chartLabel", { size: 9.5, weight: 700, color: "#5c7771", letterSpacing: 1.2, uppercase: true }),
+          box(130, 366, 746, 1, "#28504a", 0),
+          box(146, 400, 46, 92, "#28504a", 6),
+          box(216, 372, 46, 120, "#28504a", 6),
+          box(286, 418, 46, 74, "#28504a", 6),
+          box(356, 392, 46, 100, "#64d6c3", 6),
+          box(426, 358, 46, 134, "#28504a", 6),
+          box(496, 404, 46, 88, "#28504a", 6),
           // Ledger rows
-          box(604, 372, 272, 1, "#1e293b", 0),
-          cap(604, 404, "Recent activity", { color: "#475569" }),
-          val(604, 436, "tx1Label", { size: 12.5, color: "#cbd5e1", maxChars: 26 }),
-          val(820, 436, "tx1Amount", { size: 12.5, color: "#f87171", align: "right", w: 56 }),
-          rule(604, 452, 876, 452, "#1e293b"),
-          val(604, 480, "tx2Label", { size: 12.5, color: "#cbd5e1", maxChars: 26 }),
-          val(820, 480, "tx2Amount", { size: 12.5, color: "#f87171", align: "right", w: 56 }),
-          rule(604, 496, 876, 496, "#1e293b"),
-          val(604, 524, "tx3Label", { size: 12.5, color: "#cbd5e1", maxChars: 26 }),
-          val(820, 524, "tx3Amount", { size: 12.5, color: "#4ade80", align: "right", w: 56 }),
-          rule(604, 540, 876, 540, "#1e293b"),
-          qr(146, 512, 78, "qrValue", { color: "#e2e8f0", bg: "#0b1120" }),
-          txt(238, 536, "Scan to open the", { size: 10, color: "#475569" }),
-          txt(238, 552, "dashboard in the app", { size: 10, color: "#475569" }),
+          box(604, 372, 272, 1, "#28504a", 0),
+          cap(604, 404, "Recent activity", { color: "#52756d" }),
+          val(604, 436, "tx1Label", { size: 12.5, color: "#cbded8", maxChars: 26 }),
+          val(820, 436, "tx1Amount", { size: 12.5, color: "#ee8478", align: "right", w: 56 }),
+          rule(604, 452, 876, 452, "#28504a"),
+          val(604, 480, "tx2Label", { size: 12.5, color: "#cbded8", maxChars: 26 }),
+          val(820, 480, "tx2Amount", { size: 12.5, color: "#ee8478", align: "right", w: 56 }),
+          rule(604, 496, 876, 496, "#28504a"),
+          val(604, 524, "tx3Label", { size: 12.5, color: "#cbded8", maxChars: 26 }),
+          val(820, 524, "tx3Amount", { size: 12.5, color: "#9fce8a", align: "right", w: 56 }),
+          rule(604, 540, 876, 540, "#28504a"),
+          qr(146, 512, 78, "qrValue", { color: "#eaf7f1", bg: "#0b211e" }),
+          txt(238, 536, "Scan to open the", { size: 10, color: "#52756d" }),
+          txt(238, 552, "dashboard in the app", { size: 10, color: "#52756d" }),
         ],
       },
     ],
@@ -242,11 +242,11 @@ const flightItinerary: StarterTemplate = {
         height: 1123,
         background: PAPER,
         elements: [
-          box(0, 0, 794, 150, "#0f172a", 0),
-          txt(56, 68, "BOARDING ITINERARY", { size: 11, weight: 700, color: "#7dd3fc", letterSpacing: 3 }),
+          box(0, 0, 794, 150, "#102a28", 0),
+          txt(56, 68, "BOARDING ITINERARY", { size: 11, weight: 700, color: "#a8eadc", letterSpacing: 3 }),
           val(56, 108, "airline", { size: 28, weight: 800, color: "#ffffff" }),
           val(620, 74, "bookingRef", { size: 15, weight: 700, color: "#ffffff", align: "right", w: 118 }),
-          cap(620, 96, "Booking reference", { color: "#64748b" }),
+          cap(620, 96, "Booking reference", { color: "#5c7771" }),
           badge(620, 108, "flightStatus", { size: 11 }),
 
           // Route block
@@ -254,8 +254,8 @@ const flightItinerary: StarterTemplate = {
           cap(84, 226, "Origin"),
           val(84, 268, "fromCode", { size: 52, weight: 800, color: INK }),
           val(84, 296, "fromCity", { size: 13, color: MUTED, maxChars: 24 }),
-          rule(238, 250, 500, 250, "#cbd5e1", 1.5),
-          txt(352, 244, "✈", { size: 20, color: "#0ea5e9" }),
+          rule(238, 250, 500, 250, "#cbded8", 1.5),
+          txt(352, 244, "✈", { size: 20, color: "#3d9286" }),
           cap(506, 226, "Destination", { align: "right", w: 158 }),
           val(506, 268, "toCode", { size: 52, weight: 800, color: INK, align: "right", w: 158 }),
           val(506, 296, "toCity", { size: 13, color: MUTED, align: "right", w: 158, maxChars: 24 }),
@@ -357,11 +357,11 @@ const trackingCard: StarterTemplate = {
         height: 560,
         background: PAPER,
         elements: [
-          box(0, 0, 960, 96, "#0f172a", 0),
+          box(0, 0, 960, 96, "#102a28", 0),
           val(40, 46, "carrier", { size: 22, weight: 800, color: "#ffffff" }),
-          cap(40, 66, "Shipment tracking", { color: "#64748b" }),
-          val(720, 46, "trackingNumber", { size: 14, weight: 700, color: "#7dd3fc", align: "right", w: 200 }),
-          cap(720, 66, "Tracking number", { color: "#64748b", align: "right", w: 200 }),
+          cap(40, 66, "Shipment tracking", { color: "#5c7771" }),
+          val(720, 46, "trackingNumber", { size: 14, weight: 700, color: "#a8eadc", align: "right", w: 200 }),
+          cap(720, 66, "Tracking number", { color: "#5c7771", align: "right", w: 200 }),
 
           box(40, 128, 560, 236, SURFACE, 18, RULE),
           cap(68, 162, "Current status"),
@@ -372,8 +372,8 @@ const trackingCard: StarterTemplate = {
           cap(68, 250, "Location"),
           val(68, 282, "currentLocation", { size: 17, weight: 700, color: INK, maxChars: 38 }),
           cap(68, 316, "Progress"),
-          box(68, 322, 504, 12, "#e2e8f0", 6),
-          box(68, 322, 343, 12, "#0ea5e9", 6),
+          box(68, 322, 504, 12, "#eaf7f1", 6),
+          box(68, 322, 343, 12, "#3d9286", 6),
           val(68, 352, "progress", { size: 10, color: MUTED }),
           txt(96, 354, "% complete", { size: 10, color: MUTED }),
 
@@ -389,8 +389,8 @@ const trackingCard: StarterTemplate = {
           // Timeline
           cap(40, 404, "Route"),
           val(40, 434, "originCity", { size: 15, weight: 700, color: INK, maxChars: 20 }),
-          rule(168, 428, 792, 428, "#cbd5e1", 2),
-          txt(452, 424, "✈", { size: 18, color: "#0ea5e9" }),
+          rule(168, 428, 792, 428, "#cbded8", 2),
+          txt(452, 424, "✈", { size: 18, color: "#3d9286" }),
           val(792, 434, "destinationCity", { size: 15, weight: 700, color: INK, align: "right", w: 128, maxChars: 20 }),
           cap(40, 452, "Origin", { color: MUTED }),
           cap(792, 452, "Destination", { color: MUTED, align: "right", w: 128 }),
@@ -458,12 +458,12 @@ const paymentVerification: StarterTemplate = {
         height: 1123,
         background: PAPER,
         elements: [
-          box(0, 0, 794, 128, "#0f172a", 0),
-          txt(56, 60, "PAYMENT VERIFICATION", { size: 11, weight: 700, color: "#7dd3fc", letterSpacing: 3 }),
+          box(0, 0, 794, 128, "#102a28", 0),
+          txt(56, 60, "PAYMENT VERIFICATION", { size: 11, weight: 700, color: "#a8eadc", letterSpacing: 3 }),
           val(56, 96, "providerName", { size: 24, weight: 800, color: "#ffffff" }),
           badge(620, 62, "paymentStatus", { size: 12 }),
           val(620, 96, "reference", { size: 13, weight: 700, color: "#ffffff", align: "right", w: 118 }),
-          cap(620, 112, "Reference", { color: "#64748b", align: "right", w: 118 }),
+          cap(620, 112, "Reference", { color: "#5c7771", align: "right", w: 118 }),
 
           box(56, 168, 682, 132, SURFACE, 16, RULE),
           cap(84, 200, "Total settled"),
@@ -484,7 +484,7 @@ const paymentVerification: StarterTemplate = {
           txt(56, 500, "Gross amount", { size: 13, color: MUTED }),
           rule(56, 520, 738, 520),
           txt(56, 548, "Processing fee", { size: 13, color: MUTED }),
-          val(644, 550, "fee", { size: 14, color: "#dc2626", weight: 600, align: "right", w: 94 }),
+          val(644, 550, "fee", { size: 14, color: "#bd554e", weight: 600, align: "right", w: 94 }),
           rule(56, 568, 738, 568),
           txt(56, 598, "Net settled", { size: 13, weight: 700, color: INK }),
           val(644, 600, "total", { size: 16, weight: 800, color: INK, align: "right", w: 94 }),
@@ -534,7 +534,7 @@ const certificate: StarterTemplate = {
       ] },
       { id: "signatoryName", type: "text", label: "Signatory", default: "Dr. Helena Voss", maxLength: 34 },
       { id: "signatoryTitle", type: "text", label: "Signatory title", default: "Director of Accreditation", maxLength: 40 },
-      { id: "accentColor", type: "color", label: "Accent", default: "#0d9488" },
+      { id: "accentColor", type: "color", label: "Accent", default: "#0b766d" },
       { id: "qrValue", type: "text", label: "QR payload", default: "academy.example/verify/CA-2026-004812", maxLength: 120 },
     ],
   },
@@ -544,28 +544,28 @@ const certificate: StarterTemplate = {
       {
         width: 1123,
         height: 794,
-        background: "#fbfaf7",
+        background: "#f7faf7",
         elements: [
-          box(0, 0, 1123, 794, "#fbfaf7", 0),
-          box(40, 40, 1043, 714, "#ffffff", 8, "#e7e3d9"),
-          box(64, 64, 995, 666, "#fbfaf7", 6, "#0d9488"),
-          txt(561, 150, "CLOUDIE ACADEMY", { size: 12, weight: 700, color: "#0d9488", letterSpacing: 6, align: "center", w: 0, x: 561 }),
+          box(0, 0, 1123, 794, "#f7faf7", 0),
+          box(40, 40, 1043, 714, "#ffffff", 8, "#dceee8"),
+          box(64, 64, 995, 666, "#f7faf7", 6, "#0b766d"),
+          txt(561, 150, "CLOUDIE ACADEMY", { size: 12, weight: 700, color: "#0b766d", letterSpacing: 6, align: "center", w: 0, x: 561 }),
           val(561, 208, "awardTitle", { size: 40, weight: 800, color: INK, align: "center", w: 0, family: "serif" }),
-          rule(361, 240, 761, 240, "#0d9488", 2),
+          rule(361, 240, 761, 240, "#0b766d", 2),
           txt(561, 288, "This certifies that", { size: 13, color: MUTED, align: "center" }),
-          val(561, 356, "recipientName", { size: 46, weight: 800, color: "#0f172a", align: "center", family: "serif" }),
+          val(561, 356, "recipientName", { size: 46, weight: 800, color: "#102a28", align: "center", family: "serif" }),
           txt(561, 410, "has successfully completed the programme", { size: 13, color: MUTED, align: "center" }),
-          val(561, 462, "courseTitle", { size: 22, weight: 700, color: "#0d9488", align: "center", maxChars: 54 }),
+          val(561, 462, "courseTitle", { size: 22, weight: 700, color: "#0b766d", align: "center", maxChars: 54 }),
           badge(497, 500, "grade", { size: 13, w: 128, h: 32 }),
           txt(561, 512, "Awarded", { size: 10, color: MUTED, align: "center" }),
-          rule(160, 580, 420, 580, "#cbd5e1"),
+          rule(160, 580, 420, 580, "#cbded8"),
           val(160, 610, "signatoryName", { size: 15, weight: 700, color: INK, align: "center", w: 260 }),
           val(160, 632, "signatoryTitle", { size: 11, color: MUTED, align: "center", w: 260, maxChars: 34 }),
-          rule(703, 580, 963, 580, "#cbd5e1"),
+          rule(703, 580, 963, 580, "#cbded8"),
           val(703, 610, "issueDate", { size: 15, weight: 700, color: INK, align: "center", w: 260 }),
           txt(833, 632, "Date of issue", { size: 11, color: MUTED, align: "center" }),
           val(561, 682, "credentialId", { size: 12, weight: 700, color: MUTED, align: "center", letterSpacing: 2 }),
-          qr(909, 660, 62, "qrValue", { color: "#0d9488" }),
+          qr(909, 660, 62, "qrValue", { color: "#0b766d" }),
           val(561, 704, "issuerName", { size: 10, color: FAINT, align: "center", maxChars: 44 }),
         ],
       },
@@ -573,7 +573,86 @@ const certificate: StarterTemplate = {
   },
 };
 
-// ─── 6. Commercial invoice (standard) ─────────────────────────────────────────
+// ─── 6. General operations brief ─────────────────────────────────────────────
+
+const operationsBrief: StarterTemplate = {
+  slug: "operations-brief",
+  name: "Operations Brief",
+  documentType: "general",
+  description:
+    "A clear one-page brief for decisions, owners and next steps — useful for internal operations, client updates and team handoffs.",
+  sensitivity: "standard",
+  requiredCredits: 20,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "organization", type: "text", label: "Organization", default: "Northstar Operations", required: true, maxLength: 48 },
+      { id: "briefTitle", type: "text", label: "Brief title", default: "Weekly operations brief", required: true, maxLength: 64 },
+      { id: "reference", type: "reference", label: "Reference", default: "OPS-2026-014", required: true },
+      { id: "owner", type: "text", label: "Brief owner", default: "Maya Thompson", required: true, maxLength: 48 },
+      { id: "audience", type: "text", label: "Audience", default: "Operations & leadership", maxLength: 64 },
+      { id: "status", type: "status", label: "Status", default: "in_review", options: [
+        { label: "In review", value: "in_review" },
+        { label: "Approved", value: "approved" },
+        { label: "Archived", value: "archived" },
+      ] },
+      { id: "summary", type: "textarea", label: "Summary", default: "Keep every moving part visible. This brief captures the decisions, risks and next actions that need a clear owner this week.", maxLength: 260 },
+      { id: "focus", type: "textarea", label: "Primary focus", default: "Close the highest-priority requests, confirm delivery milestones and keep the customer-facing queue clear.", maxLength: 220 },
+      { id: "nextStep", type: "text", label: "Next step", default: "Review the open decisions and confirm owners before Friday.", maxLength: 90 },
+      { id: "dueDate", type: "date", label: "Review date", default: "2026-10-16", required: true },
+      { id: "shareUrl", type: "text", label: "Share URL", default: "cloudie.example/brief/OPS-2026-014", maxLength: 120 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 794,
+        height: 1123,
+        background: PAPER,
+        elements: [
+          box(0, 0, 794, 174, "#102a28", 0),
+          box(56, 44, 48, 48, "#64d6c3", 14),
+          txt(80, 76, "C", { size: 22, weight: 800, color: "#09201d" }),
+          val(126, 68, "organization", { size: 16, weight: 700, color: "#eaf7f1" }),
+          cap(126, 92, "Operations studio", { color: "#91b0a7" }),
+          val(620, 68, "reference", { size: 13, weight: 700, color: "#eaf7f1", align: "right", w: 118 }),
+          cap(620, 92, "Reference", { color: "#91b0a7", align: "right", w: 118 }),
+          val(56, 138, "briefTitle", { size: 30, weight: 800, color: "#ffffff", maxChars: 48 }),
+
+          box(56, 218, 682, 96, SURFACE, 16, RULE),
+          cap(84, 248, "Owner"),
+          val(84, 278, "owner", { size: 15, weight: 700, color: INK, maxChars: 32 }),
+          cap(300, 248, "Audience"),
+          val(300, 278, "audience", { size: 15, weight: 600, color: INK, maxChars: 32 }),
+          cap(544, 248, "Review date"),
+          val(544, 278, "dueDate", { size: 15, weight: 600, color: INK, align: "right", w: 118 }),
+          badge(612, 228, "status", { size: 11 }),
+
+          cap(56, 372, "Executive summary"),
+          box(56, 392, 682, 142, "#e5efeb", 16),
+          val(84, 430, "summary", { size: 15, color: INK, maxChars: 220, lineHeight: 23 }),
+
+          cap(56, 590, "Primary focus"),
+          box(56, 610, 682, 142, "#f7faf7", 16, RULE),
+          val(84, 648, "focus", { size: 15, color: INK, maxChars: 220, lineHeight: 23 }),
+
+          box(56, 802, 682, 92, "#102a28", 16),
+          cap(84, 834, "Next step", { color: "#a8eadc" }),
+          val(84, 868, "nextStep", { size: 16, weight: 700, color: "#ffffff", maxChars: 62 }),
+
+          rule(56, 946, 738, 946),
+          qr(56, 974, 82, "shareUrl", { color: INK, bg: PAPER }),
+          val(164, 1002, "shareUrl", { size: 12, weight: 700, color: INK, maxChars: 48 }),
+          txt(164, 1024, "Open the live brief in Cloudie", { size: 10.5, color: MUTED }),
+          txt(620, 1024, "Cloudie document studio", { size: 9.5, color: FAINT, align: "right", w: 118 }),
+        ],
+      },
+    ],
+  },
+};
+
+// ─── 7. Commercial invoice (standard) ─────────────────────────────────────────
 
 const commercialInvoice: StarterTemplate = {
   slug: "commercial-invoice",
@@ -631,8 +710,8 @@ const commercialInvoice: StarterTemplate = {
         height: 1123,
         background: PAPER,
         elements: [
-          box(0, 0, 794, 118, "#1e293b", 0),
-          txt(56, 56, "INVOICE", { size: 12, weight: 700, color: "#94a3b8", letterSpacing: 4 }),
+          box(0, 0, 794, 118, "#28504a", 0),
+          txt(56, 56, "INVOICE", { size: 12, weight: 700, color: "#91b0a7", letterSpacing: 4 }),
           val(56, 92, "invoiceNumber", { size: 24, weight: 800, color: "#ffffff" }),
           badge(620, 56, "paymentStatus", { size: 11 }),
           val(620, 92, "total", { size: 18, weight: 700, color: "#ffffff", align: "right", w: 118 }),
@@ -655,7 +734,7 @@ const commercialInvoice: StarterTemplate = {
           val(586, 322, "paymentTerms", { size: 12, color: MUTED, maxChars: 28 }),
 
           // Line items
-          box(56, 372, 682, 34, "#f1f5f9", 6),
+          box(56, 372, 682, 34, "#e5efeb", 6),
           cap(74, 392, "Description", { color: MUTED }),
           cap(520, 392, "Qty", { color: MUTED, align: "right", w: 60 }),
           cap(660, 392, "Amount", { color: MUTED, align: "right", w: 78 }),
@@ -681,7 +760,7 @@ const commercialInvoice: StarterTemplate = {
           val(660, 626, "taxAmount", { size: 13.5, color: INK, align: "right", w: 78 }),
           txt(420, 660, "Shipping", { size: 12.5, color: MUTED }),
           val(660, 660, "shipping", { size: 13.5, color: INK, align: "right", w: 78 }),
-          rule(420, 684, 738, 684, "#94a3b8", 1.5),
+          rule(420, 684, 738, 684, "#91b0a7", 1.5),
           txt(420, 716, "Total due", { size: 14, weight: 700, color: INK }),
           val(660, 716, "total", { size: 20, weight: 800, color: INK, align: "right", w: 78 }),
 
@@ -706,7 +785,7 @@ const commercialInvoice: StarterTemplate = {
  * fixes reach deployments that already installed an earlier set. Already
  * generated documents keep their frozen version snapshot and never change.
  */
-export const STARTER_SET_VERSION = 5;
+export const STARTER_SET_VERSION = 6;
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   bankingDashboard,
@@ -714,5 +793,6 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   trackingCard,
   paymentVerification,
   certificate,
+  operationsBrief,
   commercialInvoice,
 ];
