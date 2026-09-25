@@ -186,10 +186,10 @@ export function ElementCanvas({
   const height = Math.round(page.height * scale);
 
   return (
-    <div className="w-full" ref={containerRef}>
+    <div className="w-full min-w-0" ref={containerRef}>
       <div
-        className="relative mx-auto overflow-hidden rounded-lg border border-border shadow-sm"
-        style={{ width, height, background: page.background ?? "#ffffff" }}
+        className="relative mx-auto max-w-full overflow-hidden rounded-lg border border-border shadow-sm"
+        style={{ width, maxWidth: "100%", height, background: page.background ?? "#ffffff" }}
         onPointerDown={() => onSelect(null)}
       >
         <img
@@ -226,7 +226,7 @@ export function ElementCanvas({
               onPointerEnter={() => setHovered(index)}
               onPointerLeave={() => setHovered((h) => (h === index ? null : h))}
               className={cn(
-                "absolute cursor-move touch-none",
+                "absolute cursor-move touch-none select-none",
                 isSelected ? "z-20" : "z-10",
               )}
               style={{
@@ -271,7 +271,7 @@ export function ElementCanvas({
         })}
       </div>
 
-      <p className="mt-2 text-center text-[11px] text-muted-foreground">
+      <p className="mt-2 break-words text-center text-[11px] text-muted-foreground">
         Drag to move · corner handle to resize · {Math.round(scale * 100)}% zoom · {page.width}×{page.height}px
         {clipped.some(Boolean) && (
           <span className="ml-2 font-medium text-destructive">

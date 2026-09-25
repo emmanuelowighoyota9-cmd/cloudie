@@ -472,7 +472,7 @@ export default function DocumentTemplateEditor({
     : "Design the layout visually, define the dynamic form, then publish. Saving an existing template creates a new immutable version.";
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <PageHeader
         title={headerTitle}
         description={headerDescription}
@@ -544,11 +544,11 @@ export default function DocumentTemplateEditor({
         </div>
       )}
 
-      <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 gap-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[320px_minmax(0,1fr)_320px]">
         {/* ── Left: settings + fields ──
             On phones the canvas leads: it is the workspace, and the settings
             form is long enough that starting there buries it. */}
-        <div className="order-2 space-y-4 lg:order-1">
+        <div className="order-3 min-w-0 space-y-4 lg:order-1">
           <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-sm">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Template settings
@@ -648,8 +648,8 @@ export default function DocumentTemplateEditor({
         </div>
 
         {/* ── Centre: canvas ── */}
-        <div className="order-1 space-y-3 lg:order-2">
-          <div className="grid grid-cols-3 gap-2 rounded-xl border border-border bg-card p-2 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:gap-1.5">
+        <div className="order-1 min-w-0 space-y-3 lg:order-2">
+          <div className="grid min-w-0 grid-cols-4 gap-2 rounded-xl border border-border bg-card p-2 shadow-sm sm:flex sm:flex-wrap sm:items-center sm:gap-1.5">
             {ELEMENT_KINDS.map((kind) => {
               const Icon = ELEMENT_ICONS[kind];
               return (
@@ -657,7 +657,7 @@ export default function DocumentTemplateEditor({
                   key={kind}
                   size="sm"
                   variant="outline"
-                  className="h-11 gap-1.5 px-1.5 text-[10px] sm:h-8 sm:px-2 sm:text-[11px]"
+                  className="h-11 min-w-0 gap-1.5 px-1 text-[9px] sm:h-8 sm:px-2 sm:text-[11px]"
                   onClick={() => addElement(kind)}
                   title={`Add ${ELEMENT_LABELS[kind].toLowerCase()}`}
                 >
@@ -667,11 +667,11 @@ export default function DocumentTemplateEditor({
               );
             })}
 
-            <div className="col-span-3 flex items-center gap-2 sm:ml-auto sm:gap-1">
+            <div className="col-span-4 grid min-w-0 grid-cols-2 gap-2 sm:ml-auto sm:flex sm:items-center sm:gap-1">
               <Button
                 size="sm"
                 variant={mode === "layout" ? "default" : "outline"}
-                className="h-11 flex-1 gap-1.5 px-2 text-[11px] sm:h-8 sm:flex-none sm:px-2"
+                className="h-11 min-w-0 gap-1.5 px-2 text-[11px] sm:h-8 sm:flex-none sm:px-2"
                 onClick={() => setMode("layout")}
               >
                 <MousePointerSquareDashed className="h-3.5 w-3.5" /> Layout
@@ -679,7 +679,7 @@ export default function DocumentTemplateEditor({
               <Button
                 size="sm"
                 variant={mode === "preview" ? "default" : "outline"}
-                className="h-11 flex-1 gap-1.5 px-2 text-[11px] sm:h-8 sm:flex-none sm:px-2"
+                className="h-11 min-w-0 gap-1.5 px-2 text-[11px] sm:h-8 sm:flex-none sm:px-2"
                 onClick={() => setMode("preview")}
               >
                 <Eye className="h-3.5 w-3.5" /> Preview
@@ -687,7 +687,7 @@ export default function DocumentTemplateEditor({
               <Button
                 size="icon"
                 variant={showGrid ? "default" : "outline"}
-                className="h-11 w-11 sm:h-8 sm:w-8"
+                className="h-11 w-full min-w-0 sm:h-8 sm:w-8"
                 title="Toggle grid"
                 onClick={() => setShowGrid((v) => !v)}
               >
@@ -696,7 +696,7 @@ export default function DocumentTemplateEditor({
               <Button
                 size="sm"
                 variant={snapToGrid ? "default" : "outline"}
-                className="h-11 flex-1 px-2 text-[11px] sm:h-8 sm:flex-none"
+                className="h-11 min-w-0 px-2 text-[11px] sm:h-8 sm:flex-none"
                 onClick={() => setSnapToGrid((v) => !v)}
                 title="Snap to a 4px grid"
               >
@@ -705,7 +705,7 @@ export default function DocumentTemplateEditor({
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-muted/30 p-4 shadow-sm">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-border bg-muted/30 p-2 shadow-sm sm:p-4">
             {page ? (
               mode === "layout" ? (
                 <ElementCanvas
@@ -804,7 +804,7 @@ export default function DocumentTemplateEditor({
         </div>
 
         {/* ── Right: inspector ── */}
-        <div className="order-3 xl:sticky xl:top-6 xl:self-start">
+        <div className="order-2 min-w-0 xl:order-3 xl:sticky xl:top-6 xl:self-start">
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Inspector
