@@ -16,6 +16,7 @@ import {
   Send,
   ShieldAlert,
   Sparkles,
+  Table2,
   Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -44,6 +45,16 @@ const EXAMPLES = [
   "Remittance advice REM-2026-0338 issued 2026-09-24 by Lakeview Interiors settling beneficiary Northfold Trading, bank transfer, amount 4824.00 USD.",
   "Delivery note DN-2026-2291 for order PO-2026-4471, delivered on 2026-09-26 by Coriolis Freight, received by Priya Ramanathan, 3 packages, condition: Good condition.",
   "Expense claim EXP-2026-0512 submitted by Maya Thompson dated 2026-09-24, purpose: Client site visit — Nairobi, category Travel, 1 x Flights — return 612.40, total 1071.10 USD, reimburse 771.10 USD.",
+  // Paste-a-list example: the prose line names the document, the block below it
+  // fills every row slot the item schedule renders.
+  [
+    "Item schedule SCH-2026-0714 issued by Northfold Trading for Lakeview Interiors dated 2026-09-25, currency USD.",
+    "Item,Qty,Amount",
+    "Oak veneer panels,24,1920.00",
+    '"Brackets, galvanised",18,214.00',
+    "Brushed brass handles,60,1440.00",
+    "Sealant cartridges,12,192.00",
+  ].join("\n"),
 ];
 
 const CONFIDENCE_STYLE: Record<BriefConfidence, { label: string; className: string }> = {
@@ -187,7 +198,7 @@ export default function DocumentGenerator() {
               id="brief"
               value={brief}
               onChange={(event) => setBrief(event.target.value)}
-              placeholder="Example: Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, 2 x Oak veneer panels 1920.00, total 4824.00 USD."
+              placeholder={"Example: Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, total 4824.00 USD.\n\nPaste a list or CSV of items underneath and every row is filled:\nItem,Qty,Amount\nOak veneer panels,24,1920.00"}
               rows={7}
               className="mt-3 min-h-[160px] resize-y text-sm"
             />
@@ -220,8 +231,7 @@ export default function DocumentGenerator() {
                 type="button"
                 onClick={() => setBrief(example)}
                 className="min-h-11 rounded-full border border-border px-4 text-left text-[11px] leading-snug text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted sm:min-h-0 sm:max-w-[320px] sm:px-3 sm:py-1.5"
-              >
-                {example.slice(0, 82)}…
+              >                  {example.replace(/\s+/g, " ").slice(0, 82)}…
               </button>
             ))}
           </div>
@@ -538,6 +548,55 @@ export default function DocumentGenerator() {
                     </p>
                   )}
                 </div>
+
+                {result.lineItems && (
+                  <div
+                    className={cn(
+                      "rounded-xl border p-4",
+                      result.lineItems.detected > result.lineItems.capacity
+                        ? "border-amber-500/40 bg-amber-500/5"
+                        : "border-border bg-card",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Table2 className="h-4 w-4 text-muted-foreground" />
+                        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                          Line items
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-foreground">
+                        {result.lineItems.filled} of {result.lineItems.capacity} rows filled
+                      </span>
+                    </div>
+                    <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{
+                          width: `${Math.min(100, (result.lineItems.filled / result.lineItems.capacity) * 100)}%`,
+                        }}
+                        transition={{ duration: 0.4, ease: "easeOut" }}
+                        className="h-full rounded-full bg-primary"
+                      />
+                    </div>
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                      {result.lineItems.detected > result.lineItems.capacity
+                        ? `Your list has ${result.lineItems.detected} rows and this template draws ${result.lineItems.capacity}. Rows past ${result.lineItems.capacity} are left out.`
+                        : `Rows read from your pasted list or CSV and mapped onto this template's ${result.lineItems.capacity} row slots.`}
+                    </p>
+                    {result.lineItems.detected > result.lineItems.capacity &&
+                      result.intent.key !== "item_schedule" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => runParse("item_schedule")}
+                          className="mt-3 min-h-11 w-full gap-1.5 sm:min-h-9"
+                        >
+                          <Table2 className="h-3.5 w-3.5" /> Fit the list on the 10-row item schedule
+                        </Button>
+                      )}
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-border bg-card p-5">
                   <div className="flex items-center gap-2">

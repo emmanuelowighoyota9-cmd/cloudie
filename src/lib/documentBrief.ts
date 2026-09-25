@@ -18,6 +18,10 @@ import {
   type FieldType,
   type TemplateSchema,
 } from "./docTemplateEngine";
+import { parseItemList } from "./itemList";
+
+export { parseItemList } from "./itemList";
+export type { ParsedItemRow } from "./itemList";
 
 export type BriefTransform = "text" | "reference" | "date" | "amount" | "number";
 
@@ -329,6 +333,45 @@ export const BRIEF_INTENTS: BriefIntent[] = [
     ],
     lineItems: { itemPrefix: "expense", amountPrefix: "expenseAmount", label: "Claim lines", max: 3 },
   },
+  {
+    key: "item_schedule",
+    label: "Item schedule",
+    templateSlug: "item-schedule",
+    description: "Ten-row schedule for longer lists — paste a CSV or bulleted list and every line gets its own row.",
+    keywords: [
+      "item list",
+      "list of items",
+      "itemised list",
+      "itemized list",
+      "item schedule",
+      "schedule of items",
+      "csv",
+      "spreadsheet",
+      "price list",
+      "parts list",
+      "stock list",
+      "product list",
+      "multiple items",
+    ],
+    fields: [
+      {
+        id: "scheduleNumber",
+        label: "Schedule number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:schedule|sch)\s*(?:no|number|ref(?:erence)?|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(SCH-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "organization", label: "Organisation", patterns: [/\b(?:issued by|from)\s*[:#-]?\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:for|dated|on)\b|[,;.]|$)/i] },
+      { id: "preparedFor", label: "Prepared for", patterns: [/\b(?:prepared for|for client|client)\s*[:#-]?\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:dated|on|reference)\b|[,;.]|$)/i] },
+      { id: "scheduleDate", label: "Date", transform: "date", patterns: [/\b(?:schedule date|dated|issued on)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "reference", label: "Reference", patterns: [/\b(?:our reference|reference|ref)\s*[:#-]?\s*([A-Za-z0-9/][A-Za-z0-9/.-]{3,30})/i] },
+      { id: "currencyCode", label: "Currency", patterns: [/\b(USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)\b/] },
+      { id: "subtotal", label: "Subtotal", transform: "amount", patterns: [/\bsubtotal\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "taxAmount", label: "Tax", transform: "amount", patterns: [/\b(?:tax|vat)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "total", label: "Total", transform: "amount", patterns: [/\b(?:total|grand total)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+    ],
+    lineItems: { itemPrefix: "schedule", qtyPrefix: "scheduleQty", amountPrefix: "scheduleAmount", label: "Item rows", max: 10 },
+  },
 ];
 
 // ─── Refused categories ───────────────────────────────────────────────────────
@@ -408,6 +451,8 @@ export interface BriefMatch {
   recognized: BriefRecognized[];
   /** True when the brief mentioned the type by name instead of only hints. */
   explicit: boolean;
+  /** Row counters, present for templates that render item rows. */
+  lineItems?: BriefLineItemStats;
 }
 
 export type BriefResult = BriefMatch | BriefRefusal | BriefUnsupported | BriefEmpty | BriefAmbiguous;
@@ -503,54 +548,102 @@ function scoreIntent(intent: BriefIntent, haystack: string): number {
   return intent.keywords.reduce((score, keyword) => (haystack.includes(keyword) ? score + keyword.length : score), 0);
 }
 
+/** Row counters reported back to the caller so long lists can be flagged. */
+export interface BriefLineItemStats {
+  /** Row slots that were filled. */
+  filled: number;
+  /** Rows found in a pasted list or CSV block. */
+  detected: number;
+  /** Row slots the matched template renders. */
+  capacity: number;
+}
+
+interface LineItemStats {
+  entries: { id: string; label: string; value: string; confidence: BriefConfidence }[];
+  filled: number;
+  detected: number;
+}
+
 /**
- * Repeatable rows: "2 x Oak veneer panels 1,920.00", "3 x Brass handles".
- * Rows are read from `N x Description [amount]` fragments anywhere in the brief
- * and capped at the number of slots the target template provides.
+ * Repeatable rows, from a pasted list or CSV first and from inline
+ * "N x Description [amount]" fragments second, capped at the number of slots the
+ * target template renders.
  */
-function extractLineItems(
-  text: string,
-  spec: BriefLineItems,
-): { id: string; label: string; value: string; confidence: BriefConfidence }[] {
+function extractLineItems(text: string, spec: BriefLineItems): LineItemStats {
   const out: { id: string; label: string; value: string; confidence: BriefConfidence }[] = [];
-  const rowPattern = /(\d+(?:\.\d+)?)\s*[x×]\s*([^,;\n]{2,60})/gi;
+  // Pass 1 — pasted lists and CSV. Each parsed row claims the next slot.
+  const parsedRows = parseItemList(text);
+  const seen = new Set<string>();
   let rows = 0;
-  let match = rowPattern.exec(text);
-  while (match && rows < spec.max) {
-    const qty = match[1];
-    let description = match[2].trim().replace(/[-–.\s]+$/, "").trim();
-    let amount = "";
-    // Money is "1920.00"; weights are "6.2 kg". Both belong to the last column.
-    const amountMatch =
-      /^(.*?)\s+(?:USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)?\s*[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2}|[0-9]+(?:\.[0-9]+)?\s*(?:kg|kgs))$/i.exec(description);
-    if (amountMatch && amountMatch[1].trim().length >= 2) {
-      description = amountMatch[1].trim().replace(/[-–@]\s*$/, "").trim();
-      amount = applyTransform(amountMatch[2], "amount");
-    }
+  for (const row of parsedRows) {
+    if (rows >= spec.max) break;
+    // Table cells keep their commas: "Brackets, galvanised" is one description.
+    const descriptionValue = applyTransform(row.description, "text", true);
+    if (!descriptionValue) continue;
+    const key = descriptionValue.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     rows += 1;
-    const index = rows;
-    // "3 x widgets from supplier Meridian" → description "widgets".
-    const descriptionValue = applyTransform(
-      description.split(/[,;]|\s+(?:from|at|for|@)\s/i)[0],
-      "text",
-    );
-    if (descriptionValue) {
-      out.push({
-        id: `${spec.itemPrefix}${index}`,
-        label: `${spec.label} — row ${index}`,
-        value: descriptionValue,
-        confidence: amount ? "high" : "medium",
-      });
-      if (spec.qtyPrefix) {
-        out.push({ id: `${spec.qtyPrefix}${index}`, label: `Qty ${index}`, value: qty, confidence: "high" });
-      }
-      if (amount && spec.amountPrefix) {
-        out.push({ id: `${spec.amountPrefix}${index}`, label: `Amount ${index}`, value: amount, confidence: "high" });
-      }
+    out.push({
+      id: `${spec.itemPrefix}${rows}`,
+      label: `${spec.label} — row ${rows}`,
+      value: descriptionValue,
+      confidence: row.amount ? "high" : "medium",
+    });
+    if (spec.qtyPrefix && row.qty) {
+      out.push({ id: `${spec.qtyPrefix}${rows}`, label: `Qty ${rows}`, value: row.qty, confidence: "high" });
     }
-    match = rowPattern.exec(text);
+    if (spec.amountPrefix && row.amount) {
+      out.push({ id: `${spec.amountPrefix}${rows}`, label: `Amount ${rows}`, value: row.amount, confidence: "high" });
+    }
   }
-  return out;
+
+  // Pass 2 — inline rows mentioned mid-sentence in a prose brief. Two items in
+  // one sentence ("4 x tiles 880.00 and 2 x battens 240.00") are two rows, so
+  // the text is split only where another "N x" follows.
+  const segments = text.split(/\s+(?:and|plus|&)\s+(?=\d+(?:\.\d+)?\s*[x×]\s)/i);
+  for (const segment of segments) {
+    const rowPattern = /(\d+(?:\.\d+)?)\s*[x×]\s*([^,;\n]{2,80})/gi;
+    let match = rowPattern.exec(segment);
+    while (match && rows < spec.max) {
+      const qty = match[1];
+      let description = match[2].trim().replace(/[-–.\s]+$/, "").trim();
+      let amount = "";
+      // Money is "1920.00"; weights are "6.2 kg". Both belong to the last column.
+      const amountMatch =
+        /^(.*?)\s+(?:USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)?\s*[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2}|[0-9]+(?:\.[0-9]+)?\s*(?:kg|kgs))$/i.exec(description);
+      if (amountMatch && amountMatch[1].trim().length >= 2) {
+        description = amountMatch[1].trim().replace(/[-–@]\s*$/, "").trim();
+        amount = applyTransform(amountMatch[2], "amount");
+      }
+      // "3 x widgets from supplier Meridian" → description "widgets".
+      const descriptionValue = applyTransform(
+        description.split(/[,;]|\s+(?:from|at|for|@)\s/i)[0],
+        "text",
+      );
+      // A row already claimed by the pasted block never takes a second slot, so
+      // the slot counter only advances for rows that actually land.
+      if (descriptionValue && !seen.has(descriptionValue.toLowerCase())) {
+        seen.add(descriptionValue.toLowerCase());
+        rows += 1;
+        const index = rows;
+        out.push({
+          id: `${spec.itemPrefix}${index}`,
+          label: `${spec.label} — row ${index}`,
+          value: descriptionValue,
+          confidence: amount ? "high" : "medium",
+        });
+        if (spec.qtyPrefix) {
+          out.push({ id: `${spec.qtyPrefix}${index}`, label: `Qty ${index}`, value: qty, confidence: "high" });
+        }
+        if (amount && spec.amountPrefix) {
+          out.push({ id: `${spec.amountPrefix}${index}`, label: `Amount ${index}`, value: amount, confidence: "high" });
+        }
+      }
+      match = rowPattern.exec(segment);
+    }
+  }
+  return { entries: out, filled: rows, detected: Math.max(parsedRows.length, rows) };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -576,10 +669,12 @@ function collectValues(intent: BriefIntent, text: string): {
   values: Record<string, string>;
   recognized: BriefRecognized[];
   missing: { id: string; label: string }[];
+  lineItems?: BriefLineItemStats;
 } {
   const values: Record<string, string> = {};
   const recognized: BriefRecognized[] = [];
   const missing: { id: string; label: string }[] = [];
+  let lineItems: BriefLineItemStats | undefined;
 
   for (const rule of intent.fields) {
     const hit = extractRule(rule, text);
@@ -592,13 +687,15 @@ function collectValues(intent: BriefIntent, text: string): {
   }
 
   if (intent.lineItems) {
-    for (const row of extractLineItems(text, intent.lineItems)) {
+    const stats = extractLineItems(text, intent.lineItems);
+    for (const row of stats.entries) {
       values[row.id] = row.value;
       recognized.push({ id: row.id, label: row.label, value: row.value, confidence: row.confidence });
     }
+    lineItems = { filled: stats.filled, detected: stats.detected, capacity: intent.lineItems.max };
   }
 
-  return { values, recognized, missing };
+  return { values, recognized, missing, lineItems };
 }
 
 /**
@@ -630,6 +727,15 @@ export function parseDocumentBrief(input: string, intentKey?: string): BriefResu
 
   const ranked = rankIntents(text);
   const best = ranked[0];
+
+  // A pasted list or CSV with no document wording at all is an item schedule.
+  if ((!best || best.score === 0) && parseItemList(text).length >= 2) {
+    const schedule = BRIEF_INTENTS.find((entry) => entry.key === "item_schedule");
+    if (schedule) {
+      return { status: "matched", intent: schedule, explicit: false, ...collectValues(schedule, text) };
+    }
+  }
+
   if (!best || best.score === 0) {
     return {
       status: "unsupported",

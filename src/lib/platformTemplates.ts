@@ -14,8 +14,14 @@ import { COMMERCIAL_TEMPLATES } from "./commercialTemplates";
 export const PLATFORM_TEMPLATES: StarterTemplate[] = [...STARTER_TEMPLATES, ...COMMERCIAL_TEMPLATES];
 
 /**
- * Seed marker. Adding a batch of templates bumps the base version, and this
- * offset keeps the platform marker ahead of it so existing installs republish
- * once and already-generated documents keep their frozen snapshots.
+ * Bumped whenever a new batch is added to COMMERCIAL_TEMPLATES. Keep it in step
+ * with that array so installations holding an older marker republish once.
  */
-export const PLATFORM_SEED_VERSION = STARTER_SET_VERSION + 1;
+const COMMERCIAL_SET_VERSION = 3;
+
+/**
+ * Seed marker. Adding a batch of templates bumps one of the versions above, and
+ * the sum keeps the platform marker ahead of both so existing installs republish
+ * once while already-generated documents keep their frozen snapshots.
+ */
+export const PLATFORM_SEED_VERSION = STARTER_SET_VERSION + COMMERCIAL_SET_VERSION;
