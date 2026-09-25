@@ -4,7 +4,7 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack } from "lucide-react";
+import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack, Receipt } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
 
@@ -55,6 +55,26 @@ export default function Dashboard() {
           Here's an overview of your Cloudie workspace.
         </p>
       </div>
+
+      <nav aria-label="Quick actions" className="grid grid-cols-4 gap-2 sm:hidden">
+        {[
+          { label: "Shipment", icon: Package, to: "/shipments/new" },
+          { label: "Points", icon: Coins, to: "/buy-points" },
+          { label: "Document", icon: FileStack, to: "/documents/own/new" },
+          { label: "Orders", icon: Receipt, to: "/orders" },
+        ].map((action) => (
+          <Link
+            key={action.to}
+            to={action.to}
+            className="group flex min-h-20 min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-1.5 py-2 text-center shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/[0.04] active:scale-[0.98]"
+          >
+            <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+              <action.icon className="size-4" />
+            </span>
+            <span className="max-w-full truncate text-[10px] font-semibold text-foreground">{action.label}</span>
+          </Link>
+        ))}
+      </nav>
 
       {/* Hero Points Card */}
       <Card className="overflow-hidden border-0 shadow-md">
