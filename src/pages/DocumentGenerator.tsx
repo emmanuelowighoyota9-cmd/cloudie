@@ -35,6 +35,7 @@ import {
   type BriefResult,
   type BriefConfidence,
 } from "@/lib/documentBrief";
+import { formatCurrency } from "@/lib/docTemplateEngine";
 import { PageHeader } from "@/components/documents/ui";
 
 const EXAMPLES = [
@@ -136,6 +137,21 @@ export default function DocumentGenerator() {
     seeded.current = true;
     ensureStarterTemplates({}).catch(() => undefined);
   }, [ensureStarterTemplates]);
+
+  /**
+   * Currency for the row total. A currency named in the brief wins; otherwise
+   * the matched template's own currency field decides. When neither exists the
+   * total is hidden — a packing list sums weights, not money.
+   */
+  const rowCurrency = useMemo(() => {
+    if (!result || result.status !== "matched") return null;
+    const named = result.values.currencyCode ?? result.values.currency;
+    if (named && /^[A-Z]{3}$/i.test(named)) return named.toUpperCase();
+    const fields =
+      (templateDetail?.schema as { fields?: { currency?: string }[] } | undefined)?.fields ?? [];
+    const code = fields.find((field) => field.currency)?.currency;
+    return code && /^[A-Z]{3}$/.test(code) ? code : null;
+  }, [result, templateDetail?.schema]);
 
   const ownJson = useMemo(() => {
     if (!ownDetail || !ownExtraction) return "";
@@ -579,6 +595,21 @@ export default function DocumentGenerator() {
                         className="h-full rounded-full bg-primary"
                       />
                     </div>
+                    {rowCurrency && result.lineItems.amounts > 0 && (
+                      <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                        <span className="text-[11px] leading-snug text-muted-foreground">
+                          Running total · {result.lineItems.amounts} of {result.lineItems.filled} rows priced
+                        </span>
+                        <motion.span
+                          key={result.lineItems.total}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="shrink-0 text-[13.5px] font-semibold tabular-nums text-foreground"
+                        >
+                          {formatCurrency(String(result.lineItems.total), rowCurrency)}
+                        </motion.span>
+                      </div>
+                    )}
                     <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                       {result.lineItems.detected > result.lineItems.capacity
                         ? `Your list has ${result.lineItems.detected} rows and this template draws ${result.lineItems.capacity}. Rows past ${result.lineItems.capacity} are left out.`

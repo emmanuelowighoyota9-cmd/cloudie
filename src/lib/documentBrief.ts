@@ -556,12 +556,24 @@ export interface BriefLineItemStats {
   detected: number;
   /** Row slots the matched template renders. */
   capacity: number;
+  /** Sum of the amount column across the filled rows. */
+  total: number;
+  /** Filled rows that carried an amount, so a total can be trusted. */
+  amounts: number;
 }
 
 interface LineItemStats {
   entries: { id: string; label: string; value: string; confidence: BriefConfidence }[];
   filled: number;
   detected: number;
+  total: number;
+  amounts: number;
+}
+
+/** "1,920.00" → 1920. Money only; anything unparseable contributes nothing. */
+function amountValue(raw: string): number {
+  const parsed = Number(raw.replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 /**
@@ -575,6 +587,8 @@ function extractLineItems(text: string, spec: BriefLineItems): LineItemStats {
   const parsedRows = parseItemList(text);
   const seen = new Set<string>();
   let rows = 0;
+  let total = 0;
+  let amounts = 0;
   for (const row of parsedRows) {
     if (rows >= spec.max) break;
     // Table cells keep their commas: "Brackets, galvanised" is one description.
@@ -595,6 +609,8 @@ function extractLineItems(text: string, spec: BriefLineItems): LineItemStats {
     }
     if (spec.amountPrefix && row.amount) {
       out.push({ id: `${spec.amountPrefix}${rows}`, label: `Amount ${rows}`, value: row.amount, confidence: "high" });
+      total += amountValue(row.amount);
+      amounts += 1;
     }
   }
 
@@ -638,12 +654,14 @@ function extractLineItems(text: string, spec: BriefLineItems): LineItemStats {
         }
         if (amount && spec.amountPrefix) {
           out.push({ id: `${spec.amountPrefix}${index}`, label: `Amount ${index}`, value: amount, confidence: "high" });
+          total += amountValue(amount);
+          amounts += 1;
         }
       }
       match = rowPattern.exec(segment);
     }
   }
-  return { entries: out, filled: rows, detected: Math.max(parsedRows.length, rows) };
+  return { entries: out, filled: rows, detected: Math.max(parsedRows.length, rows), total, amounts };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -692,7 +710,13 @@ function collectValues(intent: BriefIntent, text: string): {
       values[row.id] = row.value;
       recognized.push({ id: row.id, label: row.label, value: row.value, confidence: row.confidence });
     }
-    lineItems = { filled: stats.filled, detected: stats.detected, capacity: intent.lineItems.max };
+    lineItems = {
+      filled: stats.filled,
+      detected: stats.detected,
+      capacity: intent.lineItems.max,
+      total: stats.total,
+      amounts: stats.amounts,
+    };
   }
 
   return { values, recognized, missing, lineItems };
