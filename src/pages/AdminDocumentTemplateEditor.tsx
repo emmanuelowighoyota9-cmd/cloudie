@@ -128,6 +128,7 @@ export default function DocumentTemplateEditor({
     api.docTemplates.getMyTemplate,
     isOwn && templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
   );
+  const pointsBalance = useQuery(api.points.getBalance);
   const existing = isOwn ? ownExisting : adminExisting;
   const createTemplate = useMutation(api.docTemplates.adminCreateTemplate);
   const publishVersion = useMutation(api.docTemplates.adminPublishTemplateVersion);
@@ -495,9 +496,21 @@ export default function DocumentTemplateEditor({
       {isOwn && (
         <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/[0.05] px-4 py-3">
           <Coins className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-          <p className="text-[11px] leading-relaxed text-primary">
-            Designing or updating this document costs <strong>{designPrice.points.toLocaleString()} points</strong> per save. The amount is configured by an administrator under Pricing.
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] leading-relaxed text-primary">
+              Designing or updating this document costs <strong>{designPrice.points.toLocaleString()} points</strong> per save. The amount is configured by an administrator under Pricing.
+            </p>
+            {typeof pointsBalance === "number" && (
+              <p className="mt-1 text-[11px] text-primary/75">
+                Your balance: <strong>{pointsBalance.toLocaleString()} points</strong>
+              </p>
+            )}
+          </div>
+          {typeof pointsBalance === "number" && pointsBalance < designPrice.points && (
+            <Button asChild size="sm" variant="outline" className="h-9 shrink-0 border-primary/30 text-primary hover:bg-primary/10">
+              <Link to="/buy-points">Buy points</Link>
+            </Button>
+          )}
         </div>
       )}
 
