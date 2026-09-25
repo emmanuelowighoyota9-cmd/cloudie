@@ -24,7 +24,7 @@ import {
   Settings,
   Menu,
   Box,
-  Cloud,
+  Truck,
 } from "lucide-react";
 import { useState } from "react";
 import { MobileNav } from "./MobileNav";
@@ -63,9 +63,9 @@ export function Header() {
         </Sheet>
         <Link to="/dashboard" className="flex min-w-0 items-center gap-2 lg:hidden">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Cloud className="size-4" />
+            <Truck className="size-4" />
           </span>
-          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Cloudie</span>
+          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Crestline Express</span>
         </Link>
       </div>
 

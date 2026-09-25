@@ -77,11 +77,11 @@ export const QUICK_ACTION_CATALOG: QuickActionCatalogItem[] = [
 ];
 
 export const DEFAULT_BRAND: BrandConfig = {
-  name: "Cloudie",
-  tagline: "Operations platform",
-  accent: "#087f73",
-  accentDark: "#53d0bf",
-  footerNote: "Built for modern operations.",
+  name: "Crestline Express",
+  tagline: "Shipment intelligence, in motion",
+  accent: "#0f766e",
+  accentDark: "#5eead4",
+  footerNote: "Move every shipment with confidence.",
   logoUrl: "",
   defaultMode: "system",
 };
@@ -94,14 +94,14 @@ export const DEFAULT_QUICK_ACTIONS: QuickActionConfig[] = [
 ];
 
 export const DEFAULT_SUPPORT: SupportConfig = {
-  email: "support@cloudie.app",
+  email: "support@crestlineexpress.com",
   phone: "+1 (800) 555-0142",
   whatsapp: "",
   hours: "Mon–Fri · 08:00–20:00 UTC",
   helpCenterUrl: "",
   widgetEnabled: true,
-  widgetTitle: "Cloudie Support",
-  widgetMessage: "Questions about a shipment, document or points balance? Our operations desk replies within one business day.",
+  widgetTitle: "Crestline Express Support",
+  widgetMessage: "Questions about a shipment, route or delivery update? Our operations desk replies within one business day.",
   faqs: [
     {
       question: "Where do I start a shipment?",
@@ -160,9 +160,11 @@ function phoneDigits(value: unknown): string {
 export function sanitizeBrand(input: unknown): BrandConfig {
   const raw = (input ?? {}) as Record<string, unknown>;
   const mode = raw.defaultMode;
+  const legacyName = raw.name === "Cloudie" || raw.name === "Cloudie Operations Platform";
+  const legacyTagline = raw.tagline === "Operations platform";
   return {
-    name: text(raw.name, DEFAULT_BRAND.name, 60),
-    tagline: text(raw.tagline, DEFAULT_BRAND.tagline, 80),
+    name: legacyName ? DEFAULT_BRAND.name : text(raw.name, DEFAULT_BRAND.name, 60),
+    tagline: legacyTagline ? DEFAULT_BRAND.tagline : text(raw.tagline, DEFAULT_BRAND.tagline, 80),
     accent: hex(raw.accent, DEFAULT_BRAND.accent),
     accentDark: hex(raw.accentDark, DEFAULT_BRAND.accentDark),
     footerNote: text(raw.footerNote, DEFAULT_BRAND.footerNote, 160),
@@ -201,7 +203,9 @@ export function sanitizeSupport(input: unknown): SupportConfig {
     hours: optionalText(raw.hours, 120),
     helpCenterUrl: url(raw.helpCenterUrl, ""),
     widgetEnabled: flag(raw.widgetEnabled, DEFAULT_SUPPORT.widgetEnabled),
-    widgetTitle: text(raw.widgetTitle, DEFAULT_SUPPORT.widgetTitle, 80),
+    widgetTitle: raw.widgetTitle === "Cloudie Support"
+      ? DEFAULT_SUPPORT.widgetTitle
+      : text(raw.widgetTitle, DEFAULT_SUPPORT.widgetTitle, 80),
     widgetMessage: text(raw.widgetMessage, DEFAULT_SUPPORT.widgetMessage, 300),
     faqs: faqs
       .slice(0, 8)

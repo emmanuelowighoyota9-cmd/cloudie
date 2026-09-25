@@ -238,7 +238,7 @@ export function ShipmentReceipt({ shipment }: { shipment: ReceiptShipment }) {
         {/* ── Footer ── */}
         <div className="mx-8 mt-6 mb-6 pt-4 border-t border-gray-200">
           <p className="text-[9px] text-gray-400 text-center leading-relaxed">
-            This receipt confirms your shipment has been registered in the Cloudie Global Logistics tracking system.
+            This receipt confirms your shipment has been registered in the Crestline Express global tracking system.
             <br />Track your shipment at cloudie.com/tracking/{shipment.trackingNumber}
           </p>
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">

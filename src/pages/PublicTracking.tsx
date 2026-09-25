@@ -264,7 +264,7 @@ export default function PublicTracking() {
               <PackageCheck className="h-4 w-4 text-primary" />
             </span>
             <span className="text-sm font-bold tracking-tight text-foreground">
-              Cloudie<span className="text-muted-foreground"> Tracking</span>
+              Crestline Express<span className="text-muted-foreground"> Tracking</span>
             </span>
           </Link>
           <div className="flex min-w-0 items-center gap-1.5">

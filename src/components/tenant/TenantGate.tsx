@@ -54,7 +54,7 @@ export function TenantSuspendedPage({
             </ul>
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
-            <Link to="/" className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-800">Back to Cloudie</Link>
+            <Link to="/" className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-800">Back to Crestline Express</Link>
             <Link to="/auth" className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-700">Sign in</Link>
           </div>
         </div>

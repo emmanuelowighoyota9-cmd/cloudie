@@ -9,12 +9,8 @@ import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPromp
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { toast } from "sonner";
 import {
-  Cloud,
   Package,
   FileText,
-  Building2,
-  Layers,
-  ShoppingBag,
   Users,
   Wallet,
   Shield,
@@ -23,32 +19,29 @@ import {
   Sparkles,
   RadioTower,
   Route,
-  CircleDollarSign,
   Plane,
   ReceiptText,
   Search,
   MapPin,
   QrCode,
   Truck,
-  Landmark,
   FileStack,
 } from "lucide-react";
 
 const features = [
-  { icon: Landmark, title: "Banking Tenants", desc: "Provision islands like Crestline Capital — ledger-backed accounts, deposits, transfers, KYC & statements." },
-  { icon: Package, title: "Shipment Management", desc: "Create, track, and manage shipments with real-time status updates and public tracking." },
-  { icon: FileStack, title: "Cloudie Document Studio", desc: "Dynamic templates with live preview, high-resolution PNG and multi-page PDF export, storage and share links." },
-  { icon: Building2, title: "Business Suite", desc: "White-label tenant portal for banking and investment platforms with KYC." },
-  { icon: Layers, title: "Email & Rendering", desc: "Run email campaigns and create stunning images with our rendering studio." },
-  { icon: ShoppingBag, title: "Marketplace", desc: "Buy and sell point packages from verified vendors in our marketplace." },
-  { icon: Users, title: "Referral System", desc: "Invite friends and earn 50 points for every successful referral." },
+  { icon: Package, title: "Shipment control", desc: "Book, organize, and update every shipment from one calm command center." },
+  { icon: RadioTower, title: "Live tracking", desc: "Share a privacy-safe tracking link with real-time milestones and ETAs." },
+  { icon: Route, title: "Route intelligence", desc: "See every handoff, facility scan, and delivery signal in a clear timeline." },
+  { icon: FileStack, title: "Customs-ready documents", desc: "Create polished commercial invoices and shipping documents without leaving the flow." },
+  { icon: Wallet, title: "Simple points ledger", desc: "Transparent, real-time credits for shipments, documents, and partner services." },
+  { icon: Users, title: "Built for teams", desc: "Give customers, operations teams, and partners a shared source of shipment truth." },
 ];
 
 const stats = [
-  { label: "Points Ledger", value: "Unified" },
-  { label: "Security", value: "Enterprise" },
-  { label: "Multi-tenant", value: "Isolated" },
-  { label: "Realtime", value: "Live" },
+  { label: "Shipment visibility", value: "Live" },
+  { label: "Carrier updates", value: "Real-time" },
+  { label: "Document flows", value: "Ready" },
+  { label: "Platform security", value: "Enterprise" },
 ];
 
 export default function Landing() {
@@ -86,7 +79,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-              <Cloud className="h-4 w-4" />
+              <Truck className="h-4 w-4" />
             </div>
             <span className="font-display text-lg font-bold tracking-tight text-foreground">{brand.name}</span>
           </div>            <div className="flex items-center gap-2">
@@ -113,15 +106,15 @@ export default function Landing() {
           >
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs font-medium text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              Live logistics, documents, and points in one workspace
+              A sharper way to move every shipment
             </div>
             <h1 className="max-w-3xl font-display text-5xl font-semibold leading-[1.02] tracking-[-0.055em] text-foreground md:text-7xl">
-              Coordinate every
+              Move every
               <br />
-              operating line in <span className="text-primary">Cloudie</span>
+              shipment with <span className="text-primary">clarity</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              Shipments, travel documents, email campaigns, marketplace orders, and a unified points ledger stay connected inside one operational command center.
+              Crestline Express brings booking, tracking, customs documents, and customer updates into one focused workspace built for modern delivery teams.
             </p>
             <form onSubmit={handleTrack} className="mt-8 flex max-w-md flex-col gap-2 sm:flex-row">
               <Input
@@ -152,9 +145,9 @@ export default function Landing() {
             </div>
             <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
               {[
-                { icon: Route, label: "Routes", value: "214" },
-                { icon: Shield, label: "KYC files", value: "98%" },
-                { icon: Wallet, label: "Ledger", value: "Live" },
+                { icon: Route, label: "Active lanes", value: "24" },
+                { icon: Shield, label: "On-time rate", value: "98%" },
+                { icon: Wallet, label: "Updates", value: "Live" },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border border-border bg-background p-3">
                   <item.icon className="h-4 w-4 text-primary" />
@@ -165,8 +158,8 @@ export default function Landing() {
             </div>
             <div className="mt-5 grid max-w-xl gap-3 sm:grid-cols-2">
               {[
-                { icon: Plane, label: "Travel desk", value: "22 itineraries queued" },
-                { icon: ReceiptText, label: "Document ops", value: "Invoices and customs ready" },
+                { icon: Plane, label: "Priority desk", value: "12 shipments need review" },
+                { icon: ReceiptText, label: "Document ops", value: "Customs packets ready to send" },
               ].map((item) => (
                 <div key={item.label} className="flex items-center gap-3 rounded-lg border border-border bg-accent/55 p-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-card text-primary">
@@ -190,8 +183,8 @@ export default function Landing() {
             <div className="surface-lift rounded-2xl border border-border bg-background/95 p-4 shadow-2xl">
               <div className="flex items-center justify-between border-b border-border pb-4">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ops Console</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">Transatlantic priority queue</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Shipment control</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">Priority delivery queue</p>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <RadioTower className="h-5 w-5" />
@@ -199,9 +192,9 @@ export default function Landing() {
               </div>
               <div className="mt-4 space-y-3">
                 {[
-                  { label: "Shipment CLD-8241", meta: "Customs docs attached", value: "On time", icon: Package },
-                  { label: "Vendor payout", meta: "Marketplace order bundle", value: "+2,450", icon: CircleDollarSign },
-                  { label: "Flight document", meta: "Client itinerary generated", value: "Ready", icon: FileText },
+                  { label: "CLX-8241 · Rotterdam", meta: "Customs packet attached", value: "On time", icon: Package },
+                  { label: "CLX-8238 · Singapore", meta: "Departed origin facility", value: "In transit", icon: RadioTower },
+                  { label: "CLX-8229 · New York", meta: "Delivery window confirmed", value: "Today", icon: Truck },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
@@ -217,12 +210,12 @@ export default function Landing() {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground">Points available</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">48,920</p>
+                  <p className="text-xs text-muted-foreground">Delivered this month</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">1,284</p>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground">Active tenants</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">36</p>
+                  <p className="text-xs text-muted-foreground">On-time rate</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">98.4%</p>
                 </div>
               </div>
             </div>
@@ -249,9 +242,9 @@ export default function Landing() {
       <section className="bg-background py-20">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">Everything you need</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">A better way to ship</h2>
             <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-              A complete SaaS platform built for modern businesses. No hacks, no workarounds.
+              Everything your team needs to turn a booking into a delivered experience.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -282,7 +275,7 @@ export default function Landing() {
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">Unified Points Economy</h2>
               <p className="mt-4 leading-relaxed text-muted-foreground">
-                Every operation in Cloudie is powered by a transparent, immutable points ledger. Shipments, documents, emails, and marketplace purchases all draw from your points balance.
+                Every shipment in Crestline Express is powered by a transparent, immutable points ledger. Booking, documents, and partner services draw from the same clear balance.
               </p>
               <ul className="mt-6 space-y-3">
                 {["Immutable ledger records", "Idempotent transactions", "Real-time balance updates", "Admin adjustment tools"].map((item) => (
@@ -307,21 +300,21 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Cloudie document studio */}
+      {/* Crestline document studio */}
       <section className="border-y border-border bg-card py-20">
         <div className="mx-auto max-w-6xl px-4">
           <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1fr]">
             <div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
                 <FileStack className="h-3.5 w-3.5 text-primary" />
-                Cloudie document studio
+                Crestline document studio
               </div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">
                 Dynamic templates in, print-ready documents out
               </h2>
               <p className="mt-4 leading-relaxed text-muted-foreground">
                 Pick a template and fill a schema-driven form — the preview re-renders on every keystroke from the
-                same engine that produces the export. Cloudie rasterizes a high-resolution PNG and assembles a
+                same engine that produces the export. Crestline Express rasterizes a high-resolution PNG and assembles a
                 multi-page PDF, stores both, and returns an unguessable share link.
               </p>
               <ul className="mt-6 space-y-3">
@@ -392,7 +385,7 @@ export default function Landing() {
                 Self-contained shipment tracking
               </h2>
               <p className="mt-4 leading-relaxed text-muted-foreground">
-                Cloudie generates tracking numbers, routes, timelines, QR codes,
+                Crestline Express generates tracking numbers, routes, timelines, QR codes,
                 barcodes, and printable labels entirely inside the platform — with a
                 privacy-filtered public tracking page anyone can open.
               </p>
@@ -451,7 +444,7 @@ export default function Landing() {
             Ready to get started?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Join {brand.name} and start managing your operations today.
+            Join {brand.name} and start moving shipments smarter today.
           </p>
           <Link to="/auth" className="mt-8 inline-block">
             <Button size="lg" className="gap-2 px-8">
@@ -467,7 +460,7 @@ export default function Landing() {
       <footer className="border-t border-border bg-card py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-4 text-center sm:flex-row sm:text-left">
           <div className="flex items-center gap-2">
-            <Cloud className="h-4 w-4 text-primary" />
+            <Truck className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold text-foreground">{brand.name}</span>
           </div>
           {(support.email || support.phone || support.helpCenterUrl) && (

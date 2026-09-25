@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import { Cloud } from "lucide-react";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -56,10 +55,10 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
     <div className="flex h-full flex-col bg-card">
       <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
         <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Cloud className="size-4" />
+          <Truck className="size-4" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-base font-bold tracking-tight text-foreground">Cloudie</p>
+          <p className="truncate text-base font-bold tracking-tight text-foreground">Crestline Express</p>
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
         </div>
       </div>

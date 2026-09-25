@@ -70,7 +70,7 @@ export function PwaInstallButton({ className }: { className?: string }) {
       className={className}
       onClick={async () => {
         const accepted = await promptInstall();
-        if (accepted) toast.success("Cloudie installed. Launch it from your home screen.");
+        if (accepted) toast.success("Crestline Express installed. Launch it from your home screen.");
       }}
     >
       <Download className="h-3.5 w-3.5" />
@@ -106,12 +106,12 @@ export function PwaInstallBanner() {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold tracking-tight text-foreground">
-            Install Cloudie
+            Install Crestline Express
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {canInstall
               ? "Add the operations console to your device for instant access."
-              : "Use your browser menu → “Install app” to add Cloudie to your home screen."}
+              : "Use your browser menu → “Install app” to add Crestline Express to your home screen."}
           </p>
         </div>
         {canInstall && (
@@ -119,7 +119,7 @@ export function PwaInstallBanner() {
             size="sm"
             onClick={async () => {
               const accepted = await promptInstall();
-              if (accepted) toast.success("Cloudie installed.");
+              if (accepted) toast.success("Crestline Express installed.");
             }}
           >
             Install

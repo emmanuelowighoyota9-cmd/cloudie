@@ -222,7 +222,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
         <img
           src={logo}
-          alt="Cloudie"
+          alt="Crestline Express"
           width={56}
           height={56}
           className="mb-6 cursor-pointer rounded-xl"
@@ -386,7 +386,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 </CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
                   {mode === "signIn"
-                    ? "Sign in to your Cloudie workspace"
+                    ? "Sign in to your Crestline Express workspace"
                     : "Sign up with your name, email and a password"}
                 </CardDescription>
               </CardHeader>

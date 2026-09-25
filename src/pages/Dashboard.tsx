@@ -66,7 +66,7 @@ export default function Dashboard() {
           Welcome back{user?.name ? `, ${user.name}` : ""}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground dark:text-slate-400">
-          Here's an overview of your Cloudie workspace.
+          Here's an overview of your Crestline Express workspace.
         </p>
       </div>
 
@@ -104,7 +104,7 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Points Balance</p>
                 <p className="text-3xl font-bold text-foreground">{balance?.toLocaleString() ?? 0}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Cloudie Points</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Crestline Express Points</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
