@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -48,6 +48,11 @@ export default function DocumentBuilder() {
   const params = useParams<{ templateId: string }>();
   const templateId = params.templateId as Id<"documentTemplates"> | undefined;
   const navigate = useNavigate();
+  const location = useLocation();
+  // Values extracted from a brief generator run are handed over through router
+  // state so the form opens pre-filled instead of blank.
+  const briefValues = (location.state as { briefValues?: Record<string, string> } | null)?.briefValues;
+  const prefillNotified = useRef(false);
 
   const template = useQuery(
     api.docTemplates.getTemplate,
@@ -71,12 +76,25 @@ export default function DocumentBuilder() {
   const [generating, setGenerating] = useState(false);
   const [stage, setStage] = useState("");
 
-  // Seed the form from the template once it loads.
+  // Seed the form from the template once it loads, layering any values
+  // extracted from a brief on top of the template defaults.
   useEffect(() => {
     if (!template) return;
     setTitle((current) => current || template.name);
-    setValues((current) => (Object.keys(current).length > 0 ? current : { ...template.defaults }));
-  }, [template]);
+    setValues((current) =>
+      Object.keys(current).length > 0
+        ? current
+        : { ...template.defaults, ...(briefValues ?? {}) },
+    );
+  }, [template, briefValues]);
+
+  useEffect(() => {
+    if (!template || prefillNotified.current) return;
+    const count = Object.keys(briefValues ?? {}).length;
+    if (count === 0) return;
+    prefillNotified.current = true;
+    toast.success(`${count} field${count === 1 ? "" : "s"} pre-filled from your brief`);
+  }, [template, briefValues]);
 
   const schema = template?.schema ?? { fields: [] };
   const configuration = template?.configuration ?? { pages: [] };

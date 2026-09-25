@@ -53,10 +53,17 @@ export default function DocumentGenerator() {
     return templates.find((template) => template.slug === result.intent.templateSlug) ?? null;
   }, [result, templates]);
 
+  // The real schema lets the extracted values line up with the builder's field
+  // ids, so the brief can be carried straight into the form.
+  const templateDetail = useQuery(
+    api.docTemplates.getTemplate,
+    matchedTemplate ? { templateId: matchedTemplate._id } : "skip",
+  );
+
   const output = useMemo(() => {
     if (!result || result.status !== "matched") return null;
-    return buildStructuredOutput(result);
-  }, [result]);
+    return buildStructuredOutput(result, templateDetail?.schema);
+  }, [result, templateDetail?.schema]);
 
   const structuredJson = useMemo(() => {
     if (!output) return "";
@@ -179,9 +186,24 @@ export default function DocumentGenerator() {
               >
                 <div className="flex items-center gap-2 text-destructive">
                   <ShieldAlert className="h-4 w-4" />
-                  <p className="text-sm font-semibold">Not supported</p>
+                  <p className="text-sm font-semibold">Out of scope</p>
                 </div>
                 <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">{result.reason}</p>
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  What this tool can build
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {BRIEF_INTENTS.map((intent) => (
+                    <span key={intent.key} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {intent.label}
+                    </span>
+                  ))}
+                </div>
+                <Button variant="outline" size="sm" className="mt-3 min-h-11 w-full gap-1.5 sm:min-h-9" asChild>
+                  <Link to="/documents/templates">
+                    <ArrowLeft className="h-3.5 w-3.5" /> Browse the template library
+                  </Link>
+                </Button>
               </motion.div>
             )}
 
@@ -218,7 +240,10 @@ export default function DocumentGenerator() {
                   <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{result.intent.description}</p>
                   {matchedTemplate ? (
                     <Button size="sm" className="mt-3 min-h-11 w-full gap-1.5 sm:min-h-9" asChild>
-                      <Link to={`/documents/new/${matchedTemplate._id}`}>
+                      <Link
+                        to={`/documents/new/${matchedTemplate._id}`}
+                        state={{ briefValues: output?.values ?? {} }}
+                      >
                         <Send className="h-3.5 w-3.5" /> Open in builder
                       </Link>
                     </Button>
