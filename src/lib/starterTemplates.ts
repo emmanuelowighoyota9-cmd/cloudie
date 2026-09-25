@@ -779,13 +779,412 @@ const commercialInvoice: StarterTemplate = {
   },
 };
 
-/**
- * Bump this whenever a starter layout changes. The seeder republishes every
- * starter template as a new version when the stored version differs, so layout
- * fixes reach deployments that already installed an earlier set. Already
- * generated documents keep their frozen version snapshot and never change.
- */
-export const STARTER_SET_VERSION = 6;
+// ─── 8. Purchase order ────────────────────────────────────────────
+
+const purchaseOrder: StarterTemplate = {
+  slug: "purchase-order",
+  name: "Purchase Order",
+  documentType: "corporate",
+  description:
+    "A buyer-issued purchase order with supplier, delivery details, itemised lines, totals and agreed terms.",
+  sensitivity: "standard",
+  requiredCredits: 40,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "organization", type: "text", label: "Buying organisation", default: "Northfold Trading", required: true, maxLength: 40 },
+      { id: "poNumber", type: "reference", label: "Order number", default: "PO-2026-4471", required: true },
+      { id: "poStatus", type: "status", label: "Status", default: "pending", options: [
+        { label: "Draft", value: "draft" },
+        { label: "Awaiting approval", value: "pending" },
+        { label: "Approved", value: "completed" },
+        { label: "Cancelled", value: "cancelled" },
+      ] },
+      { id: "issueDate", type: "date", label: "Issue date", default: "2026-09-21", required: true },
+      { id: "deliveryDate", type: "date", label: "Required by", default: "2026-10-06" },
+      { id: "terms", type: "text", label: "Terms", default: "Net 30", maxLength: 32 },
+      { id: "supplierName", type: "text", label: "Supplier", default: "Meridian Supply Co.", required: true, maxLength: 36 },
+      { id: "supplierAddress", type: "textarea", label: "Supplier address", default: "Unit 12, Harbour Works\nRotterdam, NL", maxLength: 120 },
+      { id: "deliverTo", type: "text", label: "Deliver to", default: "Lakeview Interiors — Site office", maxLength: 36 },
+      { id: "deliverToAddress", type: "textarea", label: "Delivery address", default: "18 Riverside Way\nNairobi, KE", maxLength: 120 },
+      { id: "poItem1", type: "text", label: "Item 1", default: "Oak veneer panels (m²)", maxLength: 48 },
+      { id: "poQty1", type: "number", label: "Qty 1", default: "24", min: 0 },
+      { id: "poAmount1", type: "currency", label: "Amount 1", currency: "USD", default: "1920.00" },
+      { id: "poItem2", type: "text", label: "Item 2", default: "Brushed brass handles (set)", maxLength: 48 },
+      { id: "poQty2", type: "number", label: "Qty 2", default: "60", min: 0 },
+      { id: "poAmount2", type: "currency", label: "Amount 2", currency: "USD", default: "1440.00" },
+      { id: "poItem3", type: "text", label: "Item 3", default: "Installation supervision (hr)", maxLength: 48 },
+      { id: "poQty3", type: "number", label: "Qty 3", default: "12", min: 0 },
+      { id: "poAmount3", type: "currency", label: "Amount 3", currency: "USD", default: "960.00" },
+      { id: "subtotal", type: "currency", label: "Subtotal", currency: "USD", default: "4320.00", required: true },
+      { id: "taxRate", type: "number", label: "Tax rate (%)", default: "7.5", min: 0, max: 100 },
+      { id: "taxAmount", type: "currency", label: "Tax", currency: "USD", default: "324.00" },
+      { id: "shipping", type: "currency", label: "Delivery", currency: "USD", default: "180.00" },
+      { id: "total", type: "currency", label: "Order total", currency: "USD", default: "4824.00", required: true },
+      { id: "notes", type: "textarea", label: "Notes", default: "Deliveries accepted on weekday mornings. Quote the order number on every packing list.", maxLength: 200 },
+      { id: "referenceUrl", type: "text", label: "Order portal", default: "northfold.example/orders/PO-2026-4471", maxLength: 120 },
+      { id: "qrValue", type: "text", label: "QR payload", default: "northfold.example/po/PO-2026-4471", maxLength: 120 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 794,
+        height: 1123,
+        background: PAPER,
+        elements: [
+          box(0, 0, 794, 120, "#102a28", 0),
+          txt(56, 58, "PURCHASE ORDER", { size: 11, weight: 700, color: "#a8eadc", letterSpacing: 3.4 }),
+          val(56, 96, "organization", { size: 22, weight: 800, color: "#ffffff", maxChars: 30 }),
+          cap(620, 58, "Order number", { color: "#91b0a7", align: "right", w: 118 }),
+          val(620, 76, "poNumber", { size: 13, weight: 700, color: "#ffffff", align: "right", w: 118 }),
+          badge(470, 84, "poStatus", { size: 11 }),
+
+          box(56, 160, 682, 86, SURFACE, 14, RULE),
+          cap(84, 190, "Issue date"),
+          val(84, 218, "issueDate", { size: 13.5, weight: 600, color: INK }),
+          cap(300, 190, "Required by"),
+          val(300, 218, "deliveryDate", { size: 13.5, weight: 600, color: INK }),
+          cap(504, 190, "Terms"),
+          val(504, 218, "terms", { size: 12.5, color: MUTED, maxChars: 24 }),
+
+          rule(56, 282, 738, 282),
+          cap(56, 316, "Supplier"),
+          val(56, 348, "supplierName", { size: 16, weight: 700, color: INK, maxChars: 32 }),
+          val(56, 372, "supplierAddress", { size: 11.5, color: MUTED, maxChars: 62, lineHeight: 15 }),
+          cap(420, 316, "Deliver to"),
+          val(420, 348, "deliverTo", { size: 16, weight: 700, color: INK, maxChars: 34 }),
+          val(420, 372, "deliverToAddress", { size: 11.5, color: MUTED, maxChars: 62, lineHeight: 15 }),
+
+          rule(56, 432, 738, 432),
+          box(56, 458, 682, 34, "#e5efeb", 6),
+          cap(74, 478, "Description", { color: MUTED }),
+          cap(520, 478, "Qty", { color: MUTED, align: "right", w: 60 }),
+          cap(660, 478, "Amount", { color: MUTED, align: "right", w: 78 }),
+          val(74, 520, "poItem1", { size: 13.5, color: INK, maxChars: 44 }),
+          val(520, 520, "poQty1", { size: 13.5, color: INK, align: "right", w: 60 }),
+          val(660, 520, "poAmount1", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 538, 738, 538),
+          val(74, 568, "poItem2", { size: 13.5, color: INK, maxChars: 44 }),
+          val(520, 568, "poQty2", { size: 13.5, color: INK, align: "right", w: 60 }),
+          val(660, 568, "poAmount2", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 586, 738, 586),
+          val(74, 616, "poItem3", { size: 13.5, color: INK, maxChars: 44 }),
+          val(520, 616, "poQty3", { size: 13.5, color: INK, align: "right", w: 60 }),
+          val(660, 616, "poAmount3", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 634, 738, 634),
+
+          cap(420, 676, "Subtotal"),
+          val(660, 676, "subtotal", { size: 13.5, color: INK, align: "right", w: 78 }),
+          txt(420, 708, "Tax", { size: 12.5, color: MUTED }),
+          val(520, 708, "taxRate", { size: 12.5, color: MUTED, align: "right", w: 60 }),
+          txt(590, 708, "%", { size: 12.5, color: MUTED }),
+          val(660, 708, "taxAmount", { size: 13.5, color: INK, align: "right", w: 78 }),
+          txt(420, 742, "Delivery", { size: 12.5, color: MUTED }),
+          val(660, 742, "shipping", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(420, 766, 738, 766, "#91b0a7", 1.5),
+          txt(420, 798, "Order total", { size: 14, weight: 700, color: INK }),
+          val(660, 798, "total", { size: 20, weight: 800, color: INK, align: "right", w: 78 }),
+
+          cap(56, 858, "Notes"),
+          box(56, 874, 682, 86, SURFACE, 14, RULE),
+          val(80, 906, "notes", { size: 12, color: MUTED, maxChars: 130, lineHeight: 17 }),
+
+          rule(56, 1006, 738, 1006),
+          qr(56, 1030, 86, "qrValue"),
+          val(164, 1058, "referenceUrl", { size: 11.5, weight: 600, color: INK, maxChars: 46 }),
+          txt(164, 1080, "Follow this order online", { size: 10.5, color: MUTED }),
+          txt(620, 1080, "Illustrative order only", { size: 9.5, color: FAINT, align: "right", w: 118 }),
+        ],
+      },
+    ],
+  },
+};
+
+// ─── 9. Packing list ─────────────────────────────────────────────
+
+const packingList: StarterTemplate = {
+  slug: "packing-list",
+  name: "Packing List",
+  documentType: "tracking",
+  description:
+    "Consignment contents, package counts and weights for the sender, carrier and receiving dock.",
+  sensitivity: "standard",
+  requiredCredits: 25,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "consignmentRef", type: "reference", label: "Consignment reference", default: "CRL-88213-7Q", required: true },
+      { id: "carrier", type: "text", label: "Carrier", default: "Coriolis Freight", maxLength: 32 },
+      { id: "shipmentDate", type: "date", label: "Dispatch date", default: "2026-09-22" },
+      { id: "originCity", type: "text", label: "From", default: "Rotterdam", required: true, maxLength: 24 },
+      { id: "destinationCity", type: "text", label: "To", default: "Nairobi", required: true, maxLength: 24 },
+      { id: "senderName", type: "text", label: "Sender", default: "Meridian Supply Co.", maxLength: 34 },
+      { id: "recipientName", type: "text", label: "Recipient", default: "Riverside Hardware", maxLength: 34 },
+      { id: "packageCount", type: "number", label: "Packages", default: "3", min: 1, max: 999 },
+      { id: "totalWeight", type: "number", label: "Gross weight (kg)", default: "12.4", min: 0 },
+      { id: "shippingMethod", type: "text", label: "Method", default: "Priority Express", maxLength: 26 },
+      { id: "contents1", type: "text", label: "Contents 1", default: "Oak veneer panels", maxLength: 42 },
+      { id: "contentsQty1", type: "number", label: "Qty 1", default: "24", min: 0 },
+      { id: "contentsWeight1", type: "number", label: "Weight 1 (kg)", default: "6.2", min: 0 },
+      { id: "contents2", type: "text", label: "Contents 2", default: "Brushed brass handles", maxLength: 42 },
+      { id: "contentsQty2", type: "number", label: "Qty 2", default: "60", min: 0 },
+      { id: "contentsWeight2", type: "number", label: "Weight 2 (kg)", default: "4.1", min: 0 },
+      { id: "contents3", type: "text", label: "Contents 3", default: "Fixings & sealant", maxLength: 42 },
+      { id: "contentsQty3", type: "number", label: "Qty 3", default: "12", min: 0 },
+      { id: "contentsWeight3", type: "number", label: "Weight 3 (kg)", default: "2.1", min: 0 },
+      { id: "handling", type: "textarea", label: "Handling instructions", default: "Keep flat. Do not stack more than two high.\nProtect from moisture in transit.", maxLength: 220 },
+      { id: "notes", type: "textarea", label: "Notes", default: "Dock access is booked for the morning slot. Quote the consignment reference at the gate.", maxLength: 180 },
+      { id: "barcodeValue", type: "reference", label: "Barcode value", default: "CRL-88213-7Q", required: true },
+      { id: "qrValue", type: "text", label: "QR payload", default: "crestline.example/packing/CRL-88213-7Q", maxLength: 120 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 794,
+        height: 1123,
+        background: PAPER,
+        elements: [
+          box(0, 0, 794, 120, "#102a28", 0),
+          txt(56, 58, "PACKING LIST", { size: 11, weight: 700, color: "#a8eadc", letterSpacing: 3.4 }),
+          val(56, 96, "consignmentRef", { size: 24, weight: 800, color: "#ffffff" }),
+          cap(620, 58, "Carrier", { color: "#91b0a7", align: "right", w: 118 }),
+          val(620, 76, "carrier", { size: 13.5, weight: 700, color: "#ffffff", align: "right", w: 118 }),
+          val(620, 98, "shipmentDate", { size: 11, color: "#91b0a7", align: "right", w: 118 }),
+
+          box(56, 160, 682, 92, SURFACE, 14, RULE),
+          cap(84, 192, "From"),
+          val(84, 224, "originCity", { size: 16, weight: 700, color: INK, maxChars: 18 }),
+          txt(392, 216, "→", { size: 18, color: "#3d9286" }),
+          rule(320, 220, 466, 220, RULE, 2),
+          cap(596, 192, "To", { align: "right", w: 114 }),
+          val(596, 224, "destinationCity", { size: 16, weight: 700, color: INK, align: "right", w: 114, maxChars: 18 }),
+
+          cap(56, 294, "Sender"),
+          val(56, 324, "senderName", { size: 15, weight: 700, color: INK, maxChars: 30 }),
+          cap(420, 294, "Recipient"),
+          val(420, 324, "recipientName", { size: 15, weight: 700, color: INK, maxChars: 32 }),
+
+          box(56, 362, 682, 74, "#f7faf7", 14, RULE),
+          cap(84, 392, "Packages"),
+          val(84, 420, "packageCount", { size: 18, weight: 800, color: INK }),
+          cap(280, 392, "Gross weight"),
+          val(280, 420, "totalWeight", { size: 18, weight: 800, color: INK }),
+          txt(340, 420, "kg", { size: 12, color: MUTED }),
+          cap(520, 392, "Method"),
+          val(520, 420, "shippingMethod", { size: 14, weight: 600, color: INK, maxChars: 22 }),
+
+          cap(56, 486, "Contents"),
+          box(56, 504, 682, 34, "#e5efeb", 6),
+          cap(74, 524, "Description", { color: MUTED }),
+          cap(470, 524, "Qty", { color: MUTED, align: "right", w: 56 }),
+          cap(660, 524, "Weight", { color: MUTED, align: "right", w: 78 }),
+          val(74, 566, "contents1", { size: 13.5, color: INK, maxChars: 40 }),
+          val(470, 566, "contentsQty1", { size: 13.5, color: INK, align: "right", w: 56 }),
+          val(660, 566, "contentsWeight1", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 584, 738, 584),
+          val(74, 614, "contents2", { size: 13.5, color: INK, maxChars: 40 }),
+          val(470, 614, "contentsQty2", { size: 13.5, color: INK, align: "right", w: 56 }),
+          val(660, 614, "contentsWeight2", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 632, 738, 632),
+          val(74, 662, "contents3", { size: 13.5, color: INK, maxChars: 40 }),
+          val(470, 662, "contentsQty3", { size: 13.5, color: INK, align: "right", w: 56 }),
+          val(660, 662, "contentsWeight3", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 680, 738, 680),
+
+          cap(56, 726, "Handling instructions"),
+          box(56, 744, 682, 96, SURFACE, 14, RULE),
+          val(80, 776, "handling", { size: 12.5, color: INK, maxChars: 130, lineHeight: 19 }),
+
+          cap(56, 880, "Notes"),
+          box(56, 898, 682, 74, "#f7faf7", 14, RULE),
+          val(80, 928, "notes", { size: 12, color: MUTED, maxChars: 120, lineHeight: 17 }),
+
+          rule(56, 1006, 738, 1006),
+          barcode(56, 1026, "barcodeValue", { h: 56, w: 360, color: INK }),
+          qr(660, 1022, 88, "qrValue"),
+          txt(56, 1104, "Scan or key the consignment reference to trace this shipment", { size: 10, color: MUTED }),
+        ],
+      },
+    ],
+  },
+};
+
+// ─── 10. Remittance advice ────────────────────────────────────────
+
+const remittanceAdvice: StarterTemplate = {
+  slug: "remittance-advice",
+  name: "Remittance Advice",
+  documentType: "corporate",
+  description:
+    "A remitter's advice listing the invoices being settled and the amounts applied — references and totals only.",
+  sensitivity: "standard",
+  requiredCredits: 30,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "issuer", type: "text", label: "Issuing organisation", default: "Lakeview Interiors", required: true, maxLength: 40 },
+      { id: "remittanceNumber", type: "reference", label: "Advice number", default: "REM-2026-0338", required: true },
+      { id: "issueDate", type: "date", label: "Issue date", default: "2026-09-24", required: true },
+      { id: "method", type: "select", label: "Settlement method", default: "Bank transfer", options: [
+        { label: "Bank transfer", value: "Bank transfer" },
+        { label: "Card", value: "Card" },
+        { label: "Wallet", value: "Wallet" },
+        { label: "Offset against credit note", value: "Credit offset" },
+      ] },
+      { id: "payerName", type: "text", label: "Remitter", default: "Lakeview Interiors", maxLength: 36 },
+      { id: "reference", type: "text", label: "Our reference", default: "AP/LK/2026/338", maxLength: 40 },
+      { id: "beneficiaryName", type: "text", label: "Beneficiary", default: "Northfold Trading", maxLength: 36 },
+      { id: "invoiceRef1", type: "reference", label: "Invoice 1", default: "INV-2026-0774" },
+      { id: "amount1", type: "currency", label: "Amount 1", currency: "USD", default: "4824.00" },
+      { id: "invoiceRef2", type: "reference", label: "Invoice 2", default: "INV-2026-0781" },
+      { id: "amount2", type: "currency", label: "Amount 2", currency: "USD", default: "1260.50" },
+      { id: "invoiceRef3", type: "reference", label: "Invoice 3", default: "INV-2026-0790" },
+      { id: "amount3", type: "currency", label: "Amount 3", currency: "USD", default: "880.00" },
+      { id: "totalRemitted", type: "currency", label: "Total remitted", currency: "USD", default: "6964.50", required: true },
+      { id: "notes", type: "textarea", label: "Notes", default: "Amounts are applied in invoice order. Please quote the advice number on any query.", maxLength: 180 },
+      { id: "qrValue", type: "text", label: "QR payload", default: "lakeview.example/remittance/REM-2026-0338", maxLength: 120 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 794,
+        height: 1123,
+        background: PAPER,
+        elements: [
+          box(0, 0, 794, 128, "#102a28", 0),
+          txt(56, 60, "REMITTANCE ADVICE", { size: 11, weight: 700, color: "#a8eadc", letterSpacing: 3.4 }),
+          val(56, 98, "issuer", { size: 24, weight: 800, color: "#ffffff", maxChars: 28 }),
+          cap(620, 60, "Advice number", { color: "#91b0a7", align: "right", w: 118 }),
+          val(620, 96, "remittanceNumber", { size: 13, weight: 700, color: "#ffffff", align: "right", w: 118 }),
+
+          box(56, 168, 682, 132, SURFACE, 16, RULE),
+          cap(84, 200, "Total remitted"),
+          val(84, 246, "totalRemitted", { size: 34, weight: 800, color: INK, family: "serif" }),
+          val(500, 198, "method", { size: 13, color: MUTED, align: "right", w: 238 }),
+          val(500, 224, "issueDate", { size: 13, color: MUTED, align: "right", w: 238 }),
+
+          cap(56, 344, "Remitter"),
+          val(56, 378, "payerName", { size: 17, weight: 700, color: INK, maxChars: 34 }),
+          cap(56, 410, "Our reference"),
+          val(56, 438, "reference", { size: 12.5, weight: 600, color: MUTED, maxChars: 30 }),
+          cap(420, 344, "Beneficiary"),
+          val(420, 378, "beneficiaryName", { size: 17, weight: 700, color: INK, maxChars: 34 }),
+          rule(56, 470, 738, 470),
+
+          cap(56, 504, "Invoices settled"),
+          box(56, 522, 682, 34, "#e5efeb", 6),
+          cap(74, 542, "Invoice", { color: MUTED }),
+          cap(660, 542, "Amount applied", { color: MUTED, align: "right", w: 78 }),
+          val(74, 584, "invoiceRef1", { size: 13.5, color: INK }),
+          val(660, 584, "amount1", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 602, 738, 602),
+          val(74, 632, "invoiceRef2", { size: 13.5, color: INK }),
+          val(660, 632, "amount2", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 650, 738, 650),
+          val(74, 680, "invoiceRef3", { size: 13.5, color: INK }),
+          val(660, 680, "amount3", { size: 13.5, color: INK, align: "right", w: 78 }),
+          rule(56, 698, 738, 698),
+          txt(480, 736, "Total applied", { size: 13.5, weight: 700, color: INK }),
+          val(660, 736, "totalRemitted", { size: 16, weight: 800, color: INK, align: "right", w: 78 }),
+
+          cap(56, 800, "Notes"),
+          box(56, 818, 682, 96, SURFACE, 14, RULE),
+          val(80, 850, "notes", { size: 12.5, color: INK, maxChars: 130, lineHeight: 19 }),
+
+          rule(56, 950, 738, 950),
+          qr(56, 974, 100, "qrValue"),
+          txt(190, 1004, "Scan to reconcile this advice", { size: 11.5, weight: 600, color: INK }),
+          txt(190, 1026, "Amounts are illustrative — no funds move", { size: 11, color: MUTED }),
+          val(644, 1004, "remittanceNumber", { size: 11, weight: 700, color: INK, align: "right", w: 94 }),
+          rule(56, 1060, 738, 1060),
+          txt(56, 1086, "Illustrative business document", { size: 9.5, color: FAINT }),
+        ],
+      },
+    ],
+  },
+};
+
+// ─── 11. Business letter ──────────────────────────────────────────
+
+const businessLetter: StarterTemplate = {
+  slug: "business-letter",
+  name: "Business Letter",
+  documentType: "corporate",
+  description:
+    "A formatted letter on your own letterhead with date, recipient block, subject line and signature area.",
+  sensitivity: "standard",
+  requiredCredits: 20,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "organization", type: "text", label: "Organisation", default: "Northfold Trading", required: true, maxLength: 40 },
+      { id: "organizationAddress", type: "textarea", label: "Letterhead address", default: "12 Harbour Works, Rotterdam, NL\naccounts@northfold.example", maxLength: 140 },
+      { id: "letterDate", type: "date", label: "Date", default: "2026-09-24", required: true },
+      { id: "reference", type: "reference", label: "Our reference", default: "NF/2026/114" },
+      { id: "recipientName", type: "text", label: "Recipient", default: "Priya Ramanathan", required: true, maxLength: 34 },
+      { id: "recipientOrganization", type: "text", label: "Recipient organisation", default: "Lakeview Interiors", maxLength: 36 },
+      { id: "recipientAddress", type: "textarea", label: "Recipient address", default: "18 Riverside Way\nNairobi, KE", maxLength: 140 },
+      { id: "subjectLine", type: "text", label: "Subject", default: "Delivery schedule for the remaining hardware", required: true, maxLength: 70 },
+      { id: "salutation", type: "text", label: "Salutation", default: "Dear Priya,", maxLength: 40 },
+      { id: "letterBody", type: "textarea", label: "Letter body", default: "Thank you for confirming the revised site programme.\n\nDelivery of the remaining brass hardware is confirmed for the first week of October, and our installation supervisor will be on site from the 6th.\n\nWe will send a completion pack once the final walkthrough is signed off.", required: true, maxLength: 900 },
+      { id: "closing", type: "text", label: "Sign-off", default: "Kind regards,", maxLength: 30 },
+      { id: "signatoryName", type: "text", label: "Signed by", default: "Amara Cole", required: true, maxLength: 32 },
+      { id: "signatoryTitle", type: "text", label: "Signatory role", default: "Account Director", maxLength: 40 },
+      { id: "qrValue", type: "text", label: "QR payload", default: "northfold.example/letters/NF-2026-114", maxLength: 120 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 794,
+        height: 1123,
+        background: PAPER,
+        elements: [
+          box(0, 0, 794, 8, "#0b766d", 0),
+          val(56, 76, "organization", { size: 24, weight: 800, color: INK, maxChars: 30 }),
+          val(56, 102, "organizationAddress", { size: 11.5, color: MUTED, maxChars: 70, lineHeight: 16 }),
+          rule(56, 156, 738, 156, RULE),
+
+          val(56, 194, "letterDate", { size: 12.5, weight: 600, color: INK }),
+          cap(620, 176, "Our reference", { align: "right", w: 118 }),
+          val(620, 194, "reference", { size: 12, weight: 700, color: MUTED, align: "right", w: 118 }),
+
+          val(56, 248, "recipientName", { size: 14, weight: 700, color: INK, maxChars: 32 }),
+          val(56, 270, "recipientOrganization", { size: 12.5, color: MUTED, maxChars: 36 }),
+          val(56, 292, "recipientAddress", { size: 12, color: MUTED, maxChars: 64, lineHeight: 16 }),
+
+          rule(56, 356, 738, 356, RULE),
+          cap(56, 386, "Subject"),
+          val(56, 416, "subjectLine", { size: 16, weight: 700, color: INK, maxChars: 62 }),
+          rule(56, 434, 738, 434, RULE),
+
+          val(56, 470, "salutation", { size: 13, color: INK }),
+          val(56, 508, "letterBody", { size: 13, color: INK, maxChars: 700, lineHeight: 23 }),
+
+          val(56, 802, "closing", { size: 13, color: INK }),
+          rule(56, 862, 320, 862, "#cbded8"),
+          val(56, 892, "signatoryName", { size: 15, weight: 700, color: INK, maxChars: 30 }),
+          val(56, 914, "signatoryTitle", { size: 11.5, color: MUTED, maxChars: 38 }),
+
+          rule(56, 1006, 738, 1006),
+          qr(56, 1028, 86, "qrValue"),
+          txt(164, 1056, "Scan to verify this letter", { size: 11, weight: 600, color: INK }),
+          txt(164, 1078, "Issued from the document studio", { size: 10.5, color: MUTED }),
+          txt(620, 1078, "Page 1 of 1", { size: 9.5, color: FAINT, align: "right", w: 118 }),
+        ],
+      },
+    ],
+  },
+};
+
+export const STARTER_SET_VERSION = 7;
 
 export const STARTER_TEMPLATES: StarterTemplate[] = [
   bankingDashboard,
@@ -795,4 +1194,8 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
   certificate,
   operationsBrief,
   commercialInvoice,
+  purchaseOrder,
+  packingList,
+  remittanceAdvice,
+  businessLetter,
 ];

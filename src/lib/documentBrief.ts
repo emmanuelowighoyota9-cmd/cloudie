@@ -12,9 +12,17 @@
  * mistaken for authentic are rejected rather than generated.
  */
 
-import { sanitizeText, type FieldDef, type FieldType } from "./docTemplateEngine";
+import {
+  sanitizeText,
+  type FieldDef,
+  type FieldType,
+  type TemplateSchema,
+} from "./docTemplateEngine";
 
 export type BriefTransform = "text" | "reference" | "date" | "amount" | "number";
+
+/** How sure the parser is about an extracted value. */
+export type BriefConfidence = "high" | "medium" | "low";
 
 export interface BriefFieldRule {
   id: string;
@@ -24,7 +32,21 @@ export interface BriefFieldRule {
   /** First capture group wins; the whole match is used when there is none. */
   patterns: RegExp[];
   transform?: BriefTransform;
+  /** Skip the punctuation trim — used by free text and postal addresses. */
+  keepRaw?: boolean;
   hint?: string;
+}
+
+/** Repeatable table rows, e.g. "2 x Oak veneer panels 1920.00". */
+export interface BriefLineItems {
+  /** Field-id prefix for the description column: "item" → item1, item2… */
+  itemPrefix: string;
+  qtyPrefix?: string;
+  amountPrefix?: string;
+  /** Copy used in the "recognized fields" list. */
+  label: string;
+  /** How many rows the target template can hold. */
+  max: number;
 }
 
 export interface BriefIntent {
@@ -35,6 +57,7 @@ export interface BriefIntent {
   /** Lower-cased terms that indicate this document type. */
   keywords: string[];
   fields: BriefFieldRule[];
+  lineItems?: BriefLineItems;
 }
 
 // ─── Supported intents ────────────────────────────────────────────────────────
@@ -45,7 +68,7 @@ export const BRIEF_INTENTS: BriefIntent[] = [
     label: "Shipment tracking card",
     templateSlug: "shipment-tracking-card",
     description: "Courier status card with milestones, tracking number and scannable codes.",
-    keywords: ["shipment", "shipping", "consignment", "tracking", "track", "parcel", "package", "dispatch", "courier", "freight", "delivery"],
+    keywords: ["shipment", "shipping", "consignment note", "tracking", "track", "parcel", "package", "courier", "freight", "delivery status"],
     fields: [
       {
         id: "trackingNumber",
@@ -55,8 +78,8 @@ export const BRIEF_INTENTS: BriefIntent[] = [
         patterns: [/\b(?:tracking|tracking\s*(?:no|number|id)|awb|consignment)\s*[:#-]?\s*([A-Z0-9][A-Z0-9-]{4,24})\b/i, /\b([A-Z]{2,4}-\d{4,10}(?:-[A-Z0-9]{1,6})?)\b/],
       },
       { id: "carrier", label: "Carrier", patterns: [/\b(?:carrier|courier|via|with)\s*[:#-]?\s*([A-Za-z][A-Za-z0-9&.' -]{2,32})/i] },
-      { id: "originCity", label: "Origin city", patterns: [/\bfrom\s+([A-Za-z][A-Za-z .'-]{2,22})/i, /\borigin\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,22})/i] },
-      { id: "destinationCity", label: "Destination city", patterns: [/\bto\s+([A-Za-z][A-Za-z .'-]{2,22})/i, /\bdestination\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,22})/i] },
+      { id: "originCity", label: "Origin city", patterns: [/\bfrom\s+([A-Za-z][A-Za-z .'-]{2,22}?)(?=\s+(?:to|via|on|at|for)\b|[,;.]|$)/i, /\borigin\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,22}?)(?=\s+(?:to|via)\b|[,;.]|$)/i] },
+      { id: "destinationCity", label: "Destination city", patterns: [/\bto\s+([A-Za-z][A-Za-z .'-]{2,22}?)(?=\s+(?:via|on|at|from)\b|[,;.]|$)/i, /\bdestination\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,22}?)(?=\s+(?:via|on)\b|[,;.]|$)/i] },
       { id: "senderName", label: "Sender", patterns: [/\bsender\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,34})/i, /\bshipper\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,34})/i] },
       { id: "recipientName", label: "Recipient", patterns: [/\brecipient\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,34})/i, /\bconsignee\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,34})/i] },
       { id: "weight", label: "Weight (kg)", transform: "number", patterns: [/\b([0-9]+(?:[.,][0-9]+)?)\s*(?:kg|kgs|kilograms)\b/i] },
@@ -68,7 +91,7 @@ export const BRIEF_INTENTS: BriefIntent[] = [
     label: "Commercial invoice",
     templateSlug: "commercial-invoice",
     description: "Line-item invoice with seller, buyer, tax, shipping and payment terms.",
-    keywords: ["invoice", "bill", "billing", "commercial invoice", "order", "purchase order", "receivable", "statement"],
+    keywords: ["invoice", "billing", "commercial invoice", "receivable", "statement of account", "amount due"],
     fields: [
       {
         id: "invoiceNumber",
@@ -77,27 +100,129 @@ export const BRIEF_INTENTS: BriefIntent[] = [
         transform: "reference",
         patterns: [/\b(?:invoice|inv)\s*(?:no|number|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(INV-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
       },
-      { id: "sellerName", label: "Seller", patterns: [/\b(?:seller|vendor|from|issued by|supplier)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "sellerName", label: "Seller", patterns: [/\b(?:seller|vendor|issued by|supplier)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "sellerAddress", label: "Seller address", keepRaw: true, patterns: [/\bseller\s+address\s*[:#-]\s*([^\n;]{4,90})/i, /\bfrom\s*[:#-]\s*([^\n;]{6,90})/i] },
       { id: "buyerName", label: "Buyer", patterns: [/\b(?:buyer|client|customer|bill to|billed to|purchaser)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "buyerAddress", label: "Buyer address", keepRaw: true, patterns: [/\bbuyer\s+address\s*[:#-]\s*([^\n;]{4,90})/i, /\b(?:bill to|billed to)\s+(?:address\s*[:#-]\s*)?([^\n;]{8,90})/i] },
       { id: "invoiceDate", label: "Invoice date", transform: "date", patterns: [/\b(?:invoice date|issued|date)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "dueDate", label: "Due date", transform: "date", patterns: [/\b(?:due|payment due|due date|net)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "total", label: "Total due", transform: "amount", patterns: [/\b(?:total|amount due|grand total|balance)\s*(?:due|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i, /([0-9][0-9,]*\.[0-9]{2})\s*(?:total|due)/i] },
       { id: "currencyCode", label: "Currency", patterns: [/\b(USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)\b/] },
       { id: "paymentTerms", label: "Payment terms", patterns: [/\b(net\s*[0-9]{1,3}(?:\s*days)?)\b/i, /\bpayment terms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
     ],
+    lineItems: { itemPrefix: "item", qtyPrefix: "qty", amountPrefix: "amt", label: "Line items", max: 3 },
+  },
+  {
+    key: "purchase_order",
+    label: "Purchase order",
+    templateSlug: "purchase-order",
+    description: "Buyer-issued order with supplier, delivery details, itemised lines and terms.",
+    keywords: ["purchase order", "po number", "procurement", "supplier order", "supply order", "order", "deliver to", "required by"],
+    fields: [
+      {
+        id: "poNumber",
+        label: "Order number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:purchase order|po|order)\s*(?:no|number|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(PO-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "organization", label: "Buying organisation", patterns: [/\b(?:buyer|buying organisation|buying organization|issued by|purchaser)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "supplierName", label: "Supplier", patterns: [/\bsupplier\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i, /\bvendor\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "supplierAddress", label: "Supplier address", keepRaw: true, patterns: [/\bsupplier\s+address\s*[:#-]\s*([^\n;]{4,90})/i] },
+      { id: "deliverTo", label: "Deliver to", patterns: [/\bdeliver(?:y)? to\s*[:#-]?\s*([A-Za-z0-9&.' -]{2,40})/i] },
+      { id: "deliverToAddress", label: "Delivery address", keepRaw: true, patterns: [/\bdelivery address\s*[:#-]\s*([^\n;]{4,90})/i] },
+      { id: "issueDate", label: "Issue date", transform: "date", patterns: [/\b(?:issue date|issued|ordered on|order date)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "deliveryDate", label: "Required by", transform: "date", patterns: [/\b(?:required by|deliver(?:y)? by|needed by)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "terms", label: "Terms", patterns: [/\bterms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,32})/i, /\b(net\s*[0-9]{1,3}(?:\s*days)?)\b/i] },
+      { id: "total", label: "Order total", transform: "amount", patterns: [/\b(?:order total|total)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "currencyCode", label: "Currency", patterns: [/\b(USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)\b/] },
+    ],
+    lineItems: { itemPrefix: "poItem", qtyPrefix: "poQty", amountPrefix: "poAmount", label: "Order lines", max: 3 },
+  },
+  {
+    key: "packing_list",
+    label: "Packing list",
+    templateSlug: "packing-list",
+    description: "Consignment contents, package counts and weights for the dock and carrier.",
+    keywords: ["packing list", "packing slip", "packing", "contents list", "parcels", "loading list", "dispatch note"],
+    fields: [
+      {
+        id: "consignmentRef",
+        label: "Consignment reference",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:consignment|packing list|shipment|parcel)\s*(?:ref(?:erence)?|no|number|#|:)\s*([A-Z0-9][A-Z0-9-]{4,24})\b/i, /\b([A-Z]{2,4}-\d{4,10}(?:-[A-Z0-9]{1,6})?)\b/],
+      },
+      { id: "carrier", label: "Carrier", patterns: [/\b(?:carrier|courier|freight|via)\s*[:#-]?\s*([A-Za-z][A-Za-z0-9&.' -]{2,32})/i] },
+      { id: "shipmentDate", label: "Dispatch date", transform: "date", patterns: [/\b(?:dispatch(?:ed)?(?: on)?|ship(?:ped)? on|collection date)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "originCity", label: "From", patterns: [/\bfrom\s+([A-Za-z][A-Za-z .'-]{2,22}?)(?=\s+(?:to|via|on|at|for)\b|[,;.]|$)/i] },
+      { id: "destinationCity", label: "To", patterns: [/\bto\s+([A-Za-z][A-Za-z .'-]{2,22}?)(?=\s+(?:via|on|at|from)\b|[,;.]|$)/i] },
+      { id: "senderName", label: "Sender", patterns: [/\bsender\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,34})/i] },
+      { id: "recipientName", label: "Recipient", patterns: [/\brecipient\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,34})/i] },
+      { id: "packageCount", label: "Packages", transform: "number", patterns: [/\b([0-9]{1,4})\s*(?:packages?|parcels?|cartons?|pallets?|boxes)\b/i] },
+      { id: "totalWeight", label: "Gross weight (kg)", transform: "number", patterns: [/\b(?:gross|total)\s+weight\s*[:#-]?\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:kg|kgs)?/i, /\b([0-9]+(?:[.,][0-9]+)?)\s*(?:kg|kgs|kilograms)\b/i] },
+      { id: "shippingMethod", label: "Method", patterns: [/\bmethod\s*[:#-]?\s*([A-Za-z0-9&.' -]{3,26})/i, /\b(express|priority|economy|sea freight|air freight|road)\b/i] },
+    ],
+    lineItems: { itemPrefix: "contents", qtyPrefix: "contentsQty", amountPrefix: "contentsWeight", label: "Contents rows", max: 3 },
+  },
+  {
+    key: "remittance_advice",
+    label: "Remittance advice",
+    templateSlug: "remittance-advice",
+    description: "Advice listing the invoice references being settled and the amounts applied.",
+    keywords: ["remittance", "remittance advice", "amounts applied", "invoices settled", "payment advice", "settlement advice"],
+    fields: [
+      {
+        id: "remittanceNumber",
+        label: "Advice number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:remittance|advice|rem)\s*(?:no|number|ref(?:erence)?|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(REM-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "issuer", label: "Issuing organisation", patterns: [/\b(?:remitter|from|issued by|on behalf of)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "payerName", label: "Remitter", patterns: [/\bremitter\s*[:#-]?\s*([A-Za-z0-9&.' -]{2,36})/i, /\bpayer\s*[:#-]?\s*([A-Za-z0-9&.' -]{2,36})/i, /\bby\s+([A-Za-z][A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:settling|for|at|on)\b|[,;.]|$)/i] },
+      { id: "beneficiaryName", label: "Beneficiary", patterns: [/\bbeneficiary\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,36})/i, /\bpayee\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,36})/i] },
+      { id: "issueDate", label: "Issue date", transform: "date", patterns: [/\b(?:issue date|issued|advice date|dated)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "method", label: "Settlement method", patterns: [/\b(?:method|settled by|paid by)\s*[:#-]?\s*([A-Za-z][A-Za-z .-]{2,30})/i, /\b(bank transfer|card|wallet|credit offset)\b/i] },
+      { id: "totalRemitted", label: "Total remitted", transform: "amount", patterns: [/\b(?:total remitted|total applied|amount applied|amount|total)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "reference", label: "Our reference", patterns: [/\b(?:our reference|reference|ref)\s*[:#-]?\s*([A-Za-z0-9/][A-Za-z0-9/.-]{3,30})/i] },
+    ],
+    lineItems: { itemPrefix: "invoiceRef", qtyPrefix: "amount", label: "Invoices settled", max: 3 },
   },
   {
     key: "operations_brief",
     label: "Operations brief",
     templateSlug: "operations-brief",
     description: "Internal one-page brief with owner, audience, summary and next step.",
-    keywords: ["brief", "memo", "summary", "report", "one-pager", "status update", "operations", "internal note"],
+    keywords: ["brief", "summary", "status update", "operations", "internal note", "one-pager", "weekly review", "review", "owner", "audience", "weekly", "memo", "report"],
     fields: [
       { id: "briefTitle", label: "Brief title", required: true, patterns: [/\b(?:title|subject|re)\s*[:#-]\s*([A-Za-z0-9&.,'()/ -]{3,48})/i, /^([A-Za-z0-9&.,'()/ -]{4,48})$/m] },
-      { id: "owner", label: "Owner", patterns: [/\b(?:owner|author|prepared by|from)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
-      { id: "audience", label: "Audience", patterns: [/\b(?:audience|for|to)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,32})/i] },
-      { id: "dueDate", label: "Review date", transform: "date", patterns: [/\b(?:review|due|by|deadline)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
-      { id: "summary", label: "Executive summary", patterns: [/\b(?:summary|overview|context)\s*[:#-]\s*([\s\S]{20,220})/i] },
+      { id: "organization", label: "Organization", patterns: [/\b(?:organization|organisation|company|team)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "reference", label: "Reference", transform: "reference", patterns: [/\b(?:reference|ref|ops)\s*[:#-]?\s*([A-Z0-9][A-Z0-9/-]{3,24})\b/i] },
+      { id: "owner", label: "Owner", patterns: [/\b(?:owner|author|prepared by)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+      { id: "audience", label: "Audience", patterns: [/\baudience\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i, /\bfor\s+([A-Za-z][A-Za-z &.,'/-]{3,36})/i] },
+      { id: "dueDate", label: "Review date", transform: "date", patterns: [/\b(?:review|due|deadline)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "summary", label: "Summary", keepRaw: true, patterns: [/\b(?:summary|overview|context)\s*[:#-]\s*([\s\S]{20,220})/i] },
+      { id: "nextStep", label: "Next step", patterns: [/\b(?:next step|action|next action)\s*[:#-]\s*([A-Za-z0-9&.,' -]{4,80})/i] },
+    ],
+  },
+  {
+    key: "business_letter",
+    label: "Business letter",
+    templateSlug: "business-letter",
+    description: "Formal letter on a letterhead with recipient block, subject line and signature.",
+    keywords: ["letter", "letterhead", "formal letter", "cover letter", "correspondence", "write to"],
+    fields: [
+      { id: "organization", label: "Organisation", patterns: [/\b(?:organisation|organization|on behalf of|from)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "letterDate", label: "Date", transform: "date", patterns: [/\b(?:date|dated)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "reference", label: "Our reference", transform: "reference", patterns: [/\b(?:our reference|reference|ref)\s*[:#-]?\s*([A-Za-z0-9/][A-Za-z0-9/.-]{3,30})/i] },
+      { id: "recipientName", label: "Recipient", required: true, patterns: [/\b(?:recipient|addressed to|to)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+      { id: "recipientOrganization", label: "Recipient organisation", patterns: [/\brecipient\s+(?:organisation|organization|company)\s*[:#-]\s*([A-Za-z0-9&.,' -]{2,36})/i] },
+      { id: "recipientAddress", label: "Recipient address", keepRaw: true, patterns: [/\b(?:recipient\s+)?address\s*[:#-]\s*([^\n;]{4,90})/i] },
+      { id: "subjectLine", label: "Subject", required: true, patterns: [/\b(?:subject|re)\s*[:#-]\s*([A-Za-z0-9&.,'()/ -]{4,64})/i] },
+      { id: "salutation", label: "Salutation", patterns: [/\b(dear\s+[A-Za-z][A-Za-z .'-]{1,30}),?/i] },
+      { id: "signatoryName", label: "Signed by", patterns: [/\b(?:signed by|yours(?: faithfully| sincerely)?,?\s*|signatory)\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+      { id: "signatoryTitle", label: "Signatory role", patterns: [/\b(?:role|title|position)\s*[:#-]\s*([A-Za-z0-9&.,' -]{2,40})/i] },
     ],
   },
 ];
@@ -110,6 +235,11 @@ interface RefusedCategory {
   pattern: RegExp;
 }
 
+/**
+ * Anything whose value depends on a third party believing it is genuine.
+ * Crestline does not manufacture these, and the parser refuses them before any
+ * template matching happens.
+ */
 const REFUSED: RefusedCategory[] = [
   { term: "passport", label: "passports", pattern: /\bpassport(s)?\b/i },
   { term: "driver license", label: "driver's licences", pattern: /\bdriver'?s?\s*licen[cs]es?\b/i },
@@ -123,6 +253,8 @@ const REFUSED: RefusedCategory[] = [
   { term: "routing number", label: "bank routing or account numbers", pattern: /\brouting\s+(number|no)\b|\baccount\s+number\b/i },
   { term: "certificate", label: "credential or award certificates", pattern: /\b(certificate|diploma|credential)\b/i },
 ];
+
+const SUPPORTED_SUMMARY = BRIEF_INTENTS.map((intent) => intent.label).join(", ");
 
 export interface BriefRefusal {
   status: "blocked";
@@ -140,15 +272,41 @@ export interface BriefEmpty {
   status: "empty";
 }
 
+/** Two or more supported types scored close enough that a follow-up is fairer than a guess. */
+export interface BriefAmbiguous {
+  status: "ambiguous";
+  reason: string;
+  candidates: BriefCandidate[];
+  /** Values extracted with the leading candidate, kept for convenience. */
+  values: Record<string, string>;
+}
+
+export interface BriefCandidate {
+  key: string;
+  label: string;
+  templateSlug: string;
+  description: string;
+  score: number;
+}
+
+export interface BriefRecognized {
+  id: string;
+  label: string;
+  value: string;
+  confidence: BriefConfidence;
+}
+
 export interface BriefMatch {
   status: "matched";
   intent: BriefIntent;
   values: Record<string, string>;
   missing: { id: string; label: string }[];
-  recognized: { id: string; label: string; value: string }[];
+  recognized: BriefRecognized[];
+  /** True when the brief mentioned the type by name instead of only hints. */
+  explicit: boolean;
 }
 
-export type BriefResult = BriefMatch | BriefRefusal | BriefUnsupported | BriefEmpty;
+export type BriefResult = BriefMatch | BriefRefusal | BriefUnsupported | BriefEmpty | BriefAmbiguous;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,7 +330,38 @@ function ruleFieldType(rule: BriefFieldRule): FieldType {
   }
 }
 
-function applyTransform(value: string, transform: BriefTransform | undefined): string {
+/** Phrases that mark the end of a short value but are never part of one. */
+const STOP_PHRASES =
+  /\s+(?:addressed to|signed by|required by|deliver(?:y)? to|subject|dated|invoice date|due date|payment terms|bank transfer|credit offset|reference|ref|total|amount due)\b/i;
+
+/**
+ * Short text values end at punctuation, not at the end of the sentence:
+ * "Meridian Supply Co., recipient Riverside" is a sender, not a shipping story.
+ */
+function trimTextValue(raw: string): string {
+  let value = raw;
+  const cut = value.search(/[,;():|\n]/);
+  if (cut >= 0) value = value.slice(0, cut);
+  value = value.split(STOP_PHRASES)[0];
+  value = value.replace(/\s+/g, " ").trim();
+  let previous = "";
+  while (previous !== value) {
+    previous = value;
+    value = value.replace(/\s+(?:and|or|to|at|by|with|for|from|of|the)$/i, "").trim();
+  }
+  return value.replace(/[\s.,;:–-]+$/, "").trim();
+}
+
+/** Addresses and free text keep their commas, but lose trailing filler. */
+function softTrim(raw: string): string {
+  return raw.replace(/\s+/g, " ").replace(/[\s,;:–-]+$/, "").trim();
+}
+
+function applyTransform(
+  value: string,
+  transform: BriefTransform | undefined,
+  keepRaw = false,
+): string {
   const trimmed = value.trim();
   switch (transform) {
     case "reference":
@@ -184,25 +373,80 @@ function applyTransform(value: string, transform: BriefTransform | undefined): s
     case "number":
       return trimmed.replace(/[^0-9.]/g, "").slice(0, 20);
     default:
-      return sanitizeText(trimmed, 240);
+      return sanitizeText(keepRaw ? softTrim(trimmed) : trimTextValue(trimmed), 240);
   }
 }
 
-function extractRule(rule: BriefFieldRule, text: string): string {
-  for (const pattern of rule.patterns) {
-    const match = pattern.exec(text);
+function confidenceForPattern(index: number): BriefConfidence {
+  if (index === 0) return "high";
+  if (index === 1) return "medium";
+  return "low";
+}
+
+function extractRule(rule: BriefFieldRule, text: string): { value: string; confidence: BriefConfidence } | null {
+  for (let index = 0; index < rule.patterns.length; index++) {
+    const match = rule.patterns[index].exec(text);
     if (!match) continue;
     const raw = (match[1] ?? match[0] ?? "").trim();
     if (!raw) continue;
-    const value = applyTransform(raw, rule.transform);
-    if (value) return value;
+    const value = applyTransform(raw, rule.transform, rule.keepRaw);
+    if (value) return { value, confidence: confidenceForPattern(index) };
   }
-  return "";
+  return null;
 }
 
-function scoreIntent(intent: BriefIntent, text: string): number {
-  const haystack = text.toLowerCase();
+function scoreIntent(intent: BriefIntent, haystack: string): number {
   return intent.keywords.reduce((score, keyword) => (haystack.includes(keyword) ? score + keyword.length : score), 0);
+}
+
+/**
+ * Repeatable rows: "2 x Oak veneer panels 1,920.00", "3 x Brass handles".
+ * Rows are read from `N x Description [amount]` fragments anywhere in the brief
+ * and capped at the number of slots the target template provides.
+ */
+function extractLineItems(
+  text: string,
+  spec: BriefLineItems,
+): { id: string; label: string; value: string; confidence: BriefConfidence }[] {
+  const out: { id: string; label: string; value: string; confidence: BriefConfidence }[] = [];
+  const rowPattern = /(\d+(?:\.\d+)?)\s*[x×]\s*([^,;\n]{2,60})/gi;
+  let rows = 0;
+  let match = rowPattern.exec(text);
+  while (match && rows < spec.max) {
+    const qty = match[1];
+    let description = match[2].trim().replace(/[-–.\s]+$/, "").trim();
+    let amount = "";
+    // Money is "1920.00"; weights are "6.2 kg". Both belong to the last column.
+    const amountMatch =
+      /^(.*?)\s+(?:USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)?\s*[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2}|[0-9]+(?:\.[0-9]+)?\s*(?:kg|kgs))$/i.exec(description);
+    if (amountMatch && amountMatch[1].trim().length >= 2) {
+      description = amountMatch[1].trim().replace(/[-–@]\s*$/, "").trim();
+      amount = applyTransform(amountMatch[2], "amount");
+    }
+    rows += 1;
+    const index = rows;
+    // "3 x widgets from supplier Meridian" → description "widgets".
+    const descriptionValue = applyTransform(
+      description.split(/[,;]|\s+(?:from|at|for|@)\s/i)[0],
+      "text",
+    );
+    if (descriptionValue) {
+      out.push({
+        id: `${spec.itemPrefix}${index}`,
+        label: `${spec.label} — row ${index}`,
+        value: descriptionValue,
+        confidence: amount ? "high" : "medium",
+      });
+      if (spec.qtyPrefix) {
+        out.push({ id: `${spec.qtyPrefix}${index}`, label: `Qty ${index}`, value: qty, confidence: "high" });
+      }
+      if (amount && spec.amountPrefix) {
+        out.push({ id: `${spec.amountPrefix}${index}`, label: `Amount ${index}`, value: amount, confidence: "high" });
+      }
+    }
+    match = rowPattern.exec(text);
+  }
+  return out;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -212,9 +456,55 @@ export function refusedCategory(text: string): RefusedCategory | null {
   return REFUSED.find((entry) => entry.pattern.test(text)) ?? null;
 }
 
-/** Parse a plain-language brief into a supported business document request. */
-export function parseDocumentBrief(input: string): BriefResult {
-  const text = input.trim().replace(/\s+/g, " ");
+/** Rank every supported type against the brief, best first. */
+export function rankIntents(text: string): BriefCandidate[] {
+  const haystack = text.toLowerCase();
+  return BRIEF_INTENTS.map((intent) => ({
+    key: intent.key,
+    label: intent.label,
+    templateSlug: intent.templateSlug,
+    description: intent.description,
+    score: scoreIntent(intent, haystack),
+  })).sort((a, b) => b.score - a.score);
+}
+
+function collectValues(intent: BriefIntent, text: string): {
+  values: Record<string, string>;
+  recognized: BriefRecognized[];
+  missing: { id: string; label: string }[];
+} {
+  const values: Record<string, string> = {};
+  const recognized: BriefRecognized[] = [];
+  const missing: { id: string; label: string }[] = [];
+
+  for (const rule of intent.fields) {
+    const hit = extractRule(rule, text);
+    if (hit) {
+      values[rule.id] = hit.value;
+      recognized.push({ id: rule.id, label: rule.label, value: hit.value, confidence: hit.confidence });
+    } else if (rule.required) {
+      missing.push({ id: rule.id, label: rule.label });
+    }
+  }
+
+  if (intent.lineItems) {
+    for (const row of extractLineItems(text, intent.lineItems)) {
+      values[row.id] = row.value;
+      recognized.push({ id: row.id, label: row.label, value: row.value, confidence: row.confidence });
+    }
+  }
+
+  return { values, recognized, missing };
+}
+
+/**
+ * Parse a plain-language brief.
+ *
+ * `intentKey` skips matching and uses that supported type directly — this is how
+ * the follow-up question for an ambiguous brief is answered.
+ */
+export function parseDocumentBrief(input: string, intentKey?: string): BriefResult {
+  const text = input.trim().replace(/[ \t]+/g, " ");
   if (!text) return { status: "empty" };
 
   const refused = refusedCategory(text);
@@ -222,37 +512,51 @@ export function parseDocumentBrief(input: string): BriefResult {
     return {
       status: "blocked",
       matched: refused.term,
-      reason: `Crestline does not generate ${refused.label}. Requests for identity documents, government credentials, payment confirmations, bank instruments or credential certificates are declined. Use the template library for legitimate business paperwork.`,
+      reason: `Crestline does not generate ${refused.label}. Identity documents, government credentials, payment confirmations, bank instruments and credential certificates are declined. Supported instead: ${SUPPORTED_SUMMARY}.`,
     };
   }
 
-  const ranked = BRIEF_INTENTS.map((intent) => ({ intent, score: scoreIntent(intent, text) }))
-    .sort((a, b) => b.score - a.score);
+  if (intentKey) {
+    const forced = BRIEF_INTENTS.find((intent) => intent.key === intentKey);
+    if (forced) {
+      const collected = collectValues(forced, text);
+      return { status: "matched", intent: forced, explicit: true, ...collected };
+    }
+  }
+
+  const ranked = rankIntents(text);
   const best = ranked[0];
   if (!best || best.score === 0) {
     return {
       status: "unsupported",
-      reason:
-        "Could not match this brief to a supported Crestline document. Supported types are shipment tracking, commercial invoice and operations brief.",
+      reason: `Could not match this brief to a supported document. Supported types: ${SUPPORTED_SUMMARY}.`,
       suggestions: BRIEF_INTENTS.map((intent) => intent.label),
     };
   }
 
-  const values: Record<string, string> = {};
-  const recognized: BriefMatch["recognized"] = [];
-  const missing: BriefMatch["missing"] = [];
-
-  for (const rule of best.intent.fields) {
-    const value = extractRule(rule, text);
-    if (value) {
-      values[rule.id] = value;
-      recognized.push({ id: rule.id, label: rule.label, value });
-    } else if (rule.required) {
-      missing.push({ id: rule.id, label: rule.label });
-    }
+  const runnersUp = ranked.filter((candidate) => candidate.score > 0 && candidate.score >= best.score * 0.8);
+  if (runnersUp.length > 1) {
+    const collected = collectValues(
+      BRIEF_INTENTS.find((intent) => intent.key === best.key) ?? BRIEF_INTENTS[0],
+      text,
+    );
+    return {
+      status: "ambiguous",
+      reason: "This brief could be more than one document. Pick the one you want and Crestline will extract its fields.",
+      candidates: runnersUp.slice(0, 3),
+      values: collected.values,
+    };
   }
 
-  return { status: "matched", intent: best.intent, values, missing, recognized };
+  const intent = BRIEF_INTENTS.find((entry) => entry.key === best.key) ?? BRIEF_INTENTS[0];
+  const collected = collectValues(intent, text);
+  const haystack = text.toLowerCase();
+  return {
+    status: "matched",
+    intent,
+    explicit: intent.keywords.some((keyword) => keyword.includes(" ") && haystack.includes(keyword)),
+    ...collected,
+  };
 }
 
 export interface BriefStructuredOutput {
@@ -272,7 +576,7 @@ export function buildStructuredOutput(
   result: BriefMatch,
   schema?: { fields: FieldDef[] },
 ): BriefStructuredOutput {
-  const known = new Set(result.intent.fields.map((rule) => rule.id));
+  const known = new Set(result.recognized.map((entry) => entry.id));
   const used = (schema?.fields ?? []).filter((field) => known.has(field.id));
   const fieldSchema =
     used.length > 0
@@ -295,4 +599,136 @@ export function buildStructuredOutput(
     missingFields: result.missing.map((entry) => entry.label),
     fieldSchema,
   };
+}
+
+// ─── Owner-authored templates ─────────────────────────────────────────────────
+
+export interface BriefOwnTemplateRef {
+  _id: string;
+  name: string;
+  description?: string;
+  documentType?: string;
+  categoryLabel?: string;
+}
+
+export interface BriefOwnMatch extends BriefOwnTemplateRef {
+  score: number;
+}
+
+/**
+ * Score the user's own templates against the brief's wording. Own layouts are
+ * ranked on their name, then their description, so a brief that says
+ * "site handover letter" finds a saved "Site handover letter" layout.
+ */
+export function scoreOwnTemplates(text: string, templates: BriefOwnTemplateRef[]): BriefOwnMatch[] {
+  const haystack = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  return templates
+    .map((template) => {
+      let score = 0;
+      for (const word of template.name.toLowerCase().split(/[^a-z0-9]+/)) {
+        if (word.length < 4) continue;
+        if (haystack.includes(` ${word}`)) score += 6;
+      }
+      for (const word of (template.description ?? "").toLowerCase().split(/[^a-z0-9]+/)) {
+        if (word.length < 6) continue;
+        if (haystack.includes(` ${word}`)) score += 1;
+      }
+      return { ...template, score };
+    })
+    .filter((template) => template.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Value shapes we can recognise anywhere a field label appears. */
+const VALUE_PATTERN: Record<string, string> = {
+  text: "[A-Za-z0-9][A-Za-z0-9&.,'()/ -]{1,60}",
+  textarea: "[^\\n;]{6,200}",
+  reference: "[A-Za-z0-9][A-Za-z0-9/.-]{2,32}",
+  date: "[0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\\/[0-9]{1,2}\\/[0-9]{4}",
+  time: "[0-9]{1,2}:[0-9]{2}",
+  datetime: "[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[T ][0-9]{1,2}:[0-9]{2})?",
+  number: "[0-9]+(?:[.,][0-9]+)?",
+  currency: "[0-9][0-9,]*\\.[0-9]{2}",
+  url: "[A-Za-z0-9.-]+\\.[A-Za-z]{2,}(?:\\/[^\\s,;]*)?",
+  country: "[A-Za-z][A-Za-z .'-]{2,40}",
+};
+
+export interface SchemaExtraction {
+  values: Record<string, string>;
+  recognized: BriefRecognized[];
+  missing: { id: string; label: string }[];
+}
+
+/**
+ * Label-driven extraction for owner-authored schemas: every field is looked up
+ * by its own label ("Delivery address", "Invoice 1") and the value that follows
+ * it. Types decide the shape that is accepted, so a date field never swallows a
+ * sentence.
+ */
+export function extractValuesForSchema(text: string, schema: TemplateSchema): SchemaExtraction {
+  const values: Record<string, string> = {};
+  const recognized: BriefRecognized[] = [];
+  const missing: { id: string; label: string }[] = [];
+
+  for (const field of schema.fields) {
+    if (field.type === "image" || field.type === "color" || field.type === "checkbox") continue;
+    const label = field.label?.trim() || field.id;
+    const words = label
+      .toLowerCase()
+      .replace(/\((?:%|[a-z]+)\)/g, " ")
+      .replace(/[^a-z0-9 ]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter((word) => word.length > 1 && !["the", "and", "for", "our", "your"].includes(word));
+    if (words.length === 0) continue;
+
+    const keyword = words.map(escapeRegExp).join("\\s+");
+    const shape = VALUE_PATTERN[field.type] ?? VALUE_PATTERN.text;
+    const matcher = new RegExp(`${keyword}\\s*(?:no|number|ref(?:erence)?|#)?\\s*[:#-]?\\s*(${shape})`, "i");
+    const match = matcher.exec(text);
+    const raw = match?.[1]?.trim() ?? "";
+    const value = raw ? applyTransform(raw, transformForType(field.type)) : "";
+    const finalValue = field.type === "select" || field.type === "status" ? matchOption(field, value) : value;
+
+    if (finalValue) {
+      values[field.id] = finalValue;
+      recognized.push({ id: field.id, label, value: finalValue, confidence: "medium" });
+    } else if (field.required) {
+      missing.push({ id: field.id, label });
+    }
+  }
+
+  return { values, recognized, missing };
+}
+
+function transformForType(type: FieldType): BriefTransform | undefined {
+  switch (type) {
+    case "date":
+    case "datetime": return "date";
+    case "time": return "text";
+    case "currency":
+    case "number": return "amount";
+    case "reference": return "reference";
+    default: return "text";
+  }
+}
+
+function matchOption(field: FieldDef, value: string): string {
+  if (!value) return "";
+  const options = field.options ?? [];
+  if (options.length === 0) return value;
+  const needle = value.trim().toLowerCase();
+  const found = options.find(
+    (option) => option.value.toLowerCase() === needle || option.label.toLowerCase() === needle,
+  );
+  if (found) return found.value;
+  const partial = options.find(
+    (option) => needle.includes(option.label.toLowerCase()) || option.label.toLowerCase().includes(needle),
+  );
+  return partial?.value ?? "";
 }
