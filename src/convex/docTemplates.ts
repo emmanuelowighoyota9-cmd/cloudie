@@ -24,7 +24,7 @@ import {
   type TemplateConfiguration,
   type TemplateSchema,
 } from "../lib/docTemplateEngine";
-import { STARTER_SET_VERSION, STARTER_TEMPLATES } from "../lib/starterTemplates";
+import { PLATFORM_SEED_VERSION, PLATFORM_TEMPLATES } from "../lib/platformTemplates";
 
 /**
  * Cloudie document workspace.
@@ -310,13 +310,13 @@ export const ensureStarterTemplates = mutation({
     const effectiveMarker = marker ?? legacyMarker;
     const seededVersion =
       typeof effectiveMarker?.value === "number" ? (effectiveMarker.value as number) : 0;
-    if (seededVersion >= STARTER_SET_VERSION) return { created: 0, updated: 0 };
+    if (seededVersion >= PLATFORM_SEED_VERSION) return { created: 0, updated: 0 };
 
     const now = Date.now();
     let created = 0;
     let updated = 0;
 
-    for (const starter of STARTER_TEMPLATES) {
+    for (const starter of PLATFORM_TEMPLATES) {
       const issues = validateTemplateDefinition(starter.schema, starter.configuration);
       if (issues.length > 0) continue; // never ship an invalid template
 
@@ -393,21 +393,21 @@ export const ensureStarterTemplates = mutation({
 
     if (marker) {
       await ctx.db.patch(marker._id, {
-        value: STARTER_SET_VERSION,
+        value: PLATFORM_SEED_VERSION,
         updatedBy: userId,
         updatedAt: now,
       });
     } else if (legacyMarker) {
       await ctx.db.patch(legacyMarker._id, {
         key: SEED_VERSION_KEY,
-        value: STARTER_SET_VERSION,
+        value: PLATFORM_SEED_VERSION,
         updatedBy: userId,
         updatedAt: now,
       });
     } else {
       await ctx.db.insert("adminSettings", {
         key: SEED_VERSION_KEY,
-        value: STARTER_SET_VERSION,
+        value: PLATFORM_SEED_VERSION,
         category: "documents",
         updatedBy: userId,
         updatedAt: now,

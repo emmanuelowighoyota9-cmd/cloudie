@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { buildPreviewSvg, categoryDef, defaultValues, svgToDataUrl } from "@/lib/docTemplateEngine";
-import { STARTER_TEMPLATES } from "@/lib/starterTemplates";
+import { PLATFORM_TEMPLATES } from "@/lib/platformTemplates";
 import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPrompt";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import { toast } from "sonner";
@@ -27,6 +27,9 @@ import {
   Truck,
   FileStack,
 } from "lucide-react";
+
+/** Template previews shown on the landing page, in the order listed here. */
+const SHOWCASE_SLUGS = ["shipment-tracking-card", "packing-list", "quotation"];
 
 const features = [
   { icon: Package, title: "Shipment control", desc: "Book, organize, and update every shipment from one calm command center." },
@@ -52,7 +55,7 @@ export default function Landing() {
   // Real template previews, rendered by the same engine the studio uses.
   const documentShowcase = useMemo(
     () =>
-      STARTER_TEMPLATES.slice(0, 3).map((template) => ({
+      PLATFORM_TEMPLATES.filter((template) => SHOWCASE_SLUGS.includes(template.slug)).map((template) => ({
         name: template.name,
         category: categoryDef(template.documentType).label,
         src: svgToDataUrl(

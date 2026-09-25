@@ -1,5 +1,5 @@
 /**
- * Cloudie starter templates.
+ * Crestline starter templates.
  *
  * Plain data: each entry is a complete, validated template definition
  * (schema + layout configuration) that the platform seeds so the document
@@ -30,56 +30,57 @@ export interface StarterTemplate {
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
-const INK = "#102b28";
-const MUTED = "#5c7771";
-const FAINT = "#739a91";
-const RULE = "#cbded8";
-const PAPER = "#ffffff";
-const SURFACE = "#f2f7f4";
+export const INK = "#102b28";
+export const MUTED = "#5c7771";
+export const FAINT = "#739a91";
+export const RULE = "#cbded8";
+export const PAPER = "#ffffff";
+export const SURFACE = "#f2f7f4";
 
 // ─── Element builders (kept terse; all return LayoutElement) ──────────────────
 
-type El = TemplateConfiguration["pages"][number]["elements"][number];
+export type El = TemplateConfiguration["pages"][number]["elements"][number];
 
-function txt(x: number, y: number, text: string, opts: Record<string, unknown> = {}): El {
+export function txt(x: number, y: number, text: string, opts: Record<string, unknown> = {}): El {
   return { kind: "text", x, y, text, ...opts } as El;
 }
 
-function val(x: number, y: number, bind: string, opts: Record<string, unknown> = {}): El {
+export function val(x: number, y: number, bind: string, opts: Record<string, unknown> = {}): El {
   return { kind: "text", x, y, bind, ...opts } as El;
 }
 
-function cap(x: number, y: number, text: string, opts: Record<string, unknown> = {}): El {
+export function cap(x: number, y: number, text: string, opts: Record<string, unknown> = {}): El {
   return {
     kind: "text", x, y, text, size: 9.5, weight: 700, color: FAINT,
     uppercase: true, letterSpacing: 1.4, ...opts,
   } as El;
 }
 
-function box(
+export function box(
   x: number, y: number, w: number, h: number,
   fill: string, rx = 14, stroke?: string,
 ): El {
   return { kind: "rect", x, y, w, h, fill, rx, ...(stroke ? { stroke, strokeWidth: 1 } : {}) } as El;
 }
 
-function rule(x1: number, y1: number, x2: number, y2: number, stroke = RULE, strokeWidth = 1): El {
+export function rule(x1: number, y1: number, x2: number, y2: number, stroke = RULE, strokeWidth = 1): El {
   return { kind: "line", x1, y1, x2, y2, stroke, strokeWidth } as El;
 }
 
-function badge(x: number, y: number, bind: string, opts: Record<string, unknown> = {}): El {
+export function badge(x: number, y: number, bind: string, opts: Record<string, unknown> = {}): El {
   return { kind: "badge", x, y, bind, ...opts } as El;
 }
 
-function qr(x: number, y: number, size: number, bind: string, opts: Record<string, unknown> = {}): El {
+export function qr(x: number, y: number, size: number, bind: string, opts: Record<string, unknown> = {}): El {
   return { kind: "qr", x, y, size, bind, ...opts } as El;
 }
 
-function barcode(x: number, y: number, bind: string, opts: Record<string, unknown> = {}): El {
+export function barcode(x: number, y: number, bind: string, opts: Record<string, unknown> = {}): El {
   return { kind: "barcode", x, y, bind, ...opts } as El;
 }
 
 // ─── 1. Banking interface mockup ──────────────────────────────────
+// (Templates 8-11 live in ./commercialTemplates.ts; the set below is the base.)
 
 const bankingDashboard: StarterTemplate = {
   slug: "banking-dashboard-mockup",

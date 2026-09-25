@@ -38,9 +38,12 @@ import { PageHeader } from "@/components/documents/ui";
 
 const EXAMPLES = [
   "Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, 2 x Oak veneer panels 1920.00, 3 x Brushed brass handles 1440.00, total 4824.00 USD.",
+  "Quotation QT-2026-1187 issued by Northfold Trading for Lakeview Interiors dated 2026-09-24, valid until 2026-10-24, 24 x Oak veneer panels 1920.00, quoted total 4824.00 USD.",
   "Packing list ref CRL-88213-7Q for Meridian Supply Co. shipping Rotterdam to Nairobi, 3 packages, gross weight 12.4 kg, contents 24 x Oak veneer panels 6.2 kg.",
+  "Statement of account SOA-2026-0091 from Northfold Trading for Lakeview Interiors dated 2026-09-30, period from 2026-09-01 to 2026-09-30, balance due 2500.50 USD.",
   "Remittance advice REM-2026-0338 issued 2026-09-24 by Lakeview Interiors settling beneficiary Northfold Trading, bank transfer, amount 4824.00 USD.",
-  "Business letter dated 2026-09-24 from Northfold Trading addressed to Priya Ramanathan, subject: Delivery schedule for the remaining hardware, signed by Amara Cole.",
+  "Delivery note DN-2026-2291 for order PO-2026-4471, delivered on 2026-09-26 by Coriolis Freight, received by Priya Ramanathan, 3 packages, condition: Good condition.",
+  "Expense claim EXP-2026-0512 submitted by Maya Thompson dated 2026-09-24, purpose: Client site visit — Nairobi, category Travel, 1 x Flights — return 612.40, total 1071.10 USD, reimburse 771.10 USD.",
 ];
 
 const CONFIDENCE_STYLE: Record<BriefConfidence, { label: string; className: string }> = {
@@ -93,6 +96,16 @@ export default function DocumentGenerator() {
     if (!output) return "";
     return JSON.stringify(output, null, 2);
   }, [output]);
+
+  /** Fields the brief could not fill and that the template genuinely needs. */
+  const stillRequired = useMemo(() => {
+    if (!result || result.status !== "matched") return [];
+    const labels = result.missing.map((entry) => entry.label);
+    for (const label of output?.missingFields ?? []) {
+      if (!labels.includes(label)) labels.push(label);
+    }
+    return labels;
+  }, [result, output]);
 
   /** Owner-authored layouts whose name or description matches the brief. */
   const ownMatches = useMemo(() => {
@@ -560,16 +573,16 @@ export default function DocumentGenerator() {
                       ))}
                     </ul>
                   )}
-                  {result.missing.length > 0 && (
+                  {stillRequired.length > 0 && (
                     <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
                       <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">Still required</p>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {result.missing.map((entry) => (
+                        {stillRequired.map((label) => (
                           <span
-                            key={entry.id}
+                            key={label}
                             className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
                           >
-                            {entry.label}
+                            {label}
                           </span>
                         ))}
                       </div>

@@ -91,7 +91,7 @@ export const BRIEF_INTENTS: BriefIntent[] = [
     label: "Commercial invoice",
     templateSlug: "commercial-invoice",
     description: "Line-item invoice with seller, buyer, tax, shipping and payment terms.",
-    keywords: ["invoice", "billing", "commercial invoice", "receivable", "statement of account", "amount due"],
+    keywords: ["invoice", "billing", "commercial invoice", "receivable", "amount due"],
     fields: [
       {
         id: "invoiceNumber",
@@ -135,7 +135,6 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "deliveryDate", label: "Required by", transform: "date", patterns: [/\b(?:required by|deliver(?:y)? by|needed by)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "terms", label: "Terms", patterns: [/\bterms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,32})/i, /\b(net\s*[0-9]{1,3}(?:\s*days)?)\b/i] },
       { id: "total", label: "Order total", transform: "amount", patterns: [/\b(?:order total|total)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
-      { id: "currencyCode", label: "Currency", patterns: [/\b(USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)\b/] },
     ],
     lineItems: { itemPrefix: "poItem", qtyPrefix: "poQty", amountPrefix: "poAmount", label: "Order lines", max: 3 },
   },
@@ -224,6 +223,111 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "signatoryName", label: "Signed by", patterns: [/\b(?:signed by|yours(?: faithfully| sincerely)?,?\s*|signatory)\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
       { id: "signatoryTitle", label: "Signatory role", patterns: [/\b(?:role|title|position)\s*[:#-]\s*([A-Za-z0-9&.,' -]{2,40})/i] },
     ],
+  },
+  {
+    key: "quotation",
+    label: "Quotation",
+    templateSlug: "quotation",
+    description: "Priced proposal with a validity window, client details, itemised lines and totals.",
+    keywords: ["quotation", "quote", "estimate", "priced proposal", "tender price"],
+    fields: [
+      {
+        id: "quoteNumber",
+        label: "Quotation number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:quotation|quote|qt)\s*(?:no|number|ref(?:erence)?|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(QT-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "organization", label: "Issuing organisation", patterns: [/\b(?:issued by|issuing organisation|issuing organization)\s*[:#-]?\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:to|for|dated|valid)\b|[,;.]|$)/i, /\bfrom\s+([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:to|for|dated|valid)\b|[,;.]|$)/i] },
+      { id: "clientName", label: "Prepared for", required: true, patterns: [/\b(?:prepared for|for client|client)\s*[:#-]?\s*([A-Za-z][A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:dated|valid|subject|total)\b|[,;.]|$)/i] },
+      { id: "clientAddress", label: "Client address", keepRaw: true, patterns: [/\b(?:client|prepared for)\s+address\s*[:#-]\s*([^\n;]{4,90})/i] },
+      { id: "subject", label: "Subject", patterns: [/\bsubject\s*[:#-]\s*([A-Za-z0-9&.,'()/ -]{4,60})/i] },
+      { id: "issueDate", label: "Issued", transform: "date", patterns: [/\b(?:dated|issue date|issued)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "validUntil", label: "Valid until", transform: "date", patterns: [/\b(?:valid until|valid to|expires?|offer valid)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "validityTerms", label: "Validity terms", patterns: [/\b(?:prices? held|validity)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
+      { id: "total", label: "Quoted total", transform: "amount", patterns: [/\b(?:quoted total|grand total|total|quoted at)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+    ],
+    lineItems: { itemPrefix: "quoteItem", qtyPrefix: "quoteQty", amountPrefix: "quoteAmount", label: "Quotation lines", max: 3 },
+  },
+  {
+    key: "delivery_note",
+    label: "Delivery note",
+    templateSlug: "delivery-note",
+    description: "Proof-of-delivery paperwork: parcels, quantities, condition on arrival and signatures.",
+    keywords: ["delivery note", "delivery docket", "proof of delivery", "goods received", "received by", "delivery confirmation"],
+    fields: [
+      {
+        id: "noteNumber",
+        label: "Delivery note number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:delivery note|delivery docket|dn)\s*(?:no|number|ref(?:erence)?|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(DN-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "orderRef", label: "Order reference", transform: "reference", patterns: [/\b(?:order|po)\s*(?:ref(?:erence)?|no|number|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i] },
+      { id: "organization", label: "Dispatch organisation", patterns: [/\b(?:dispatch(?:ed)? by|from|issued by)\s*[:#-]?\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:to|for|on)\b|[,;.]|$)/i] },
+      { id: "carrier", label: "Carrier", patterns: [/\b(?:carrier|courier|freight|via)\s*[:#-]?\s*([A-Za-z][A-Za-z0-9&.' -]{2,32})/i] },
+      { id: "deliveryDate", label: "Delivered on", transform: "date", patterns: [/\b(?:delivered(?: on)?|delivery date|delivered by|arrived)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "deliverTo", label: "Deliver to", required: true, patterns: [/\bdeliver(?:y)? to\s*[:#-]?\s*([A-Za-z0-9&.' -]{2,40})/i] },
+      { id: "deliveryAddress", label: "Delivery address", keepRaw: true, patterns: [/\bdelivery address\s*[:#-]\s*([^\n;]{4,90})/i] },
+      { id: "receivedBy", label: "Received by", patterns: [/\breceived by\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i, /\bsigned (?:for|by)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+      { id: "packageCount", label: "Packages", transform: "number", patterns: [/\b([0-9]{1,4})\s*(?:packages?|parcels?|cartons?|pallets?|boxes)\b/i] },
+      { id: "condition", label: "Condition on arrival", patterns: [/\bcondition\s*(?:on arrival)?\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,26})/i, /\b(good condition|packaging damaged|short delivery|refused)\b/i] },
+    ],
+    lineItems: { itemPrefix: "contents", qtyPrefix: "contentsQty", label: "Delivered items", max: 3 },
+  },
+  {
+    key: "statement_of_account",
+    label: "Statement of account",
+    templateSlug: "statement-of-account",
+    description: "Period summary of documents raised on an account: entries, amounts paid and the balance due.",
+    keywords: ["statement of account", "account statement", "statement", "outstanding balance", "balance due", "account summary"],
+    fields: [
+      {
+        id: "statementNumber",
+        label: "Statement number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:statement|soa)\s*(?:no|number|ref(?:erence)?|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(SOA-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "organization", label: "Issuing organisation", patterns: [/\b(?:from|issued by|issuing organisation|issuing organization)\s*[:#-]?\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:for|to|dated)\b|[,;.]|$)/i] },
+      { id: "accountName", label: "Account", patterns: [/\b(?:account name|account)\s*[:#-]\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:dated|for)\b|[,;.]|\s+[—–]|$)/i] },
+      { id: "statementDate", label: "Statement date", transform: "date", patterns: [/\b(?:statement date|statement dated|issued)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "periodStart", label: "Period from", transform: "date", patterns: [/\b(?:period from|from)\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})\s*(?:to|until|through)\b/i] },
+      { id: "periodEnd", label: "Period to", transform: "date", patterns: [/\b(?:to|until|through)\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "openingBalance", label: "Opening balance", transform: "amount", patterns: [/\bopening balance\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "totalInvoiced", label: "Total invoiced", transform: "amount", patterns: [/\b(?:total invoiced|invoiced)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "totalPaid", label: "Total paid", transform: "amount", patterns: [/\b(?:total paid|paid to date|amount paid)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "balanceDue", label: "Balance due", required: true, transform: "amount", patterns: [/\b(?:balance due|outstanding balance|amount outstanding|balance)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "terms", label: "Terms", patterns: [/\bterms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,42})/i, /\b(payment due on receipt of statement|net\s*[0-9]{1,3})\b/i] },
+    ],
+    lineItems: { itemPrefix: "entryRef", amountPrefix: "entryAmount", label: "Statement entries", max: 3 },
+  },
+  {
+    key: "expense_claim",
+    label: "Expense claim",
+    templateSlug: "expense-claim",
+    description: "Reimbursement form with purpose, category, itemised costs, advance received and balance payable.",
+    keywords: ["expense claim", "expense report", "expenses", "reimbursement", "claim form", "out-of-pocket"],
+    fields: [
+      {
+        id: "claimNumber",
+        label: "Claim number",
+        required: true,
+        transform: "reference",
+        patterns: [/\b(?:expense claim|claim|exp)\s*(?:no|number|ref(?:erence)?|#|:)\s*([A-Z0-9][A-Z0-9-]{3,24})\b/i, /\b(EXP-[0-9]{4,}-[A-Z0-9]{2,8})\b/],
+      },
+      { id: "organization", label: "Organisation", patterns: [/\b(?:organisation|organization|company|for)\s*[:#-]?\s*([A-Za-z0-9&.'-]*(?: [A-Za-z0-9&.'-]+){0,3}?)(?=\s+(?:claim|dated|by)\b|[,;.]|$)/i] },
+      { id: "claimantName", label: "Claimant", required: true, patterns: [/\b(?:claimant|claimed by|submitted by)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+      { id: "claimantRole", label: "Role", patterns: [/\b(?:role|position)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+      { id: "claimDate", label: "Claim date", transform: "date", patterns: [/\b(?:claim date|dated|submitted)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
+      { id: "purpose", label: "Purpose", patterns: [/\b(?:purpose|reason for claim|trip)\s*[:#-]\s*([^,;\n]{4,60})/i] },
+      { id: "category", label: "Category", patterns: [/\bcategory\s*[:#-]?\s*([A-Za-z][A-Za-z .-]{2,20})/i, /\b(travel|equipment|software|meals|other)\b/i] },
+      { id: "total", label: "Total claimed", transform: "amount", patterns: [/\b(?:total claimed|total|amount claimed)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "advance", label: "Advance received", transform: "amount", patterns: [/\b(?:advance received|advance|less advance)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "reimbursable", label: "Reimbursable", required: true, transform: "amount", patterns: [/\b(?:reimbursable|reimbursement|net claim|payable)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      { id: "approverName", label: "Approved by", patterns: [/\b(?:approved by|approver)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
+    ],
+    lineItems: { itemPrefix: "expense", amountPrefix: "expenseAmount", label: "Claim lines", max: 3 },
   },
 ];
 
@@ -591,12 +695,27 @@ export function buildStructuredOutput(
     const value = result.values[field.id];
     if (value) values[field.id] = value;
   }
+
+  // Anything the template itself demands (and that has no default to fall back
+  // on) is reported too, so the brief never looks complete when the builder
+  // would still refuse to generate.
+  const missingFields = result.missing.map((entry) => entry.label);
+  if (schema) {
+    const labels = new Set(missingFields);
+    for (const field of schema.fields) {
+      if (!field.required || field.default) continue;
+      if (values[field.id] || labels.has(field.label)) continue;
+      labels.add(field.label);
+      missingFields.push(field.label);
+    }
+  }
+
   return {
     documentType: result.intent.key,
     template: result.intent.label,
     templateSlug: result.intent.templateSlug,
     values,
-    missingFields: result.missing.map((entry) => entry.label),
+    missingFields,
     fieldSchema,
   };
 }
