@@ -50,11 +50,18 @@ export default function DocumentTemplates() {
         title="Template library"
         description="Every template is schema-driven: fill the dynamic form, watch the preview update live, then generate a PNG and a PDF."
         actions={
-          <Button variant="outline" asChild>
-            <Link to="/documents" className="gap-1.5">
-              <ArrowLeft className="h-4 w-4" /> Documents
-            </Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/documents" className="gap-1.5">
+                <ArrowLeft className="h-4 w-4" /> Documents
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link to="/documents/generate" className="gap-1.5">
+                <Sparkles className="h-4 w-4" /> Brief generator
+              </Link>
+            </Button>
+          </>
         }
       />
 

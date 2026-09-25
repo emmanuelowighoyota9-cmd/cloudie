@@ -75,6 +75,11 @@ export default function Documents() {
         actions={
           <>
             <Button variant="outline" asChild>
+              <Link to="/documents/generate" className="gap-1.5">
+                <Sparkles className="h-4 w-4" /> Brief generator
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
               <Link to="/documents/templates" className="gap-1.5">
                 <LayoutGrid className="h-4 w-4" /> Template library
               </Link>

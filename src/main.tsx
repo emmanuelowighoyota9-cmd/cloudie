@@ -51,6 +51,7 @@ const NewSite = lazy(() => import("./pages/NewSite.tsx"));
 const SiteDetail = lazy(() => import("./pages/SiteDetail.tsx"));
 const DocumentsPage = lazy(() => import("./pages/Documents.tsx"));
 const DocumentTemplates = lazy(() => import("./pages/DocumentTemplates.tsx"));
+const DocumentGenerator = lazy(() => import("./pages/DocumentGenerator.tsx"));
 const DocumentBuilder = lazy(() => import("./pages/DocumentBuilder.tsx"));
 const OwnDocumentTemplate = lazy(() => import("./pages/OwnDocumentTemplate.tsx"));
 const DocumentDetail = lazy(() => import("./pages/DocumentDetail.tsx"));
@@ -225,6 +226,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/business/sites/:siteId" element={<SiteDetail />} />
                   <Route path="/documents" element={<DocumentsPage />} />
                   <Route path="/documents/templates" element={<DocumentTemplates />} />
+                  <Route path="/documents/generate" element={<DocumentGenerator />} />
                   <Route path="/documents/own/new" element={<OwnDocumentTemplate />} />
                   <Route path="/documents/own/:templateId" element={<OwnDocumentTemplate />} />
                   <Route path="/documents/new/:templateId" element={<DocumentBuilder />} />
