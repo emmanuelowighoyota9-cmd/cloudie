@@ -30,7 +30,7 @@ export function AdminPageHeader({
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{title}</h1>
         {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
   );
 }

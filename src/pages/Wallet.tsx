@@ -44,13 +44,13 @@ export default function Wallet() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Wallet</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your points balance and transaction history.</p>
         </div>
-        <Link to="/buy-points">
-          <Button size="sm" className="gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+        <Link to="/buy-points" className="w-full sm:w-auto">
+          <Button size="sm" className="w-full gap-1.5 sm:w-auto">
             <Plus className="h-4 w-4" /> Buy Points
           </Button>
         </Link>

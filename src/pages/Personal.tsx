@@ -25,12 +25,12 @@ export default function Personal() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Personal Workspace</h1>
-          <div className="flex gap-2">
-            <Link to="/buy-points"><Button size="sm" className="gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"><Plus className="h-4 w-4" /> Buy Points</Button></Link>
-            <Link to="/orders"><Button size="sm" variant="outline" className="gap-1.5"><Receipt className="h-4 w-4" /> Orders</Button></Link>
-            <Link to="/vendor"><Button size="sm" variant="outline" className="gap-1.5"><Store className="h-4 w-4" /> Vendor</Button></Link>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <Link to="/buy-points" className="flex-1 sm:flex-none"><Button size="sm" className="w-full gap-1.5"><Plus className="h-4 w-4" /> Buy Points</Button></Link>
+            <Link to="/orders" className="flex-1 sm:flex-none"><Button size="sm" variant="outline" className="w-full gap-1.5"><Receipt className="h-4 w-4" /> Orders</Button></Link>
+            <Link to="/vendor" className="flex-1 sm:flex-none"><Button size="sm" variant="outline" className="w-full gap-1.5"><Store className="h-4 w-4" /> Vendor</Button></Link>
           </div>
         </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Manage your wallet, transactions, and profile.</p>

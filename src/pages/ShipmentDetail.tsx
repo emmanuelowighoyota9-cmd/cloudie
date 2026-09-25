@@ -51,7 +51,7 @@ export default function ShipmentDetail() {
             {s.role === "sender" ? "You are the sender" : "You are the recipient"} · {s.serviceTypeName}
           </p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
           <Link to={`/shipments/${id}/edit`}>
             <Button variant="outline" size="sm" className="gap-1.5">
               <Pencil className="h-3.5 w-3.5" /> Update

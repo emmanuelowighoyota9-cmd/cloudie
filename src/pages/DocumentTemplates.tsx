@@ -102,7 +102,7 @@ export default function DocumentTemplates() {
 
       {activeCategory === "" && search.trim() === "" && mine !== undefined && (
         <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold text-foreground">Your own documents</h2>
@@ -132,7 +132,7 @@ export default function DocumentTemplates() {
             {mine.map((template) => (
               <div
                 key={template._id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-sm"
+                className="flex flex-col items-stretch gap-3 rounded-xl border border-border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-foreground">{template.name}</p>
@@ -140,16 +140,18 @@ export default function DocumentTemplates() {
                     {template.categoryLabel} · {template.fieldCount} fields · {template.requiredCredits} pts
                   </p>
                 </div>
-                <Button size="sm" variant="outline" className="shrink-0 gap-1.5" asChild>
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
+                  <Button size="sm" variant="outline" className="flex-1 gap-1.5 sm:flex-none" asChild>
                   <Link to={`/documents/own/${template._id}`}>
                     <Pencil className="h-3.5 w-3.5" /> Edit
                   </Link>
-                </Button>
-                <Button size="sm" className="shrink-0 gap-1.5" asChild>
-                  <Link to={`/documents/new/${template._id}`}>
-                    <Sparkles className="h-3.5 w-3.5" /> Use
-                  </Link>
-                </Button>
+                  </Button>
+                  <Button size="sm" className="flex-1 gap-1.5 sm:flex-none" asChild>
+                    <Link to={`/documents/new/${template._id}`}>
+                      <Sparkles className="h-3.5 w-3.5" /> Use
+                    </Link>
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

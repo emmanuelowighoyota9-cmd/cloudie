@@ -12,13 +12,13 @@ export default function NotificationsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Notifications</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Stay updated on your account activity.</p>
         </div>
         {notifications && notifications.some((n) => !n.isRead) && (
-          <Button variant="outline" size="sm" onClick={() => markAllRead()} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => markAllRead()} className="w-full gap-1.5 sm:w-auto">
             <CheckCheck className="h-3.5 w-3.5" /> Mark all read
           </Button>
         )}
@@ -45,11 +45,11 @@ export default function NotificationsPage() {
                     <Bell className="h-4 w-4" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-[var(--nb-ink)]">{n.title}</p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="min-w-0 break-words text-sm font-medium text-[var(--nb-ink)]">{n.title}</p>
                       {!n.isRead && <div className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
+                    <p className="break-words text-sm text-muted-foreground mt-0.5">{n.message}</p>
                     <p className="text-[10px] text-muted-foreground/70 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                   </div>
                   {!n.isRead && (

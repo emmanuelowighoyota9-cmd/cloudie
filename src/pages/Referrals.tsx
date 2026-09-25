@@ -77,8 +77,8 @@ export default function Referrals() {
         <CardHeader><CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Have a referral code?</CardTitle></CardHeader>
         <CardContent>
           <div className="flex gap-2">
-            <Input placeholder="Enter referral code (e.g. CLOUD-ABC123)" value={applyCode} onChange={(e) => setApplyCode(e.target.value.toUpperCase())} className="max-w-sm" />
-            <Button onClick={handleApply} disabled={!applyCode.trim()}>Apply</Button>
+            <Input placeholder="Enter referral code (e.g. CLOUD-ABC123)" value={applyCode} onChange={(e) => setApplyCode(e.target.value.toUpperCase())} className="min-w-0 flex-1" />
+            <Button onClick={handleApply} disabled={!applyCode.trim()} className="shrink-0">Apply</Button>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">You'll receive 25 bonus points when you apply a valid code.</p>
         </CardContent>
