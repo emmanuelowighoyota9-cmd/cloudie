@@ -24,6 +24,7 @@ import {
   Settings,
   Menu,
   Box,
+  Cloud,
 } from "lucide-react";
 import { useState } from "react";
 import { MobileNav } from "./MobileNav";
@@ -48,26 +49,32 @@ export function Header() {
     : user?.email?.[0]?.toUpperCase() || "U";
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800">
-      <div className="flex items-center gap-3">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 sm:h-14 sm:px-4">
+      <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="lg:hidden">
-              <Menu className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="size-11 shrink-0 lg:hidden" aria-label="Open navigation">
+              <Menu className="size-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-60 p-0">
+          <SheetContent side="left" className="w-[88vw] max-w-80 p-0">
             <MobileNav onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>
+        <Link to="/dashboard" className="flex min-w-0 items-center gap-2 lg:hidden">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Cloud className="size-4" />
+          </span>
+          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Cloudie</span>
+        </Link>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         {/* Points Balance */}
-        <Link to="/buy-points">
+        <Link to="/buy-points" className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Badge
-            variant="secondary"
-            className="gap-1.5 px-3 py-1.5 text-sm font-semibold cursor-pointer bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 border-0 rounded-full"
+            variant="default"
+            className="min-h-11 gap-1.5 rounded-full border-0 px-2.5 py-2 text-xs font-semibold shadow-sm sm:min-h-8 sm:px-3 sm:text-sm"
           >
             <Box className="h-3.5 w-3.5" />
             {pointsBalance != null ? `${pointsBalance.toLocaleString()} pts` : "—"}
@@ -81,10 +88,10 @@ export function Header() {
 
         {/* Notifications */}
         <Link to="/notifications">
-          <Button variant="ghost" size="icon" className="relative">
+          <Button variant="ghost" size="icon" className="relative size-11 sm:size-9" aria-label="Notifications">
             <Bell className="h-4 w-4" />
             {unreadCount !== undefined && unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-background">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -92,7 +99,7 @@ export function Header() {
         </Link>
 
         {/* Theme Toggle */}
-        <Button variant="ghost" size="icon" onClick={toggle}>
+        <Button variant="ghost" size="icon" className="hidden size-11 sm:inline-flex sm:size-9" onClick={toggle} aria-label="Toggle theme">
           {theme === "light" ? (
             <Moon className="h-4 w-4" />
           ) : (
@@ -103,9 +110,9 @@ export function Header() {
         {/* Profile Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 px-2">
-              <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-blue-100 text-xs font-semibold text-blue-700 dark:bg-blue-900 dark:text-blue-300">
+            <Button variant="ghost" className="size-11 gap-2 px-1 sm:h-9 sm:w-auto sm:px-2" aria-label="Open profile menu">
+              <Avatar className="size-7">
+                <AvatarFallback className="bg-secondary text-xs font-semibold text-secondary-foreground">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -127,7 +134,7 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleSignOut}
-              className="text-red-600 focus:text-red-600"
+              className="text-destructive focus:text-destructive"
             >
               <LogOut className="mr-2 h-4 w-4" /> Sign out
             </DropdownMenuItem>

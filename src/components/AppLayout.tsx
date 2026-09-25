@@ -17,10 +17,10 @@ export function AppLayout() {
         />
       </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header />
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
-          <div className="mx-auto w-full max-w-7xl p-4 md:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] overscroll-contain lg:pb-0">
+          <div className="mx-auto w-full max-w-7xl p-3 sm:p-5 lg:p-8">
             <Outlet />
           </div>
         </main>

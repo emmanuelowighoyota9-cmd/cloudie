@@ -4,7 +4,7 @@ import { Home, CreditCard, Truck, FileText, Building2, FileStack } from "lucide-
 
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
-  { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
+  { label: "Points", icon: CreditCard, to: "/buy-points" },
   { label: "Shipments", icon: Truck, to: "/shipments" },
   { label: "Docs", icon: FileStack, to: "/documents" },
   { label: "Tickets", icon: FileText, to: "/ticketing" },
@@ -20,8 +20,8 @@ export function BottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 lg:hidden">
-      <div className="flex items-center justify-around px-2 py-1.5">
+    <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-18px_color-mix(in_srgb,var(--foreground)_35%,transparent)] backdrop-blur lg:hidden">
+      <div className="flex items-stretch justify-around px-1 pt-1 sm:px-2">
         {navItems.map((item) => {
           const active = isActive(item.to);
           return (
@@ -29,14 +29,15 @@ export function BottomNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex flex-col items-center gap-0.5 rounded-lg px-3 py-1.5 text-[10px] font-medium transition-colors min-w-[48px]",
+                "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium transition-colors",
                 active
-                  ? "text-blue-600 dark:text-blue-400"
-                  : "text-slate-400 dark:text-slate-500",
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
+              aria-current={active ? "page" : undefined}
             >
-              <item.icon className="h-5 w-5" />
-              <span>{item.label}</span>
+              <item.icon className="size-5" />
+              <span className="max-w-full truncate">{item.label}</span>
             </Link>
           );
         })}

@@ -135,6 +135,20 @@
     font-family: var(--font-sans);
   }
 
+  select,
+  textarea,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]) {
+    min-height: 2.75rem;
+  }
+
+  @media (min-width: 640px) {
+    select,
+    textarea,
+    input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]) {
+      min-height: 0;
+    }
+  }
+
   h1,
   h2,
   h3,

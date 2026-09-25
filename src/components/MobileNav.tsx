@@ -17,6 +17,7 @@ import {
   Truck,
   Store,
   Receipt,
+  FileStack,
 } from "lucide-react";
 
 const navItems = [
@@ -30,6 +31,7 @@ const navItems = [
   { label: "Shipments", icon: Truck, to: "/shipments" },
   { label: "Ticketing", icon: FileText, to: "/ticketing" },
   { label: "Business Suite", icon: Building2, to: "/business" },
+  { label: "Documents", icon: FileStack, to: "/documents" },
   { label: "Services", icon: Layers, to: "/services" },
   { label: "Notifications", icon: Bell, to: "/notifications" },
   { label: "Settings", icon: Settings, to: "/settings" },
@@ -51,14 +53,17 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-slate-800">
-      <div className="flex h-14 items-center gap-2 border-b border-slate-200 dark:border-slate-700 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600">
-          <Cloud className="h-4 w-4 text-white" />
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
+        <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+          <Cloud className="size-4" />
         </div>
-        <span className="text-lg font-bold text-slate-900 dark:text-white">Cloudie</span>
+        <div className="min-w-0">
+          <p className="truncate text-base font-bold tracking-tight text-foreground">Cloudie</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
+        </div>
       </div>
-      <nav className="flex-1 space-y-0.5 p-3 overflow-y-auto">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Mobile navigation">
         {navItems
           .filter((item) => item.label !== "Admin" || isAdmin)
           .map((item) => (
@@ -66,11 +71,12 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
               key={item.to}
               to={item.to}
               onClick={onNavigate}
+              aria-current={isActive(item.to) ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium transition-colors",
                 isActive(item.to)
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300"
-                  : "text-slate-600 hover:bg-slate-50 dark:text-slate-400 dark:hover:bg-slate-700/50",
+                  ? "border-primary/20 bg-primary/10 text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <item.icon className="h-4 w-4" />

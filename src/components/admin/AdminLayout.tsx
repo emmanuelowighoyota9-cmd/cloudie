@@ -19,7 +19,7 @@ import {
   BarChart3,
   Boxes,
   Building2,
-  ChevronLeft,
+  X,
   ClipboardCheck,
   FileText,
   Gavel,
@@ -110,7 +110,7 @@ function GlobalSearch() {
     results && (results.users.length || results.shipments.length || results.vendors.length || results.tenants.length || results.orders.length);
 
   return (
-    <div ref={boxRef} className="relative w-full max-w-md">
+    <div ref={boxRef} className="relative min-w-0 w-full max-w-md">
       <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
       <Input
         value={q}
@@ -259,10 +259,10 @@ function AdminShell() {
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white",
+                  ? "border-primary/20 bg-primary/10 text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
               )
             }
           >
@@ -289,16 +289,16 @@ function AdminShell() {
   );
 
   const profile = (
-    <div className="border-t border-slate-200 p-3 dark:border-slate-700">
+    <div className="border-t border-border p-3">
       <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-xs font-bold text-white">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
           {(user?.name || user?.email || "A")[0]?.toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">{user?.name || "Admin"}</p>
-          <p className="truncate text-[10px] text-slate-400">{user?.email}</p>
+          <p className="truncate text-xs font-semibold text-foreground">{user?.name || "Admin"}</p>
+          <p className="truncate text-[10px] text-muted-foreground">{user?.email}</p>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleLogout} aria-label="Log out">
+        <Button variant="ghost" size="icon" className="size-11 sm:size-9" onClick={handleLogout} aria-label="Log out">
           <LogOut className="h-3.5 w-3.5" />
         </Button>
       </div>
@@ -323,13 +323,13 @@ function AdminShell() {
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-72 flex-col bg-white dark:bg-slate-800">
-            <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-4 dark:border-slate-700">
-              <Shield className="h-5 w-5 text-blue-600" />
-              <p className="flex-1 text-sm font-bold">Cloudie Admin</p>
-              <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} aria-label="Close menu">
-                <ChevronLeft className="h-4 w-4" />
+          <div className="absolute inset-0 bg-foreground/40" onClick={() => setMobileOpen(false)} />
+          <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-80 flex-col border-r border-border bg-card shadow-2xl">
+            <div className="flex h-16 items-center gap-2 border-b border-border px-4">
+              <Shield className="size-5 text-primary" />
+              <p className="flex-1 text-sm font-bold text-foreground">Cloudie Admin</p>
+              <Button variant="ghost" size="icon" className="size-11" onClick={() => setMobileOpen(false)} aria-label="Close menu">
+                <X className="size-5" />
               </Button>
             </div>
             {navList}
@@ -339,8 +339,8 @@ function AdminShell() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4 dark:border-slate-700 dark:bg-slate-800">
-          <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-card px-3 sm:h-14 sm:gap-3 sm:px-4">
+          <Button variant="ghost" size="icon" className="size-11 shrink-0 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <LayoutDashboard className="h-4 w-4" />
           </Button>
           <GlobalSearch />
@@ -348,7 +348,7 @@ function AdminShell() {
             <span className="mr-2 hidden items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300 sm:flex">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Secure session
             </span>
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
+            <Button variant="ghost" size="icon" className="size-11 sm:size-9" onClick={toggle} aria-label="Toggle theme">
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             <Link to="/dashboard" className="hidden sm:block">
@@ -356,8 +356,8 @@ function AdminShell() {
             </Link>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
-          <div className="mx-auto w-full max-w-7xl p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(1rem+env(safe-area-inset-bottom))] overscroll-contain">
+          <div className="mx-auto w-full max-w-7xl p-3 sm:p-5 lg:p-8">
             <Outlet />
           </div>
         </main>
