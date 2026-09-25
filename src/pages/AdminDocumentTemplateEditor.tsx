@@ -141,7 +141,8 @@ export default function DocumentTemplateEditor({
     isOwn && templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
   );
   const pointsBalance = useQuery(api.points.getBalance);
-  const canAffordDesign = typeof pointsBalance !== "number" || pointsBalance >= designPrice.points;
+  const balanceLoading = pointsBalance === undefined;
+  const canAffordDesign = typeof pointsBalance === "number" && pointsBalance >= designPrice.points;
   const existing = isOwn ? ownExisting : adminExisting;
   const createTemplate = useMutation(api.docTemplates.adminCreateTemplate);
   const publishVersion = useMutation(api.docTemplates.adminPublishTemplateVersion);
@@ -869,32 +870,76 @@ export default function DocumentTemplateEditor({
           setConfirmDesignSave(false);
         }
       }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm document design</AlertDialogTitle>
+            <AlertDialogTitle>Confirm {editing ? "save" : "design"}</AlertDialogTitle>
             <AlertDialogDescription>
-              Saving this {editing ? "version" : "design"} will use {designPrice.points.toLocaleString()} points from your balance. This design fee is charged once for this save.
+              {editing
+                ? "This will save a new version of your document."
+                : "This will create your document and make it available in Documents."}{" "}
+              Your balance will be charged when the save succeeds.
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          <div className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.06] p-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Coins className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">
+                {designPrice.points.toLocaleString()} points
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Design fee for this save · charged once
+              </p>
+            </div>
+          </div>
+
+          {balanceLoading && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Checking your balance before saving…
+            </div>
+          )}
+
+          {pointsBalance === null && (
+            <div className="rounded-lg border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
+              We couldn’t load your points balance. Refresh the page or sign in again before saving.
+            </div>
+          )}
+
           {typeof pointsBalance === "number" && !canAffordDesign && (
             <div className="rounded-lg border border-destructive/25 bg-destructive/[0.06] p-3 text-xs text-destructive">
               You need {designPrice.points.toLocaleString()} points to save this design. Your current balance is {pointsBalance.toLocaleString()} points.
-              <Button asChild size="sm" variant="outline" className="mt-2 h-9 border-destructive/30 text-destructive hover:bg-destructive/10">
+              <Button
+                asChild
+                size="sm"
+                variant="outline"
+                className="mt-2 h-9 w-full border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={() => setConfirmDesignSave(false)}
+              >
                 <Link to="/buy-points">Buy points</Link>
               </Button>
             </div>
           )}
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={saving}>Keep editing</AlertDialogCancel>
             <AlertDialogAction
-              disabled={saving || !canAffordDesign}
+              disabled={saving || typeof pointsBalance !== "number" || !canAffordDesign}
               onClick={() => {
                 confirmedDesignSave.current = true;
                 setConfirmDesignSave(false);
                 void onSave();
               }}
             >
-              {saving ? "Saving…" : `Confirm · use ${designPrice.points.toLocaleString()} pts`}
+              {saving
+                ? "Saving…"
+                : balanceLoading
+                  ? "Checking balance…"
+                  : pointsBalance === null
+                    ? "Balance unavailable"
+                    : `Confirm · use ${designPrice.points.toLocaleString()} pts`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
