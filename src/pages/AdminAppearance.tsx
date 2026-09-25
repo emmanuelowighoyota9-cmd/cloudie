@@ -20,11 +20,17 @@ import {
 import { AdminPageHeader, AdminSkeleton } from "@/components/admin/shared";
 import {
   DEFAULT_BRAND,
+  DEFAULT_QUICK_ACTIONS,
   DEFAULT_SUPPORT,
+  QUICK_ACTION_CATALOG,
   type BrandConfig,
+  type QuickActionConfig,
+  type QuickActionKind,
   type SupportConfig,
 } from "@/lib/platformConfig";
 import {
+  ArrowDown,
+  ArrowUp,
   BadgeCheck,
   Headphones,
   LifeBuoy,
@@ -33,6 +39,7 @@ import {
   RotateCcw,
   Save,
   Send,
+  Smartphone,
   Trash2,
 } from "lucide-react";
 
@@ -135,13 +142,16 @@ export default function AdminAppearance() {
   const config = useQuery(api.platform.getPublicConfig);
   const saveBrand = useMutation(api.platform.saveBrand);
   const saveSupport = useMutation(api.platform.saveSupport);
+  const saveQuickActions = useMutation(api.platform.saveQuickActions);
   const resetConfig = useMutation(api.platform.resetConfig);
 
   const [brand, setBrand] = useState<BrandConfig>(DEFAULT_BRAND);
   const [support, setSupport] = useState<SupportConfig>(DEFAULT_SUPPORT);
+  const [quickActions, setQuickActions] = useState<QuickActionConfig[]>(DEFAULT_QUICK_ACTIONS);
   const [touchedBrand, setTouchedBrand] = useState(false);
   const [touchedSupport, setTouchedSupport] = useState(false);
-  const [saving, setSaving] = useState<"brand" | "support" | "reset" | null>(null);
+  const [touchedQuickActions, setTouchedQuickActions] = useState(false);
+  const [saving, setSaving] = useState<"brand" | "support" | "quickActions" | "reset" | null>(null);
 
   // Seed the forms from the live config until the admin starts editing, so
   // realtime subscription updates never clobber in-progress changes.
@@ -151,6 +161,9 @@ export default function AdminAppearance() {
   useEffect(() => {
     if (config && !touchedSupport) setSupport(config.support);
   }, [config, touchedSupport]);
+  useEffect(() => {
+    if (config && !touchedQuickActions) setQuickActions(config.quickActions);
+  }, [config, touchedQuickActions]);
 
   const updateBrand = (patch: Partial<BrandConfig>) => {
     setTouchedBrand(true);
@@ -159,6 +172,22 @@ export default function AdminAppearance() {
   const updateSupport = (patch: Partial<SupportConfig>) => {
     setTouchedSupport(true);
     setSupport((prev) => ({ ...prev, ...patch }));
+  };
+  const updateQuickActions = (next: QuickActionConfig[]) => {
+    setTouchedQuickActions(true);
+    setQuickActions(next);
+  };
+  const addQuickAction = (kind: QuickActionKind) => {
+    const catalogItem = QUICK_ACTION_CATALOG.find((item) => item.kind === kind);
+    if (!catalogItem || quickActions.length >= 4 || quickActions.some((item) => item.kind === kind)) return;
+    updateQuickActions([...quickActions, { kind, label: catalogItem.label }]);
+  };
+  const moveQuickAction = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= quickActions.length) return;
+    const next = [...quickActions];
+    [next[index], next[target]] = [next[target], next[index]];
+    updateQuickActions(next);
   };
 
   const handleSaveBrand = async () => {
@@ -187,12 +216,29 @@ export default function AdminAppearance() {
     }
   };
 
+  const handleSaveQuickActions = async () => {
+    setSaving("quickActions");
+    try {
+      await saveQuickActions({ quickActions });
+      setTouchedQuickActions(false);
+      toast.success("Mobile quick actions saved — customers will see the update live");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save mobile quick actions");
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const handleReset = async () => {
     setSaving("reset");
     try {
       await resetConfig();
+      setBrand(DEFAULT_BRAND);
+      setSupport(DEFAULT_SUPPORT);
+      setQuickActions(DEFAULT_QUICK_ACTIONS);
       setTouchedBrand(false);
       setTouchedSupport(false);
+      setTouchedQuickActions(false);
       toast.success("Configuration reset to platform defaults");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not reset configuration");
@@ -205,7 +251,7 @@ export default function AdminAppearance() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Appearance & Support"
-        description="Set the app design tokens, product identity and the customer support details shown to your users. Every change is audited (SETTING_CHANGED) and applies live."
+        description="Set the app design, customer support details and the quick actions shown on the mobile dashboard. Every change is audited and applies live."
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleReset} disabled={saving !== null} className="gap-1.5">
@@ -224,6 +270,9 @@ export default function AdminAppearance() {
               <TabsList className="mb-4">
                 <TabsTrigger value="design" className="gap-1.5">
                   <Palette className="h-3.5 w-3.5" /> Brand & design
+                </TabsTrigger>
+                <TabsTrigger value="quick-actions" className="gap-1.5">
+                  <Smartphone className="h-3.5 w-3.5" /> Mobile quick actions
                 </TabsTrigger>
                 <TabsTrigger value="support" className="gap-1.5">
                   <Headphones className="h-3.5 w-3.5" /> Customer support
@@ -308,6 +357,98 @@ export default function AdminAppearance() {
                       </p>
                       <Button onClick={handleSaveBrand} disabled={saving !== null} className="gap-1.5">
                         <Save className="h-3.5 w-3.5" /> {saving === "brand" ? "Saving…" : "Save design"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="quick-actions" className="space-y-5">
+                <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base text-slate-900 dark:text-white">Mobile dashboard quick actions</CardTitle>
+                    <p className="text-xs text-slate-500">
+                      Choose up to four actions, rename their labels and set the order customers see. Destinations are restricted to safe, built-in pages.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      {quickActions.map((action, index) => {
+                        const catalogItem = QUICK_ACTION_CATALOG.find((item) => item.kind === action.kind);
+                        return (
+                          <div key={action.kind} className="grid gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700 sm:grid-cols-[1fr_auto] sm:items-center">
+                            <div className="space-y-1.5">
+                              <Label htmlFor={`quick-action-${action.kind}`} className="text-xs text-slate-600 dark:text-slate-400">
+                                Button label
+                              </Label>
+                              <Input
+                                id={`quick-action-${action.kind}`}
+                                value={action.label}
+                                maxLength={24}
+                                onChange={(event) => {
+                                  const next = [...quickActions];
+                                  next[index] = { ...action, label: event.target.value };
+                                  updateQuickActions(next);
+                                }}
+                              />
+                              <p className="truncate text-[11px] text-slate-400">Opens {catalogItem?.path}</p>
+                            </div>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="size-11"
+                                disabled={index === 0}
+                                onClick={() => moveQuickAction(index, -1)}
+                                aria-label={`Move ${action.label} up`}
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="size-11"
+                                disabled={index === quickActions.length - 1}
+                                onClick={() => moveQuickAction(index, 1)}
+                                aria-label={`Move ${action.label} down`}
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-11 text-red-500"
+                                disabled={quickActions.length === 1}
+                                onClick={() => updateQuickActions(quickActions.filter((item) => item.kind !== action.kind))}
+                                aria-label={`Remove ${action.label}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {quickActions.length < 4 && (
+                      <div className="rounded-xl border border-dashed border-slate-200 p-3 dark:border-slate-700">
+                        <p className="mb-2 text-xs font-medium text-slate-600 dark:text-slate-400">Add an action</p>
+                        <div className="flex flex-wrap gap-2">
+                          {QUICK_ACTION_CATALOG.filter((item) => !quickActions.some((action) => action.kind === item.kind)).map((item) => (
+                            <Button key={item.kind} variant="outline" size="sm" className="min-h-11 gap-1.5" onClick={() => addQuickAction(item.kind)}>
+                              <Plus className="h-3.5 w-3.5" /> {item.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                      <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                        <BadgeCheck className="h-3 w-3" /> {touchedQuickActions ? "Unsaved changes" : "Saved"}
+                      </p>
+                      <Button onClick={handleSaveQuickActions} disabled={saving !== null || !touchedQuickActions} className="gap-1.5">
+                        <Save className="h-3.5 w-3.5" /> {saving === "quickActions" ? "Saving…" : "Save quick actions"}
                       </Button>
                     </div>
                   </CardContent>

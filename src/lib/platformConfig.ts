@@ -43,6 +43,39 @@ export interface SupportConfig {
   faqs: SupportFaq[];
 }
 
+export const QUICK_ACTION_KINDS = [
+  "shipment",
+  "points",
+  "document",
+  "orders",
+  "tracking",
+  "wallet",
+  "marketplace",
+  "support",
+] as const;
+
+export type QuickActionKind = (typeof QUICK_ACTION_KINDS)[number];
+
+export interface QuickActionConfig {
+  kind: QuickActionKind;
+  label: string;
+}
+
+export interface QuickActionCatalogItem extends QuickActionConfig {
+  path: string;
+}
+
+export const QUICK_ACTION_CATALOG: QuickActionCatalogItem[] = [
+  { kind: "shipment", label: "Shipment", path: "/shipments/new" },
+  { kind: "points", label: "Points", path: "/buy-points" },
+  { kind: "document", label: "Document", path: "/documents/own/new" },
+  { kind: "orders", label: "Orders", path: "/orders" },
+  { kind: "tracking", label: "Track", path: "/track" },
+  { kind: "wallet", label: "Wallet", path: "/wallet" },
+  { kind: "marketplace", label: "Market", path: "/marketplace" },
+  { kind: "support", label: "Support", path: "/support" },
+];
+
 export const DEFAULT_BRAND: BrandConfig = {
   name: "Cloudie",
   tagline: "Operations platform",
@@ -52,6 +85,13 @@ export const DEFAULT_BRAND: BrandConfig = {
   logoUrl: "",
   defaultMode: "system",
 };
+
+export const DEFAULT_QUICK_ACTIONS: QuickActionConfig[] = [
+  { kind: "shipment", label: "Shipment" },
+  { kind: "points", label: "Points" },
+  { kind: "document", label: "Document" },
+  { kind: "orders", label: "Orders" },
+];
 
 export const DEFAULT_SUPPORT: SupportConfig = {
   email: "support@cloudie.app",
@@ -129,6 +169,26 @@ export function sanitizeBrand(input: unknown): BrandConfig {
     logoUrl: url(raw.logoUrl, ""),
     defaultMode: mode === "light" || mode === "dark" || mode === "system" ? mode : DEFAULT_BRAND.defaultMode,
   };
+}
+
+export function sanitizeQuickActions(input: unknown): QuickActionConfig[] {
+  if (!Array.isArray(input)) return DEFAULT_QUICK_ACTIONS;
+  const seen = new Set<QuickActionKind>();
+  const actions: QuickActionConfig[] = [];
+
+  for (const item of input.slice(0, 4)) {
+    const row = (item ?? {}) as Record<string, unknown>;
+    if (typeof row.kind !== "string") continue;
+    const catalogItem = QUICK_ACTION_CATALOG.find((candidate) => candidate.kind === row.kind);
+    if (!catalogItem || seen.has(catalogItem.kind)) continue;
+    seen.add(catalogItem.kind);
+    actions.push({
+      kind: catalogItem.kind,
+      label: optionalText(row.label, 24) || catalogItem.label,
+    });
+  }
+
+  return actions;
 }
 
 export function sanitizeSupport(input: unknown): SupportConfig {
