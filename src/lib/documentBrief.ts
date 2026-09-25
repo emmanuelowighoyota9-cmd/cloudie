@@ -62,7 +62,36 @@ export interface BriefIntent {
   keywords: string[];
   fields: BriefFieldRule[];
   lineItems?: BriefLineItems;
+  /**
+   * Field id that holds the document's own total. When a brief states one, the
+   * line-item sum is compared against it, so rows that do not add up can be
+   * flagged before the document is generated.
+   */
+  totalField?: string;
+  /** Stated amounts added to the line sum first — tax, VAT, delivery. */
+  totalAdditions?: string[];
 }
+
+/**
+ * Amounts that sit between the line items and the document's own total. They
+ * are shared by every intent whose template has the matching field, so a brief
+ * that prices its lines, tax and delivery separately still reconciles.
+ */
+const TAX_RULE: BriefFieldRule = {
+  id: "taxAmount",
+  label: "Tax",
+  transform: "amount",
+  patterns: [/\b(?:tax|vat)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i],
+};
+
+const SHIPPING_RULE: BriefFieldRule = {
+  id: "shipping",
+  label: "Delivery",
+  transform: "amount",
+  patterns: [
+    /\b(?:delivery|shipping|freight)\s*(?:charge|cost|fee)?\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i,
+  ],
+};
 
 // ─── Supported intents ────────────────────────────────────────────────────────
 
@@ -111,10 +140,14 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "invoiceDate", label: "Invoice date", transform: "date", patterns: [/\b(?:invoice date|issued|date)\s*(?:on|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "dueDate", label: "Due date", transform: "date", patterns: [/\b(?:due|payment due|due date|net)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "total", label: "Total due", transform: "amount", patterns: [/\b(?:total|amount due|grand total|balance)\s*(?:due|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i, /([0-9][0-9,]*\.[0-9]{2})\s*(?:total|due)/i] },
+      TAX_RULE,
+      SHIPPING_RULE,
       { id: "currencyCode", label: "Currency", patterns: [/\b(USD|EUR|GBP|NGN|CAD|AUD|KES|GHS|ZAR|INR)\b/] },
       { id: "paymentTerms", label: "Payment terms", patterns: [/\b(net\s*[0-9]{1,3}(?:\s*days)?)\b/i, /\bpayment terms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
     ],
     lineItems: { itemPrefix: "item", qtyPrefix: "qty", amountPrefix: "amt", label: "Line items", max: 3 },
+    totalField: "total",
+    totalAdditions: ["taxAmount", "shipping"],
   },
   {
     key: "purchase_order",
@@ -139,8 +172,12 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "deliveryDate", label: "Required by", transform: "date", patterns: [/\b(?:required by|deliver(?:y)? by|needed by)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "terms", label: "Terms", patterns: [/\bterms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,32})/i, /\b(net\s*[0-9]{1,3}(?:\s*days)?)\b/i] },
       { id: "total", label: "Order total", transform: "amount", patterns: [/\b(?:order total|total)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      TAX_RULE,
+      SHIPPING_RULE,
     ],
     lineItems: { itemPrefix: "poItem", qtyPrefix: "poQty", amountPrefix: "poAmount", label: "Order lines", max: 3 },
+    totalField: "total",
+    totalAdditions: ["taxAmount", "shipping"],
   },
   {
     key: "packing_list",
@@ -190,7 +227,10 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "totalRemitted", label: "Total remitted", transform: "amount", patterns: [/\b(?:total remitted|total applied|amount applied|amount|total)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
       { id: "reference", label: "Our reference", patterns: [/\b(?:our reference|reference|ref)\s*[:#-]?\s*([A-Za-z0-9/][A-Za-z0-9/.-]{3,30})/i] },
     ],
-    lineItems: { itemPrefix: "invoiceRef", qtyPrefix: "amount", label: "Invoices settled", max: 3 },
+    // The advice settles invoices by amount: there is no quantity column, so the
+    // amount column is what the row total adds up.
+    lineItems: { itemPrefix: "invoiceRef", amountPrefix: "amount", label: "Invoices settled", max: 3 },
+    totalField: "totalRemitted",
   },
   {
     key: "operations_brief",
@@ -250,8 +290,11 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "validUntil", label: "Valid until", transform: "date", patterns: [/\b(?:valid until|valid to|expires?|offer valid)\s*(?:on|by|:)?\s*([0-9]{4}-[0-9]{2}-[0-9]{2}|[A-Za-z]+ [0-9]{1,2},? [0-9]{4}|[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i] },
       { id: "validityTerms", label: "Validity terms", patterns: [/\b(?:prices? held|validity)\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,40})/i] },
       { id: "total", label: "Quoted total", transform: "amount", patterns: [/\b(?:quoted total|grand total|total|quoted at)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      TAX_RULE,
     ],
     lineItems: { itemPrefix: "quoteItem", qtyPrefix: "quoteQty", amountPrefix: "quoteAmount", label: "Quotation lines", max: 3 },
+    totalField: "total",
+    totalAdditions: ["taxAmount"],
   },
   {
     key: "delivery_note",
@@ -305,6 +348,7 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "terms", label: "Terms", patterns: [/\bterms\s*[:#-]?\s*([A-Za-z0-9&.,' -]{2,42})/i, /\b(payment due on receipt of statement|net\s*[0-9]{1,3})\b/i] },
     ],
     lineItems: { itemPrefix: "entryRef", amountPrefix: "entryAmount", label: "Statement entries", max: 3 },
+    totalField: "balanceDue",
   },
   {
     key: "expense_claim",
@@ -327,11 +371,14 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "purpose", label: "Purpose", patterns: [/\b(?:purpose|reason for claim|trip)\s*[:#-]\s*([^,;\n]{4,60})/i] },
       { id: "category", label: "Category", patterns: [/\bcategory\s*[:#-]?\s*([A-Za-z][A-Za-z .-]{2,20})/i, /\b(travel|equipment|software|meals|other)\b/i] },
       { id: "total", label: "Total claimed", transform: "amount", patterns: [/\b(?:total claimed|total|amount claimed)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
+      TAX_RULE,
       { id: "advance", label: "Advance received", transform: "amount", patterns: [/\b(?:advance received|advance|less advance)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
       { id: "reimbursable", label: "Reimbursable", required: true, transform: "amount", patterns: [/\b(?:reimbursable|reimbursement|net claim|payable)\s*(?::)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
       { id: "approverName", label: "Approved by", patterns: [/\b(?:approved by|approver)\s*[:#-]?\s*([A-Za-z][A-Za-z .'-]{2,32})/i] },
     ],
     lineItems: { itemPrefix: "expense", amountPrefix: "expenseAmount", label: "Claim lines", max: 3 },
+    totalField: "total",
+    totalAdditions: ["taxAmount"],
   },
   {
     key: "item_schedule",
@@ -371,6 +418,8 @@ export const BRIEF_INTENTS: BriefIntent[] = [
       { id: "total", label: "Total", transform: "amount", patterns: [/\b(?:total|grand total)\s*(?:value|:)?\s*(?:[A-Z]{3}\s*)?[$€£₦]?\s*([0-9][0-9,]*\.[0-9]{2})/i] },
     ],
     lineItems: { itemPrefix: "schedule", qtyPrefix: "scheduleQty", amountPrefix: "scheduleAmount", label: "Item rows", max: 10 },
+    totalField: "total",
+    totalAdditions: ["taxAmount"],
   },
 ];
 
@@ -560,6 +609,14 @@ export interface BriefLineItemStats {
   total: number;
   /** Filled rows that carried an amount, so a total can be trusted. */
   amounts: number;
+  /** Stated tax, VAT or delivery added to the line sum before comparing. */
+  additions?: number;
+  /** Field id holding the document's own total, when the brief stated one. */
+  totalFieldId?: string;
+  /** That field's label, e.g. "Quoted total". */
+  totalFieldLabel?: string;
+  /** The total the brief states for the document, when it states one. */
+  documentTotal?: number;
 }
 
 interface LineItemStats {
@@ -717,6 +774,21 @@ function collectValues(intent: BriefIntent, text: string): {
       total: stats.total,
       amounts: stats.amounts,
     };
+    // Reconcile the rows against the document's own total. Only a total the
+    // brief actually states is used: template defaults would flag every list.
+    if (intent.totalField) {
+      const rule = intent.fields.find((field) => field.id === intent.totalField);
+      lineItems.additions = (intent.totalAdditions ?? []).reduce(
+        (sum, id) => sum + amountValue(values[id] ?? ""),
+        0,
+      );
+      const stated = values[intent.totalField];
+      if (stated) {
+        lineItems.totalFieldId = intent.totalField;
+        lineItems.totalFieldLabel = rule?.label ?? "Total";
+        lineItems.documentTotal = amountValue(stated);
+      }
+    }
   }
 
   return { values, recognized, missing, lineItems };

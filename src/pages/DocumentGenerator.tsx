@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  AlertTriangle,
   ArrowLeft,
   BadgeCheck,
   Check,
@@ -39,17 +40,24 @@ import { formatCurrency } from "@/lib/docTemplateEngine";
 import { PageHeader } from "@/components/documents/ui";
 
 const EXAMPLES = [
-  "Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, 2 x Oak veneer panels 1920.00, 3 x Brushed brass handles 1440.00, total 4824.00 USD.",
-  "Quotation QT-2026-1187 issued by Northfold Trading for Lakeview Interiors dated 2026-09-24, valid until 2026-10-24, 24 x Oak veneer panels 1920.00, quoted total 4824.00 USD.",
+  "Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, 2 x Oak veneer panels 1920.00, 3 x Brushed brass handles 1440.00, tax 252.00, delivery 180.00, order total 3792.00 USD.",
+  "Quotation QT-2026-1187 issued by Northfold Trading for Lakeview Interiors dated 2026-09-24, valid until 2026-10-24, 24 x Oak veneer panels 1920.00, 60 x Brushed brass handles 1440.00, tax 252.00, quoted total 3612.00 USD.",
   "Packing list ref CRL-88213-7Q for Meridian Supply Co. shipping Rotterdam to Nairobi, 3 packages, gross weight 12.4 kg, contents 24 x Oak veneer panels 6.2 kg.",
   "Statement of account SOA-2026-0091 from Northfold Trading for Lakeview Interiors dated 2026-09-30, period from 2026-09-01 to 2026-09-30, balance due 2500.50 USD.",
-  "Remittance advice REM-2026-0338 issued 2026-09-24 by Lakeview Interiors settling beneficiary Northfold Trading, bank transfer, amount 4824.00 USD.",
+  // Invoices settled: the pasted amounts add up to the total being remitted.
+  [
+    "Remittance advice REM-2026-0338 issued 2026-09-24 by Lakeview Interiors settling beneficiary Northfold Trading, bank transfer, total remitted 6964.50 USD.",
+    "Invoice,Amount",
+    "INV-2026-0774,4824.00",
+    "INV-2026-0781,1260.50",
+    "INV-2026-0790,880.00",
+  ].join("\n"),
   "Delivery note DN-2026-2291 for order PO-2026-4471, delivered on 2026-09-26 by Coriolis Freight, received by Priya Ramanathan, 3 packages, condition: Good condition.",
-  "Expense claim EXP-2026-0512 submitted by Maya Thompson dated 2026-09-24, purpose: Client site visit — Nairobi, category Travel, 1 x Flights — return 612.40, total 1071.10 USD, reimburse 771.10 USD.",
+  "Expense claim EXP-2026-0512 submitted by Maya Thompson dated 2026-09-24, purpose: Client site visit — Nairobi, category Travel, 1 x Flights — return 612.40, 1 x Hotel — 2 nights 392.20, tax 66.50, total 1071.10 USD, reimburse 771.10 USD.",
   // Paste-a-list example: the prose line names the document, the block below it
   // fills every row slot the item schedule renders.
   [
-    "Item schedule SCH-2026-0714 issued by Northfold Trading for Lakeview Interiors dated 2026-09-25, currency USD.",
+    "Item schedule SCH-2026-0714 issued by Northfold Trading for Lakeview Interiors dated 2026-09-25, currency USD, total 3766.00.",
     "Item,Qty,Amount",
     "Oak veneer panels,24,1920.00",
     '"Brackets, galvanised",18,214.00',
@@ -81,6 +89,8 @@ export default function DocumentGenerator() {
   const [result, setResult] = useState<BriefResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [ownPick, setOwnPick] = useState<Id<"documentTemplates"> | null>(null);
+  /** A corrected document total the owner accepted from the reconciliation. */
+  const [totalOverride, setTotalOverride] = useState<string | null>(null);
 
   const matchedTemplate = useMemo(() => {
     if (!result || result.status !== "matched" || !templates) return null;
@@ -101,8 +111,11 @@ export default function DocumentGenerator() {
 
   const output = useMemo(() => {
     if (!result || result.status !== "matched") return null;
-    return buildStructuredOutput(result, templateDetail?.schema);
-  }, [result, templateDetail?.schema]);
+    const built = buildStructuredOutput(result, templateDetail?.schema);
+    const fieldId = result.lineItems?.totalFieldId;
+    if (totalOverride && fieldId) built.values[fieldId] = totalOverride;
+    return built;
+  }, [result, templateDetail?.schema, totalOverride]);
 
   const structuredJson = useMemo(() => {
     if (!output) return "";
@@ -118,6 +131,49 @@ export default function DocumentGenerator() {
     }
     return labels;
   }, [result, output]);
+
+  /**
+   * The layout's own total, used when the brief never states one — a pasted
+   * list still has to add up against the figure the document will carry.
+   */
+  const templateTotal = useMemo(() => {
+    const fieldId = result && result.status === "matched" ? result.lineItems?.totalFieldId : undefined;
+    if (!fieldId) return undefined;
+    const fields = (templateDetail?.schema as { fields?: { id: string; default?: string }[] } | undefined)
+      ?.fields;
+    const raw = fields?.find((field) => field.id === fieldId)?.default;
+    if (!raw) return undefined;
+    const parsed = Number(String(raw).replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }, [result, templateDetail?.schema]);
+
+  /**
+   * The running total against the document's own total field — the figure the
+   * brief states, or the layout's own until the brief overrides it. Anything
+   * more than a cent apart is flagged.
+   */
+  const reconciliation = useMemo(() => {
+    if (!result || result.status !== "matched" || !result.lineItems) return null;
+    const { totalFieldId, totalFieldLabel, documentTotal, total, additions = 0, amounts } = result.lineItems;
+    if (!totalFieldId || amounts === 0) return null;
+    const stated = totalOverride !== null ? Number(totalOverride) : (documentTotal ?? templateTotal);
+    if (stated === undefined || !Number.isFinite(stated)) return null;
+    const expected = Math.round((total + additions) * 100) / 100;
+    const difference = Math.round((stated - expected) * 100) / 100;
+    return {
+      label: totalFieldLabel ?? "Total",
+      fieldId: totalFieldId,
+      /** The rows themselves, before tax and charges. */
+      lineTotal: Math.round(total * 100) / 100,
+      expected,
+      additions,
+      declared: stated,
+      difference,
+      /** True when the figure came from the layout rather than the brief. */
+      fromLayout: totalOverride === null && documentTotal === undefined,
+      agrees: Math.abs(difference) < 0.01,
+    };
+  }, [result, totalOverride, templateTotal]);
 
   /** Owner-authored layouts whose name or description matches the brief. */
   const ownMatches = useMemo(() => {
@@ -137,6 +193,13 @@ export default function DocumentGenerator() {
     seeded.current = true;
     ensureStarterTemplates({}).catch(() => undefined);
   }, [ensureStarterTemplates]);
+
+  // A corrected total belongs to the brief it was made against.
+  useEffect(() => {
+    setTotalOverride(null);
+  }, [brief]);
+
+
 
   /**
    * Currency for the row total. A currency named in the brief wins; otherwise
@@ -173,6 +236,7 @@ export default function DocumentGenerator() {
     setResult(parsed);
     setOwnPick(null);
     setCopied(false);
+    setTotalOverride(null);
     if (parsed.status === "matched") toast.success(`Matched ${parsed.intent.label}`);
     else if (parsed.status === "ambiguous") toast.message("Which document do you need?");
     else if (parsed.status === "blocked") toast.error("Unsupported document type");
@@ -610,6 +674,57 @@ export default function DocumentGenerator() {
                         </motion.span>
                       </div>
                     )}
+                    {rowCurrency && reconciliation && !reconciliation.agrees && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3"
+                      >
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                          <div className="min-w-0">
+                            <p className="text-[11.5px] font-semibold text-amber-700 dark:text-amber-400">
+                              {reconciliation.label} does not match the rows
+                            </p>
+                            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                              The rows add up to {formatCurrency(String(reconciliation.lineTotal), rowCurrency)}
+                              {reconciliation.additions > 0
+                                ? `; with ${formatCurrency(String(reconciliation.additions), rowCurrency)} of tax and charges that is ${formatCurrency(String(reconciliation.expected), rowCurrency)}, but`
+                                : ", but"}{" "}
+                              {reconciliation.fromLayout
+                                ? `this layout's own ${reconciliation.label} field holds`
+                                : `${reconciliation.label} says`}{" "}
+                              {formatCurrency(String(reconciliation.declared), rowCurrency)} — out by{" "}
+                              {formatCurrency(String(Math.abs(reconciliation.difference)), rowCurrency)}.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setTotalOverride(reconciliation.expected.toFixed(2));
+                                toast.success(`${reconciliation.label} set to the row total`);
+                              }}
+                              className="mt-2 min-h-11 w-full gap-1.5 sm:min-h-9"
+                            >
+                              <Check className="h-3.5 w-3.5" /> Use{" "}
+                              {formatCurrency(String(reconciliation.expected), rowCurrency)}
+                            </Button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                    {rowCurrency && reconciliation && reconciliation.agrees && (
+                      <p className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-primary">
+                        <Check className="mt-0.5 h-3 w-3 shrink-0" />
+                        <span>
+                          {reconciliation.label} agrees with the rows
+                          {reconciliation.additions > 0
+                            ? ` once ${formatCurrency(String(reconciliation.additions), rowCurrency)} of tax and charges are added`
+                            : ""}
+                          {reconciliation.fromLayout ? " — carried over from this layout" : ""}.
+                        </span>
+                      </p>
+                    )}
                     <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                       {result.lineItems.detected > result.lineItems.capacity
                         ? `Your list has ${result.lineItems.detected} rows and this template draws ${result.lineItems.capacity}. Rows past ${result.lineItems.capacity} are left out.`
@@ -640,27 +755,38 @@ export default function DocumentGenerator() {
                     <p className="mt-2 text-[11px] text-muted-foreground">No fields could be extracted automatically.</p>
                   ) : (
                     <ul className="mt-3 space-y-2">
-                      {result.recognized.map((entry) => (
-                        <li
-                          key={entry.id}
-                          className="flex items-start justify-between gap-3 border-b border-border/60 pb-2 last:border-0 last:pb-0"
-                        >
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate text-[11px] text-muted-foreground">{entry.label}</span>
-                            <span
-                              className={cn(
-                                "shrink-0 rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide",
-                                CONFIDENCE_STYLE[entry.confidence].className,
+                      {result.recognized.map((entry) => {
+                        // A total the owner accepted from the reconciliation
+                        // replaces the figure the brief stated.
+                        const adjusted =
+                          totalOverride !== null && entry.id === result.lineItems?.totalFieldId;
+                        return (
+                          <li
+                            key={entry.id}
+                            className="flex items-start justify-between gap-3 border-b border-border/60 pb-2 last:border-0 last:pb-0"
+                          >
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="truncate text-[11px] text-muted-foreground">{entry.label}</span>
+                              <span
+                                className={cn(
+                                  "shrink-0 rounded-full border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide",
+                                  CONFIDENCE_STYLE[entry.confidence].className,
+                                )}
+                              >
+                                {CONFIDENCE_STYLE[entry.confidence].label}
+                              </span>
+                              {adjusted && (
+                                <span className="shrink-0 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-primary">
+                                  adjusted
+                                </span>
                               )}
-                            >
-                              {CONFIDENCE_STYLE[entry.confidence].label}
                             </span>
-                          </span>
-                          <span className="max-w-[58%] truncate text-right text-[12px] font-medium text-foreground">
-                            {entry.value}
-                          </span>
-                        </li>
-                      ))}
+                            <span className="max-w-[58%] truncate text-right text-[12px] font-medium text-foreground">
+                              {adjusted && totalOverride ? totalOverride : entry.value}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                   {stillRequired.length > 0 && (
