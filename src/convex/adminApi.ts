@@ -88,6 +88,9 @@ export const upsertPricing = mutation({
     if (!Number.isFinite(args.pointsCost) || args.pointsCost < 0) {
       throw new Error("INVALID_COST");
     }
+    if (args.service === "custom_document_design" && args.pointsCost <= 0) {
+      throw new Error("DESIGN_FEE_MUST_BE_POSITIVE");
+    }
     if (args.priceNgn !== undefined && (!Number.isFinite(args.priceNgn) || args.priceNgn < 0)) {
       throw new Error("INVALID_NGN_PRICE");
     }
@@ -182,6 +185,7 @@ const DEFAULT_PRICING: { service: string; workspace: string; pointsCost: number 
   { service: "shipment_tracking_update", workspace: "shipments", pointsCost: 25 },
   { service: "shipment_event_add", workspace: "shipments", pointsCost: 15 },
   { service: "document_render", workspace: "documents", pointsCost: 40 },
+  { service: "custom_document_design", workspace: "documents", pointsCost: 25 },
   { service: "flight_pdf", workspace: "ticketing", pointsCost: 150 },
   { service: "hotel_pdf", workspace: "ticketing", pointsCost: 120 },
   { service: "commercial_invoice", workspace: "ticketing", pointsCost: 80 },
@@ -212,7 +216,7 @@ export const seedDefaultPricing = mutation({
         service: entry.service,
         workspace: entry.workspace,
         pointsCost: entry.pointsCost,
-        isActive: false,
+        isActive: entry.service === "custom_document_design",
         effectiveFrom: now,
         updatedBy: adminId,
         updatedAt: now,

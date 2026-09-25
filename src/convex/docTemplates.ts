@@ -41,6 +41,8 @@ import { STARTER_SET_VERSION, STARTER_TEMPLATES } from "../lib/starterTemplates"
 
 const RENDER_SERVICE = "document_render";
 const DEFAULT_RENDER_COST = 40;
+const DESIGN_SERVICE = "custom_document_design";
+const DEFAULT_DESIGN_COST = 25;
 const MAX_LIST = 100;
 const MAX_DOCUMENTS = 60;
 const MAX_IMAGE_B64 = 4_500_000;
@@ -97,6 +99,37 @@ function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60) || "document";
+}
+
+/** Charge the owner for one customer-authored design save, atomically with it. */
+async function chargeDocumentDesign(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  templateId: Id<"documentTemplates">,
+  templateName: string,
+): Promise<number> {
+  const cost = await effectivePointsCost(ctx, DESIGN_SERVICE, DEFAULT_DESIGN_COST);
+  const user = await ctx.db.get(userId);
+  if (!user) throw new Error("User not found");
+  const balance = user.pointsBalance ?? 0;
+  if (balance < cost) {
+    throw new Error(`Insufficient points. Designing a document costs ${cost} points.`);
+  }
+
+  const balanceAfter = balance - cost;
+  await ctx.db.patch(userId, { pointsBalance: balanceAfter });
+  await ctx.db.insert("pointLedger", {
+    userId,
+    amount: -cost,
+    balanceAfter,
+    description: `Custom document design: ${templateName}`,
+    type: "service_charge",
+    reference: DESIGN_SERVICE,
+    referenceId: templateId,
+    metadata: { service: DESIGN_SERVICE, action: "design" },
+    createdAt: Date.now(),
+  });
+  return cost;
 }
 
 // ─── Templates: public reads ──────────────────────────────────────────────────
@@ -1129,6 +1162,8 @@ export const createMyTemplate = mutation({
       updatedAt: now,
     });
 
+    const charged = await chargeDocumentDesign(ctx, userId, templateId, name);
+
     await ctx.db.insert("documentTemplateVersions", {
       templateId,
       version: 1,
@@ -1153,7 +1188,7 @@ export const createMyTemplate = mutation({
       reason: "Created an own document",
     });
 
-    return { templateId, slug };
+    return { templateId, slug, charged };
   },
 });
 
@@ -1192,6 +1227,8 @@ export const updateMyTemplate = mutation({
     const formats = supportedFormats.length > 0 ? supportedFormats : ["png", "pdf"];
     const nextVersion = template.currentVersion + 1;
     const now = Date.now();
+
+    const charged = await chargeDocumentDesign(ctx, userId, template._id, name);
 
     await ctx.db.insert("documentTemplateVersions", {
       templateId: template._id,
@@ -1232,7 +1269,7 @@ export const updateMyTemplate = mutation({
       reason: "Published a new version of an own document",
     });
 
-    return { version: nextVersion };
+    return { version: nextVersion, charged };
   },
 });
 

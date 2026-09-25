@@ -36,7 +36,8 @@ type PackageDraft = {
   popular: boolean;
 };
 
-const WORKSPACES = ["shipments", "ticketing", "business", "services", "platform"] as const;
+const WORKSPACES = ["shipments", "ticketing", "business", "services", "documents", "platform"] as const;
+const DESIGN_SERVICE = "custom_document_design";
 
 /**
  * Labelled control wrapper used by both pricing lists. Keeping the label above
@@ -64,6 +65,7 @@ const SEED_SERVICES: { service: string; workspace: string }[] = [
   { service: "customs_document", workspace: "ticketing" },
   { service: "email_per_recipient", workspace: "services" },
   { service: "image_render", workspace: "services" },
+  { service: DESIGN_SERVICE, workspace: "documents" },
 ];
 
 function toDrafts(packages: PointPackage[]): PackageDraft[] {
@@ -188,7 +190,7 @@ export default function AdminPricing() {
       service: s.service,
       workspace: s.workspace,
       pointsCost: 0,
-      isActive: false,
+      isActive: s.service === DESIGN_SERVICE,
       effectiveFrom: 0,
       updatedAt: 0,
     })),
@@ -196,10 +198,15 @@ export default function AdminPricing() {
   ].sort((a, b) => a.service.localeCompare(b.service));
 
   const save = async (row: PricingRow) => {
+    const isNew = row._id.startsWith("placeholder-");
     const raw = edits[row.service];
     const cost = raw !== undefined && raw !== "" ? Number(raw) : row.pointsCost;
     if (!Number.isFinite(cost) || cost < 0) {
       toast.error("Cost must be a non-negative number");
+      return;
+    }
+    if (row.service === DESIGN_SERVICE && cost <= 0) {
+      toast.error("Document design must cost at least 1 point");
       return;
     }
     const ngnRaw = priceEdits[`${row.service}|ngn`];
@@ -222,7 +229,7 @@ export default function AdminPricing() {
         pointsCost: cost,
         priceNgn,
         priceUsd,
-        isActive: row.isActive,
+        isActive: isNew && row.service === DESIGN_SERVICE ? true : row.isActive,
       });
       setEdits((e) => ({ ...e, [row.service]: "" }));
       setPriceEdits((p) => ({ ...p, [`${row.service}|ngn`]: "", [`${row.service}|usd`]: "" }));
@@ -254,6 +261,10 @@ export default function AdminPricing() {
     const cost = Number(draft.cost);
     if (!service || !Number.isFinite(cost) || cost < 0) {
       toast.error("Provide a service key and non-negative cost");
+      return;
+    }
+    if (service === DESIGN_SERVICE && cost <= 0) {
+      toast.error("Document design must cost at least 1 point");
       return;
     }
     setSaving("__new");
@@ -480,7 +491,8 @@ export default function AdminPricing() {
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Set a points cost and the exact ₦/$ price per service. Leave a price blank to
               derive it from the point rate. Only <strong>active</strong> services are charged —
-              inactive rows keep the platform default.
+              inactive rows keep the platform default. <strong>custom_document_design</strong> controls
+              the point cost charged for every customer design save (create or edit); it defaults to 25 points.
             </p>
           </div>
           <Button

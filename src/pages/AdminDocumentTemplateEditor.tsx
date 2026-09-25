@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Barcode,
+  Coins,
   Eye,
   Grid3x3,
   Image as ImageIcon,
@@ -56,6 +57,10 @@ import { ElementInspector } from "@/components/documents/ElementInspector";
 import { SchemaFieldEditor } from "@/components/documents/SchemaFieldEditor";
 import { DocumentPreview } from "@/components/documents/DocumentPreview";
 import { PageHeader } from "@/components/documents/ui";
+import { usePricing } from "@/lib/pricing";
+
+const DESIGN_SERVICE = "custom_document_design";
+const DEFAULT_DESIGN_COST = 25;
 
 const ELEMENT_ICONS: Record<ElementKind, React.ComponentType<{ className?: string }>> = {
   text: Type,
@@ -109,6 +114,8 @@ export default function DocumentTemplateEditor({
   organizationName = "",
 }: DocumentTemplateEditorProps) {
   const isOwn = variant === "own";
+  const pricing = usePricing();
+  const designPrice = pricing.price(DESIGN_SERVICE, DEFAULT_DESIGN_COST);
   const { templateId } = useParams<{ templateId?: string }>();
   const editing = Boolean(templateId);
   const navigate = useNavigate();
@@ -357,7 +364,7 @@ export default function DocumentTemplateEditor({
             schema,
             configuration,
           });
-          toast.success(`Saved version ${result.version}`);
+          toast.success(`Saved version ${result.version} · ${result.charged} points used for this design`);
           navigate(backTo);
         } else {
           const result = await publishVersion({
@@ -381,7 +388,7 @@ export default function DocumentTemplateEditor({
           schema,
           configuration,
         });
-        toast.success("Your document is ready — fill the form to generate it");
+        toast.success(`Your document is ready — ${result.charged} points used for this design`);
         navigate(`/documents/new/${result.templateId}`);
       } else {
         await createTemplate({
@@ -482,6 +489,15 @@ export default function DocumentTemplateEditor({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {isOwn && (
+        <div className="flex items-start gap-2 rounded-xl border border-primary/25 bg-primary/[0.05] px-4 py-3">
+          <Coins className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <p className="text-[11px] leading-relaxed text-primary">
+            Designing or updating this document costs <strong>{designPrice.points.toLocaleString()} points</strong> per save. The amount is configured by an administrator under Pricing.
+          </p>
         </div>
       )}
 
