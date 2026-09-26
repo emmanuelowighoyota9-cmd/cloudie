@@ -14,6 +14,7 @@ import {
   generateShareSlug,
   isValidShareSlug,
   documentCreationKey,
+  shouldChargeForRender,
   renderIdempotencyKey,
   resolveRenderCost,
   sanitizeText,
@@ -39,12 +40,14 @@ import { PLATFORM_SEED_VERSION, PLATFORM_TEMPLATES } from "../lib/platformTempla
  * `finalizeDocument` completes the record — server-side, schema-validated and
  * idempotent per render attempt.
  *
- * Points are charged ONCE, by `createDocument`, at the full render cost. That
- * makes a document a paid object from the moment it exists: unlimited free
- * drafts are no longer possible, and the price a customer is quoted is the
- * price they keep even if pricing changes before the render finishes. Drafts
- * created before this rule existed carry no creation charge and are still
- * billed by `finalizeDocument`, so no historical document is left unpaid.
+ * Points are charged at the full render cost by `createDocument`, so a
+ * document is a paid object from the moment it exists: unlimited free drafts
+ * are no longer possible, and the price a customer is quoted is the price they
+ * keep even if pricing changes before the render finishes. That charge pays for
+ * the document's FIRST render only — `finalizeDocument` bills every subsequent
+ * re-render as new work. Drafts created before this rule existed carry no
+ * creation charge and are still billed at render, so no historical document is
+ * left unpaid.
  */
 
 const RENDER_SERVICE = "document_render";
@@ -563,10 +566,10 @@ export const updateDocumentValues = mutation({
  * Server-side completion of a client-rendered document.
  *
  * Validates the input values against the frozen template schema, takes the
- * render charge for documents that predate creation-time billing (idempotent
- * per attempt via the ledger index; documents already charged by
- * `createDocument` are not charged again), registers the uploaded PNG/PDF
- * artifacts, and records audit + notification.
+ * render charge for re-renders and for documents that predate creation-time
+ * billing (idempotent per attempt via the ledger index, so a retried attempt is
+ * never charged twice), registers the uploaded PNG/PDF artifacts, and records
+ * audit + notification.
  */
 export const finalizeDocument = mutation({
   args: {
@@ -622,12 +625,11 @@ export const finalizeDocument = mutation({
     );
 
     // ── Charge (idempotent) ──
-    // A document created under the current rules was ALREADY charged in full
-    // by `createDocument`; that creation charge is the price lock, so nothing
-    // is taken again here. Drafts predating the rule carry no creation marker
-    // and are still billed at render, so no historical document goes free.
-    const paidAtCreation = meta.pointsChargedAtCreation;
-    const alreadyPaid = typeof paidAtCreation === "number" && Number.isFinite(paidAtCreation);
+    // The creation charge pays for the document's FIRST render. Anything the
+    // customer renders after that — a re-render of an edited document — is new
+    // work and is billed again. Retries of the same attemptId are held free by
+    // the ledger key below, so a flaky network never costs twice.
+    const billThisAttempt = shouldChargeForRender(meta);
 
     const idempotencyKey = renderIdempotencyKey(args.documentId, "pdf", attemptId);
     const prior = await ctx.db
@@ -636,7 +638,7 @@ export const finalizeDocument = mutation({
       .first();
 
     let charged = 0;
-    if (!alreadyPaid) {
+    if (billThisAttempt) {
       const freshUser = await ctx.db.get(userId);
       const balance = freshUser?.pointsBalance ?? 0;
       if (!prior) {

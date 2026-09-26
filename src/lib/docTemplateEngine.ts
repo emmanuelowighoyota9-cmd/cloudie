@@ -757,6 +757,31 @@ export function documentCreationKey(documentId: string): string {
   return `docrender:create:${documentId}`;
 }
 
+/**
+ * Should this finalize attempt take a render charge?
+ *
+ * The creation charge pays for the document's FIRST render and no more. Every
+ * attempt after that is fresh work the customer asked for — a re-render of an
+ * edited document — and is billed again. Retries of the *same* attempt are a
+ * different matter and are handled by the ledger idempotency key, not here.
+ *
+ * `lastAttemptId` is only written when a render completes, so its presence is
+ * an honest signal that this document has been rendered before.
+ */
+export function shouldChargeForRender(meta: {
+  pointsChargedAtCreation?: unknown;
+  lastAttemptId?: unknown;
+}): boolean {
+  const paid = meta.pointsChargedAtCreation;
+  const chargedAtCreation = typeof paid === "number" && Number.isFinite(paid);
+  const prior = meta.lastAttemptId;
+  const renderedBefore = typeof prior === "string" && prior.trim().length > 0;
+  // A document with no creation charge (predates creation-time billing) is
+  // billed at render, as before. One that was paid for is charged again only
+  // once it has been rendered once.
+  return renderedBefore || !chargedAtCreation;
+}
+
 export function refundIdempotencyKey(attemptId: string): string {
   return `docrender-refund:${attemptId}`;
 }

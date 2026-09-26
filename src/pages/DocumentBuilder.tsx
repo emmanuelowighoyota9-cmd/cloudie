@@ -253,9 +253,9 @@ export default function DocumentBuilder() {
         sizeBytes: artifacts.sizeBytes,
       });
 
-      // The customer paid at creation; `outcome.charged` is only non-zero for
-      // documents that predate creation-time billing.
-      const spent = chargedRef.current + outcome.charged;
+      // What THIS generate cost: the render charge for a re-render, otherwise
+      // the creation charge that paid for this document's first render.
+      const spent = outcome.charged > 0 ? outcome.charged : chargedRef.current;
       toast.success(
         spent > 0 ? `Document generated — ${spent} points used` : "Document generated",
       );

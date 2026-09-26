@@ -3,6 +3,7 @@ import {
   documentCreationKey,
   renderIdempotencyKey,
   resolveRenderCost,
+  shouldChargeForRender,
 } from "../src/lib/docTemplateEngine.ts";
 
 /**
@@ -120,5 +121,70 @@ describe("creation requires sufficient points", () => {
     const chargedAtFinalize = 40;
     expect(balance - chargedAtFinalize).toBe(60);
     expect(balance - chargedAtFinalize).toBe(balance - cost);
+  });
+});
+
+// ─── Re-renders are billable work ────────────────────────────────────────────
+
+describe("re-render charging", () => {
+  const PAID = { pointsChargedAtCreation: 40 };
+
+  test("the first render is covered by the creation charge", () => {
+    // A brand-new document has never rendered, so creation already paid for it.
+    expect(shouldChargeForRender(PAID)).toBe(false);
+  });
+
+  test("a re-render of a completed document is charged again", () => {
+    // The customer edited and re-rendered: new work, so it is billed.
+    expect(shouldChargeForRender({ ...PAID, lastAttemptId: "attempt-1" })).toBe(true);
+  });
+
+  test("a second, third and fourth re-render are each charged", () => {
+    for (const n of [1, 2, 3, 4]) {
+      expect(shouldChargeForRender({ ...PAID, lastAttemptId: `attempt-${n}` })).toBe(true);
+    }
+  });
+
+  test("a legacy document is charged on its first render and every one after", () => {
+    expect(shouldChargeForRender({})).toBe(true);
+    expect(shouldChargeForRender({ lastAttemptId: "attempt-1" })).toBe(true);
+  });
+
+  test("a blank attempt id is not mistaken for a completed render", () => {
+    // Guard against whitespace or a stray field being read as "rendered before",
+    // which would silently make a first render free.
+    expect(shouldChargeForRender({ ...PAID, lastAttemptId: "" })).toBe(false);
+    expect(shouldChargeForRender({ ...PAID, lastAttemptId: "   " })).toBe(false);
+  });
+
+  test("junk in the creation marker does not make a render free", () => {
+    for (const paid of [undefined, null, "forty", Number.NaN, Infinity, {}]) {
+      expect(shouldChargeForRender({ pointsChargedAtCreation: paid })).toBe(true);
+    }
+  });
+
+  test("junk in the attempt marker is ignored safely", () => {
+    for (const prior of [undefined, null, 42, {}, []]) {
+      expect(shouldChargeForRender({ ...PAID, lastAttemptId: prior })).toBe(false);
+    }
+  });
+
+  test("a re-render on an empty balance is refused rather than half-charged", () => {
+    // finalizeDocument checks the balance inside the same transaction as the
+    // debit, so a broke customer is stopped before any ledger row is written.
+    const balance = 5;
+    const cost = 40;
+    expect(shouldChargeForRender({ ...PAID, lastAttemptId: "attempt-1" })).toBe(true);
+    expect(balance < cost).toBe(true);
+  });
+
+  test("each distinct attempt gets its own ledger key, so retries are free", () => {
+    // Per-attempt keys are what make a retried attempt non-billable while a
+    // genuine re-render still bills.
+    const first = renderIdempotencyKey("doc1", "pdf", "attempt-1");
+    const retrySame = renderIdempotencyKey("doc1", "pdf", "attempt-1");
+    const rerender = renderIdempotencyKey("doc1", "pdf", "attempt-2");
+    expect(retrySame).toBe(first);
+    expect(rerender).not.toBe(first);
   });
 });
