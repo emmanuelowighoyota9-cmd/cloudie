@@ -150,6 +150,10 @@ export default function DocumentBuilder() {
     });
   };
 
+  // Points are charged when the document is first created, so the amount the
+  // customer paid is captured here and carried into the generate receipt.
+  const chargedRef = useRef(0);
+
   const persistDraft = async (): Promise<Id<"renderedDocuments"> | null> => {
     if (!templateId) return null;
     if (draftId) {
@@ -158,15 +162,28 @@ export default function DocumentBuilder() {
     }
     const created = await createDocument({ templateId, title, values });
     setDraftId(created.documentId);
+    chargedRef.current = created.charged;
     return created.documentId;
   };
 
   const onSaveDraft = async () => {
     if (!template) return;
+    // Creating the draft is the chargeable step, so a customer who cannot
+    // afford it is told before the click rather than after it fails.
+    if (!draftId && !affordable) {
+      toast.error(`Insufficient points — creating a document costs ${cost} points`, {
+        description: "Your draft has not been saved.",
+      });
+      return;
+    }
     setSaving(true);
     try {
-      await persistDraft();
-      toast.success("Draft saved");
+      const created = await persistDraft();
+      toast.success(
+        created && chargedRef.current > 0
+          ? `Draft saved — ${chargedRef.current} points used`
+          : "Draft saved",
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not save the draft");
     } finally {
@@ -236,10 +253,11 @@ export default function DocumentBuilder() {
         sizeBytes: artifacts.sizeBytes,
       });
 
+      // The customer paid at creation; `outcome.charged` is only non-zero for
+      // documents that predate creation-time billing.
+      const spent = chargedRef.current + outcome.charged;
       toast.success(
-        outcome.charged > 0
-          ? `Document generated — ${outcome.charged} points used`
-          : "Document generated",
+        spent > 0 ? `Document generated — ${spent} points used` : "Document generated",
       );
       navigate(`/documents/${documentId}`);
     } catch (error) {
@@ -287,9 +305,14 @@ export default function DocumentBuilder() {
                 <ArrowLeft className="h-4 w-4" /> Library
               </Link>
             </Button>
-            <Button variant="outline" onClick={onSaveDraft} disabled={saving || generating} className="gap-1.5">
+            <Button
+              variant="outline"
+              onClick={onSaveDraft}
+              disabled={saving || generating || (!draftId && !affordable)}
+              className="gap-1.5"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save draft
+              {draftId ? "Save draft" : `Save draft (${cost} pts)`}
             </Button>
             <Button
               onClick={onGenerate}
@@ -441,7 +464,7 @@ export default function DocumentBuilder() {
 
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Render cost</span>
+              <span className="text-muted-foreground">Cost per document</span>
               <span className="flex items-center gap-1 font-semibold text-foreground">
                 <Coins className="h-3.5 w-3.5 text-primary" /> {cost} pts
               </span>
@@ -466,7 +489,8 @@ export default function DocumentBuilder() {
               )}
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Generates a high-resolution PNG and a multi-page PDF, stored in your workspace and shareable by link.
+              Charged once when the document is created, so saving a draft spends these points too. Generates a
+              high-resolution PNG and a multi-page PDF, stored in your workspace and shareable by link.
             </p>
           </div>
 

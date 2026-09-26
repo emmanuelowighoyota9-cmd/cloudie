@@ -745,6 +745,18 @@ export function renderIdempotencyKey(documentId: string, format: "image" | "pdf"
   return `docrender:${format}:${documentId}:${attemptId}`;
 }
 
+/**
+ * Idempotency key for the debit taken when a document is CREATED.
+ *
+ * Creation charges the full render cost up front, so this key is what
+ * `finalizeDocument` looks for to avoid taking the same money twice. It is
+ * keyed on the freshly-inserted document id and deliberately lives in its own
+ * namespace, so it can never collide with a per-attempt render key.
+ */
+export function documentCreationKey(documentId: string): string {
+  return `docrender:create:${documentId}`;
+}
+
 export function refundIdempotencyKey(attemptId: string): string {
   return `docrender-refund:${attemptId}`;
 }

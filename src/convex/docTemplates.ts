@@ -13,6 +13,7 @@ import {
   defaultValues,
   generateShareSlug,
   isValidShareSlug,
+  documentCreationKey,
   renderIdempotencyKey,
   resolveRenderCost,
   sanitizeText,
@@ -35,8 +36,15 @@ import { PLATFORM_SEED_VERSION, PLATFORM_TEMPLATES } from "../lib/platformTempla
  *
  * Rendering happens on the client (SVG → PNG via canvas → PDF via the
  * dependency-free raster PDF writer), then the artifacts are uploaded and
- * `finalizeDocument` is the ONLY place points are charged — server-side,
- * schema-validated and idempotent per render attempt.
+ * `finalizeDocument` completes the record — server-side, schema-validated and
+ * idempotent per render attempt.
+ *
+ * Points are charged ONCE, by `createDocument`, at the full render cost. That
+ * makes a document a paid object from the moment it exists: unlimited free
+ * drafts are no longer possible, and the price a customer is quoted is the
+ * price they keep even if pricing changes before the render finishes. Drafts
+ * created before this rule existed carry no creation charge and are still
+ * billed by `finalizeDocument`, so no historical document is left unpaid.
  */
 
 const RENDER_SERVICE = "document_render";
@@ -439,7 +447,33 @@ export const createDocument = mutation({
       .first();
     if (!version) throw new Error("Template has no published version");
 
+    // ── Points are taken HERE, once, for the full render cost ──
+    // Creating a document is a chargeable act. A draft is therefore a paid
+    // object from the moment it exists, and the price quoted at this instant
+    // is the price the customer keeps for the whole render.
+    if (!(await consumeRateLimit(ctx, `createDocument:${userId}`, 30, 60_000))) {
+      throw new Error("Too many documents created. Try again in a minute.");
+    }
+
     const blocks = version.blocks as VersionBlocks;
+    const cost = resolveRenderCost(
+      await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
+      blocks?.requiredCredits ?? template.requiredCredits ?? 0,
+      DEFAULT_RENDER_COST,
+    );
+
+    // Checked before the insert so an unaffordable request never leaves an
+    // orphan draft behind. Convex mutations are transactional, so the debit
+    // below cannot outlive the row it belongs to.
+    const payer = await ctx.db.get(userId);
+    if (!payer) throw new Error("User not found");
+    const balance = payer.pointsBalance ?? 0;
+    if (balance < cost) {
+      throw new Error(
+        `Insufficient points. Creating a document costs ${cost} points and your balance is ${balance}.`,
+      );
+    }
+
     const schema = blocks?.schema ?? { fields: [] };
     const values = sanitizeValues(schema, args.values);
     // A customer's own documents are issued under their organization name:
@@ -464,13 +498,36 @@ export const createDocument = mutation({
       sizeBytes: 0,
       viewCount: 0,
       isPublic: false,
-      pointsCost: 0,
-      metadata: { category: template.documentType, sensitivity: template.sensitivity ?? "standard" },
+      pointsCost: cost,
+      metadata: {
+        category: template.documentType,
+        sensitivity: template.sensitivity ?? "standard",
+        // Marker read back by `finalizeDocument` so the render never charges
+        // for a document that was already paid for at creation.
+        pointsChargedAtCreation: cost,
+      },
       createdAt: now,
       updatedAt: now,
     });
 
-    return { documentId, values };
+    // ── Debit (exactly once per document) ──
+    const idempotencyKey = documentCreationKey(documentId);
+    const balanceAfter = balance - cost;
+    await ctx.db.patch(userId, { pointsBalance: balanceAfter });
+    await ctx.db.insert("pointLedger", {
+      userId,
+      amount: -cost,
+      balanceAfter,
+      description: `${title} — document created`,
+      type: "document_generation",
+      reference: "document",
+      referenceId: documentId,
+      idempotencyKey,
+      metadata: { stage: "creation", cost },
+      createdAt: now,
+    });
+
+    return { documentId, values, charged: cost };
   },
 });
 
@@ -505,9 +562,11 @@ export const updateDocumentValues = mutation({
 /**
  * Server-side completion of a client-rendered document.
  *
- * Validates the input values against the frozen template schema, debits the
- * render cost exactly once per attempt (idempotent via the ledger index),
- * registers the uploaded PNG/PDF artifacts, and records audit + notification.
+ * Validates the input values against the frozen template schema, takes the
+ * render charge for documents that predate creation-time billing (idempotent
+ * per attempt via the ledger index; documents already charged by
+ * `createDocument` are not charged again), registers the uploaded PNG/PDF
+ * artifacts, and records audit + notification.
  */
 export const finalizeDocument = mutation({
   args: {
@@ -563,6 +622,13 @@ export const finalizeDocument = mutation({
     );
 
     // ── Charge (idempotent) ──
+    // A document created under the current rules was ALREADY charged in full
+    // by `createDocument`; that creation charge is the price lock, so nothing
+    // is taken again here. Drafts predating the rule carry no creation marker
+    // and are still billed at render, so no historical document goes free.
+    const paidAtCreation = meta.pointsChargedAtCreation;
+    const alreadyPaid = typeof paidAtCreation === "number" && Number.isFinite(paidAtCreation);
+
     const idempotencyKey = renderIdempotencyKey(args.documentId, "pdf", attemptId);
     const prior = await ctx.db
       .query("pointLedger")
@@ -570,27 +636,29 @@ export const finalizeDocument = mutation({
       .first();
 
     let charged = 0;
-    const freshUser = await ctx.db.get(userId);
-    const balance = freshUser?.pointsBalance ?? 0;
-    if (!prior) {
-      if (balance < cost) {
-        throw new Error(`Insufficient points. This render costs ${cost} points.`);
+    if (!alreadyPaid) {
+      const freshUser = await ctx.db.get(userId);
+      const balance = freshUser?.pointsBalance ?? 0;
+      if (!prior) {
+        if (balance < cost) {
+          throw new Error(`Insufficient points. This render costs ${cost} points.`);
+        }
+        const newBalance = balance - cost;
+        await ctx.db.patch(userId, { pointsBalance: newBalance });
+        await ctx.db.insert("pointLedger", {
+          userId,
+          amount: -cost,
+          balanceAfter: newBalance,
+          description: `${doc.title ?? "Document"} render`,
+          type: "document_generation",
+          reference: "document",
+          referenceId: args.documentId,
+          idempotencyKey,
+          metadata: { attemptId, pageCount: args.pageCount },
+          createdAt: Date.now(),
+        });
+        charged = cost;
       }
-      const newBalance = balance - cost;
-      await ctx.db.patch(userId, { pointsBalance: newBalance });
-      await ctx.db.insert("pointLedger", {
-        userId,
-        amount: -cost,
-        balanceAfter: newBalance,
-        description: `${doc.title ?? "Document"} render`,
-        type: "document_generation",
-        reference: "document",
-        referenceId: args.documentId,
-        idempotencyKey,
-        metadata: { attemptId, pageCount: args.pageCount },
-        createdAt: Date.now(),
-      });
-      charged = cost;
     }
 
     // ── Register artifacts, replacing any previous render of this document ──
