@@ -17,7 +17,7 @@ export const PLATFORM_TEMPLATES: StarterTemplate[] = [...STARTER_TEMPLATES, ...C
  * Bumped whenever a new batch is added to COMMERCIAL_TEMPLATES. Keep it in step
  * with that array so installations holding an older marker republish once.
  */
-const COMMERCIAL_SET_VERSION = 3;
+const COMMERCIAL_SET_VERSION = 4;
 
 /**
  * Seed marker. Adding a batch of templates bumps one of the versions above, and

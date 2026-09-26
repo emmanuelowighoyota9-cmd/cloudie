@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowLeft,
+  CheckCircle2,
   Coins,
   Download,
   Loader2,
@@ -27,6 +28,7 @@ import {
   validateValues,
   type DocumentValues,
 } from "@/lib/docTemplateEngine";
+import { checkDocumentTotals, formatAmount, formatDifference, type TotalsCheck } from "@/lib/documentTotals";
 import {
   newAttemptId,
   renderDocumentArtifacts,
@@ -75,6 +77,8 @@ export default function DocumentBuilder() {
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [stage, setStage] = useState("");
+  // Set once the user chooses to render a document whose totals still disagree.
+  const [mismatchAccepted, setMismatchAccepted] = useState(false);
 
   // Seed the form from the template once it loads, layering any values
   // extracted from a brief on top of the template defaults.
@@ -119,8 +123,23 @@ export default function DocumentBuilder() {
     return out;
   }, [schema, values]);
 
+  // Totals are reconciled on every keystroke, so a manual edit that breaks the
+  // arithmetic is caught before the document is ever rendered.
+  const totals = useMemo(
+    () => checkDocumentTotals(schema, values, template?.slug),
+    [schema, values, template?.slug],
+  );
+
+  const applyTotal = (check: TotalsCheck) => {
+    handleChange(check.fieldId, check.expected.toFixed(2));
+    toast.success(`${check.label} set to ${formatAmount(check.expected, totals?.currency ?? "USD")}`);
+  };
+
+  const openMismatch = () => setMismatchAccepted(false);
+
   const handleChange = (fieldId: string, value: unknown) => {
     setValues((prev) => ({ ...prev, [fieldId]: value }));
+    openMismatch();
     setErrors((prev) => {
       if (!prev[fieldId]) return prev;
       const next = { ...prev };
@@ -155,6 +174,18 @@ export default function DocumentBuilder() {
 
   const onGenerate = async () => {
     if (!template) return;
+    // Mismatched totals mean the printed document contradicts its own lines.
+    // Rendering is chargeable, so the mismatch is confirmed once, not bypassed.
+    if (totals && totals.mismatches.length > 0 && !mismatchAccepted) {
+      setMismatchAccepted(true);
+      const names = totals.mismatches.map((check) => check.label).join(", ");
+      toast.error(`Totals do not add up: ${names}`, {
+        description: "Apply the suggested figures, or press Generate again to render anyway.",
+        duration: 7000,
+      });
+      return;
+    }
+    if (totals && totals.mismatches.length > 0) setMismatchAccepted(false);
     const result = validateValues(schema, values);
     if (!result.ok) {
       const map: Record<string, string> = {};
@@ -311,6 +342,81 @@ export default function DocumentBuilder() {
             onChange={handleChange}
             className="sm:grid-cols-2"
           />
+
+          <AnimatePresence initial={false}>
+            {totals && (
+              <motion.div
+                key={totals.mismatches.length > 0 ? "mismatch" : "ok"}
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+                className={cn(
+                  "space-y-3 rounded-xl border px-4 py-3",
+                  totals.mismatches.length > 0
+                    ? "border-amber-500/40 bg-amber-500/[0.07]"
+                    : "border-emerald-500/30 bg-emerald-500/[0.06]",
+                )}
+              >
+                {totals.mismatches.length === 0 ? (
+                  <p className="flex items-center gap-2 text-[11px] text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Totals check out — {totals.rowLabel.toLowerCase()} add to{" "}
+                      {formatAmount(totals.rowTotal, totals.currency)} and every declared total agrees.
+                    </span>
+                  </p>
+                ) : (
+                  <>
+                    <p className="flex items-start gap-2 text-[11px] font-medium leading-relaxed text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        {totals.mismatches.length === 1
+                          ? "One total does not add up"
+                          : `${totals.mismatches.length} totals do not add up`}{" "}
+                        after your edits.
+                      </span>
+                    </p>
+                    <ul className="space-y-2">
+                      {totals.mismatches.map((check) => (
+                        <li
+                          key={check.fieldId}
+                          className="flex flex-col gap-2 rounded-lg border border-amber-500/25 bg-background/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0 text-[11px] leading-relaxed">
+                            <p className="font-semibold text-foreground">{check.label}</p>
+                            <p className="text-muted-foreground">
+                              {check.basis} ={" "}
+                            <span className="tabular-nums text-foreground">
+                              {formatAmount(check.expected, totals.currency)}
+                            </span>{" "}
+                            · you entered{" "}
+                            <span className="tabular-nums text-foreground">
+                              {formatAmount(check.declared, totals.currency)}
+                            </span>{" "}
+                            <span className="text-amber-700 dark:text-amber-400">
+                              ({formatDifference(check.difference, totals.currency)})
+                            </span>
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => applyTotal(check)}
+                            className="shrink-0 gap-1.5"
+                          >
+                            <Wand2 className="h-3.5 w-3.5" />
+                            Use {formatAmount(check.expected, totals.currency)}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         {/* Preview + summary */}
