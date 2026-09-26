@@ -272,7 +272,7 @@ export default function Documents() {
                   </div>
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                     {doc.category ? categoryDef(doc.category).label : "General"} · v{doc.templateVersion} ·{" "}
-                    {formatDateTime(doc.createdAt)} · {doc.pointsCost} pts
+                    {formatDateTime(doc.createdAt)} · {doc.renderPrice ?? doc.pointsCost} pts
                   </p>
                 </div>
                 {doc.isPublic && (

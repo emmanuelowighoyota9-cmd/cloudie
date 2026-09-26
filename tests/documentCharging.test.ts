@@ -188,3 +188,60 @@ describe("re-render charging", () => {
     expect(rerender).not.toBe(first);
   });
 });
+
+// ─── What the document UI shows ──────────────────────────────────────────────
+
+/**
+ * Mirrors the price a document displays. `pointsCost` is a lifetime accounting
+ * total that grows with every re-render; `renderPrice` is what one render
+ * costs. The UI must never present the lifetime total as the price.
+ */
+function displayedPrice(doc: { renderPrice?: number | null; pointsCost: number }): number {
+  return doc.renderPrice ?? doc.pointsCost;
+}
+
+describe("per-render price display", () => {
+  test("a document re-rendered three times still reads as one price", () => {
+    // 40 at creation, then three re-renders at 40 each = 160 charged in total.
+    expect(displayedPrice({ renderPrice: 40, pointsCost: 160 })).toBe(40);
+  });
+
+  test("a never-re-rendered document is unchanged", () => {
+    expect(displayedPrice({ renderPrice: 40, pointsCost: 40 })).toBe(40);
+  });
+
+  test("a legacy document with no renderPrice falls back to its total", () => {
+    // Nothing to show otherwise; the old figure is the best available answer.
+    expect(displayedPrice({ renderPrice: null, pointsCost: 40 })).toBe(40);
+    expect(displayedPrice({ pointsCost: 120 })).toBe(120);
+  });
+
+  test("the displayed price never exceeds what was actually charged", () => {
+    // Only achievable states: the document was created at `creationPrice` and
+    // re-rendered n times at `reRenderPrice`, so the lifetime total is the sum
+    // of charges that includes the displayed one.
+    for (const creationPrice of [40, 60]) {
+      for (const reRenderPrice of [25, 40, 60]) {
+        for (const rerenders of [0, 1, 2, 3]) {
+          const pointsCost = creationPrice + rerenders * reRenderPrice;
+          const renderPrice = rerenders === 0 ? creationPrice : reRenderPrice;
+          expect(displayedPrice({ renderPrice, pointsCost })).toBeLessThanOrEqual(pointsCost);
+        }
+      }
+    }
+  });
+
+  test("a price rise between renders still reads as that render's price", () => {
+    // Created at 40, then repriced to 60: the badge shows 60 while the lifetime
+    // total grows to 100. The displayed figure is never the running total.
+    expect(displayedPrice({ renderPrice: 60, pointsCost: 100 })).toBe(60);
+  });
+
+  test("'total spent' is only shown once the two figures actually differ", () => {
+    const showTotal = (d: { renderPrice?: number | null; pointsCost: number }) =>
+      d.renderPrice != null && d.renderPrice !== d.pointsCost;
+    expect(showTotal({ renderPrice: 40, pointsCost: 40 })).toBe(false);
+    expect(showTotal({ renderPrice: 40, pointsCost: 160 })).toBe(true);
+    expect(showTotal({ renderPrice: null, pointsCost: 160 })).toBe(false);
+  });
+});

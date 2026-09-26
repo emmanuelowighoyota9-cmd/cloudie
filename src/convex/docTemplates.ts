@@ -502,6 +502,9 @@ export const createDocument = mutation({
       viewCount: 0,
       isPublic: false,
       pointsCost: cost,
+      // What one render of this document costs. Kept separate from pointsCost,
+      // which accumulates across re-renders and is only an accounting total.
+      renderPrice: cost,
       metadata: {
         category: template.documentType,
         sensitivity: template.sensitivity ?? "standard",
@@ -696,6 +699,14 @@ export const finalizeDocument = mutation({
       });
     }
 
+    // The price shown for this document: the creation price when the creation
+    // charge paid for this render, otherwise the price just charged.
+    const creationPrice =
+      typeof meta.pointsChargedAtCreation === "number" && Number.isFinite(meta.pointsChargedAtCreation)
+        ? meta.pointsChargedAtCreation
+        : cost;
+    const renderPrice = charged > 0 ? cost : creationPrice;
+
     const now = Date.now();
     await ctx.db.patch(args.documentId, {
       status: "completed",
@@ -707,6 +718,7 @@ export const finalizeDocument = mutation({
       pageCount: Math.max(0, Math.min(Math.round(args.pageCount), 20)),
       sizeBytes: Math.max(0, Math.round(args.sizeBytes)),
       pointsCost: (doc.pointsCost ?? 0) + charged,
+      renderPrice,
       failureReason: undefined,
       metadata: {
         ...meta,
@@ -765,6 +777,7 @@ export const listMyDocuments = query({
         pageCount: d.pageCount,
         sizeBytes: d.sizeBytes,
         pointsCost: d.pointsCost,
+        renderPrice: d.renderPrice ?? null,
         isPublic: d.isPublic ?? false,
         publicSlug: d.publicSlug ?? null,
         category: (d.metadata as Record<string, unknown> | undefined)?.category as string | undefined,
@@ -804,6 +817,7 @@ export const getDocument = query({
       pageCount: doc.pageCount,
       sizeBytes: doc.sizeBytes,
       pointsCost: doc.pointsCost,
+      renderPrice: doc.renderPrice ?? null,
       isPublic: doc.isPublic ?? false,
       publicSlug: doc.publicSlug ?? null,
       expiresAt: doc.expiresAt ?? null,
@@ -879,6 +893,7 @@ export const getStudioStats = query({
         title: d.title ?? "Untitled document",
         status: d.status ?? "draft",
         pointsCost: d.pointsCost,
+        renderPrice: d.renderPrice ?? null,
         category: (d.metadata as Record<string, unknown> | undefined)?.category as string | undefined,
         createdAt: d.createdAt,
       })),

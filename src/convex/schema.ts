@@ -974,6 +974,11 @@ const schema = defineSchema(
       failureReason: v.optional(v.string()),
       metadata: v.optional(v.any()),
       pointsCost: v.number(), // total charged so far (ledger is authoritative)
+      // Price of the MOST RECENT render, for display. `pointsCost` grows with
+      // every re-render and is an accounting figure; this is what one render
+      // costs, so a document re-rendered three times still reads as "40 pts".
+      // Absent on documents created before per-render pricing was recorded.
+      renderPrice: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.optional(v.number()),
     })

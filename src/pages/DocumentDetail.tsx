@@ -182,7 +182,7 @@ export default function DocumentDetail() {
       <div className="flex flex-wrap items-center gap-2">
         <StatusPill status={doc.status} />
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Coins className="h-3 w-3" /> {doc.pointsCost} pts
+          <Coins className="h-3 w-3" /> {doc.renderPrice ?? doc.pointsCost} pts
         </span>
         <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
           <FileText className="h-3 w-3" /> {doc.pageCount} page{doc.pageCount === 1 ? "" : "s"} ·{" "}
@@ -263,7 +263,12 @@ export default function DocumentDetail() {
                 ["Version", `v${doc.templateVersion}`],
                 ["Pages", String(doc.pageCount)],
                 ["File size", formatBytes(doc.sizeBytes)],
-                ["Credits", `${doc.pointsCost} pts`],
+                ["Render price", `${doc.renderPrice ?? doc.pointsCost} pts`],
+                // Only worth showing once re-renders have made the lifetime
+                // total diverge from the price of a single render.
+                ...(doc.renderPrice != null && doc.renderPrice !== doc.pointsCost
+                  ? [["Total spent", `${doc.pointsCost} pts`]]
+                  : []),
                 ["Share state", doc.shareState],
                 ["Created", formatDateTime(doc.createdAt)],
                 ["Updated", formatDateTime(doc.updatedAt)],
