@@ -28,7 +28,7 @@ import {
   validateValues,
   type DocumentValues,
 } from "@/lib/docTemplateEngine";
-import { checkDocumentTotals, formatAmount, formatDifference, type TotalsCheck } from "@/lib/documentTotals";
+import { checkDocumentTotals, formatAmount, formatDifference, pruneBriefRowDefaults, type TotalsCheck } from "@/lib/documentTotals";
 import {
   newAttemptId,
   renderDocumentArtifacts,
@@ -81,15 +81,17 @@ export default function DocumentBuilder() {
   const [mismatchAccepted, setMismatchAccepted] = useState(false);
 
   // Seed the form from the template once it loads, layering any values
-  // extracted from a brief on top of the template defaults.
+  // extracted from a brief on top of the template defaults. Row slots the brief
+  // left alone are cleared rather than kept, so a one-line brief does not
+  // arrive carrying the template's sample lines.
   useEffect(() => {
     if (!template) return;
     setTitle((current) => current || template.name);
-    setValues((current) =>
-      Object.keys(current).length > 0
-        ? current
-        : { ...template.defaults, ...(briefValues ?? {}) },
-    );
+    setValues((current) => {
+      if (Object.keys(current).length > 0) return current;
+      const seeded = { ...template.defaults, ...(briefValues ?? {}) };
+      return briefValues ? pruneBriefRowDefaults(template.schema, seeded, briefValues) : seeded;
+    });
   }, [template, briefValues]);
 
   useEffect(() => {
@@ -362,8 +364,10 @@ export default function DocumentBuilder() {
                   <p className="flex items-center gap-2 text-[11px] text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                     <span>
-                      Totals check out — {totals.rowLabel.toLowerCase()} add to{" "}
-                      {formatAmount(totals.rowTotal, totals.currency)} and every declared total agrees.
+                      {totals.rowIds.length > 0
+                        ? `Totals check out — ${totals.rowLabel.toLowerCase()} add to ${formatAmount(totals.rowTotal, totals.currency)} and `
+                        : "Totals check out — "}
+                      every declared total agrees.
                     </span>
                   </p>
                 ) : (

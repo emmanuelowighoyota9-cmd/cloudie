@@ -130,8 +130,29 @@ const PLANS: Record<string, Plan> = {
 
 /** Currency fields that sit between the line sum and the total. */
 const ADDITION_PATTERN = /^(?:tax|vat|shipping|delivery|freight|discount|duty|surcharge|handling|levy)/i;
-/** Currency fields that read as the document's own total. */
-const TOTAL_PATTERN = /^(?:grand)?total|total$|due|balance|totalremitted/i;
+/**
+ * Field ids that read as the document's own total. Matched whole rather than by
+ * substring: `balanceForward` and `overdue` are line figures, not totals, and
+ * guessing wrong here invents a mismatch the user never created.
+ */
+const TOTAL_IDS = new Set([
+  "total",
+  "totalamount",
+  "grandtotal",
+  "ordertotal",
+  "quotedtotal",
+  "totalclaimed",
+  "totalcost",
+  "totaldue",
+  "totalsettled",
+  "totalpayable",
+  "totalremitted",
+  "amountdue",
+  "amountpayable",
+  "netpayable",
+  "balancedue",
+  "balancetotal",
+]);
 
 function numberOf(raw: unknown): number {
   const n = Number(String(raw ?? "").replace(/[^0-9.\-]/g, ""));
@@ -172,7 +193,7 @@ function inferPlan(fields: FieldDef[]): Plan | null {
   if (!rowGroup) return null;
   const [rowPrefix] = rowGroup;
   const total = currency.find(
-    (f) => f.id === rowPrefix || !/(\d+)$/.test(f.id) && TOTAL_PATTERN.test(f.id) && !/^subtotal/i.test(f.id),
+    (f) => !/(\d+)$/.test(f.id) && !/^subtotal$/i.test(f.id) && TOTAL_IDS.has(f.id.toLowerCase()),
   );
   if (!total) return null;
   const additions = currency.filter(
@@ -194,54 +215,94 @@ function inferPlan(fields: FieldDef[]): Plan | null {
   };
 }
 
-/** Row amount ids of the plan's prefix that belong to a row the form renders. */
+/** Row amount fields of the plan's prefix that the form actually carries. */
 function rowFields(fields: FieldDef[], plan: Plan, values: DocumentValues): FieldDef[] {
   if (!plan.rowPrefix) return [];
-  return fields.filter((field) => {
-    if (field.type !== "currency") return false;
-    const match = new RegExp(`^${plan.rowPrefix}(\\d+)$`).exec(field.id);
-    if (!match) return false;
-    if (isFilled(field, values)) return true;
-    // A row with a description but no amount still counts: its amount is zero.
-    const index = match[1];
-    return fields.some(
-      (other) =>
-        other.type !== "currency" &&
-        new RegExp(`${index}$`).test(other.id) &&
-        isFilled(other, values),
-    );
-  });
+  return fields.filter(
+    (field) =>
+      field.type === "currency" &&
+      new RegExp(`^${plan.rowPrefix}\\d+$`).test(field.id) &&
+      isFilled(field, values),
+  );
 }
 
 function expectationOf(
   spec: CheckSpec,
-  plan: Plan,
   rows: FieldDef[],
   fields: FieldDef[],
   values: DocumentValues,
-): { expected: number; contributors: string[] } {
+): { expected: number; filledRows: number; filledContributors: number } {
   let expected = 0;
-  const contributors: string[] = [];
+  let filledRows = 0;
+  let filledContributors = 0;
   if (spec.rows) {
     for (const row of rows) {
+      if (!isFilled(row, values)) continue;
       expected += valueOf(row, values);
-      contributors.push(row.id);
+      filledRows++;
     }
   }
   for (const id of spec.add ?? []) {
     const field = fields.find((f) => f.id === id);
     if (!field || !isFilled(field, values)) continue;
     expected += valueOf(field, values);
-    contributors.push(id);
+    filledContributors++;
   }
   for (const id of spec.subtract ?? []) {
     const field = fields.find((f) => f.id === id);
     if (!field || !isFilled(field, values)) continue;
     expected -= valueOf(field, values);
-    contributors.push(id);
+    filledContributors++;
   }
-  void plan;
-  return { expected, contributors };
+  return { expected, filledRows, filledContributors };
+}
+
+/**
+ * Drop template defaults a brief never mentioned.
+ *
+ * A brief that quotes one line must not leave the other row slots holding the
+ * template's sample amounts, and a brief that states its own total must not
+ * leave the template's sample tax, delivery or subtotal behind: the document
+ * would then carry figures nobody asked for, and the totals check would flag a
+ * mismatch the user did not create. A brief that states no money at all is
+ * left on the template's defaults.
+ */
+export function pruneBriefRowDefaults(
+  schema: TemplateSchema,
+  values: DocumentValues,
+  briefValues: Record<string, string>,
+): DocumentValues {
+  const fields = schema?.fields ?? [];
+  const stated = (id: string) => String(briefValues[id] ?? "").trim() !== "";
+
+  // Row slots: amt1, amt2, amt3 … grouped by their shared prefix.
+  const groups = new Map<string, string[]>();
+  for (const field of fields) {
+    const match = /^(.*?)(\d+)$/.exec(field.id);
+    if (!match) continue;
+    groups.set(match[1], [...(groups.get(match[1]) ?? []), field.id]);
+  }
+  const out: DocumentValues = { ...values };
+  for (const [, ids] of groups) {
+    // Only a row set the brief actually filled in gets its gaps cleared.
+    if (!ids.some(stated)) continue;
+    for (const id of ids) {
+      // Blanked rather than deleted: the schema default is the fallback for a
+      // missing key, so removing the key would leave the sample row in place.
+      if (!stated(id)) out[id] = "";
+    }
+  }
+
+  // Summary amounts — subtotal, tax, delivery — once the brief has spoken about
+  // money at all. Row amounts are handled above; totals are blanked the same
+  // way so a stated total is never measured against the template's sample tax.
+  if (fields.some((field) => field.type === "currency" && stated(field.id))) {
+    for (const field of fields) {
+      if (field.type !== "currency" || /(\d+)$/.test(field.id)) continue;
+      if (!stated(field.id)) out[field.id] = "";
+    }
+  }
+  return out;
 }
 
 /**
@@ -265,17 +326,27 @@ export function checkDocumentTotals(
   for (const spec of plan.checks) {
     const field = fields.find((f) => f.id === spec.field);
     if (!field || !isFilled(field, values)) continue;
-    const { expected } = expectationOf(spec, plan, rows, fields, values);
-    // Nothing to compare against — e.g. an empty form still on its defaults.
-    if (expected === 0 && !spec.add?.length && !spec.subtract?.length) continue;
+    // A deduction the form leaves blank makes the whole expectation unknowable:
+    // "total less advance" cannot be checked while the advance is unknown.
+    const unknownDeduction = (spec.subtract ?? []).some((id) => {
+      const term = fields.find((f) => f.id === id);
+      return !!term && !isFilled(term, values);
+    });
+    if (unknownDeduction) continue;
+    const { expected, filledRows, filledContributors } = expectationOf(spec, rows, fields, values);
+    // A total cannot be reconciled against lines that carry no amounts, and a
+    // balance cannot be reconciled against contributors the form leaves blank.
+    // Reporting those would be arithmetic theatre, not a caught mistake.
+    if (spec.rows ? filledRows === 0 : filledContributors === 0) continue;
     const declared = valueOf(field, values);
-    const difference = Math.round((declared - expected) * 100) / 100;
+    const expectedCents = Math.round(expected * 100) / 100;
+    const difference = Math.round((declared - expectedCents) * 100) / 100;
     checks.push({
       fieldId: field.id,
       label: field.label,
       basis: spec.basis,
       declared,
-      expected,
+      expected: expectedCents,
       difference,
       agrees: Math.abs(difference) < 0.01,
     });
