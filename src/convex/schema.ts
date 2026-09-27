@@ -60,7 +60,7 @@ export type PointTxType = (typeof POINT_TX_TYPES)[number];
 export const pointTxTypeValidator = v.union(...literals(POINT_TX_TYPES));
 
 // ─── VTU (virtual top-up) enums ───
-export const VTU_SERVICE_TYPES =[
+export const VTU_SERVICE_TYPES = [
   "airtime",
   "data",
   "cable",
