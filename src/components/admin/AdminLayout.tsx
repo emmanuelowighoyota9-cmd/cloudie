@@ -259,7 +259,9 @@ function AdminShell() {
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               cn(
-                        "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium transition-colors",
+                        "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium " +
+                        "transition-[background-color,color,transform,border-color] duration-200 " +
+                        "ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]",
                 isActive
                   ? "border-primary/20 bg-primary/10 text-primary"
                   : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -356,8 +358,11 @@ function AdminShell() {
             </Link>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(1rem+env(safe-area-inset-bottom))] overscroll-contain">
-          <div className="mx-auto w-full max-w-7xl p-3 sm:p-5 lg:p-8">
+        <main
+          className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pb-0"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="mx-auto w-full max-w-7xl page-gutter py-4 sm:py-6 lg:py-8">
             <Outlet />
           </div>
         </main>

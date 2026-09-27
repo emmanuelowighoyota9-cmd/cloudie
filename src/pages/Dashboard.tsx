@@ -1,3 +1,4 @@
+import { StaggerGroup, StaggerItem } from "@/components/motion";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -123,86 +124,100 @@ export default function Dashboard() {
       </Card>
 
       {/* Metrics */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard
-          title="Shipments"
-          value={shipments?.length ?? 0}
-          icon={Package}
-          color="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-        />
-        <MetricCard
-          title="Referrals"
-          value={referrals?.length ?? 0}
-          icon={Users}
-          color="bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400"
-        />
-        <MetricCard
-          title="Transactions This Month"
-          value={monthlyTransactions}
-          icon={TrendingUp}
-          color="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
-        />
-      </div>
+      <StaggerGroup className="grid gap-4 sm:grid-cols-3">
+        <StaggerItem>
+          <MetricCard
+            title="Shipments"
+            value={shipments?.length ?? 0}
+            icon={Package}
+            color="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <MetricCard
+            title="Referrals"
+            value={referrals?.length ?? 0}
+            icon={Users}
+            color="bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <MetricCard
+            title="Transactions This Month"
+            value={monthlyTransactions}
+            icon={TrendingUp}
+            color="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+          />
+        </StaggerItem>
+      </StaggerGroup>
 
       {/* Quick Actions */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Link to="/shipments/new">
-          <Card className="h-full hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30">
-                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">New Shipment</p>
-                <p className="text-xs text-muted-foreground">{shipmentPrice.label}</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link to="/ticketing/flight">
-          <Card className="h-full hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 dark:bg-green-900/30">
-                <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Generate Document</p>
-                <p className="text-xs text-muted-foreground">From {invoicePrice.label}</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link to="/marketplace">
-          <Card className="h-full hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-900/30">
-                <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Marketplace</p>
-                <p className="text-xs text-muted-foreground">Browse products</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
-            </CardContent>
-          </Card>
-        </Link>
-        <Link to="/business/sites/new">
-          <Card className="h-full hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-            <CardContent className="flex items-center gap-3 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-900/30">
-                <Building2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground">Create Site</p>
-                <p className="text-xs text-muted-foreground">Business Suite</p>
-              </div>
-              <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
-            </CardContent>
-          </Card>
-        </Link>
-      </div>
+      <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StaggerItem>
+          <Link to="/shipments/new">
+            <Card className="interactive-card h-full">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30">
+                  <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">New Shipment</p>
+                  <p className="text-xs text-muted-foreground">{shipmentPrice.label}</p>
+                </div>
+                <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
+              </CardContent>
+            </Card>
+          </Link>
+        </StaggerItem>
+        <StaggerItem>
+          <Link to="/ticketing/flight">
+            <Card className="interactive-card h-full">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-50 dark:bg-green-900/30">
+                  <FileText className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Generate Document</p>
+                  <p className="text-xs text-muted-foreground">From {invoicePrice.label}</p>
+                </div>
+                <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
+              </CardContent>
+            </Card>
+          </Link>
+        </StaggerItem>
+        <StaggerItem>
+          <Link to="/marketplace">
+            <Card className="interactive-card h-full">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-900/30">
+                  <Layers className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Marketplace</p>
+                  <p className="text-xs text-muted-foreground">Browse products</p>
+                </div>
+                <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
+              </CardContent>
+            </Card>
+          </Link>
+        </StaggerItem>
+        <StaggerItem>
+          <Link to="/business/sites/new">
+            <Card className="interactive-card h-full">
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-900/30">
+                  <Building2 className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Create Site</p>
+                  <p className="text-xs text-muted-foreground">Business Suite</p>
+                </div>
+                <ArrowUpRight className="ml-auto h-4 w-4 text-slate-400" />
+              </CardContent>
+            </Card>
+          </Link>
+        </StaggerItem>
+      </StaggerGroup>
 
       {/* Workspace Hub */}
       <Card>
@@ -222,7 +237,7 @@ export default function Dashboard() {
               { icon: Layers, title: "Services", desc: "Small tools that stand on their own, email and pictures.", to: "/services", color: "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
             ].map((w) => (
               <Link key={w.to} to={w.to} className="group">
-                <Card className="h-full hover:border-blue-300 dark:hover:border-blue-700 transition-all">
+                <Card className="interactive-card h-full">
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${w.color}`}>

@@ -242,8 +242,8 @@ export default function Landing() {
       </section>
 
       {/* Features */}
-      <section className="bg-background py-20">
-        <div className="mx-auto max-w-6xl px-4">
+      <section className="bg-background py-16 sm:py-20 lg:py-28">
+        <div className="mx-auto max-w-6xl page-gutter">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground">A better way to ship</h2>
             <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
@@ -258,7 +258,7 @@ export default function Landing() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * i, duration: 0.4 }}
               >
-                <div className="h-full rounded-2xl border border-border bg-card p-6 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10">
+                <div className="interactive-card h-full rounded-2xl border border-border bg-card p-6 elev-1">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                     <f.icon className="h-5 w-5 text-primary" />
                   </div>
@@ -272,8 +272,8 @@ export default function Landing() {
       </section>
 
       {/* Points Economy */}
-      <section className="border-y border-border bg-card py-20">
-        <div className="mx-auto max-w-6xl px-4">
+      <section className="border-y border-border bg-card py-16 sm:py-20 lg:py-28">
+        <div className="mx-auto max-w-6xl page-gutter">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">Unified Points Economy</h2>
@@ -304,8 +304,8 @@ export default function Landing() {
       </section>
 
       {/* Crestline document studio */}
-      <section className="border-y border-border bg-card py-20">
-        <div className="mx-auto max-w-6xl px-4">
+      <section className="border-y border-border bg-card py-16 sm:py-20 lg:py-28">
+        <div className="mx-auto max-w-6xl page-gutter">
           <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1fr]">
             <div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -376,8 +376,8 @@ export default function Landing() {
       </section>
 
       {/* Native tracking platform */}
-      <section className="bg-background py-20">
-        <div className="mx-auto max-w-6xl px-4">
+      <section className="bg-background py-16 sm:py-20 lg:py-28">
+        <div className="mx-auto max-w-6xl page-gutter">
           <div className="grid items-center gap-12 lg:grid-cols-[0.9fr_1fr]">
             <div>
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
@@ -441,7 +441,7 @@ export default function Landing() {
       </section>
 
       {/* CTA */}
-      <section className="border-t border-border bg-card py-20">
+      <section className="border-t border-border bg-card py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground">
             Ready to get started?

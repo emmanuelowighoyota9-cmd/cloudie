@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Home, CreditCard, Truck, FileText, Building2, FileStack } from "lucide-react";
 
@@ -29,14 +30,29 @@ export function BottomNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium transition-colors",
+                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium " +
+                "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.95]",
                 active
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
               aria-current={active ? "page" : undefined}
             >
-              <item.icon className="size-5" />
+              {active && (
+                <motion.span
+                  layoutId="bottomnav-active"
+                  aria-hidden
+                  className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-primary"
+                  transition={{ type: "spring", stiffness: 480, damping: 34 }}
+                />
+              )}
+              <motion.span
+                animate={active ? { y: -1, scale: 1.06 } : { y: 0, scale: 1 }}
+                transition={{ type: "spring", stiffness: 480, damping: 26 }}
+                className="flex"
+              >
+                <item.icon className="size-5" />
+              </motion.span>
               <span className="max-w-full truncate">{item.label}</span>
             </Link>
           );

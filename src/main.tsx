@@ -10,6 +10,8 @@ import { ConvexReactClient } from "convex/react";
 import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router";
+import { AnimatePresence, motion } from "framer-motion";
+import { EASE_OUT_QUINT } from "@/components/motion";
 import "./index.css";
 
 // Lazy-loaded pages
@@ -103,9 +105,36 @@ const AdminLayout = lazy(() => import("./components/admin/AdminLayout.tsx").then
 
 function RouteLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading...</div>
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
+      <div className="relative h-10 w-10">
+        <div className="absolute inset-0 rounded-full border-2 border-border" />
+        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-primary" />
+      </div>
+      <p className="text-sm text-muted-foreground">Loading…</p>
     </div>
+  );
+}
+
+/**
+ * Replays the enter animation on every navigation.
+ *
+ * Keying on `pathname` remounts the subtree per route, so `PageTransition`
+ * runs again for each new page without any page needing to opt in.
+ */
+function RouteTransition({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.28, ease: EASE_OUT_QUINT }}
+      >
+        {children}
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
@@ -174,6 +203,7 @@ createRoot(document.getElementById("root")!).render(
             <RouteSyncer />
             <Suspense fallback={<RouteLoading />}>
               <TenantGateLazy>
+              <RouteTransition>
               <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
@@ -293,6 +323,7 @@ createRoot(document.getElementById("root")!).render(
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </RouteTransition>
               </TenantGateLazy>
             </Suspense>
             {/* Config-driven support launcher — hidden on admin + tenant banking surfaces */}

@@ -78,7 +78,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r border-border bg-card transition-all duration-200",
+        "flex h-screen flex-col border-r border-border bg-card transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
         collapsed ? "w-16" : "w-60",
         "dark:border-border dark:bg-card",
       )}
@@ -90,7 +90,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             <Cloud className="h-4 w-4 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-primary-foreground">
+            <span className="text-lg font-bold tracking-tight text-foreground">
               {brand.name}
             </span>
           )}
@@ -112,14 +112,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {!collapsed && (
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-xs font-semibold text-blue-700 dark:text-blue-300">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-900 dark:text-primary-foreground truncate">
+              <p className="text-sm font-medium text-foreground truncate">
                 {user?.name || user?.email || "User"}
               </p>
-              <p className="text-[11px] text-slate-500 dark:text-muted-foreground truncate">
+              <p className="text-[11px] text-muted-foreground truncate">
                 {user?.email || ""}
               </p>
             </div>
@@ -134,12 +134,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               key={item.to}
               to={item.to}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium " +
+                "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] " +
+                "hover:translate-x-0.5 active:scale-[0.98]",
                 isActive(item.to)
                   ? "bg-primary/10 text-primary"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-muted-foreground dark:hover:bg-slate-700/50 dark:hover:text-slate-200",
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-opacity duration-200",
+                  isActive(item.to) ? "opacity-100" : "opacity-0",
+                )}
+              />
               <item.icon className="h-4 w-4 shrink-0" />
               {!collapsed && <span>{item.label}</span>}
             </Link>
@@ -161,12 +170,21 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   key={item.to}
                   to={item.to}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium " +
+                "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] " +
+                "hover:translate-x-0.5 active:scale-[0.98]",
                     isActive(item.to)
-                      ? "bg-accent/20 text-accent-foreground"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-muted-foreground dark:hover:bg-slate-700/50 dark:hover:text-slate-200",
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-opacity duration-200",
+                      isActive(item.to) ? "opacity-100" : "opacity-0",
+                    )}
+                  />
                   <item.icon className="h-4 w-4 shrink-0" />
                   {!collapsed && <span>{item.label}</span>}
                 </Link>
@@ -182,7 +200,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           onClick={() => signOut()}
           className={cn(
             "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-            "text-slate-500 hover:bg-red-50 hover:text-red-600 dark:text-muted-foreground dark:hover:bg-red-950/30 dark:hover:text-red-400",
+            "text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
           )}
         >
           <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">

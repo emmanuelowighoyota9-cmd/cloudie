@@ -27,6 +27,7 @@ import {
   Truck,
 } from "lucide-react";
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { MobileNav } from "./MobileNav";
 import { usePricing } from "@/lib/pricing";
 
@@ -49,7 +50,7 @@ export function Header() {
     : user?.email?.[0]?.toUpperCase() || "U";
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-3 sm:h-14 sm:px-4">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/85 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-card/70 sm:h-14 sm:px-4">
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
@@ -70,12 +71,11 @@ export function Header() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        {/* Points Balance */}
-        <Link to="/buy-points" className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <Badge
-            variant="default"
-            className="min-h-11 gap-1.5 rounded-full border-0 px-2.5 py-2 text-xs font-semibold shadow-sm sm:min-h-8 sm:px-3 sm:text-sm"
-          >
+        {/* Points Balance */}          <Link to="/buy-points" className="shrink-0 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Badge
+              variant="default"
+              className="min-h-11 gap-1.5 rounded-full border-0 px-2.5 py-2 text-xs font-semibold shadow-sm transition-shadow duration-200 hover:shadow-md sm:min-h-8 sm:px-3 sm:text-sm"
+            >
             <Box className="h-3.5 w-3.5" />
             {pointsBalance != null ? `${pointsBalance.toLocaleString()} pts` : "—"}
             {pointsBalance != null && (
@@ -91,9 +91,15 @@ export function Header() {
           <Button variant="ghost" size="icon" className="relative size-11 sm:size-9" aria-label="Notifications">
             <Bell className="h-4 w-4" />
             {unreadCount !== undefined && unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-background">
+              <motion.span
+                key={unreadCount}
+                initial={{ scale: 0.4, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 520, damping: 22 }}
+                className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-background"
+              >
                 {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
+              </motion.span>
             )}
           </Button>
         </Link>

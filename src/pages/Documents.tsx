@@ -135,7 +135,7 @@ export default function Documents() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <Link
               to="/documents/own/new"
-              className="group flex h-full flex-col justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/[0.04] p-4 transition-all hover:-translate-y-0.5 hover:border-primary hover:shadow-md"
+              className="interactive-card group flex h-full flex-col justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/[0.04] p-4"
             >
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -209,7 +209,7 @@ export default function Documents() {
             >
               <Link
                 to={`/documents/templates?category=${category.key}`}
-                className="group flex h-full items-start justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+                className="interactive-card group flex h-full items-start justify-between gap-3 rounded-xl border border-border bg-card p-4"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
