@@ -50,9 +50,55 @@ export const POINT_TX_TYPES = [
   "document_generation",
   "email_dispatch",
   "image_rendering",
+  // VTU (airtime/data/cable/electricity/exam/betting). A purchase debits and a
+  // failure reverses; both flow through this same ledger so VTU money is never
+  // tracked by a second, parallel balance.
+  "vtu_purchase",
+  "vtu_refund",
 ] as const;
 export type PointTxType = (typeof POINT_TX_TYPES)[number];
 export const pointTxTypeValidator = v.union(...literals(POINT_TX_TYPES));
+
+// ─── VTU (virtual top-up) enums ───
+export const VTU_SERVICE_TYPES = [
+  "airtime",
+  "data",
+  "cable",
+  "electricity",
+  "exam",
+  "betting",
+] as const;
+export type VtuServiceType = (typeof VTU_SERVICE_TYPES)[number];
+export const vtuServiceTypeValidator = v.union(...literals(VTU_SERVICE_TYPES));
+
+/**
+ * VTU transaction lifecycle.
+ *
+ * `pending` deliberately doubles as the "outcome unknown" state. A transport
+ * timeout leaves the row here with a `failureReason`, because reversing on a
+ * timeout would risk refunding a top-up that actually succeeded at the carrier.
+ * There is no poller in this slice, so these rows are counted and reported
+ * rather than auto-recovered.
+ */
+export const VTU_TRANSACTION_STATUSES = [
+  "pending", // row + debit exist; provider call not yet resolved
+  "processing", // dispatched to the aggregator
+  "success", // aggregator confirmed delivery
+  "failed", // aggregator definitively rejected; reversal issued
+  "reversed", // points returned; terminal
+] as const;
+export type VtuTransactionStatus = (typeof VTU_TRANSACTION_STATUSES)[number];
+export const vtuTransactionStatusValidator = v.union(
+  ...literals(VTU_TRANSACTION_STATUSES),
+);
+
+export const VTU_PROVIDER_STATUSES = [
+  "active",
+  "sandbox",
+  "disabled",
+] as const;
+export type VtuProviderStatus = (typeof VTU_PROVIDER_STATUSES)[number];
+export const vtuProviderStatusValidator = v.union(...literals(VTU_PROVIDER_STATUSES));
 
 export const DOCUMENT_TYPES = [
   "flight",
@@ -1262,6 +1308,117 @@ const schema = defineSchema(
     })
       .index("by_key", ["key"])
       .index("by_tenant_and_kind", ["tenantId", "kind", "createdAt"]),
+
+    // ─── VTU / bill payments ────────────────────────────────────────────
+    // The transaction log is deliberately SEPARATE from `pointLedger`. The
+    // ledger records money only; this table records the provider-facing
+    // lifecycle (customer phone/meter, provider reference, raw payloads,
+    // status) that a ledger row has no business carrying.
+    vtuTransactions: defineTable({
+      userId: v.id("users"),
+      /** Client-generated idempotency key. Unique per purchase attempt. */
+      requestId: v.string(),
+      serviceType: v.union(...literals(VTU_SERVICE_TYPES)),
+      /** Matches `vtuProviders.provider` — which adapter served this. */
+      provider: v.string(),
+      productCode: v.string(),
+      productName: v.optional(v.string()),
+      /** Phone number, meter number, smartcard number or betting user id. */
+      customerIdentifier: v.string(),
+      quantity: v.optional(v.number()),
+      status: v.union(...literals(VTU_TRANSACTION_STATUSES)),
+      /** What the aggregator charged us, in naira. */
+      costNgn: v.number(),
+      /** What the customer paid, in points. */
+      pointsCharged: v.number(),
+      /** Reference the aggregator assigned. Set from the response or webhook. */
+      providerReference: v.optional(v.string()),
+      debitLedgerId: v.optional(v.id("pointLedger")),
+      reversalLedgerId: v.optional(v.id("pointLedger")),
+      /** Sanitized request/response payloads. Secrets are stripped on write. */
+      rawRequest: v.optional(v.any()),
+      rawResponse: v.optional(v.any()),
+      /** Rejection code, or the transport error when the outcome is unknown. */
+      failureReason: v.optional(v.string()),
+      failureCode: v.optional(v.string()),
+      /** Exam PIN / recharge serial, when the product returns one. */
+      serial: v.optional(v.string()),
+      pin: v.optional(v.string()),
+      reversedAt: v.optional(v.number()),
+      resolvedAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      // Both single-purpose indexes are load-bearing: `by_requestId` makes a
+      // retried purchase a lookup rather than a second charge, and
+      // `by_provider_reference` is how an inbound webhook finds its row.
+      .index("by_user", ["userId", "createdAt"])
+      .index("by_requestId", ["requestId"])
+      .index("by_provider_reference", ["providerReference"])
+      .index("by_status", ["status", "createdAt"])
+      .index("by_provider", ["provider", "createdAt"]),
+
+    // Aggregator configuration. The secret is stored sealed (AES-256-GCM) and
+    // is only ever opened inside a "use node" action — never in the database
+    // layer, never in the browser.
+    vtuProviders: defineTable({
+      provider: v.string(),
+      displayName: v.string(),
+      status: v.union(...literals(VTU_PROVIDER_STATUSES)),
+      baseUrl: v.string(),
+      /** Encrypted credential payload. See vtuCrypto.ts. */
+      encryptedSecret: v.string(),
+      /** Callback secret, also sealed. */
+      encryptedCallbackSecret: v.optional(v.string()),
+      /** Header the aggregator sends its callback signature in. */
+      callbackSignatureHeader: v.optional(v.string()),
+      /** Header the request authorization is sent in. */
+      authHeader: v.optional(v.string()),
+      timeoutMs: v.optional(v.number()),
+      isDefault: v.optional(v.boolean()),
+      notes: v.optional(v.string()),
+      updatedBy: v.optional(v.id("users")),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_provider", ["provider"])
+      .index("by_status", ["status"]),
+
+    /** Seedable catalog of purchasable products, independent of any live call. */
+    vtuCatalog: defineTable({
+      provider: v.string(),
+      serviceType: v.union(...literals(VTU_SERVICE_TYPES)),
+      /** Provider's own catalog identifier, sent verbatim on purchase. */
+      productCode: v.string(),
+      name: v.string(),
+      /** Face value in naira, used to derive the point cost. */
+      priceNgn: v.number(),
+      /** Optional override: charge exactly this many points when set. */
+      pointsCost: v.optional(v.number()),
+      /** Operator / network discriminator (e.g. "mtn", "dstv", "ikeja"). */
+      network: v.optional(v.string()),
+      description: v.optional(v.string()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_service", ["serviceType", "isActive"])
+      .index("by_provider_code", ["provider", "productCode"])
+      .index("by_network", ["network"]),
+
+    /** Live offers reported by the aggregator, cached against the catalog. */
+    vtuProductOffers: defineTable({
+      productCode: v.string(),
+      provider: v.string(),
+      serviceType: v.union(...literals(VTU_SERVICE_TYPES)),
+      name: v.optional(v.string()),
+      priceNgn: v.number(),
+      network: v.optional(v.string()),
+      isAvailable: v.optional(v.boolean()),
+      fetchedAt: v.number(),
+    })
+      .index("by_productCode", ["productCode"])
+      .index("by_service", ["serviceType"]),
   },
   {
     schemaValidation: false,

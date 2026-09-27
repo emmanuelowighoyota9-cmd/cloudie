@@ -489,4 +489,47 @@ const paystackWebhookHandler = httpAction(async (ctx, req) => {
 
 http.route({ path: "/api/webhooks/paystack", method: "POST", handler: paystackWebhookHandler });
 
+// ─── VTU Webhook ───────────────────────────────────────────────────
+// POST /api/webhooks/vtu
+// Verifies the HMAC signature over the RAW body BEFORE anything is trusted,
+// then applies the provider event to its transaction.
+
+const vtuWebhookHandler = httpAction(async (ctx, req) => {
+  // Raw body, never parsed-and-restringified: re-serialization changes the
+  // bytes and the HMAC would not match.
+  const rawBody = await req.text();
+
+  const headers: Record<string, string> = {};
+  req.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+
+  // Signature verification runs in an action because the Convex HTTP runtime
+  // has no node:crypto.
+  const verification = await ctx.runAction(internal.vtuHttp.verifyVtuCallback, {
+    rawBody,
+    headers,
+  });
+
+  if (!verification.verified) {
+    // 401 for a bad or absent signature: this request is not from the
+    // aggregator and must not be processed at all.
+    return json({ error: "Invalid signature", reason: verification.reason }, 401);
+  }
+
+  try {
+    const result = await ctx.runAction(internal.vtuHttp.handleVtuCallback, { rawBody });
+    // Always 200 from here on, including for an unmatched reference. A 4xx
+    // would make the aggregator retry forever against something that will
+    // never resolve on our side. `result` already carries its own `ok` flag,
+    // so it is returned as-is rather than re-spread with a conflicting key.
+    return json(result);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return json({ error: "Processing failed", message: msg }, 500);
+  }
+});
+
+http.route({ path: "/api/webhooks/vtu", method: "POST", handler: vtuWebhookHandler });
+
 export default http;

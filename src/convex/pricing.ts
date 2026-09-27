@@ -33,6 +33,34 @@ export const DEFAULT_PACKAGES: PointPackage[] = [
 
 const RATE_KEY = "point_rate";
 const PACKAGES_KEY = "point_packages";
+/** Optional VTU margin, in basis points. Absent or 0 means sell at cost. */
+const VTU_MARKUP_KEY = "vtu_markup_bp";
+
+/**
+ * The admin-configured naira/USD → points rate.
+ *
+ * Exported so the VTU purchase path prices against the SAME table every other
+ * surface displays, rather than a second, drifting copy of the rate.
+ */
+export async function readPointRate(
+  ctx: QueryCtx | MutationCtx,
+): Promise<{ ngnPerPoint: number; usdPerPoint: number }> {
+  return readRate(ctx as QueryCtx);
+}
+
+/** VTU margin in basis points. Defaults to 0 — no margin is invented. */
+export async function readVtuMarkupBp(
+  ctx: QueryCtx | MutationCtx,
+): Promise<number> {
+  const row = await (ctx as QueryCtx).db
+    .query("adminSettings")
+    .withIndex("by_key", (q) => q.eq("key", VTU_MARKUP_KEY))
+    .first();
+  const value = (row?.value ?? {}) as { bp?: unknown };
+  return typeof value.bp === "number" && Number.isFinite(value.bp) && value.bp >= 0
+    ? value.bp
+    : 0;
+}
 
 const packageValidator = v.object({
   id: v.string(),
