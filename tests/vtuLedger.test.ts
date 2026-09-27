@@ -1,28 +1,26 @@
 import { describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
 import {
-  MIN_VTU_COST_NGN,
+  airtimeServiceCode,
   isValidRequestId,
   maskIdentifier,
+  parseServiceCode,
   pointsForNaira,
-  validateCustomerIdentifier,
+  resolveVtuPointsCost,
+  validatePhone,
   vtuPurchaseKey,
   vtuRefundKey,
 } from "../src/lib/vtu";
 import { sanitizeForLog } from "../src/convex/vtuShared";
 import { decryptVtuSecret, encryptVtuSecret } from "../src/convex/vtuCrypto";
-import {
-  mapPurchaseResponse,
-  pairgateAdapter,
-} from "../src/convex/vtuPairgate";
-import { createHmac } from "node:crypto";
+import { mapPurchaseResponse, pairgateAdapter } from "../src/convex/vtuPairgate";
 
 // ─── Idempotency keys ──────────────────────────────────────────────
 
 describe("VTU idempotency keys", () => {
   test("purchase and refund keys are namespaced differently", () => {
-    // This is the property the whole design rests on: `pointLedger` keys on ONE
-    // global index, so a shared namespace would let a reversal collide with
-    // its own debit and silently refund nothing.
+    // `pointLedger` keys on ONE global index, so a shared namespace would let
+    // a refund collide with its own debit.
     expect(vtuPurchaseKey("abc")).toBe("vtu:purchase:abc");
     expect(vtuRefundKey("abc")).toBe("vtu:refund:abc");
     expect(vtuPurchaseKey("abc")).not.toBe(vtuRefundKey("abc"));
@@ -33,10 +31,17 @@ describe("VTU idempotency keys", () => {
     expect(vtuRefundKey("x")).not.toContain("docrender");
   });
 
-  test("refund key is stable for the same requestId", () => {
-    // Stability is what makes a second reversal a no-op rather than a
-    // double credit.
-    expect(vtuRefundKey("r1")).toBe(vtuRefundKey("r1"));
+  test("purchase keys are never namespaced by provider", () => {
+    // A retry must dedupe even when slice 3 routes it to a different
+    // aggregator, which is why the key is derived from the request id alone.
+    expect(vtuPurchaseKey("r1")).toBe(vtuPurchaseKey("r1"));
+    expect(vtuPurchaseKey("r1")).toBe("vtu:purchase:r1");
+  });
+
+  test("refund keys vary per transaction", () => {
+    // Each attempt is its own transaction, so a distinct key per row needs no
+    // further guarding beyond the `failed -> reversed` status check.
+    expect(vtuRefundKey("t1")).not.toBe(vtuRefundKey("t2"));
   });
 
   test("requestId validation rejects weak or malformed ids", () => {
@@ -51,53 +56,69 @@ describe("VTU idempotency keys", () => {
 
 describe("naira to points conversion", () => {
   test("converts at the configured rate", () => {
-    // 15 naira per point (DEFAULT_POINT_RATE).
     expect(pointsForNaira(1500, 15)).toBe(100);
-    expect(pointsForNaira(225, 15)).toBe(15);
+    expect(pointsForNaira(1000, 15)).toBe(67); // 66.67
   });
 
   test("rounds UP so a customer never underpays for delivered airtime", () => {
-    // 100 / 15 = 6.67 — must never bill 6.
-    expect(pointsForNaira(100, 15)).toBe(7);
+    expect(pointsForNaira(100, 15)).toBe(7); // 6.67
     expect(pointsForNaira(1, 15)).toBe(1);
-    expect(pointsForNaira(31, 15)).toBe(3); // 2.07 → 3
-  });
-
-  test("applies markup in basis points", () => {
-    // ₦1,000 at 15/pt = 66.67 → 67; +10% = 73.33 → 74
-    expect(pointsForNaira(1000, 15, 1000)).toBe(74);
+    expect(pointsForNaira(31, 15)).toBe(3); // 2.07
   });
 
   test("rejects nonsense inputs instead of returning a wrong price", () => {
     expect(() => pointsForNaira(0, 15)).toThrow();
-    expect(() => pointsForNaira(MIN_VTU_COST_NGN - 0.5, 15)).toThrow();
-    expect(() => pointsForNaira(NaN, 15)).toThrow();
+    expect(() => pointsForNaira(Number.NaN, 15)).toThrow();
     expect(() => pointsForNaira(100, 0)).toThrow();
-    expect(() => pointsForNaira(100, 15, -5)).toThrow();
+  });
+
+  test("an active override wins outright over the conversion", () => {
+    expect(resolveVtuPointsCost(1000, 15, 50)).toBe(50);
+    expect(resolveVtuPointsCost(1000, 15, undefined)).toBe(67);
+    expect(resolveVtuPointsCost(1000, 15, null)).toBe(67);
+    expect(resolveVtuPointsCost(1000, 15, 0)).toBe(67);
   });
 });
 
-// ─── Identifier handling ───────────────────────────────────────────
+// ─── Service codes ─────────────────────────────────────────────────
 
-describe("customer identifier validation", () => {
-  test("accepts and normalises Nigerian phone numbers", () => {
-    expect(validateCustomerIdentifier("airtime", "08031234567").ok).toBe(true);
-    expect(validateCustomerIdentifier("airtime", "+2348031234567").ok).toBe(true);
-    const spaced = validateCustomerIdentifier("data", "0803 123 4567");
+describe("airtime service codes", () => {
+  test("round-trips", () => {
+    const code = airtimeServiceCode("MTN", 1000);
+    expect(code).toBe("airtime.mtn.1000");
+    expect(parseServiceCode(code)).toEqual({
+      serviceType: "airtime",
+      network: "mtn",
+      amountNgn: 1000,
+    });
+  });
+
+  test("rejects unknown networks and out-of-range amounts", () => {
+    expect(() => airtimeServiceCode("vodafone", 1000)).toThrow();
+    expect(() => airtimeServiceCode("mtn", 50)).toThrow();
+    expect(() => airtimeServiceCode("mtn", 100_001)).toThrow();
+  });
+
+  test("parses unknown shapes to null rather than guessing", () => {
+    expect(parseServiceCode("data.mtn.1")).toBeNull();
+    expect(parseServiceCode("airtime.vodafone.1000")).toBeNull();
+    expect(parseServiceCode("")).toBeNull();
+  });
+});
+
+// ─── Destination numbers ───────────────────────────────────────────
+
+describe("phone validation and masking", () => {
+  test("accepts and normalises Nigerian mobile numbers", () => {
+    expect(validatePhone("08031234567").ok).toBe(true);
+    expect(validatePhone("+2348031234567").ok).toBe(true);
+    const spaced = validatePhone("0803 123 4567");
     expect(spaced.ok && spaced.value).toBe("08031234567");
   });
 
   test("rejects numbers that cannot receive airtime", () => {
-    expect(validateCustomerIdentifier("airtime", "12345").ok).toBe(false);
-    expect(validateCustomerIdentifier("airtime", "").ok).toBe(false);
-  });
-
-  test("applies per-service length rules", () => {
-    // A meter number is not a phone number and vice versa.
-    expect(validateCustomerIdentifier("electricity", "451234567890").ok).toBe(true);
-    expect(validateCustomerIdentifier("electricity", "0803").ok).toBe(false);
-    expect(validateCustomerIdentifier("cable", "12345678").ok).toBe(true);
-    expect(validateCustomerIdentifier("exam", "1234567890").ok).toBe(true);
+    expect(validatePhone("12345").ok).toBe(false);
+    expect(validatePhone("").ok).toBe(false);
   });
 
   test("masking keeps only the last four digits", () => {
@@ -168,8 +189,7 @@ describe("VTU credential sealing", () => {
   test("a tampered payload is rejected, not silently mis-decrypted", () => {
     const sealed = encryptVtuSecret("pg_live_key_12345", SECRET);
     const parts = sealed.split(".");
-    // `v1:iv` | tag | ciphertext — the ciphertext is the third segment.
-    expect(parts).toHaveLength(3);
+    expect(parts).toHaveLength(3); // "v1:iv" | tag | ciphertext
     parts[2] = Buffer.from("tampered").toString("base64");
     expect(() => decryptVtuSecret(parts.join("."), SECRET)).toThrow();
   });
@@ -179,19 +199,18 @@ describe("VTU credential sealing", () => {
   });
 });
 
-// ─── Pairgate response mapping ────────────────────────────────────
+// ─── Provider response mapping ────────────────────────────────────
 
 describe("Pairgate response mapping", () => {
   test("maps a success payload", () => {
     const result = mapPurchaseResponse(
-      { status: "success", reference: "PG-1", cost: 1000, serial: "S-9" },
+      { status: "success", reference: "PG-1", cost: 1000 },
       "req-1",
     );
     expect(result.status).toBe("success");
     if (result.status === "success") {
       expect(result.providerReference).toBe("PG-1");
       expect(result.costNgn).toBe(1000);
-      expect(result.serial).toBe("S-9");
     }
   });
 
@@ -214,94 +233,130 @@ describe("Pairgate response mapping", () => {
   });
 
   test("success without a price is `unknown`, never a bogus success", () => {
-    // Marking this success would leave the customer out of pocket with
-    // nothing to reconcile against.
     const result = mapPurchaseResponse({ status: "success", reference: "PG-4" }, "req-4");
     expect(result.status).toBe("unknown");
   });
 
   test("an unrecognised payload is `unknown`, not an optimistic guess", () => {
-    const result = mapPurchaseResponse({ weird: true }, "req-5");
-    expect(result.status).toBe("unknown");
+    expect(mapPurchaseResponse({ weird: true }, "req-5").status).toBe("unknown");
+  });
+
+  test("every branch carries `raw` for the audit trail", () => {
+    // Stripping `raw` deletes the only record of what the aggregator said.
+    for (const body of [
+      { status: "success", reference: "PG", cost: 10 },
+      { status: "failed", message: "no" },
+      { nonsense: 1 },
+    ]) {
+      expect(mapPurchaseResponse(body, "r")).toHaveProperty("raw");
+    }
   });
 });
 
-// ─── Callback signature verification ───────────────────────────────
+// ─── verifyAndParseCallback ────────────────────────────────────────
 
-describe("webhook signature verification", () => {
+describe("verifyAndParseCallback (single call)", () => {
   const SECRET = "callback-secret-value";
   const BODY = JSON.stringify({ reference: "PG-1", status: "success" });
   const sign = (body: string, secret = SECRET) =>
     createHmac("sha256", secret).update(body).digest("hex");
 
-  test("accepts a correctly signed raw body", () => {
-    expect(
-      pairgateAdapter.verifyCallback(BODY, { "x-signature": sign(BODY) }, SECRET),
-    ).toBe(true);
+  test("returns the event for a correctly signed body", () => {
+    const event = pairgateAdapter.verifyAndParseCallback(
+      BODY,
+      { "x-pairgate-signature": sign(BODY) },
+      SECRET,
+    );
+    expect(event?.providerReference).toBe("PG-1");
+    expect(event?.outcome).toBe("confirmed");
   });
 
   test("accepts a `sha256=` prefixed signature", () => {
     expect(
-      pairgateAdapter.verifyCallback(
+      pairgateAdapter.verifyAndParseCallback(
         BODY,
         { "x-signature": `sha256=${sign(BODY)}` },
         SECRET,
-      ),
-    ).toBe(true);
+      )?.providerReference,
+    ).toBe("PG-1");
   });
 
-  test("rejects a wrong secret", () => {
-    expect(
-      pairgateAdapter.verifyCallback(BODY, { "x-signature": sign(BODY) }, "nope"),
-    ).toBe(false);
-  });
-
-  test("rejects a tampered body", () => {
+  test("a tampered body yields null — never a parsed event", () => {
     const tampered = JSON.stringify({ reference: "PG-1", status: "failed" });
     expect(
-      pairgateAdapter.verifyCallback(tampered, { "x-signature": sign(BODY) }, SECRET),
-    ).toBe(false);
+      pairgateAdapter.verifyAndParseCallback(
+        tampered,
+        { "x-signature": sign(BODY) },
+        SECRET,
+      ),
+    ).toBeNull();
   });
 
-  test("rejects when no signature is present", () => {
-    expect(pairgateAdapter.verifyCallback(BODY, {}, SECRET)).toBe(false);
-  });
-
-  test("rejects when no callback secret is configured", () => {
-    expect(pairgateAdapter.verifyCallback(BODY, { "x-signature": sign(BODY) }, "")).toBe(
-      false,
-    );
-  });
-
-  test("rejects a length-mismatched signature without throwing", () => {
+  test("a wrong secret yields null", () => {
     expect(
-      pairgateAdapter.verifyCallback(BODY, { "x-signature": "abc" }, SECRET),
-    ).toBe(false);
-  });
-});
-
-// ─── Callback parsing ──────────────────────────────────────────────
-
-describe("callback parsing", () => {
-  test("parses a success event", () => {
-    const event = pairgateAdapter.parseCallback(
-      JSON.stringify({ reference: "PG-1", status: "success", cost: 1000 }),
-    );
-    expect(event?.outcome).toBe("success");
-    expect(event?.providerReference).toBe("PG-1");
+      pairgateAdapter.verifyAndParseCallback(BODY, { "x-signature": sign(BODY) }, "nope"),
+    ).toBeNull();
   });
 
-  test("parses a failure event", () => {
-    const event = pairgateAdapter.parseCallback(
-      JSON.stringify({ reference: "PG-2", status: "failed", message: "no" }),
+  test("no signature yields null", () => {
+    expect(pairgateAdapter.verifyAndParseCallback(BODY, {}, SECRET)).toBeNull();
+  });
+
+  test("no configured secret yields null", () => {
+    expect(
+      pairgateAdapter.verifyAndParseCallback(BODY, { "x-signature": sign(BODY) }, ""),
+    ).toBeNull();
+  });
+
+  test("a length-mismatched signature yields null without throwing", () => {
+    expect(
+      pairgateAdapter.verifyAndParseCallback(BODY, { "x-signature": "abc" }, SECRET),
+    ).toBeNull();
+  });
+
+  test("a signed but unparseable body yields null", () => {
+    const raw = "not json at all";
+    expect(
+      pairgateAdapter.verifyAndParseCallback(raw, { "x-signature": sign(raw) }, SECRET),
+    ).toBeNull();
+  });
+
+  test("a signed payload with no outcome signal yields null", () => {
+    // Resolving a transaction on a guess would be worse than doing nothing.
+    const raw = JSON.stringify({ reference: "PG-3" });
+    expect(
+      pairgateAdapter.verifyAndParseCallback(raw, { "x-signature": sign(raw) }, SECRET),
+    ).toBeNull();
+  });
+
+  test("maps a failure event", () => {
+    const raw = JSON.stringify({ reference: "PG-2", status: "failed", message: "no" });
+    const event = pairgateAdapter.verifyAndParseCallback(
+      raw,
+      { "x-signature": sign(raw) },
+      SECRET,
     );
     expect(event?.outcome).toBe("failed");
   });
+});
 
-  test("returns null for unparseable or signal-free payloads", () => {
-    // Resolving on a guess would be worse than doing nothing.
-    expect(pairgateAdapter.parseCallback("not json")).toBeNull();
-    expect(pairgateAdapter.parseCallback(JSON.stringify({ reference: "PG-3" }))).toBeNull();
-    expect(pairgateAdapter.parseCallback(JSON.stringify({ status: "success" }))).toBeNull();
+// ─── Interface shape ───────────────────────────────────────────────
+
+describe("adapter interface", () => {
+  test("exposes verify() for future reconciliation", () => {
+    // Present now so slice 4 does not have to break every adapter.
+    expect(typeof pairgateAdapter.verify).toBe("function");
+    expect(typeof pairgateAdapter.purchase).toBe("function");
+    expect(typeof pairgateAdapter.verifyAndParseCallback).toBe("function");
+  });
+
+  test("verify() reports an unreachable provider as unknown, not failed", async () => {
+    const result = await pairgateAdapter.verify("PG-1", {
+      baseUrl: "http://127.0.0.1:9",
+      apiKey: "k",
+      timeoutMs: 200,
+      fetchImpl: fetch,
+    });
+    expect(result.status).toBe("unknown");
   });
 });

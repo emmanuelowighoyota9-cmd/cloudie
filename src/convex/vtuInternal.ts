@@ -1,37 +1,47 @@
 /**
- * VTU money path — internal mutations only.
+ * VTU money path and transitions — internal only.
  *
- * Nothing here is a public function. The client cannot debit, reverse, or set a
- * price; it can only ask the action in `vtuHttp.ts` to run a purchase, and
- * that action calls into this module. Every path that moves points goes
- * through `internal.points.debit` / `internal.points.credit`, so the existing
- * immutable ledger stays the single source of truth.
+ * Nothing here is public. The client cannot begin a purchase, advance a
+ * status, refund itself, or set a price; it can only ask the action in
+ * `vtuHttp.ts` to run a purchase, and that action resolves the caller and
+ * passes `userId` explicitly.
  *
- * Deliberately does NOT import `vtuPairgate.ts`: this module must stay free of
- * `node:crypto` so the test harness can run these mutations without a Node
- * runtime.
+ * (A public mutation reads the caller from the auth context. An ACTION calling
+ * a public mutation does NOT carry that context, so a purchase mutation
+ * reachable from an action must be internal and take `userId` itself.)
+ *
+ * These live apart from `vtu.ts` for a second, concrete reason: a Convex
+ * module that reaches for its OWN exports through the generated `internal`
+ * API creates a self-referential type-inference cycle that collapses the
+ * module — and everything importing it — to `any`.
  */
 
-import { getAuthUserId } from "@convex-dev/auth/server";
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import type { VtuTransactionStatus } from "./vtuShared";
-import type { VtuReversalResult } from "./vtuReversal";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { sanitizeForLog } from "./vtuShared";
-import { readPointRate, readVtuMarkupBp } from "./pricing";
+import type { VtuTransactionStatus } from "./vtuShared";
 import {
   isValidRequestId,
   maskIdentifier,
-  pointsForNaira,
-  validateCustomerIdentifier,
+  parseServiceCode,
+  resolveVtuPointsCost,
+  validatePhone,
+  vtuLedgerPurchaseKey,
   vtuPurchaseKey,
+  vtuRefundKey,
 } from "../lib/vtu";
-import type { MutationCtx } from "./_generated/server";
+import { readPointRate } from "./pricing";
 
-/** Fixed-window limiter, mirroring the one in `docTemplates.ts`. */
-async function consumeRateLimit(
+/** Purchases allowed per minute, per user. Fixed window in Convex, no Redis. */
+export const PURCHASE_RATE_LIMIT = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
+/** Shared with the public price queries in `vtu.ts`. */
+export async function consumeRateLimit(
   ctx: { db: any },
   key: string,
   limit: number,
@@ -54,335 +64,423 @@ async function consumeRateLimit(
   return true;
 }
 
-export const VTU_PURCHASE_SERVICE = "vtu_purchase";
+export type ResolvedCost = {
+  points: number;
+  ngnPerPoint: number;
+  override: boolean;
+};
 
 /**
- * Explicit result shapes.
+ * Resolve the points cost for a service code: override first, conversion
+ * second — the same precedence as `resolveRenderCost`.
  *
- * These annotations are load-bearing, not decoration. Without them TypeScript
- * must infer each handler's return type THROUGH the generated `internal`
- * object, which itself contains these functions — a circular inference that
- * collapses the module to `any` and produces TS7022/TS7023.
+ * `pointPricing` ships with no VTU rows, so this exercises the conversion
+ * branch until an admin sets one.
  */
-export type ReserveResult =
+export async function resolveCost(
+  ctx: any,
+  serviceCode: string,
+  nairaPrice: number,
+): Promise<ResolvedCost> {
+  const overrideRow = await ctx.db
+    .query("pointPricing")
+    .withIndex("by_serviceCode", (q: any) => q.eq("serviceCode", serviceCode))
+    .first();
+  const rate = await readPointRate(ctx);
+  const override = overrideRow?.active === true;
+  return {
+    points: resolveVtuPointsCost(
+      nairaPrice,
+      rate.ngnPerPoint,
+      override ? overrideRow.pointsCost : undefined,
+    ),
+    ngnPerPoint: rate.ngnPerPoint,
+    override,
+  };
+}
+
+export type BeginPurchaseResult =
   | {
-      already: true;
+      reused: true;
       transactionId: Id<"vtuTransactions">;
       status: VtuTransactionStatus;
+      pointsDebited: number;
     }
   | {
-      already: false;
+      reused: false;
       transactionId: Id<"vtuTransactions">;
-      points: number;
-      costNgn: number;
+      status: "pending";
+      pointsDebited: number;
+      ngnPerPoint: number;
     };
 
-export type FinalizeResult =
-  | { status: "success" }
-  | { status: "reversed"; reversal: VtuReversalResult }
-  | { status: "pending" };
-
-export type CallbackResult =
-  | { outcome: "unmatched" }
-  | { outcome: "ignored"; status: VtuTransactionStatus }
-  | { outcome: "success" }
-  | { outcome: "failed"; reversal: VtuReversalResult };
-
 /**
- * Reserve a purchase: validate, price, debit, and record the transaction.
+ * Begin a purchase: claim the key, debit the ledger, record the transaction.
  *
- * Returns `{ already: true }` when this `requestId` has been seen before, so a
- * client retry is served from the existing row rather than charged twice. That
- * check runs FIRST and before the rate limiter — a genuine retry of a request
- * that timed out must not be rate-limited into a failure the customer pays
- * for.
+ * The ordering is the design:
  *
- * The debit and the row insert are in ONE transaction, so a rollback can
- * never leave points taken with no transaction record to reconcile against.
+ *   1. Rate limit.
+ *   2. Idempotency — an existing claim means a retry, so return the recorded
+ *      transaction WITHOUT debiting again. Checked before the limiter so a
+ *      genuine retry of a request that timed out is served rather than being
+ *      rate-limited into a failure the customer pays for.
+ *   3. Claim the key FIRST. If a later step throws, this insert rolls back
+ *      with it, so a failed attempt never burns the customer's request id.
+ *   4. Insert the transaction, so the debit can be keyed on its own id.
+ *   5. Debit, keyed per ATTEMPT. Throws on insufficient balance, unwinding
+ *      the claim and the row above.
+ *
+ * Steps 3–5 are one Convex transaction, so there is no window in which the key
+ * exists without a debit, or a debit without a row to reconcile against.
+ *
+ * `points.debit` returns the EXISTING ledger id on a replay rather than
+ * failing, so its return value alone is not proof of a new debit — the
+ * uniqueness of `vtuIdempotency` is what actually prevents a double charge.
  */
-export const reserveTransaction = internalMutation({
+export const beginPurchase = internalMutation({
   args: {
     userId: v.id("users"),
-    requestId: v.string(),
-    provider: v.string(),
-    serviceType: v.union(
-      v.literal("airtime"),
-      v.literal("data"),
-      v.literal("cable"),
-      v.literal("electricity"),
-      v.literal("exam"),
-      v.literal("betting"),
-    ),
-    productCode: v.string(),
+    clientRequestId: v.string(),
+    serviceCode: v.string(),
     customerIdentifier: v.string(),
-    quantity: v.optional(v.number()),
-    pinCount: v.optional(v.number()),
+    provider: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<ReserveResult> => {
-    if (!isValidRequestId(args.requestId)) {
-      throw new Error("A valid requestId is required");
+  handler: async (ctx, args): Promise<BeginPurchaseResult> => {
+    if (!isValidRequestId(args.clientRequestId)) {
+      throw new Error("A valid clientRequestId is required");
     }
 
-    // 1. Idempotency — before anything else.
-    const existing = await ctx.db
-      .query("vtuTransactions")
-      .withIndex("by_requestId", (q) => q.eq("requestId", args.requestId))
-      .unique();
-    if (existing) {
-      return { already: true, transactionId: existing._id, status: existing.status };
-    }
+    const parsed = parseServiceCode(args.serviceCode);
+    if (!parsed) throw new Error("Unsupported product");
 
-    if (!(await consumeRateLimit(ctx, `vtu:purchase:${args.userId}`, 10, 60_000))) {
+    const phone = validatePhone(args.customerIdentifier);
+    if (!phone.ok) throw new Error(phone.error);
+
+    if (
+      !(await consumeRateLimit(
+        ctx,
+        `vtu:purchase:${args.userId}`,
+        PURCHASE_RATE_LIMIT,
+        RATE_LIMIT_WINDOW_MS,
+      ))
+    ) {
       throw new Error("Too many purchase attempts. Try again in a minute.");
     }
 
-    // 2. Destination number. Never persisted in full.
-    const identifier = validateCustomerIdentifier(
-      args.serviceType,
-      args.customerIdentifier,
-    );
-    if (!identifier.ok) throw new Error(identifier.error);
+    const key = vtuPurchaseKey(args.clientRequestId);
 
-    // 3. Price comes from the catalog, never from the client.
-    const product = await ctx.db
-      .query("vtuCatalog")
-      .withIndex("by_provider_code", (q) =>
-        q.eq("provider", args.provider).eq("productCode", args.productCode),
-      )
-      .first();
-    if (!product || !product.isActive) {
-      throw new Error("This product is not available");
-    }
-    if (product.serviceType !== args.serviceType) {
-      throw new Error("Product does not match the selected service");
+    // 2. Idempotency.
+    const existingClaim = await ctx.db
+      .query("vtuIdempotency")
+      .withIndex("by_key", (q) => q.eq("key", key))
+      .unique();
+    if (existingClaim?.transactionId) {
+      const tx = await ctx.db.get(existingClaim.transactionId);
+      if (tx) {
+        return {
+          reused: true,
+          transactionId: tx._id,
+          status: tx.status,
+          pointsDebited: tx.pointsDebited,
+        };
+      }
     }
 
-    const rate = await readPointRate(ctx);
-    const markupBp = await readVtuMarkupBp(ctx);
-    // An explicit per-product point cost overrides naira conversion, so an
-    // admin can price a loss-leading product deliberately.
-    const points =
-      product.pointsCost && product.pointsCost > 0
-        ? product.pointsCost
-        : pointsForNaira(product.priceNgn, rate.ngnPerPoint, markupBp);
-
-    const masked = maskIdentifier(identifier.value);
-    const label = product.name;
-
-    // 4. Debit. Throws on insufficient balance, which aborts the whole
-    //    mutation — no orphan row is left behind.
-    const debitId: Id<"pointLedger"> = await ctx.runMutation(internal.points.debit, {
+    // 3. Claim the key FIRST. Rolls back with everything below on throw.
+    const now = Date.now();
+    const claimId = await ctx.db.insert("vtuIdempotency", {
+      key,
+      scope: "purchase",
       userId: args.userId,
-      amount: points,
-      type: VTU_PURCHASE_SERVICE as any,
-      description: `${label} for ${masked}`,
-      reference: args.provider,
-      idempotencyKey: vtuPurchaseKey(args.requestId),
-      metadata: {
-        requestId: args.requestId,
-        serviceType: args.serviceType,
-        productCode: args.productCode,
-        productName: label,
-        customerIdentifier: masked,
-        costNgn: product.priceNgn,
-      },
+      createdAt: now,
     });
 
-    const now = Date.now();
+    const { points, ngnPerPoint } = await resolveCost(
+      ctx,
+      args.serviceCode,
+      parsed.amountNgn,
+    );
+
+    // 4. Insert the transaction FIRST, so the debit can be keyed on its id.
+    //
+    // The ledger key is per ATTEMPT (see `vtuLedgerPurchaseKey`). If it were
+    // the client request id, the immutable ledger row from a FAILED attempt
+    // would block this debit forever and the customer's retry would be free.
+    // All of steps 3–5 are one transaction, so this row cannot survive a
+    // failed debit.
     const transactionId = await ctx.db.insert("vtuTransactions", {
       userId: args.userId,
-      requestId: args.requestId,
-      serviceType: args.serviceType,
-      provider: args.provider,
-      productCode: args.productCode,
-      productName: label,
-      customerIdentifier: masked,
-      quantity: args.quantity,
+      clientRequestId: args.clientRequestId,
+      serviceCode: args.serviceCode,
+      provider: args.provider ?? "pairgate",
       status: "pending",
-      costNgn: product.priceNgn,
-      pointsCharged: points,
-      debitLedgerId: debitId,
+      customerIdentifier: maskIdentifier(phone.value),
+      network: parsed.network,
+      amountNgn: parsed.amountNgn,
+      nairaPrice: parsed.amountNgn,
+      ngnPerPoint,
+      pointsDebited: points,
+      idempotencyKey: key,
       createdAt: now,
       updatedAt: now,
     });
 
-    return { already: false, transactionId, points, costNgn: product.priceNgn };
+    // 5. Debit, keyed on this attempt.
+    const debitId = await ctx.runMutation(internal.points.debit, {
+      userId: args.userId,
+      amount: points,
+      type: "vtu_purchase",
+      description: `${args.serviceCode} for ${maskIdentifier(phone.value)}`,
+      reference: args.provider ?? "pairgate",
+      idempotencyKey: vtuLedgerPurchaseKey(transactionId),
+      metadata: {
+        clientRequestId: args.clientRequestId,
+        serviceCode: args.serviceCode,
+        customerIdentifier: maskIdentifier(phone.value),
+        nairaPrice: parsed.amountNgn,
+        ngnPerPoint,
+        transactionId,
+      },
+    });
+
+    await ctx.db.patch(transactionId, { debitLedgerId: debitId });
+    await ctx.db.patch(claimId, { transactionId });
+
+    return {
+      reused: false,
+      transactionId,
+      status: "pending",
+      pointsDebited: points,
+      ngnPerPoint,
+    };
   },
 });
 
 /**
- * NOTE: the reversal mutation itself lives in `vtuReversal.ts`.
+ * States a transaction may be written OUT of.
  *
- * It cannot be a function in this module: a Convex module that calls its own
- * exports through the generated `internal` API produces a circular inferred
- * type, which collapses this whole module — and every module importing it —
- * to `any`.
+ * `recordOutcome` is the single owner of every terminal transition. Both input
+ * paths — the provider's synchronous response and its webhook — write through
+ * it, which makes "no status with two owners" true by construction rather than
+ * by convention: a second writer cannot be added without landing outside this
+ * set.
  */
+const OUTCOME_ALLOWED_FROM: readonly VtuTransactionStatus[] = ["processing", "unknown"];
+
+export type RecordOutcomeResult =
+  | { applied: true; status: VtuTransactionStatus }
+  | { applied: false; reason: "not_found" | "illegal_transition" | "already_resolved" };
 
 /**
- * Record the outcome of the outbound provider call.
+ * The ONLY writer permitted to move a transaction out of `processing` or
+ * `unknown`.
  *
- * `unknown` deliberately leaves the row `pending` with a `failureReason`. The
- * points stay debited, because reversing a timeout would refund airtime that
- * may genuinely have been delivered at the carrier. There is no poller in this
- * slice: these rows are counted and reported, which is the failure rate that
- * decides whether one is needed.
+ * Refused, loudly:
+ *   - anything from `failed` (its only exit is `reversed`) — this is what
+ *     blocks `failed -> confirmed`
+ *   - anything from `confirmed` (terminal) — blocks `confirmed -> failed`
+ *   - anything from `reversed` (terminal)
+ *   - anything from `pending` (must pass through `markProcessing` first)
  */
-export const finalizeTransaction = internalMutation({
+export const recordOutcome = internalMutation({
   args: {
     transactionId: v.id("vtuTransactions"),
-    result: v.union(
+    outcome: v.union(
       v.object({
-        status: v.literal("success"),
-        providerReference: v.string(),
+        status: v.union(v.literal("success"), v.literal("failed"), v.literal("unknown")),
+        providerReference: v.optional(v.string()),
         costNgn: v.optional(v.number()),
-        serial: v.optional(v.string()),
-        pin: v.optional(v.string()),
-        raw: v.optional(v.any()),
-      }),
-      v.object({
-        status: v.literal("failed"),
-        code: v.string(),
-        message: v.string(),
-        providerReference: v.optional(v.string()),
-        raw: v.optional(v.any()),
-      }),
-      v.object({
-        status: v.literal("unknown"),
-        message: v.string(),
-        providerReference: v.optional(v.string()),
+        code: v.optional(v.string()),
+        message: v.optional(v.string()),
         raw: v.optional(v.any()),
       }),
     ),
+    source: v.union(v.literal("provider_response"), v.literal("webhook")),
   },
-  handler: async (ctx, args): Promise<FinalizeResult> => {
+  handler: async (ctx, args): Promise<RecordOutcomeResult> => {
     const tx = await ctx.db.get(args.transactionId);
-    if (!tx) throw new Error("Transaction not found");
-    const now = Date.now();
+    if (!tx) return { applied: false, reason: "not_found" };
 
-    if (args.result.status === "success") {
+    if (tx.status === "confirmed" || tx.status === "reversed") {
+      return { applied: false, reason: "already_resolved" };
+    }
+    if (tx.status === "failed") return { applied: false, reason: "illegal_transition" };
+    if (!OUTCOME_ALLOWED_FROM.includes(tx.status)) {
+      return { applied: false, reason: "illegal_transition" };
+    }
+
+    const now = Date.now();
+    const o = args.outcome;
+
+    if (o.status === "success") {
       await ctx.db.patch(args.transactionId, {
-        status: "success",
-        providerReference: args.result.providerReference,
-        costNgn: args.result.costNgn ?? tx.costNgn,
-        serial: args.result.serial,
-        pin: args.result.pin,
-        rawResponse: sanitizeForLog(args.result.raw ?? null),
+        status: "confirmed",
+        providerReference: o.providerReference ?? tx.providerReference,
+        ...(o.costNgn !== undefined ? { nairaPrice: o.costNgn } : {}),
+        source: args.source,
+        failureReason: undefined,
+        failureCode: undefined,
+        rawResponse: sanitizeForLog(o.raw ?? null),
         resolvedAt: now,
         updatedAt: now,
       });
-      return { status: "success" };
+      return { applied: true, status: "confirmed" };
     }
 
-    if (args.result.status === "failed") {
+    if (o.status === "failed") {
       await ctx.db.patch(args.transactionId, {
         status: "failed",
-        providerReference: args.result.providerReference,
-        failureCode: args.result.code,
-        failureReason: args.result.message,
-        rawResponse: sanitizeForLog(args.result.raw ?? null),
+        providerReference: o.providerReference ?? tx.providerReference,
+        failureCode: o.code,
+        failureReason: o.message,
+        source: args.source,
+        rawResponse: sanitizeForLog(o.raw ?? null),
         updatedAt: now,
       });
-      const reversal = await ctx.runMutation(internal.vtuReversal.reverse, {
-        transactionId: args.transactionId,
-        reason: args.result.message,
-      });
-      return { status: "reversed", reversal };
+      return { applied: true, status: "failed" };
     }
 
-    // unknown → stays pending
+    // unknown — a REAL status, never coerced to pending or failed.
     await ctx.db.patch(args.transactionId, {
-      status: "pending",
-      failureReason: args.result.message,
-      rawResponse: sanitizeForLog(args.result.raw ?? null),
+      status: "unknown",
+      providerReference: o.providerReference ?? tx.providerReference,
+      failureReason: o.message,
+      source: args.source,
+      rawResponse: sanitizeForLog(o.raw ?? null),
       updatedAt: now,
     });
-    return { status: "pending" };
+    return { applied: true, status: "unknown" };
   },
 });
 
 /**
- * Apply a verified provider callback to its transaction.
- *
- * Terminal states are no-ops, which is what makes a duplicate webhook harmless.
- * An unrecognised reference is reported rather than thrown so the HTTP layer
- * can acknowledge it with 200 — an aggregator that gets a 4xx retries forever
- * against something that will never resolve.
+ * `pending -> processing`. Written immediately before the provider call, so a
+ * row that ages in `pending` means "never dispatched" while a row that ages in
+ * `processing` means "dispatched, never answered".
  */
-export const applyCallback = internalMutation({
-  args: {
-    provider: v.string(),
-    event: v.object({
-      providerReference: v.string(),
-      outcome: v.union(v.literal("success"), v.literal("failed")),
-      costNgn: v.optional(v.number()),
-      code: v.optional(v.string()),
-      message: v.optional(v.string()),
-      serial: v.optional(v.string()),
-      pin: v.optional(v.string()),
-      eventId: v.optional(v.string()),
-    }),
+export const markProcessing = internalMutation({
+  args: { transactionId: v.id("vtuTransactions") },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ marked: boolean; reason?: string }> => {
+    const tx = await ctx.db.get(args.transactionId);
+    if (!tx) return { marked: false, reason: "not_found" };
+    if (tx.status !== "pending") return { marked: false, reason: "not_pending" };
+
+    await ctx.db.patch(args.transactionId, { status: "processing", updatedAt: Date.now() });
+    return { marked: true };
   },
-  handler: async (ctx, args): Promise<CallbackResult> => {
+});
+
+export type RefundResult =
+  | { reversed: true; creditId: Id<"pointLedger">; releasedKey: string }
+  | { reversed: false; reason: "not_found" | "illegal_transition" | "already_reversed" };
+
+/**
+ * The ONLY exit from `failed`: credit the points back and release the
+ * idempotency key so the customer can retry the same request id.
+ *
+ * Two properties make the release safe to rely on:
+ *   1. The credit amount is `pointsDebited` — the FROZEN snapshot. Re-reading
+ *      the live rate would refund a different number of points than were
+ *      taken and the balance would not return to where it started.
+ *   2. The credit key derives from the transaction id, so a duplicate call
+ *      cannot pay twice; the status guard also short-circuits first.
+ */
+export const refundAndRelease = internalMutation({
+  args: {
+    transactionId: v.id("vtuTransactions"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args): Promise<RefundResult> => {
+    const tx = await ctx.db.get(args.transactionId);
+    if (!tx) return { reversed: false, reason: "not_found" };
+    if (tx.status === "reversed") return { reversed: false, reason: "already_reversed" };
+    // Notably refuses `unknown`: releasing an unresolved transaction risks
+    // charging a customer twice for a top-up that may have landed.
+    if (tx.status !== "failed") return { reversed: false, reason: "illegal_transition" };
+    if (tx.reversalLedgerId) return { reversed: false, reason: "already_reversed" };
+
+    const creditId = await ctx.runMutation(internal.points.credit, {
+      userId: tx.userId,
+      amount: tx.pointsDebited,
+      type: "vtu_refund",
+      description: `VTU refund: ${tx.serviceCode} (${tx.customerIdentifier})`,
+      reference: tx.provider,
+      idempotencyKey: vtuRefundKey(tx._id),
+      metadata: {
+        transactionId: tx._id,
+        serviceCode: tx.serviceCode,
+        reason: args.reason,
+        pointsDebited: tx.pointsDebited,
+        ngnPerPoint: tx.ngnPerPoint,
+      },
+    });
+
+    // Deleting the claim is what lets the customer retry the same
+    // clientRequestId without being charged a second time for one attempt.
+    const claim = await ctx.db
+      .query("vtuIdempotency")
+      .withIndex("by_key", (q) => q.eq("key", tx.idempotencyKey))
+      .unique();
+    if (claim) await ctx.db.delete(claim._id);
+
+    const now = Date.now();
+    await ctx.db.patch(args.transactionId, {
+      status: "reversed",
+      reversalLedgerId: creditId,
+      reversedAt: now,
+      resolvedAt: now,
+      failureReason: args.reason,
+      updatedAt: now,
+    });
+
+    return { reversed: true, creditId, releasedKey: tx.idempotencyKey };
+  },
+});
+
+/** Find a transaction by the reference the aggregator assigned. */
+export const findByProviderReference = internalQuery({
+  args: { provider: v.string(), providerReference: v.string() },
+  handler: async (ctx, args) => {
     const matches = await ctx.db
       .query("vtuTransactions")
       .withIndex("by_provider_reference", (q) =>
-        q.eq("providerReference", args.event.providerReference),
+        q.eq("providerReference", args.providerReference),
       )
       .take(5);
-    const tx = matches.find((t) => t.provider === args.provider);
+    const row = matches.find((t) => t.provider === args.provider);
+    return row?._id ?? null;
+  },
+});
 
-    if (!tx) {
-      await ctx.db.insert("auditLogs", {
-        action: "vtu_callback_unmatched",
-        resource: "vtuTransaction",
-        resourceId: args.event.providerReference,
-        after: sanitizeForLog(args.event),
-        reason: "No transaction matched this provider reference",
-        createdAt: Date.now(),
-      });
-      return { outcome: "unmatched" };
-    }
-
-    if (tx.status === "reversed" || tx.status === "success") {
-      return { outcome: "ignored", status: tx.status };
-    }
-
-    const now = Date.now();
-
-    if (args.event.outcome === "success") {
-      await ctx.db.patch(tx._id, {
-        status: "success",
-        costNgn: args.event.costNgn ?? tx.costNgn,
-        serial: args.event.serial,
-        pin: args.event.pin,
-        failureReason: undefined,
-        resolvedAt: now,
-        updatedAt: now,
-      });
-      return { outcome: "success" };
-    }
-
-    await ctx.db.patch(tx._id, {
-      status: "failed",
-      failureCode: args.event.code,
-      failureReason: args.event.message ?? "Provider reported failure",
-      updatedAt: now,
+/**
+ * Record a callback we could not match.
+ *
+ * Audited rather than rejected: a 4xx makes the aggregator retry forever
+ * against a reference that will never resolve on our side.
+ */
+export const auditUnmatchedCallback = internalMutation({
+  args: { provider: v.string(), providerReference: v.string() },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("auditLogs", {
+      action: "vtu_callback_unmatched",
+      resource: "vtuTransaction",
+      resourceId: args.providerReference,
+      after: { provider: args.provider },
+      reason: "No transaction matched this provider reference",
+      createdAt: Date.now(),
     });
-    const reversal = await ctx.runMutation(internal.vtuReversal.reverse, {
-      transactionId: tx._id,
-      reason: args.event.message ?? "Provider reported failure",
-    });
-    return { outcome: "failed", reversal };
   },
 });
 
 /**
  * Provider connection config for the action layer.
  *
- * Internal, so only server code can read it. It returns the SEALED secrets
- * and never the encryption key: the action reads that from its own
- * environment, so the master key never transits through a query result.
+ * Internal, so only server code can read it. It returns the SEALED secrets and
+ * never the encryption key: the action reads that from its own environment, so
+ * the master key never transits through a query result.
  */
 export const getProviderConfig = internalQuery({
   args: { provider: v.string() },
@@ -404,85 +502,27 @@ export const getProviderConfig = internalQuery({
   },
 });
 
-/** A customer's own VTU history. */
-export const listMyTransactions = query({
-  args: { limit: v.optional(v.number()) },
+/** Subscribe to one transaction. Owner-only; the page renders whatever this says. */
+export const getTransaction = query({
+  args: { transactionId: v.id("vtuTransactions") },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const rows = await ctx.db
-      .query("vtuTransactions")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(args.limit ?? 25);
-
-    return rows.map((t) => ({
-      _id: t._id,
-      requestId: t.requestId,
-      serviceType: t.serviceType,
-      productName: t.productName ?? t.productCode,
-      customerIdentifier: t.customerIdentifier,
-      status: t.status,
-      pointsCharged: t.pointsCharged,
-      costNgn: t.costNgn,
-      providerReference: t.providerReference,
-      failureReason: t.failureReason,
-      createdAt: t.createdAt,
-    }));
+    if (!userId) return null;
+    const tx = await ctx.db.get(args.transactionId);
+    if (!tx || tx.userId !== userId) return null;
+    return {
+      _id: tx._id,
+      status: tx.status,
+      serviceCode: tx.serviceCode,
+      network: tx.network ?? null,
+      customerIdentifier: tx.customerIdentifier,
+      nairaPrice: tx.nairaPrice,
+      ngnPerPoint: tx.ngnPerPoint,
+      pointsDebited: tx.pointsDebited,
+      providerReference: tx.providerReference ?? null,
+      failureReason: tx.failureReason ?? null,
+      createdAt: tx.createdAt,
+      updatedAt: tx.updatedAt,
+    };
   },
 });
-
-/** Active catalog for one service type. */
-export const listCatalog = query({
-  args: { serviceType: v.string() },
-  handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("vtuCatalog")
-      .withIndex("by_service", (q) =>
-        q
-          .eq("serviceType", args.serviceType as any)
-          .eq("isActive", true),
-      )
-      .take(200);
-
-    const rate = await readPointRate(ctx);
-    const markupBp = await readVtuMarkupBp(ctx);
-
-    return rows.map((p) => ({
-      productCode: p.productCode,
-      name: p.name,
-      network: p.network,
-      priceNgn: p.priceNgn,
-      description: p.description,
-      points:
-        p.pointsCost && p.pointsCost > 0
-          ? p.pointsCost
-          : pointsForNaira(p.priceNgn, rate.ngnPerPoint, markupBp),
-    }));
-  },
-});
-
-/**
- * Count of transactions stuck past the unresolved window.
- *
- * This is the measurement that decides whether a reconciler is worth building,
- * so it is cheap and bounded rather than a sweeping job.
- */
-export const stuckTransactionCount = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return 0;
-    const user = await ctx.db.get(userId);
-    if (user?.role !== "admin") return 0;
-
-    const cutoff = Date.now() - 10 * 60_000;
-    const rows = await ctx.db
-      .query("vtuTransactions")
-      .withIndex("by_status", (q) => q.eq("status", "pending"))
-      .take(200);
-    return rows.filter((r) => r.createdAt < cutoff).length;
-  },
-});
-
-export type { MutationCtx as VtuMutationCtx };

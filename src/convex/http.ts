@@ -499,6 +499,10 @@ const vtuWebhookHandler = httpAction(async (ctx, req) => {
   // bytes and the HMAC would not match.
   const rawBody = await req.text();
 
+  // Provider hint from a HEADER, never from an unsigned body field — otherwise
+  // a caller could choose which secret we verify the payload against.
+  const providerHint = req.headers.get("x-vtu-provider") ?? "pairgate";
+
   const headers: Record<string, string> = {};
   req.headers.forEach((value, key) => {
     headers[key] = value;
@@ -506,9 +510,10 @@ const vtuWebhookHandler = httpAction(async (ctx, req) => {
 
   // Signature verification runs in an action because the Convex HTTP runtime
   // has no node:crypto.
-  const verification = await ctx.runAction(internal.vtuHttp.verifyVtuCallback, {
+  const verification = await ctx.runAction(internal.vtuHttp.verifyCallback, {
     rawBody,
     headers,
+    provider: providerHint,
   });
 
   if (!verification.verified) {
@@ -518,7 +523,10 @@ const vtuWebhookHandler = httpAction(async (ctx, req) => {
   }
 
   try {
-    const result = await ctx.runAction(internal.vtuHttp.handleVtuCallback, { rawBody });
+    const result = await ctx.runAction(internal.vtuHttp.applyCallback, {
+      provider: providerHint,
+      event: verification.event!,
+    });
     // Always 200 from here on, including for an unmatched reference. A 4xx
     // would make the aggregator retry forever against something that will
     // never resolve on our side. `result` already carries its own `ok` flag,

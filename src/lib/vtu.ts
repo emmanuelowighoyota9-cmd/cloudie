@@ -7,8 +7,8 @@
  * database-touching counterpart lives in `src/convex/vtuShared.ts`.
  */
 
-/** Namespace for the debit taken when a VTU purchase is created. */
-export const VTU_DEBIT_NAMESPACE = "vtu:purchase";
+/** Namespace for the debit taken when a purchase begins. */
+export const VTU_PURCHASE_NAMESPACE = "vtu:purchase";
 
 /**
  * Namespace for the credit that returns points when a purchase fails.
@@ -27,19 +27,41 @@ export const VTU_REVERSAL_NAMESPACE = "vtu:refund";
  * timed out on the client is served from the existing ledger row rather than
  * charged twice.
  */
-export function vtuPurchaseKey(requestId: string): string {
-  return `${VTU_DEBIT_NAMESPACE}:${requestId}`;
+export function vtuPurchaseKey(clientRequestId: string): string {
+  return `${VTU_PURCHASE_NAMESPACE}:${clientRequestId}`;
 }
 
 /**
  * Idempotency key for a reversal credit.
  *
- * Derived from the same `requestId` and NOT from a timestamp: that is what
- * makes reversal replay-safe, so a webhook arriving twice (or a webhook racing
- * a future reconciler) credits the points exactly once.
+ * Keyed on the TRANSACTION id, not the request id. Each purchase attempt is
+ * its own transaction, and a key that varies per row needs no further guarding
+ * beyond the `failed -> reversed` status check.
  */
-export function vtuRefundKey(requestId: string): string {
-  return `${VTU_REVERSAL_NAMESPACE}:${requestId}`;
+export function vtuRefundKey(transactionId: string): string {
+  return `${VTU_REVERSAL_NAMESPACE}:${transactionId}`;
+}
+
+/**
+ * Idempotency key for the LEDGER debit.
+ *
+ * Keyed on the TRANSACTION id, not the client request id — and that
+ * distinction is load-bearing rather than cosmetic.
+ *
+ * `pointLedger` is immutable: a debit row is written once and never removed,
+ * and `points.debit` returns the existing row instead of charging again when
+ * it sees a key it has already used. So if the ledger key were the client
+ * request id, releasing the `vtuIdempotency` claim after a failure would NOT
+ * actually let the customer retry — the immutable ledger row would still block
+ * the charge and the retry would be free.
+ *
+ * Keying on the transaction id gives each ATTEMPT its own ledger key, so a
+ * retry after a failure is a genuinely new charge. True-duplicate protection
+ * is the `vtuIdempotency` claim, which is checked before this key is ever used
+ * and IS released on failure.
+ */
+export function vtuLedgerPurchaseKey(transactionId: string): string {
+  return `${VTU_PURCHASE_NAMESPACE}:${transactionId}`;
 }
 
 /** Minimum naira charge worth transacting. Guards against zero-price products. */
@@ -142,4 +164,72 @@ export function maskIdentifier(value: string): string {
 /** A `requestId` must be unguessable-ish and short enough to send upstream. */
 export function isValidRequestId(value: string): boolean {
   return typeof value === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(value);
+}
+
+/**
+ * Resolve the points cost for a product: an admin override wins outright,
+ * otherwise convert from naira.
+ *
+ * Mirrors `resolveRenderCost`'s override-then-fallback precedence. The
+ * override is ABSOLUTE, not a delta — an admin pricing a loss-leading product
+ * should not have to reason about the live rate.
+ */
+export function resolveVtuPointsCost(
+  costNgn: number,
+  ngnPerPoint: number,
+  overridePoints: number | null | undefined,
+): number {
+  if (
+    typeof overridePoints === "number" &&
+    Number.isFinite(overridePoints) &&
+    overridePoints > 0
+  ) {
+    return overridePoints;
+  }
+  return pointsForNaira(costNgn, ngnPerPoint);
+}
+
+// ─── Airtime service codes ─────────────────────────────────────────
+
+export const AIRTIME_NETWORKS = ["mtn", "airtel", "glo", "9mobile"] as const;
+export type AirtimeNetwork = (typeof AIRTIME_NETWORKS)[number];
+
+/** e.g. "airtime.mtn.1000" */
+export function airtimeServiceCode(network: string, amountNgn: number): string {
+  const net = (network ?? "").trim().toLowerCase();
+  if (!(AIRTIME_NETWORKS as readonly string[]).includes(net)) {
+    throw new Error("Unsupported network");
+  }
+  if (!Number.isInteger(amountNgn) || amountNgn < 100 || amountNgn > 100_000) {
+    throw new Error("Amount is out of range");
+  }
+  return `airtime.${net}.${amountNgn}`;
+}
+
+/** Parse "airtime.mtn.1000" back into its parts, or null if unrecognised. */
+export function parseServiceCode(
+  serviceCode: string,
+): { serviceType: string; network: string; amountNgn: number } | null {
+  const parts = (serviceCode ?? "").split(".");
+  if (parts.length !== 3 || parts[0] !== "airtime") return null;
+  if (!(AIRTIME_NETWORKS as readonly string[]).includes(parts[1])) return null;
+  const amountNgn = Number(parts[2]);
+  if (!Number.isInteger(amountNgn) || amountNgn < 100 || amountNgn > 100_000) {
+    return null;
+  }
+  return { serviceType: "airtime", network: parts[1], amountNgn };
+}
+
+/** Validate a Nigerian mobile number. Stored masked — see maskIdentifier. */
+export function validatePhone(
+  raw: string,
+): { ok: true; value: string } | { ok: false; error: string } {
+  const value = (raw ?? "").trim();
+  if (!value) return { ok: false, error: "Enter a phone number" };
+
+  const digits = value.replace(/[\s-]/g, "");
+  if (!/^(\+?234|0)[789]\d{9}$/.test(digits)) {
+    return { ok: false, error: "Enter a valid Nigerian number, e.g. 0803 123 4567" };
+  }
+  return { ok: true, value: digits };
 }

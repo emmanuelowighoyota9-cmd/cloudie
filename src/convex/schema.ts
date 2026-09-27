@@ -74,18 +74,36 @@ export const vtuServiceTypeValidator = v.union(...literals(VTU_SERVICE_TYPES));
 /**
  * VTU transaction lifecycle.
  *
- * `pending` deliberately doubles as the "outcome unknown" state. A transport
- * timeout leaves the row here with a `failureReason`, because reversing on a
- * timeout would risk refunding a top-up that actually succeeded at the carrier.
- * There is no poller in this slice, so these rows are counted and reported
- * rather than auto-recovered.
+ * `unknown` is a REAL status, not a placeholder for `pending`. "We asked and
+ * the transport gave us nothing" is a different fact from "we have not asked
+ * yet", and collapsing the two destroys the one measurement that decides
+ * whether a reconciliation poller is worth building. It is never coerced to
+ * `pending` or `failed`.
+ *
+ * Legal transitions, each owned by exactly ONE mutation (see
+ * `vtuInternal.recordOutcome` for the enforcing guard):
+ *
+ *   (none)  -> pending        beginPurchase
+ *   pending -> processing     markProcessing
+ *   processing -> confirmed   recordOutcome   (provider response OR webhook)
+ *   processing -> failed      recordOutcome
+ *   processing -> unknown     recordOutcome
+ *   unknown   -> confirmed    recordOutcome   (a late webhook resolves it)
+ *   unknown   -> failed       recordOutcome
+ *   failed    -> reversed     refundAndRelease
+ *
+ * Terminal: `confirmed`, `reversed`. `failed` exits ONLY via `reversed` — never
+ * back to `confirmed`, and `confirmed` never moves to `failed`. `unknown` is
+ * deliberately NOT releasable: refunding an unresolved transaction risks paying
+ * a customer twice for a top-up that may have landed at the carrier.
  */
 export const VTU_TRANSACTION_STATUSES = [
-  "pending", // row + debit exist; provider call not yet resolved
-  "processing", // dispatched to the aggregator
-  "success", // aggregator confirmed delivery
-  "failed", // aggregator definitively rejected; reversal issued
-  "reversed", // points returned; terminal
+  "pending", // row + ledger debit exist; nothing dispatched yet
+  "processing", // handed to the provider; outcome not yet known
+  "confirmed", // provider confirmed delivery. TERMINAL.
+  "failed", // provider definitively rejected; not yet refunded
+  "unknown", // transport gave us nothing. Real state.
+  "reversed", // points returned and the idempotency key released. TERMINAL.
 ] as const;
 export type VtuTransactionStatus = (typeof VTU_TRANSACTION_STATUSES)[number];
 export const vtuTransactionStatusValidator = v.union(
@@ -728,8 +746,16 @@ const schema = defineSchema(
 
     // ─── Super Admin tables ───
     pointPricing: defineTable({
+      /** Service key. Required, as before — the document engine and the admin
+       *  pricing screen both read it. */
       service: v.string(),
       workspace: v.string(),
+      /** VTU price override key, e.g. "airtime.mtn.1000". Optional and created
+       *  EMPTY: VTU falls back to nairaPrice / ngnPerPoint until an admin sets
+       *  one. A VTU override row also sets `service` to the same value. */
+      serviceCode: v.optional(v.string()),
+      /** VTU override enable flag. Undefined is treated as inactive. */
+      active: v.optional(v.boolean()),
       /** Customer-facing catalog copy. Blank falls back to the platform default. */
       label: v.optional(v.string()),
       description: v.optional(v.string()),
@@ -741,7 +767,9 @@ const schema = defineSchema(
       effectiveFrom: v.number(),
       updatedBy: v.optional(v.id("users")),
       updatedAt: v.number(),
-    }).index("by_service", ["service"]),
+    })
+      .index("by_service", ["service"])
+      .index("by_serviceCode", ["serviceCode"]),
 
     adminSettings: defineTable({
       key: v.string(),
@@ -1316,47 +1344,76 @@ const schema = defineSchema(
     // status) that a ledger row has no business carrying.
     vtuTransactions: defineTable({
       userId: v.id("users"),
-      /** Client-generated idempotency key. Unique per purchase attempt. */
-      requestId: v.string(),
-      serviceType: v.union(...literals(VTU_SERVICE_TYPES)),
-      /** Matches `vtuProviders.provider` — which adapter served this. */
+      /** Client-generated. The idempotency key derives from this and is NEVER
+       *  namespaced by provider — a retry must dedupe across providers too. */
+      clientRequestId: v.string(),
+      /** e.g. "airtime.mtn.1000". Resolves the catalog cell and any price
+       *  override, so the price can never be chosen by the client. */
+      serviceCode: v.string(),
+      /** Matches `vtuProviders.name`, i.e. `adapter.name`. */
       provider: v.string(),
-      productCode: v.string(),
-      productName: v.optional(v.string()),
-      /** Phone number, meter number, smartcard number or betting user id. */
-      customerIdentifier: v.string(),
-      quantity: v.optional(v.number()),
       status: v.union(...literals(VTU_TRANSACTION_STATUSES)),
-      /** What the aggregator charged us, in naira. */
-      costNgn: v.number(),
-      /** What the customer paid, in points. */
-      pointsCharged: v.number(),
-      /** Reference the aggregator assigned. Set from the response or webhook. */
+      /** Destination, stored MASKED — phone numbers are personal data. */
+      customerIdentifier: v.string(),
+      network: v.optional(v.string()),
+      amountNgn: v.optional(v.number()),
+
+      // ── Rate snapshot, frozen at debit time ──────────────────────
+      // These make a historical transaction auditable after the rate moves.
+      // Without them you cannot reconstruct what the customer was actually
+      // charged, and a reversal would credit a different number of points
+      // than were taken.
+      nairaPrice: v.number(),
+      ngnPerPoint: v.number(),
+      pointsDebited: v.number(),
+
       providerReference: v.optional(v.string()),
+      /** "vtu:purchase:<clientRequestId>" — copied here so a refund can find
+       *  the claim to release without re-deriving it. */
+      idempotencyKey: v.string(),
       debitLedgerId: v.optional(v.id("pointLedger")),
       reversalLedgerId: v.optional(v.id("pointLedger")),
-      /** Sanitized request/response payloads. Secrets are stripped on write. */
+      failureCode: v.optional(v.string()),
+      failureReason: v.optional(v.string()),
+      /** Which path wrote the last transition: provider_response | webhook. */
+      source: v.optional(v.string()),
+      /** Sanitized payloads. Secrets stripped on write by sanitizeForLog. */
       rawRequest: v.optional(v.any()),
       rawResponse: v.optional(v.any()),
-      /** Rejection code, or the transport error when the outcome is unknown. */
-      failureReason: v.optional(v.string()),
-      failureCode: v.optional(v.string()),
-      /** Exam PIN / recharge serial, when the product returns one. */
-      serial: v.optional(v.string()),
-      pin: v.optional(v.string()),
-      reversedAt: v.optional(v.number()),
       resolvedAt: v.optional(v.number()),
+      reversedAt: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
-      // Both single-purpose indexes are load-bearing: `by_requestId` makes a
-      // retried purchase a lookup rather than a second charge, and
-      // `by_provider_reference` is how an inbound webhook finds its row.
       .index("by_user", ["userId", "createdAt"])
-      .index("by_requestId", ["requestId"])
+      .index("by_clientRequestId", ["clientRequestId"])
       .index("by_provider_reference", ["providerReference"])
-      .index("by_status", ["status", "createdAt"])
-      .index("by_provider", ["provider", "createdAt"]),
+      .index("by_status", ["status", "createdAt"]),
+
+    /**
+     * Idempotency key claims, in their own table rather than left implicit in
+     * `pointLedger`.
+     *
+     * The ledger answers "was this charged". This table answers "is this key
+     * currently claimed". They are different questions, because a FAILED
+     * transaction must RELEASE its key while its ledger rows stay forever. A
+     * ledger-only key cannot be released without either mutating an append-only
+     * record or lying about whether the debit happened.
+     *
+     * Convex indexes declare no uniqueness constraint; uniqueness is enforced
+     * by check-then-insert inside a mutation, which is a serializable
+     * transaction — two concurrent requests with the same key cannot both pass.
+     */
+    vtuIdempotency: defineTable({
+      /** "vtu:purchase:<clientRequestId>" */
+      key: v.string(),
+      scope: v.string(),
+      userId: v.id("users"),
+      transactionId: v.optional(v.id("vtuTransactions")),
+      createdAt: v.number(),
+    })
+      .index("by_key", ["key"])
+      .index("by_user", ["userId", "createdAt"]),
 
     // Aggregator configuration. The secret is stored sealed (AES-256-GCM) and
     // is only ever opened inside a "use node" action — never in the database

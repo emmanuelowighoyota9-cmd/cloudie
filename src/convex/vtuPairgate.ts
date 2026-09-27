@@ -3,19 +3,17 @@
 /**
  * Pairgate VTU adapter.
  *
- * Every Pairgate-specific detail lives in this file. The rest of the VTU
- * feature is written against the `VtuProviderAdapter` interface, so adding a
- * second aggregator means a new adapter file plus one `vtuProviders` row —
- * nothing else changes.
+ * Every Pairgate-specific detail lives in this file. Everything else is
+ * written against `VtuProviderAdapter` via `vtuRegistry.getAdapter()`, so a
+ * second aggregator is a new adapter file plus a `vtuProviders` row.
  *
  * ── On the endpoint paths ────────────────────────────────────────────
- * Pairgate does not publish an open API spec, so the paths and field names
- * below are the ones to confirm against the Pairgate dashboard before going
- * live. They are deliberately isolated in two small helpers, `purchasePath()`
- * and `mapPurchaseResponse()`, so a correction from the vendor is a two-line
- * change here and nowhere else. The ledger, lifecycle, reversal, and callback
- * verification logic are NOT affected by any of this — none of them know
- * which aggregator produced a response.
+ * Pairgate publishes no API spec, so the paths and field names below are the
+ * ones to confirm against the Pairgate dashboard before going live. They are
+ * isolated in `purchasePath()` and `mapPurchaseResponse()` so a correction
+ * from the vendor is a two-line change here and nowhere else. The ledger,
+ * lifecycle, reversal, and callback verification logic are unaffected by any
+ * of it — none of them know which aggregator produced a response.
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -46,16 +44,6 @@ function purchasePath(serviceType: ProviderPurchaseRequest["serviceType"]): stri
   }
 }
 
-/** Human-facing label for the notification/ledger description. */
-const SERVICE_LABELS: Record<ProviderPurchaseRequest["serviceType"], string> = {
-  airtime: "Airtime",
-  data: "Data bundle",
-  cable: "Cable TV",
-  electricity: "Electricity",
-  exam: "Exam PIN",
-  betting: "Betting wallet",
-};
-
 // ─── Response mapping ───────────────────────────────────────────────
 
 function num(value: unknown): number | undefined {
@@ -67,27 +55,28 @@ function str(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+/** Pull `reference` out of a payload, top level or nested under `data`. */
+function referenceOf(b: Record<string, unknown>, data: Record<string, unknown>) {
+  return str(data.reference) ?? str(data.transaction_id) ?? str(b.reference) ?? str(b.transaction_id);
+}
+
 /**
- * Map a Pairgate purchase response onto the provider-agnostic union.
+ * Map a Pairgate response onto the provider-agnostic three-state union.
  *
- * The branch that matters most is the last one: a payload we do not
- * recognise, or one carrying neither a success nor a failure signal, is
- * reported as `unknown` rather than being optimistically treated as a
- * success. Guessing "success" here would mark undelivered airtime as paid for.
+ * The branch that matters most is the last one. A payload we do not
+ * recognise — or one carrying neither a success nor a failure signal — is
+ * reported as `unknown`, never optimistically as success. Guessing "success"
+ * would mark undelivered airtime as paid for; guessing "failed" would refund
+ * airtime that was actually delivered.
  */
 export function mapPurchaseResponse(
   body: unknown,
   requestId: string,
 ): ProviderPurchaseResult {
   const b = (body ?? {}) as Record<string, unknown>;
-  const providerReference =
-    str(b.reference) ?? str(b.transaction_id) ?? str(b.transactionId);
-
-  // Some aggregators nest the payload under `data`.
   const data =
-    b.data && typeof b.data === "object"
-      ? (b.data as Record<string, unknown>)
-      : b;
+    b.data && typeof b.data === "object" ? (b.data as Record<string, unknown>) : b;
+  const providerReference = referenceOf(b, data);
 
   const status = String(data.status ?? b.status ?? "").toLowerCase();
   const succeeded = status === "success" || status === "successful" || b.success === true;
@@ -97,8 +86,9 @@ export function mapPurchaseResponse(
   if (succeeded) {
     const costNgn = num(data.cost) ?? num(data.amount) ?? num(data.price);
     if (costNgn === undefined) {
-      // Delivered, but we cannot price it — treating this as success would
-      // leave the customer out of pocket with nothing to reconcile against.
+      // Delivered but unpriceable. Success would leave the customer out of
+      // pocket with nothing to reconcile against; failure would refund a
+      // delivered top-up. `unknown` is the only honest answer.
       return {
         status: "unknown",
         message: "Provider reported success without a chargeable amount",
@@ -110,8 +100,6 @@ export function mapPurchaseResponse(
       status: "success",
       providerReference: providerReference ?? requestId,
       costNgn,
-      serial: str(data.serial) ?? str(data.recharge_id),
-      pin: str(data.pin) ?? str(data.pin_code),
       raw: body,
     };
   }
@@ -120,8 +108,7 @@ export function mapPurchaseResponse(
     return {
       status: "failed",
       code: str(data.code) ?? str(b.code) ?? "PROVIDER_REJECTED",
-      message:
-        str(data.message) ?? str(b.message) ?? "The provider rejected this purchase",
+      message: str(data.message) ?? str(b.message) ?? "The provider rejected this purchase",
       providerReference,
       raw: body,
     };
@@ -135,14 +122,14 @@ export function mapPurchaseResponse(
   };
 }
 
-// ─── HMAC helpers ───────────────────────────────────────────────────
+// ─── Signature helpers ─────────────────────────────────────────────
 
 /**
- * Constant-time HMAC comparison.
+ * Constant-time comparison.
  *
- * `timingSafeEqual` throws on length mismatch, so a length check runs first
- * and returns false rather than throwing — an early return on length does leak
- * only the digest length, which is not a secret.
+ * `timingSafeEqual` throws on a length mismatch, so the length check runs
+ * first and returns false rather than throwing — an early return on length
+ * leaks only the digest length, which is not a secret.
  */
 function safeEqualHex(a: string, b: string): boolean {
   if (typeof a !== "string" || typeof b !== "string") return false;
@@ -152,6 +139,22 @@ function safeEqualHex(a: string, b: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Header names Pairgate may sign under, in preference order. */
+const SIGNATURE_HEADERS = [
+  "x-pairgate-signature",
+  "x-signature",
+  "x-vtu-signature",
+  "signature",
+];
+
+function signatureFrom(headers: Record<string, string>): string | null {
+  for (const name of SIGNATURE_HEADERS) {
+    const value = headers[name] ?? headers[name.toLowerCase()];
+    if (value) return value.replace(/^sha256=/, "").trim();
+  }
+  return null;
 }
 
 // ─── Adapter ────────────────────────────────────────────────────────
@@ -166,20 +169,16 @@ export const pairgateAdapter: VtuProviderAdapter = {
   ): Promise<ProviderPurchaseResult> {
     const url = `${opts.baseUrl.replace(/\/+$/, "")}${purchasePath(req.serviceType)}`;
 
-    // `reference` is the aggregator-side idempotency key. Sending OUR
-    // namespaced key means a retry is de-duplicated by Pairgate too, not just
-    // by us — without it, a client retry after a timeout buys the customer
-    // two top-ups for one charge.
-    const payload = {
+    // `reference` is the aggregator-side idempotency key. Sending OUR namespaced
+    // key means a retry is de-duplicated by Pairgate too, not only by us.
+    const rawBody = JSON.stringify({
       reference: req.requestId,
       product_code: req.productCode,
       phone: req.customerIdentifier,
-      ...(req.quantity !== undefined ? { quantity: req.quantity } : {}),
-      ...(req.pinCount !== undefined ? { pin_count: req.pinCount } : {}),
-    };
-    const rawBody = JSON.stringify(payload);
+      ...(req.network ? { network: req.network } : {}),
+    });
 
-    // Sign the exact bytes sent, so the provider can verify the same string.
+    // Sign the exact bytes sent, so the provider verifies the same string.
     const signature = createHmac("sha256", opts.apiKey).update(rawBody).digest("hex");
 
     const controller = new AbortController();
@@ -201,7 +200,7 @@ export const pairgateAdapter: VtuProviderAdapter = {
       const text = await response.text();
 
       // 5xx and 429 are the server's problem, not the customer's: the outcome
-      // is undetermined, so this is `unknown` and the row stays `pending`.
+      // is undetermined, so this is `unknown` and the row stays unresolved.
       if (response.status >= 500 || response.status === 429) {
         return {
           status: "unknown",
@@ -223,11 +222,13 @@ export const pairgateAdapter: VtuProviderAdapter = {
 
       if (!response.ok) {
         const b = parsed as Record<string, unknown>;
+        const data =
+          b.data && typeof b.data === "object" ? (b.data as Record<string, unknown>) : b;
         return {
           status: "failed",
-          code: str(b.code) ?? `HTTP_${response.status}`,
-          message: str(b.message) ?? "The provider rejected this purchase",
-          providerReference: str(b.reference),
+          code: str(b.code) ?? str(data.code) ?? `HTTP_${response.status}`,
+          message: str(b.message) ?? str(data.message) ?? "The provider rejected this purchase",
+          providerReference: referenceOf(b, data),
           raw: parsed,
         };
       }
@@ -235,7 +236,7 @@ export const pairgateAdapter: VtuProviderAdapter = {
       return mapPurchaseResponse(parsed, req.requestId);
     } catch (error) {
       // Network error or abort. The top-up may or may not have landed at the
-      // carrier, so the caller must NOT reverse on this path.
+      // carrier, so the caller must NOT refund on this path.
       const message =
         error instanceof Error ? error.message : "Network error contacting provider";
       return { status: "unknown", message, raw: { thrown: message } };
@@ -244,30 +245,32 @@ export const pairgateAdapter: VtuProviderAdapter = {
     }
   },
 
-  verifyCallback(
+  /**
+   * Verify, THEN parse.
+   *
+   * The order is the security property, and the single method is what makes
+   * it unavoidable: there is no way for a caller to obtain the parsed event
+   * without the signature having been checked first, because an unverified
+   * body returns null instead of an event.
+   */
+  verifyAndParseCallback(
     rawBody: string,
     headers: Record<string, string>,
     secret: string,
-  ): boolean {
-    if (!secret) return false;
+  ): ProviderCallbackEvent | null {
+    if (!secret) return null;
 
-    const provided =
-      headers["x-signature"] ??
-      headers["x-pairgate-signature"] ??
-      headers["signature"] ??
-      "";
-    if (!provided) return false;
+    const provided = signatureFrom(headers);
+    if (!provided) return null;
 
     const expectedHex = createHmac("sha256", secret).update(rawBody).digest("hex");
-    const providedClean = provided.replace(/^sha256=/, "").trim();
+    // Vendors differ on encoding, so accept both hex and base64.
+    const verified =
+      safeEqualHex(expectedHex, provided) ||
+      safeEqualHex(Buffer.from(expectedHex, "hex").toString("base64"), provided);
+    if (!verified) return null;
 
-    // Accept hex (the common form) and base64, since vendors differ.
-    if (safeEqualHex(expectedHex, providedClean)) return true;
-    const expectedB64 = Buffer.from(expectedHex, "hex").toString("base64");
-    return safeEqualHex(expectedB64, providedClean);
-  },
-
-  parseCallback(rawBody: string): ProviderCallbackEvent | null {
+    // Only now is the body parsed.
     let body: unknown;
     try {
       body = JSON.parse(rawBody);
@@ -280,40 +283,68 @@ export const pairgateAdapter: VtuProviderAdapter = {
     const data =
       b.data && typeof b.data === "object" ? (b.data as Record<string, unknown>) : b;
 
-    const providerReference =
-      str(data.reference) ?? str(data.transaction_id) ?? str(b.reference);
+    const providerReference = referenceOf(b, data);
     if (!providerReference) return null;
 
     const status = String(data.status ?? b.status ?? "").toLowerCase();
-    const succeeded =
-      status === "success" || status === "successful" || b.success === true;
-    const failed =
-      status === "failed" || status === "error" || status === "rejected" || b.success === false;
+    const confirmed = status === "success" || status === "successful" || b.success === true;
+    const failed = status === "failed" || status === "error" || status === "rejected" || b.success === false;
 
-    // Neither signal: do not guess. Returning null leaves the transaction
-    // untouched rather than resolving it on a guess.
-    if (!succeeded && !failed) return null;
+    // Neither signal: do not guess. Null leaves the transaction untouched
+    // rather than resolving it on an assumption.
+    if (!confirmed && !failed) return null;
 
     return {
       providerReference,
-      outcome: succeeded ? "success" : "failed",
+      outcome: confirmed ? "confirmed" : "failed",
       costNgn: num(data.cost) ?? num(data.amount),
-      code: str(data.code),
-      message: str(data.message),
-      serial: str(data.serial) ?? str(data.recharge_id),
-      pin: str(data.pin) ?? str(data.pin_code),
+      code: str(data.code) ?? str(b.code),
+      message: str(data.message) ?? str(b.message),
       eventId: str(b.event_id) ?? str(b.id),
     };
   },
+
+  /**
+   * Authoritative re-read. Unused in slice 1 — present so the slice-4
+   * reconciliation does not force an interface change.
+   */
+  async verify(
+    providerReference: string,
+    opts: ProviderCallOptions,
+  ): Promise<ProviderPurchaseResult> {
+    const url = `${opts.baseUrl.replace(/\/+$/, "")}/api/v1/transaction/${encodeURIComponent(providerReference)}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+
+    try {
+      const response = await opts.fetchImpl(url, {
+        method: "GET",
+        headers: { accept: "application/json", "x-api-key": opts.apiKey },
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      if (response.status >= 500) {
+        return {
+          status: "unknown",
+          message: `Provider returned HTTP ${response.status}`,
+          raw: { status: response.status, body: text },
+        };
+      }
+      let parsed: unknown;
+      try {
+        parsed = text ? JSON.parse(text) : {};
+      } catch {
+        return { status: "unknown", message: "Non-JSON response", raw: { body: text } };
+      }
+      // Reuse the purchase mapper: the re-read payload describes the same
+      // transaction and carries the same three-way signal.
+      return mapPurchaseResponse(parsed, providerReference);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Network error";
+      return { status: "unknown", message, raw: { thrown: message } };
+    } finally {
+      clearTimeout(timer);
+    }
+  },
 };
-
-export { SERVICE_LABELS as PAIRGATE_SERVICE_LABELS };
-
-/** Registry. Adding a provider means adding an entry here and a schema row. */
-const ADAPTERS: Record<string, VtuProviderAdapter> = {
-  [pairgateAdapter.name]: pairgateAdapter,
-};
-
-export function getAdapter(provider: string): VtuProviderAdapter | null {
-  return ADAPTERS[provider] ?? null;
-}

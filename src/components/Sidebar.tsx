@@ -29,7 +29,7 @@ const mainNav = [
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
-  { label: "Top Up & Bills", icon: Zap, to: "/vtu" },
+  { label: "Airtime Top-Up", icon: Zap, to: "/vtu/airtime" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },

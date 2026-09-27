@@ -27,7 +27,7 @@ const NewShipment = lazy(() => import("./pages/NewShipment.tsx"));
 const ShipmentDetail = lazy(() => import("./pages/ShipmentDetail.tsx"));
 const ShipmentUpdates = lazy(() => import("./pages/ShipmentUpdates.tsx"));
 const ShipmentUpdateForm = lazy(() => import("./pages/ShipmentUpdateForm.tsx"));
-const VtuPurchase = lazy(() => import("./pages/VtuPurchase.tsx"));
+const VtuAirtime = lazy(() => import("./pages/VtuAirtime.tsx"));
 const PublicTracking = lazy(() => import("./pages/PublicTracking.tsx"));
 const SiteLanding = lazy(() => import("./pages/site/SiteLanding.tsx"));
 const SiteBanking = lazy(() => import("./pages/site/SiteBanking.tsx"));
@@ -242,7 +242,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/personal/wallet" element={<Wallet />} />
                   <Route path="/personal/transactions" element={<Wallet />} />
                   <Route path="/shipments" element={<Shipments />} />
-                  <Route path="/vtu" element={<VtuPurchase />} />
+                  <Route path="/vtu/airtime" element={<VtuAirtime />} />
                   <Route path="/shipments/new" element={<NewShipment />} />
                   <Route path="/shipments/:id" element={<ShipmentDetail />} />
                   <Route path="/shipments/:id/updates" element={<ShipmentUpdates />} />

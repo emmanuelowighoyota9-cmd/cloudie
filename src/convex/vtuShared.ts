@@ -1,14 +1,13 @@
 /**
- * Server-side VTU vocabulary shared by the V8 layer (`vtu.ts`), the Node
- * action (`vtuHttp.ts`), and the Pairgate adapter (`vtuPairgate.ts`).
+ * Provider-agnostic VTU vocabulary.
  *
- * This file is NOT a "use node" module, so mutations and queries may import it.
- * Anything needing `node:crypto` lives in `vtuCrypto.ts` or `vtuPairgate.ts`,
- * which Convex will not let a V8 function import.
+ * Shared by the V8 layer (`vtu.ts`, `vtuInternal.ts`), the Node action
+ * (`vtuHttp.ts`), and every adapter. Not a "use node" module, so mutations may
+ * import it; anything needing `node:crypto` lives in `vtuCrypto.ts` or
+ * `vtuPairgate.ts`, which Convex will not let a V8 function import.
  *
  * The rule this file exists to enforce: no provider-specific concept appears
- * above this line. Everything here is the vocabulary an aggregator adapter
- * maps *onto*.
+ * above this line. Everything here is the vocabulary an adapter maps ONTO.
  */
 
 import { v } from "convex/values";
@@ -36,15 +35,16 @@ export type VtuTransactionStatus = (typeof VTU_TRANSACTION_STATUSES)[number];
 // ─── Provider-facing request/result types ───────────────────────────
 
 export interface ProviderPurchaseRequest {
-  /** Namespaced idempotency key, forwarded upstream as its own reference. */
+  /** Sent upstream as ITS reference, so a retry dedupes on their side too.
+   *  Without this a client retry after a timeout buys two top-ups for one
+   *  charge. */
   requestId: string;
   serviceType: VtuServiceType;
-  /** Provider's catalog identifier, sent verbatim. */
+  /** The aggregator's catalog id for the product. */
   productCode: string;
-  /** Phone, meter, smartcard or betting user id — already validated. */
+  /** Already validated and masked. */
   customerIdentifier: string;
-  quantity?: number;
-  pinCount?: number;
+  network?: string;
 }
 
 export interface ProviderCallOptions {
@@ -57,24 +57,18 @@ export interface ProviderCallOptions {
 }
 
 /**
- * A purchase outcome as a discriminated union rather than a thrown error.
+ * A purchase outcome as a three-state discriminated union, not a thrown error.
  *
  * The three members drive three different ledger behaviours, and the type
  * forces every call site to handle all three:
- *   success → debit stands
- *   failed  → reverse immediately, points returned
- *   unknown → leave `pending`; reversing a timeout would refund airtime that
- *              may genuinely have been delivered
+ *   success -> the debit stands
+ *   failed  -> definitive rejection; refund and release the key
+ *   unknown -> we asked and the transport told us nothing. NOT a failure: the
+ *              top-up may have reached the carrier, so points stay debited
+ *              and the row sits in a real `unknown` state awaiting a webhook.
  */
 export type ProviderPurchaseResult =
-  | {
-      status: "success";
-      providerReference: string;
-      costNgn: number;
-      serial?: string;
-      pin?: string;
-      raw: unknown;
-    }
+  | { status: "success"; providerReference: string; costNgn: number; raw: unknown }
   | {
       status: "failed";
       code: string;
@@ -91,19 +85,19 @@ export type ProviderPurchaseResult =
 
 export interface ProviderCallbackEvent {
   providerReference: string;
-  outcome: "success" | "failed";
+  outcome: "confirmed" | "failed";
   costNgn?: number;
   code?: string;
   message?: string;
-  serial?: string;
-  pin?: string;
   /** Stable across retries, so a duplicate callback is recognisable. */
   eventId?: string;
 }
 
 /**
- * The provider boundary. A second aggregator is a new file implementing this
- * interface plus one row in `vtuProviders` — no other file changes.
+ * The provider boundary.
+ *
+ * A second aggregator is a new file implementing this interface plus a
+ * `vtuProviders` row. Nothing above `vtuRegistry.ts` changes.
  */
 export interface VtuProviderAdapter {
   readonly name: string;
@@ -115,19 +109,32 @@ export interface VtuProviderAdapter {
   ): Promise<ProviderPurchaseResult>;
 
   /**
-   * Verify a callback over the RAW body string.
+   * Single entry point for a webhook: verify the raw body's signature AND
+   * parse it. Returns null on a bad signature, a bad parse, or an
+   * unrecognised shape.
    *
-   * Must use a timing-safe comparison. Never accept a pre-parsed object: JSON
-   * re-serialization changes the bytes and the HMAC will not match.
+   * Collapsing two methods into one is deliberate. Splitting verify and parse
+   * let a call site verify and then forget to check the result — that mistake
+   * compiles, ships, and silently accepts unsigned webhooks. One method
+   * returning null merges "did not verify" and "did not parse" into a single
+   * branch, and there is no ordering in which parsing happens first.
    */
-  verifyCallback(
+  verifyAndParseCallback(
     rawBody: string,
     headers: Record<string, string>,
     secret: string,
-  ): boolean;
+  ): ProviderCallbackEvent | null;
 
-  /** Parse a callback body. Return null when the shape is unrecognised. */
-  parseCallback(rawBody: string): ProviderCallbackEvent | null;
+  /**
+   * Authoritative re-read of one transaction. UNUSED in slice 1.
+   *
+   * Present now so the slice-4 reconciliation does not change this interface.
+   * Adding a method later breaks every adapter; omitting it guarantees one.
+   */
+  verify(
+    providerReference: string,
+    opts: ProviderCallOptions,
+  ): Promise<ProviderPurchaseResult>;
 }
 
 // ─── Log sanitisation ───────────────────────────────────────────────
@@ -137,13 +144,13 @@ export interface VtuProviderAdapter {
  * an audit row, or a notification.
  *
  * Matching is by substring on the key name, so `api_key`, `apiKey`,
- * `x-api-secret` and `authorization` are all caught. Nesting is walked to a
- * bounded depth and the output is size-capped, because an aggregator response
- * can be arbitrarily large and a persisted blob that grows without bound is a
- * storage cost with no benefit.
+ * `x-api-secret` and `authorization` are all caught. Nesting is bounded and
+ * the output size-capped, because an aggregator response can be arbitrarily
+ * large and a persisted blob that grows without bound is a storage cost with
+ * no benefit.
  */
 const SECRET_KEY_PATTERN =
-  /(secret|password|passwd|token|authorization|apikey|api_key|credential|signature|session)/i;
+  /(secret|password|passwd|token|authorization|auth|apikey|api_key|credential|signature|session)/i;
 
 const MAX_DEPTH = 6;
 const MAX_STRING_LENGTH = 2_000;
@@ -151,8 +158,7 @@ const MAX_ARRAY_ITEMS = 50;
 
 /** Redact secrets and cap size in a payload destined for the database. */
 export function sanitizeForLog(value: unknown, depth = 0): unknown {
-  if (value === undefined) return null;
-  if (value === null) return null;
+  if (value === undefined || value === null) return null;
 
   if (typeof value === "string") {
     return value.length > MAX_STRING_LENGTH
@@ -163,7 +169,9 @@ export function sanitizeForLog(value: unknown, depth = 0): unknown {
   if (depth >= MAX_DEPTH) return "[max-depth]";
 
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_ARRAY_ITEMS).map((item) => sanitizeForLog(item, depth + 1));
+    return value
+      .slice(0, MAX_ARRAY_ITEMS)
+      .map((item) => sanitizeForLog(item, depth + 1));
   }
   if (typeof value === "object") {
     const out: Record<string, unknown> = {};
