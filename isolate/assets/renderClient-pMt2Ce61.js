@@ -1,0 +1,24 @@
+import{a as I,s as S}from"./docTemplateEngine-C5_L1-Aq.js";const v=72/96;function A(r){const t=r===void 0?new Date(0):new Date(r),n=(o,i=2)=>String(o).padStart(i,"0");return`D:${t.getUTCFullYear()}${n(t.getUTCMonth()+1)}${n(t.getUTCDate())}${n(t.getUTCHours())}${n(t.getUTCMinutes())}${n(t.getUTCSeconds())}Z`}function $(r){let t="";for(const n of r){const o=n.codePointAt(0)??63;n==="\\"?t+="\\\\":n==="("?t+="\\(":n===")"?t+="\\)":o<32||o>255?t+="?":t+=n}return t}const u=new TextEncoder;function F(r,t,n={}){if(r.length===0)throw new Error("buildRasterPdf: no pages");if(r.length!==t.length)throw new Error("buildRasterPdf: page count mismatch");const o=r.length,i=3+o*3,a=[],l=[],p=e=>t[e].widthPx*v,m=e=>t[e].heightPx*v;for(let e=0;e<o;e++){const s=4+e*3;l.push(s);const j=p(e).toFixed(2),U=m(e).toFixed(2),R=`q
+${j} 0 0 ${U} 0 0 cm
+/Im${e+1} Do
+Q
+`;a.push({id:s,body:u.encode(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${j} ${U}] /Resources << /XObject << /Im${e+1} ${s+2} 0 R >> >> /Contents ${s+1} 0 R >>`)}),a.push({id:s+1,body:u.encode(`<< /Length ${R.length} >>
+stream
+${R}endstream`)});const f=r[e],y=u.encode(`<< /Type /XObject /Subtype /Image /Width ${f.widthPx} /Height ${f.heightPx} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${f.jpeg.byteLength} >>
+stream
+`),L=u.encode(`
+endstream`),b=new Uint8Array(y.byteLength+f.jpeg.byteLength+L.byteLength);b.set(y,0),b.set(f.jpeg,y.byteLength),b.set(L,y.byteLength+f.jpeg.byteLength),a.push({id:s+2,body:b})}a.unshift({id:1,body:u.encode("<< /Type /Catalog /Pages 2 0 R >>")}),a.unshift({id:2,body:u.encode(`<< /Type /Pages /Count ${o} /Kids [${l.map(e=>`${e} 0 R`).join(" ")}] >>`)}),a.unshift({id:3,body:u.encode(`<< /Title (${$(n.title??"Document")}) /Author (${$(n.author??"Cloudie")}) /Subject (${$(n.subject??"Generated document")}) /Producer (${$("Cloudie Document Engine")}) /CreationDate (${A(n.creationDate)}) >>`)});const w=new Map(a.map(e=>[e.id,e])),d=[];let h=0;const c=e=>{d.push(e),h+=e.byteLength},g=e=>c(u.encode(e));g(`%PDF-1.4
+%âãÏÓ
+`),d.pop(),h=d.reduce((e,s)=>e+s.byteLength,0),c(new Uint8Array([37,80,68,70,45,49,46,52,10,37,226,227,207,211,10]));const C=[];for(let e=1;e<=i;e++){const s=w.get(e);if(!s)throw new Error(`buildRasterPdf: missing object ${e}`);C[e]=h,g(`${e} 0 obj
+`),c(s.body),g(`
+endobj
+`)}const E=h;let P=`xref
+0 ${i+1}
+0000000000 65535 f 
+`;for(let e=1;e<=i;e++)P+=`${String(C[e]).padStart(10,"0")} 00000 n 
+`;g(P),g(`trailer
+<< /Size ${i+1} /Root 1 0 R /Info 3 0 R >>
+startxref
+${E}
+%%EOF
+`);const x=d.reduce((e,s)=>e+s.byteLength,0),T=new Uint8Array(x);let D=0;for(const e of d)T.set(e,D),D+=e.byteLength;return{bytes:T,pageCount:o,sizeBytes:x}}const O=.92;function M(r){return new Promise((t,n)=>{const o=new Image;o.onload=()=>t(o),o.onerror=()=>n(new Error("Could not rasterize the document preview")),o.src=r})}function B(r,t,n){return new Promise((o,i)=>{r.toBlob(a=>a?o(a):i(new Error("Canvas export failed")),t,n)})}async function k(r){const t=await M(S(r)),n=t.naturalWidth||t.width||1e3,o=t.naturalHeight||t.height||1e3,i=document.createElement("canvas");i.width=n,i.height=o;const a=i.getContext("2d");if(!a)throw new Error("This browser cannot render documents (no 2D canvas)");return a.fillStyle="#ffffff",a.fillRect(0,0,n,o),a.drawImage(t,0,0,n,o),i}async function z(r,t,n,o={}){const i=I(r,t,n,o);if(i.length===0)throw new Error("This template has no pages to render");const a=[],l=[];let p=null,m=0,w=0;for(let h=0;h<i.length;h++){const c=await k(i[h]),g=await B(c,"image/jpeg",O);a.push({jpeg:new Uint8Array(await g.arrayBuffer()),widthPx:c.width,heightPx:c.height}),l.push({widthPx:c.width,heightPx:c.height}),h===0&&(p=await B(c,"image/png"),m=c.width,w=c.height)}const d=F(a,l,{title:o.title??"Document",author:"Cloudie",subject:"Generated document",creationDate:o.creationDate});if(!p)throw new Error("Canvas export failed");return{imagePng:p,pdfBytes:d.bytes,pageCount:d.pageCount,sizeBytes:d.sizeBytes,imageWidth:m,imageHeight:w}}async function G(r,t){const n=await fetch(r,{method:"POST",headers:{"Content-Type":t.type||"application/octet-stream"},body:t});if(!n.ok)throw new Error(`Upload failed (${n.status})`);const o=await n.json();if(!o.storageId)throw new Error("Upload did not return a storage id");return o.storageId}function W(){return typeof crypto<"u"&&"randomUUID"in crypto?crypto.randomUUID():`attempt-${Date.now()}-${Math.random().toString(16).slice(2,10)}`}function X(r){return!Number.isFinite(r)||r<=0?"—":r<1024?`${r} B`:r<1024*1024?`${(r/1024).toFixed(1)} KB`:`${(r/(1024*1024)).toFixed(2)} MB`}function _(r,t){const n=URL.createObjectURL(r),o=document.createElement("a");o.href=n,o.download=t,document.body.appendChild(o),o.click(),o.remove(),setTimeout(()=>URL.revokeObjectURL(n),4e3)}export{_ as d,X as f,W as n,z as r,G as u};
