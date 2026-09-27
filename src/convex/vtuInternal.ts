@@ -392,6 +392,25 @@ export const refundAndRelease = internalMutation({
   args: {
     transactionId: v.id("vtuTransactions"),
     reason: v.string(),
+    /**
+     * WHY this reversal happened, as a closed enum.
+     *
+     * REQUIRED, not optional, and that is the point: `refundAndRelease` is the
+     * only writer of `status: "reversed"`, so making the argument mandatory
+     * here is what makes `reversalReason` non-null on every reversed row by
+     * CONSTRUCTION rather than by discipline. Convex cannot express a
+     * cross-field constraint (`reversed` implies a reason), so the invariant
+     * is enforced at the one place that can break it.
+     *
+     * The schema field stays optional only because a table validator has no
+     * way to say "required when status is reversed".
+     */
+    reversalReason: v.union(
+      v.literal("provider_failed"),
+      v.literal("provider_cancelled"),
+      v.literal("admin_override"),
+      v.literal("reconciliation"),
+    ),
   },
   handler: async (ctx, args): Promise<RefundResult> => {
     const tx = await ctx.db.get(args.transactionId);
@@ -413,6 +432,7 @@ export const refundAndRelease = internalMutation({
         transactionId: tx._id,
         serviceCode: tx.serviceCode,
         reason: args.reason,
+        reversalReason: args.reversalReason,
         pointsDebited: tx.pointsDebited,
         ngnPerPoint: tx.ngnPerPoint,
       },
@@ -429,6 +449,9 @@ export const refundAndRelease = internalMutation({
     const now = Date.now();
     await ctx.db.patch(args.transactionId, {
       status: "reversed",
+      // Written in the SAME patch as the status, so there is no intermediate
+      // state in which the row is reversed without a reason.
+      reversalReason: args.reversalReason,
       reversalLedgerId: creditId,
       reversedAt: now,
       resolvedAt: now,

@@ -13,12 +13,19 @@
 
 import { v } from "convex/values";
 import {
+  VTU_AUTH_SCHEMES,
   VTU_PROVIDER_STATUSES,
   VTU_SERVICE_TYPES,
   VTU_TRANSACTION_STATUSES,
 } from "./schema";
 
-export { VTU_PROVIDER_STATUSES, VTU_SERVICE_TYPES, VTU_TRANSACTION_STATUSES };
+export {
+  VTU_AUTH_SCHEMES,
+  VTU_PROVIDER_STATUSES,
+  VTU_SERVICE_TYPES,
+  VTU_TRANSACTION_STATUSES,
+};
+export type VtuAuthScheme = (typeof VTU_AUTH_SCHEMES)[number];
 
 export const vtuServiceTypeValidator = v.union(
   ...VTU_SERVICE_TYPES.map((s) => v.literal(s)),
@@ -36,10 +43,30 @@ export type VtuTransactionStatus = (typeof VTU_TRANSACTION_STATUSES)[number];
 // ─── Provider-facing request/result types ───────────────────────────
 
 export interface ProviderPurchaseRequest {
-  /** Sent upstream as ITS reference, so a retry dedupes on their side too.
-   *  Without this a client retry after a timeout buys two top-ups for one
-   *  charge. */
+  /**
+   * The LOGICAL identity of this purchase: the client-generated id, stable
+   * across retries of the same attempt.
+   *
+   * Adapters that support upstream idempotency send this as their reference,
+   * so a client retry after a timeout is de-duplicated on their side too.
+   */
   requestId: string;
+  /**
+   * The PHYSICAL dispatch identity of this single outbound call — our
+   * transaction id.
+   *
+   * Distinct from `requestId` on purpose. Some aggregators (AidaPay) reject a
+   * duplicate `ref` outright with a 403, which collides with our own rule that
+   * a FAILED transaction must release its key so the customer can retry using
+   * the SAME request id. Forwarding the request id upstream would therefore
+   * 403 every legitimate retry.
+   *
+   * An adapter needing a globally-unique-per-call reference uses this; one
+   * that benefits from upstream dedup can use `requestId`. Our own layer
+   * already guarantees a held key is never dispatched twice, so neither choice
+   * can double-charge.
+   */
+  attemptId: string;
   serviceType: VtuServiceType;
   /** The aggregator's catalog id for the product. */
   productCode: string;
@@ -52,9 +79,74 @@ export interface ProviderCallOptions {
   baseUrl: string;
   /** Plaintext credential, decrypted at the call site. Never persisted. */
   apiKey: string;
+  /**
+   * Provider-level transaction PIN, for aggregators that require one on every
+   * purchase. Opened from the provider row and passed through here so no
+   * adapter has to reach for configuration itself.
+   *
+   * Optional, because it is a PROVIDER concept, not a platform one: Pairgate
+   * has no equivalent and the value stays undefined for it. An adapter that
+   * needs it must fail cleanly when it is absent rather than sending an empty
+   * PIN.
+   */
+  accountPin?: string;
+  /**
+   * Header the credential is sent in, and how it is composed into that header.
+   *
+   * Both are DATA, read from the provider row, so retargeting a provider's
+   * auth is an admin edit rather than a code change and a redeploy.
+   */
+  authHeader?: string;
+  authScheme?: VtuAuthScheme;
   timeoutMs: number;
   /** Injected so adapters are testable with no network and no credentials. */
   fetchImpl: typeof fetch;
+}
+
+// ─── Auth header composition ───────────────────────────────────────
+
+/**
+ * Used when a row says nothing, so an unconfigured provider still sends a
+ * well-formed header instead of an `Authorization: undefined`.
+ */
+export const DEFAULT_AUTH_HEADER = "x-api-key";
+
+/**
+ * Build the single auth header for a call, from row data.
+ *
+ * ONE rule, used by every adapter and by the test-connection probe, because a
+ * second hand-rolled copy is how a provider ends up authenticating one call
+ * correctly and the next one not at all.
+ *
+ * The scheme is the CLOSED enum from the schema, so this switch is exhaustive
+ * by construction: adding a scheme to `VTU_AUTH_SCHEMES` turns the
+ * `never` check below into a compile error here rather than a silent
+ * malformed header at runtime.
+ */
+export function composeAuthHeader(opts: {
+  authHeader?: string;
+  authScheme?: VtuAuthScheme;
+  apiKey: string;
+}): Record<string, string> {
+  const header = (opts.authHeader ?? "").trim() || DEFAULT_AUTH_HEADER;
+  const scheme = opts.authScheme ?? "";
+
+  switch (scheme) {
+    case "bearer":
+      return { [header]: `Bearer ${opts.apiKey}` };
+    case "basic":
+      return { [header]: `Basic ${opts.apiKey}` };
+    case "":
+      return { [header]: opts.apiKey };
+    default: {
+      // Unreachable while the enum is closed. Assigning to `never` is the
+      // exhaustiveness assertion: it fails to COMPILE if a scheme is added
+      // without being handled, which is the failure mode this whole design
+      // exists to prevent.
+      const unhandled: never = scheme;
+      throw new Error(`Unsupported auth scheme: ${unhandled}`);
+    }
+  }
 }
 
 /**
@@ -74,6 +166,14 @@ export type ProviderPurchaseResult =
       status: "failed";
       code: string;
       message: string;
+      /**
+       * Refused, or accepted and then withdrawn. Both refund the customer, but
+       * they are different facts about what happened to their money.
+       *
+       * Optional because an adapter that cannot tell them apart may omit it;
+       * the caller then records the conservative `provider_failed`.
+       */
+      failureKind?: "rejected" | "cancelled";
       providerReference?: string;
       raw: unknown;
     }
@@ -90,6 +190,13 @@ export interface ProviderCallbackEvent {
   costNgn?: number;
   code?: string;
   message?: string;
+  /**
+   * Distinguishes a provider that rejected the purchase from one that
+   * cancelled it AFTER accepting it. At least one aggregator reports these
+   * separately, and collapsing them loses the ability to tell a customer
+   * whether their money was refused outright or pulled back.
+   */
+  failureKind?: "rejected" | "cancelled";
   /** Stable across retries, so a duplicate callback is recognisable. */
   eventId?: string;
 }

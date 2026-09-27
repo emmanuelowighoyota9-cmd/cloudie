@@ -48,6 +48,38 @@ import { toast } from "sonner";
 
 type Status = "active" | "sandbox" | "disabled";
 
+/**
+ * The closed auth-scheme enum, mirrored from the schema.
+ *
+ * A dropdown rather than a free-text field on purpose: a typo in an auth
+ * scheme produces a well-formed request carrying a nonsense header, which the
+ * provider answers with a 401 that reads like a bad key. Making the bad value
+ * unselectable removes that whole class of incident.
+ */
+type AuthScheme = "" | "bearer" | "basic";
+
+/**
+ * `Select.Item` forbids an empty-string value, so the raw-token option is
+ * carried in the DOM as `raw` and mapped back to `""` on the way in and out.
+ * The value that reaches the server is always the real enum member.
+ */
+const AUTH_SCHEME_OPTIONS: { value: string; label: string; scheme: AuthScheme }[] = [
+  { value: "raw", label: "Raw token", scheme: "" },
+  { value: "bearer", label: "Bearer", scheme: "bearer" },
+  { value: "basic", label: "Basic", scheme: "basic" },
+];
+
+const authSchemeToSelect = (scheme: AuthScheme) =>
+  AUTH_SCHEME_OPTIONS.find((o) => o.scheme === scheme)?.value ?? "raw";
+const selectToAuthScheme = (value: string): AuthScheme =>
+  AUTH_SCHEME_OPTIONS.find((o) => o.value === value)?.scheme ?? "";
+
+const AUTH_SCHEME_HINT: Record<AuthScheme, string> = {
+  "": "Sends the token as-is, e.g. x-api-key: <token>.",
+  bearer: "Sends Authorization: Bearer <token>.",
+  basic: "Sends Authorization: Basic <token>. The token must already be base64.",
+};
+
 type ProviderRow = {
   _id: string;
   name: string;
@@ -57,6 +89,7 @@ type ProviderRow = {
   baseUrl: string;
   healthPath: string | null;
   authHeader: string | null;
+  authScheme: AuthScheme;
   callbackSignatureHeader: string | null;
   timeoutMs: number | null;
   priority: number;
@@ -65,6 +98,7 @@ type ProviderRow = {
   lastTestError: string | null;
   hasApiKey: boolean;
   hasWebhookSecret: boolean;
+  hasAccountPin: boolean;
   updatedAt: number;
 };
 
@@ -86,6 +120,7 @@ type Draft = {
   baseUrl: string;
   healthPath: string;
   authHeader: string;
+  authScheme: AuthScheme;
   callbackSignatureHeader: string;
   priority: string;
   status: Status;
@@ -97,6 +132,7 @@ const EMPTY_DRAFT: Draft = {
   baseUrl: "",
   healthPath: "",
   authHeader: "x-api-key",
+  authScheme: "",
   callbackSignatureHeader: "x-pairgate-signature",
   priority: "100",
   status: "disabled",
@@ -121,14 +157,16 @@ export default function AdminVtuProviders() {
     Record<string, { ok: boolean; latencyMs?: number; error?: string }>
   >({});
 
-  // Secrets live ONLY in these two transient fields, only while the form is
+  // Secrets live ONLY in these transient fields, only while the form is
   // open, and are cleared on close. They are never read back from the server.
   const [apiKey, setApiKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
+  const [accountPin, setAccountPin] = useState("");
   // "Replace key" is an explicit opt-in, so saving an unrelated edit never
   // re-writes the credential.
   const [replaceApiKey, setReplaceApiKey] = useState(false);
   const [replaceWebhookSecret, setReplaceWebhookSecret] = useState(false);
+  const [replaceAccountPin, setReplaceAccountPin] = useState(false);
 
   const target = useMemo(
     () => (providers ?? []).find((p) => p.name === editing) ?? null,
@@ -140,8 +178,10 @@ export default function AdminVtuProviders() {
     setDraft(EMPTY_DRAFT);
     setApiKey("");
     setWebhookSecret("");
+    setAccountPin("");
     setReplaceApiKey(false);
     setReplaceWebhookSecret(false);
+    setReplaceAccountPin(false);
   }
 
   function openEdit(row: ProviderRow) {
@@ -152,14 +192,17 @@ export default function AdminVtuProviders() {
       baseUrl: row.baseUrl,
       healthPath: row.healthPath ?? "",
       authHeader: row.authHeader ?? "",
+      authScheme: row.authScheme,
       callbackSignatureHeader: row.callbackSignatureHeader ?? "",
       priority: String(row.priority),
       status: row.status,
     });
     setApiKey("");
     setWebhookSecret("");
+    setAccountPin("");
     setReplaceApiKey(false);
     setReplaceWebhookSecret(false);
+    setReplaceAccountPin(false);
   }
 
   function closeForm() {
@@ -167,8 +210,10 @@ export default function AdminVtuProviders() {
     // Clear the transient plaintext on the way out.
     setApiKey("");
     setWebhookSecret("");
+    setAccountPin("");
     setReplaceApiKey(false);
     setReplaceWebhookSecret(false);
+    setReplaceAccountPin(false);
   }
 
   async function save() {
@@ -184,7 +229,9 @@ export default function AdminVtuProviders() {
           status: draft.status,
           healthPath: draft.healthPath.trim() || undefined,
           authHeader: draft.authHeader.trim() || undefined,
+          authScheme: draft.authScheme,
           callbackSignatureHeader: draft.callbackSignatureHeader.trim() || undefined,
+          accountPin: accountPin.trim() || undefined,
           priority: Number(draft.priority) || 100,
         });
         toast.success("Provider created");
@@ -196,7 +243,10 @@ export default function AdminVtuProviders() {
           status: draft.status,
           healthPath: draft.healthPath || undefined,
           authHeader: draft.authHeader || undefined,
+          authScheme: draft.authScheme,
           callbackSignatureHeader: draft.callbackSignatureHeader || undefined,
+          accountPin:
+            replaceAccountPin && accountPin.trim() ? accountPin.trim() : undefined,
           priority: Number(draft.priority) || 100,
           // Omitted unless the operator explicitly chose to replace, so an
           // unrelated edit never re-writes the credential.
@@ -405,6 +455,30 @@ export default function AdminVtuProviders() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Auth scheme</Label>
+                  <Select
+                    value={authSchemeToSelect(draft.authScheme)}
+                    onValueChange={(v) =>
+                      setDraft({ ...draft, authScheme: selectToAuthScheme(v) })
+                    }
+                  >
+                    <SelectTrigger className="min-h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AUTH_SCHEME_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {AUTH_SCHEME_HINT[draft.authScheme]}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="p-sig">Webhook signature header</Label>
                   <Input
                     id="p-sig"
@@ -525,6 +599,46 @@ export default function AdminVtuProviders() {
                     />
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="p-pin">Account PIN</Label>
+                  {target?.hasAccountPin && !replaceAccountPin ? (
+                    <div className="flex items-center gap-3">
+                      <Input
+                        value="••••••••••••"
+                        readOnly
+                        aria-label="Account PIN stored"
+                        className="min-h-11 font-mono"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setReplaceAccountPin(true)}
+                        className="min-h-11 shrink-0 gap-2"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Replace PIN
+                      </Button>
+                    </div>
+                  ) : (
+                    <Input
+                      id="p-pin"
+                      type="password"
+                      inputMode="numeric"
+                      value={accountPin}
+                      onChange={(e) => setAccountPin(e.target.value)}
+                      placeholder="Optional — only for aggregators that require one"
+                      autoComplete="off"
+                      className="min-h-11 font-mono"
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    A provider-level transaction PIN, sent on every purchase.
+                    Sealed separately from the API key so either can be rotated
+                    on its own. Leave blank for providers that have no
+                    equivalent.
+                  </p>
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -583,10 +697,24 @@ export default function AdminVtuProviders() {
                             no key
                           </Badge>
                         )}
+                        {row.authScheme !== "" && (
+                          <Badge variant="outline" className="border-border text-muted-foreground">
+                            {row.authScheme}
+                          </Badge>
+                        )}
+                        {row.hasAccountPin && (
+                          <Badge variant="outline" className="border-border text-muted-foreground">
+                            <KeyRound className="mr-1 h-3 w-3" />
+                            PIN
+                          </Badge>
+                        )}
                       </div>
                       <p className="break-anywhere text-xs text-muted-foreground">
                         {row.baseUrl || "No base URL"}
                         {row.healthPath ? ` · health ${row.healthPath}` : " · no health path"}
+                        {` · auth ${row.authHeader ?? "x-api-key"}${
+                          row.authScheme ? ` (${row.authScheme})` : ""
+                        }`}
                       </p>
                     </div>
 

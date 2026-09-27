@@ -60,7 +60,7 @@ export type PointTxType = (typeof POINT_TX_TYPES)[number];
 export const pointTxTypeValidator = v.union(...literals(POINT_TX_TYPES));
 
 // ─── VTU (virtual top-up) enums ───
-export const VTU_SERVICE_TYPES = [
+export const VTU_SERVICE_TYPES =[
   "airtime",
   "data",
   "cable",
@@ -122,6 +122,41 @@ export const vtuTransactionStatusValidator = v.union(
  * RESOLVE step only, so it stops new purchases while leaving in-flight
  * transactions to complete against the reference they already carry.
  */
+/**
+ * Why a transaction was reversed.
+ *
+ * `admin_override` and `reconciliation` are reserved for later slices but are
+ * typed NOW, so the schema does not need to move once rows start using them.
+ *
+ * `provider_cancelled` is distinct from `provider_failed` because at least one
+ * aggregator distinguishes them (AidaPay reports `Cancelled` separately from
+ * `Refund`), and collapsing them loses the ability to tell a customer whether
+ * their money was rejected outright or pulled back after acceptance.
+ */
+export const VTU_REVERSAL_REASONS = [
+  "provider_failed", // provider definitively rejected the purchase
+  "provider_cancelled", // provider cancelled after accepting it
+  "admin_override", // reserved: operator-initiated
+  "reconciliation", // reserved: automatic catch-up for a stuck transaction
+] as const;
+export type VtuReversalReason = (typeof VTU_REVERSAL_REASONS)[number];
+export const vtuReversalReasonValidator = v.union(
+  ...literals(VTU_REVERSAL_REASONS),
+);
+
+/**
+ * How a provider authenticates.
+ *
+ * A CLOSED enum, not a free string. `Authorization: Bearer <token>` and
+ * `x-api-key: <token>` are the shapes we support; a free string invites a typo
+ * that silently produces a malformed header and a provider that mysteriously
+ * rejects every call. Extending later is a union addition, which Convex
+ * handles cleanly.
+ */
+export const VTU_AUTH_SCHEMES = ["", "bearer", "basic"] as const;
+export type VtuAuthScheme = (typeof VTU_AUTH_SCHEMES)[number];
+export const vtuAuthSchemeValidator = v.union(...literals(VTU_AUTH_SCHEMES));
+
 export const VTU_PROVIDER_STATUSES = [
   "active",
   "sandbox",
@@ -1387,6 +1422,13 @@ const schema = defineSchema(
       reversalLedgerId: v.optional(v.id("pointLedger")),
       failureCode: v.optional(v.string()),
       failureReason: v.optional(v.string()),
+      /**
+       * Required whenever `status` is `reversed`. Optional in the schema only
+       * because Convex cannot express a cross-field constraint; the mutation
+       * that writes the transition REQUIRES it, so a `reversed` row with no
+       * reason cannot be created.
+       */
+      reversalReason: v.optional(v.union(...literals(VTU_REVERSAL_REASONS))),
       /** Which path wrote the last transition: provider_response | webhook. */
       source: v.optional(v.string()),
       /** Sanitized payloads. Secrets stripped on write by sanitizeForLog. */
@@ -1455,14 +1497,26 @@ const schema = defineSchema(
       /** Sealed independently, so one provider's webhook secret can be
        *  rotated without touching any other. */
       encryptedWebhookSecret: v.optional(v.string()),
+      /**
+       * Provider-level transaction PIN, for aggregators that require one on
+       * every purchase (AidaPay's POST /buy `account_pin`).
+       *
+       * It is provider CREDENTIAL configuration, not user data: it is the same
+       * value for every purchase we make through this provider, so it belongs
+       * on the row and is sealed alongside the API key. Null for providers
+       * with no equivalent (Pairgate).
+       */
+      encryptedAccountPin: v.optional(v.string()),
+      /** Header the aggregator sends its callback signature in. */
+      callbackSignatureHeader: v.optional(v.string()),
+      /** How to compose the auth header. Closed enum, never a free string. */
+      authScheme: v.optional(v.union(...literals(VTU_AUTH_SCHEMES))),
+      timeoutMs: v.optional(v.number()),
       /** Read-only endpoint the "test connection" button GETs. Data, not
        *  code, so a new adapter needs no health() method. */
       healthPath: v.optional(v.string()),
-      /** Header the aggregator sends its callback signature in. */
-      callbackSignatureHeader: v.optional(v.string()),
       /** Header the request authorization is sent in. */
       authHeader: v.optional(v.string()),
-      timeoutMs: v.optional(v.number()),
       /** Lower runs first. Consumed by slice 3 routing; harmless before that. */
       priority: v.optional(v.number()),
       lastTestedAt: v.optional(v.number()),

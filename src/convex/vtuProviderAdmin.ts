@@ -17,7 +17,7 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { auditLog, requireAdmin } from "./adminApi";
 import { encrypt, isSecretError } from "./lib/encryption";
-import { VTU_PROVIDER_STATUSES } from "./schema";
+import { VTU_AUTH_SCHEMES, VTU_PROVIDER_STATUSES } from "./schema";
 
 /**
  * Seal a secret, turning a missing master key into an actionable message
@@ -38,6 +38,16 @@ async function sealOrThrow(plaintext: string): Promise<string> {
 
 const statusValidator = v.union(
   ...VTU_PROVIDER_STATUSES.map((s) => v.literal(s)),
+);
+
+/**
+ * The closed auth-scheme enum, validated here exactly as the schema does.
+ *
+ * A free string would let a typo through to a provider that then rejects every
+ * call with a confusing 401. The union makes the bad value unrepresentable.
+ */
+const authSchemeValidator = v.union(
+  ...VTU_AUTH_SCHEMES.map((s) => v.literal(s)),
 );
 
 // ─── Reads ─────────────────────────────────────────────────────────
@@ -66,6 +76,7 @@ export const listProviders = query({
       baseUrl: p.baseUrl,
       healthPath: p.healthPath ?? null,
       authHeader: p.authHeader ?? null,
+      authScheme: p.authScheme ?? "",
       callbackSignatureHeader: p.callbackSignatureHeader ?? null,
       timeoutMs: p.timeoutMs ?? null,
       priority: p.priority ?? 100,
@@ -75,6 +86,7 @@ export const listProviders = query({
       // Booleans. The sealed values stay on the server.
       hasApiKey: Boolean(p.encryptedApiKey),
       hasWebhookSecret: Boolean(p.encryptedWebhookSecret),
+      hasAccountPin: Boolean(p.encryptedAccountPin),
       updatedAt: p.updatedAt,
     }));
   },
@@ -102,12 +114,14 @@ export const getForTest = internalQuery({
       .query("vtuProviders")
       .withIndex("by_name", (q) => q.eq("name", args.name))
       .unique();
-    if (!row) return null;      return {
-        baseUrl: row.baseUrl,
-        encryptedApiKey: row.encryptedApiKey,
-        healthPath: row.healthPath,
-        authHeader: row.authHeader,
-      };
+    if (!row) return null;
+    return {
+      baseUrl: row.baseUrl,
+      encryptedApiKey: row.encryptedApiKey,
+      healthPath: row.healthPath,
+      authHeader: row.authHeader,
+      authScheme: row.authScheme,
+    };
   },
 });
 
@@ -137,9 +151,11 @@ export const createProvider = mutation({
     baseUrl: v.string(),
     apiKey: v.string(),
     webhookSecret: v.optional(v.string()),
+    accountPin: v.optional(v.string()),
     status: v.optional(statusValidator),
     healthPath: v.optional(v.string()),
     authHeader: v.optional(v.string()),
+    authScheme: v.optional(authSchemeValidator),
     callbackSignatureHeader: v.optional(v.string()),
     timeoutMs: v.optional(v.number()),
     priority: v.optional(v.number()),
@@ -163,6 +179,9 @@ export const createProvider = mutation({
     const sealedWebhook = args.webhookSecret
       ? await sealOrThrow(args.webhookSecret)
       : undefined;
+    // Sealed separately from the API key: it is a different secret with its
+    // own rotation, and sharing one ciphertext would couple them.
+    const sealedPin = args.accountPin ? await sealOrThrow(args.accountPin) : undefined;
 
     const id: Id<"vtuProviders"> = await ctx.db.insert("vtuProviders", {
       name,
@@ -172,8 +191,10 @@ export const createProvider = mutation({
       // Sealed at the boundary. A plaintext key never reaches the database.
       encryptedApiKey: sealedKey,
       encryptedWebhookSecret: sealedWebhook,
+      encryptedAccountPin: sealedPin,
       healthPath: args.healthPath,
       authHeader: args.authHeader,
+      authScheme: args.authScheme,
       callbackSignatureHeader: args.callbackSignatureHeader,
       timeoutMs: args.timeoutMs,
       priority: args.priority ?? 100,
@@ -191,8 +212,10 @@ export const createProvider = mutation({
         name,
         baseUrl: args.baseUrl,
         status: args.status ?? "disabled",
+        authScheme: args.authScheme ?? "",
         hasApiKey: true,
         hasWebhookSecret: Boolean(args.webhookSecret),
+        hasAccountPin: Boolean(args.accountPin),
       },
     });
 
@@ -215,9 +238,12 @@ export const updateProvider = mutation({
     apiKey: v.optional(v.string()),
     webhookSecret: v.optional(v.string()),
     clearWebhookSecret: v.optional(v.boolean()),
+    accountPin: v.optional(v.string()),
+    clearAccountPin: v.optional(v.boolean()),
     status: v.optional(statusValidator),
     healthPath: v.optional(v.string()),
     authHeader: v.optional(v.string()),
+    authScheme: v.optional(authSchemeValidator),
     callbackSignatureHeader: v.optional(v.string()),
     timeoutMs: v.optional(v.number()),
     priority: v.optional(v.number()),
@@ -238,6 +264,7 @@ export const updateProvider = mutation({
     if (args.status !== undefined) patch.status = args.status;
     if (args.healthPath !== undefined) patch.healthPath = args.healthPath;
     if (args.authHeader !== undefined) patch.authHeader = args.authHeader;
+    if (args.authScheme !== undefined) patch.authScheme = args.authScheme;
     if (args.callbackSignatureHeader !== undefined) {
       patch.callbackSignatureHeader = args.callbackSignatureHeader;
     }
@@ -251,6 +278,11 @@ export const updateProvider = mutation({
     }
     if (args.clearWebhookSecret) patch.encryptedWebhookSecret = undefined;
 
+    // Same leave-alone-unless-replaced rule as the other two secrets: the UI
+    // shows a mask and offers "Replace", and never receives the plaintext.
+    if (args.accountPin) patch.encryptedAccountPin = await sealOrThrow(args.accountPin);
+    if (args.clearAccountPin) patch.encryptedAccountPin = undefined;
+
     await ctx.db.patch(row._id, patch);
 
     await auditLog(ctx, adminId, {
@@ -261,8 +293,10 @@ export const updateProvider = mutation({
       after: {
         status: args.status ?? row.status,
         baseUrl: args.baseUrl ?? row.baseUrl,
+        authScheme: args.authScheme ?? row.authScheme ?? "",
         apiKeyReplaced: Boolean(args.apiKey),
         webhookSecretReplaced: Boolean(args.webhookSecret || args.clearWebhookSecret),
+        accountPinReplaced: Boolean(args.accountPin || args.clearAccountPin),
       },
       reason: args.apiKey ? "credential replaced" : "configuration updated",
     });

@@ -17,6 +17,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { composeAuthHeader } from "./vtuShared";
 import type {
   ProviderCallOptions,
   ProviderCallbackEvent,
@@ -42,6 +43,85 @@ function purchasePath(serviceType: ProviderPurchaseRequest["serviceType"]): stri
     case "betting":
       return "/api/v1/betting";
   }
+}
+
+// ─── Status interpretation ─────────────────────────────────────────
+
+/**
+ * The words ONE provider uses for its transaction states.
+ *
+ * The vocabulary is DATA and the classifier below is a PURE FUNCTION with no
+ * provider knowledge in it. That split is the whole point: it is what lets a
+ * second aggregator's status words be tested against the same rules without a
+ * line of shared code learning the word "Completed".
+ */
+export interface ProviderStatusVocabulary {
+  /** The top-up landed. Terminal and successful. */
+  confirmed: readonly string[];
+  /** Refused. Terminal and unsuccessful. */
+  failed: readonly string[];
+  /** Accepted, then withdrawn by the provider. Terminal and unsuccessful. */
+  cancelled: readonly string[];
+  /** Accepted and still in flight. NOT terminal. */
+  processing: readonly string[];
+}
+
+export type ProviderStatusVerdict =
+  | { kind: "confirmed" }
+  | { kind: "processing" }
+  | { kind: "failed"; failureKind: "rejected" | "cancelled" }
+  | { kind: "unknown" };
+
+/**
+ * Pairgate's vocabulary, transcribed from the strings this adapter already
+ * interpreted inline. Deliberately NOT widened: a word Pairgate has never been
+ * observed to send must keep resolving to `unknown`, because guessing
+ * "confirmed" marks undelivered airtime as paid for.
+ */
+export const PAIRGATE_STATUS_VOCABULARY: ProviderStatusVocabulary = {
+  confirmed: ["success", "successful"],
+  failed: ["failed", "error", "rejected"],
+  cancelled: [],
+  processing: [],
+};
+
+/**
+ * Classify one provider status word.
+ *
+ * Two properties this function must never lose, because both are money:
+ *
+ *  1. It NEVER returns a `reversed` notion. Reversal is OUR decision, taken
+ *     when we decide to credit points back — a provider has no authority over
+ *     our ledger, so a status word can only ever say "confirmed", "failed",
+ *     "still going", or "I don't know".
+ *
+ *  2. `cancelled` and `rejected` stay distinguishable. They are the same
+ *     outcome for the ledger (both refund) but different facts for a customer:
+ *     one was refused, the other was taken back. Collapsing them here would
+ *     lose the distinction before it reaches the transaction row.
+ *
+ * An unrecognised word is `unknown`, never a guess. `unknown` is a real state
+ * that keeps the points debited and waits for a webhook; guessing either way
+ * would either refund a delivered top-up or bill for one that never arrived.
+ */
+export function mapProviderStatus(
+  rawStatus: unknown,
+  vocab: ProviderStatusVocabulary,
+  successFlag?: unknown,
+): ProviderStatusVerdict {
+  const status = typeof rawStatus === "string" ? rawStatus.trim().toLowerCase() : "";
+
+  // `cancelled` is tested before `failed` so a provider that lists a word in
+  // both still gets the more specific answer.
+  if (status !== "") {
+    if (vocab.confirmed.includes(status)) return { kind: "confirmed" };
+    if (vocab.cancelled.includes(status)) return { kind: "failed", failureKind: "cancelled" };
+    if (vocab.failed.includes(status)) return { kind: "failed", failureKind: "rejected" };
+    if (vocab.processing.includes(status)) return { kind: "processing" };
+  }
+  if (successFlag === true) return { kind: "confirmed" };
+  if (successFlag === false) return { kind: "failed", failureKind: "rejected" };
+  return { kind: "unknown" };
 }
 
 // ─── Response mapping ───────────────────────────────────────────────
@@ -79,11 +159,13 @@ export function mapPurchaseResponse(
   const providerReference = referenceOf(b, data);
 
   const status = String(data.status ?? b.status ?? "").toLowerCase();
-  const succeeded = status === "success" || status === "successful" || b.success === true;
-  const explicitlyFailed =
-    status === "failed" || status === "error" || status === "rejected" || b.success === false;
+  const verdict = mapProviderStatus(
+    data.status ?? b.status,
+    PAIRGATE_STATUS_VOCABULARY,
+    b.success,
+  );
 
-  if (succeeded) {
+  if (verdict.kind === "confirmed") {
     const costNgn = num(data.cost) ?? num(data.amount) ?? num(data.price);
     if (costNgn === undefined) {
       // Delivered but unpriceable. Success would leave the customer out of
@@ -104,11 +186,23 @@ export function mapPurchaseResponse(
     };
   }
 
-  if (explicitlyFailed) {
+  if (verdict.kind === "failed") {
     return {
       status: "failed",
       code: str(data.code) ?? str(b.code) ?? "PROVIDER_REJECTED",
       message: str(data.message) ?? str(b.message) ?? "The provider rejected this purchase",
+      failureKind: verdict.failureKind,
+      providerReference,
+      raw: body,
+    };
+  }
+
+  // Accepted but not finished. `unknown` is exactly right: the top-up may
+  // still land, so the points stay debited and the row waits for a webhook.
+  if (verdict.kind === "processing") {
+    return {
+      status: "unknown",
+      message: "The provider is still processing this purchase",
       providerReference,
       raw: body,
     };
@@ -171,6 +265,11 @@ export const pairgateAdapter: VtuProviderAdapter = {
 
     // `reference` is the aggregator-side idempotency key. Sending OUR namespaced
     // key means a retry is de-duplicated by Pairgate too, not only by us.
+    //
+    // `req.attemptId` is deliberately NOT sent. Pairgate 403s nothing on a
+    // repeated reference and gains nothing from a per-call one, so adding it
+    // would change bytes on the wire for no reason. Adapters whose vendor
+    // rejects a duplicate reference (AidaPay) are the ones that read it.
     const rawBody = JSON.stringify({
       reference: req.requestId,
       product_code: req.productCode,
@@ -190,7 +289,11 @@ export const pairgateAdapter: VtuProviderAdapter = {
         headers: {
           "content-type": "application/json",
           accept: "application/json",
-          "x-api-key": opts.apiKey,
+          // With the shipped Pairgate row (no authHeader, scheme "") this
+          // composes to exactly `x-api-key: <token>` — the same header as
+          // before — while letting an operator retarget auth from the admin
+          // page instead of a redeploy.
+          ...composeAuthHeader(opts),
           signature,
         },
         body: rawBody,
@@ -224,10 +327,18 @@ export const pairgateAdapter: VtuProviderAdapter = {
         const b = parsed as Record<string, unknown>;
         const data =
           b.data && typeof b.data === "object" ? (b.data as Record<string, unknown>) : b;
+        // A 4xx body can still name a terminal state, so classify it rather
+        // than assuming every non-2xx is the same kind of rejection.
+        const verdict = mapProviderStatus(
+          data.status ?? b.status,
+          PAIRGATE_STATUS_VOCABULARY,
+          b.success,
+        );
         return {
           status: "failed",
           code: str(b.code) ?? str(data.code) ?? `HTTP_${response.status}`,
           message: str(b.message) ?? str(data.message) ?? "The provider rejected this purchase",
+          ...(verdict.kind === "failed" ? { failureKind: verdict.failureKind } : {}),
           providerReference: referenceOf(b, data),
           raw: parsed,
         };
@@ -286,20 +397,27 @@ export const pairgateAdapter: VtuProviderAdapter = {
     const providerReference = referenceOf(b, data);
     if (!providerReference) return null;
 
-    const status = String(data.status ?? b.status ?? "").toLowerCase();
-    const confirmed = status === "success" || status === "successful" || b.success === true;
-    const failed = status === "failed" || status === "error" || status === "rejected" || b.success === false;
+    const verdict = mapProviderStatus(
+      data.status ?? b.status,
+      PAIRGATE_STATUS_VOCABULARY,
+      b.success,
+    );
 
-    // Neither signal: do not guess. Null leaves the transaction untouched
-    // rather than resolving it on an assumption.
-    if (!confirmed && !failed) return null;
+    // Only a TERMINAL verdict resolves a transaction. `processing` and
+    // `unknown` both return null, which leaves the row untouched rather than
+    // resolving it on an assumption — a duplicate or premature callback is
+    // then simply a no-op.
+    if (verdict.kind !== "confirmed" && verdict.kind !== "failed") return null;
 
     return {
       providerReference,
-      outcome: confirmed ? "confirmed" : "failed",
+      outcome: verdict.kind === "confirmed" ? "confirmed" : "failed",
       costNgn: num(data.cost) ?? num(data.amount),
       code: str(data.code) ?? str(b.code),
       message: str(data.message) ?? str(b.message),
+      // Preserved so a cancellation is recorded as a cancellation rather than
+      // a generic rejection.
+      ...(verdict.kind === "failed" ? { failureKind: verdict.failureKind } : {}),
       eventId: str(b.event_id) ?? str(b.id),
     };
   },
@@ -320,7 +438,7 @@ export const pairgateAdapter: VtuProviderAdapter = {
     try {
       const response = await opts.fetchImpl(url, {
         method: "GET",
-        headers: { accept: "application/json", "x-api-key": opts.apiKey },
+        headers: { accept: "application/json", ...composeAuthHeader(opts) },
         signal: controller.signal,
       });
       const text = await response.text();

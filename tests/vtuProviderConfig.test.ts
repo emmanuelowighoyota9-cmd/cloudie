@@ -171,7 +171,8 @@ describe("provider resolution reads the table, never env", () => {
 const stubAdapter: VtuProviderAdapter = {
   name: "stubco",
   displayName: "StubCo",
-  async purchase() {
+  async purchase(req) {
+    stubAdapterAttempts.push({ requestId: req.requestId, attemptId: req.attemptId });
     return { status: "success", providerReference: "STUB-1", costNgn: 100, raw: {} };
   },
   verifyAndParseCallback() {
@@ -181,6 +182,9 @@ const stubAdapter: VtuProviderAdapter = {
     return { status: "unknown", message: "stub", raw: {} };
   },
 };
+
+/** What the stub was handed, so a test can assert on the request it received. */
+const stubAdapterAttempts: { requestId: string; attemptId: string }[] = [];
 
 describe("registry generalises to a second provider", () => {
   test("a stub adapter registers and resolves by name", () => {
@@ -226,6 +230,58 @@ describe("registry generalises to a second provider", () => {
       expect(JSON.stringify(pairgate)).not.toContain("pg_live_key_12345");
       expect(JSON.stringify(stub)).not.toContain("stub_live_key_99999");
     });
+  });
+
+  test("both providers are handed the SAME request type, attemptId included", async () => {
+    // The point of `attemptId` living on `ProviderPurchaseRequest` rather than
+    // on one adapter: a second aggregator must not need its own plumbing to
+    // receive a per-dispatch reference. Adding it to the shared type is all
+    // that bought, and this is the test that says so.
+    registerAdapter(stubAdapter);
+    stubAdapterAttempts.length = 0;
+
+    const bodies: string[] = [];
+    const recordingFetch = (async (_url: any, init: any) => {
+      bodies.push(String(init?.body ?? ""));
+      return new Response(JSON.stringify({ status: "success", reference: "PG-1", cost: 100 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const request = {
+      requestId: "req_shared_0001",
+      attemptId: "tx_shared_0001",
+      serviceType: "airtime",
+      productCode: "airtime.mtn.1000",
+      customerIdentifier: "08031234567",
+      network: "MTN",
+    } as any;
+
+    const opts = {
+      baseUrl: "https://api.pairgate.com",
+      apiKey: "pg_live_key_12345",
+      timeoutMs: 5_000,
+      fetchImpl: recordingFetch,
+    } as any;
+
+    // Identical call against two different providers, resolved from the
+    // registry. No branch, no special case, no per-provider argument list.
+    const viaPairgate = await getAdapter("pairgate")!.purchase(request, opts);
+    const viaStub = await getAdapter("stubco")!.purchase(request, opts);
+
+    expect(viaPairgate.status).toBe("success");
+    expect(viaStub.status).toBe("success");
+
+    // Pairgate uses the logical id and ignores the physical one.
+    expect(JSON.parse(bodies[0]).reference).toBe("req_shared_0001");
+    expect(bodies[0]).not.toContain("tx_shared_0001");
+
+    // The second provider received the physical id and can use it as a
+    // never-repeating upstream ref.
+    expect(stubAdapterAttempts).toEqual([
+      { requestId: "req_shared_0001", attemptId: "tx_shared_0001" },
+    ]);
   });
 
   test("a row with no registered adapter still resolves — the CALL fails closed", async () => {
@@ -385,6 +441,30 @@ describe("admin provider surface", () => {
         expect(await t.run(async (ctx) =>
           (await ctx.db.get(rows[0]._id)).encryptedApiKey,
         )).toBeTruthy();
+
+        // ── Across the schema change ──────────────────────────────
+        // The migration was NOT edited for the account-PIN and auth-scheme
+        // columns, and that is the point: it is still a no-op against a row
+        // shape that gained two optional fields. These assertions fail if a
+        // future change starts writing them, duplicates them, or starts
+        // stamping a second row on a re-run.
+        const after: any = await t.run(async (ctx) => ctx.db.get(rows[0]._id));
+        expect(after.encryptedAccountPin).toBeUndefined();
+        expect(after.authScheme).toBeUndefined();
+        // The fields the migration DOES own are untouched by re-running.
+        expect(after.status).toBe("sandbox");
+        expect(after.authHeader).toBe("x-api-key");
+        expect(after.callbackSignatureHeader).toBe("x-pairgate-signature");
+
+        // A FOURTH run, after the schema change, is still a no-op. Proves
+        // idempotency is a property of the mutation rather than of a run
+        // count.
+        const fourth: any = await client.mutation(
+          api.vtuProviderAdmin.migratePairgateFromEnv,
+          {},
+        );
+        expect(fourth.action).toBe("noop");
+        expect(await t.run(async (ctx) => ctx.db.query("vtuProviders").collect())).toHaveLength(1);
       } finally {
         if (previous === undefined) delete process.env.PAIRGATE_API_KEY;
         else process.env.PAIRGATE_API_KEY = previous;

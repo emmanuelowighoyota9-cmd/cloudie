@@ -54,6 +54,7 @@ export interface CallbackVerification {
     costNgn?: number;
     code?: string;
     message?: string;
+    failureKind?: "rejected" | "cancelled";
     eventId?: string;
   };
 }
@@ -106,7 +107,14 @@ export const purchaseAirtime = action({
     const transactionId = reserved.transactionId;
 
     /** Every post-debit failure funnels through here, so points always come back. */
-    const fail = async (code: string, message: string): Promise<PurchaseResult> => {
+    const fail = async (
+      code: string,
+      message: string,
+      // A cancellation is the provider pulling back a purchase it had already
+      // accepted; everything else here is a plain provider-side failure. Both
+      // refund, so the difference is recorded rather than acted on.
+      reversalReason: "provider_failed" | "provider_cancelled" = "provider_failed",
+    ): Promise<PurchaseResult> => {
       const outcome = await ctx.runMutation(internal.vtuInternal.recordOutcome, {
         transactionId,
         outcome: { status: "failed", code, message },
@@ -116,6 +124,7 @@ export const purchaseAirtime = action({
         await ctx.runMutation(internal.vtuInternal.refundAndRelease, {
           transactionId,
           reason: message,
+          reversalReason,
         });
       }
       return {
@@ -143,6 +152,10 @@ export const purchaseAirtime = action({
     const outcome = await call.adapter.purchase(
       {
         requestId: args.clientRequestId,
+        // Physical dispatch identity: a fresh value per attempt, so an adapter
+        // that needs a never-repeating upstream `ref` gets one. The logical
+        // id above is what the CLIENT retries with.
+        attemptId: transactionId,
         serviceType: "airtime",
         productCode: args.serviceCode,
         customerIdentifier: phone.value,
@@ -169,6 +182,7 @@ export const purchaseAirtime = action({
                 status: "failed",
                 code: outcome.code,
                 message: outcome.message,
+                ...(outcome.failureKind ? { failureKind: outcome.failureKind } : {}),
                 providerReference: outcome.providerReference,
                 raw: outcome.raw,
               }
@@ -184,6 +198,12 @@ export const purchaseAirtime = action({
       await ctx.runMutation(internal.vtuInternal.refundAndRelease, {
         transactionId,
         reason: "Provider rejected the purchase",
+        // The adapter told us which kind of failure it was; an adapter that
+        // could not tell us defaults to the conservative provider_failed.
+        reversalReason:
+          outcome.status === "failed" && outcome.failureKind === "cancelled"
+            ? "provider_cancelled"
+            : "provider_failed",
       });
       return {
         requestId: args.clientRequestId,
@@ -277,6 +297,7 @@ export const verifyCallback = internalAction({
         costNgn: event.costNgn,
         code: event.code,
         message: event.message,
+        failureKind: event.failureKind,
         eventId: event.eventId,
       },
     };
@@ -307,6 +328,7 @@ export const applyCallback = internalAction({
       costNgn: v.optional(v.number()),
       code: v.optional(v.string()),
       message: v.optional(v.string()),
+      failureKind: v.optional(v.union(v.literal("rejected"), v.literal("cancelled"))),
       eventId: v.optional(v.string()),
     }),
   },
@@ -349,6 +371,8 @@ export const applyCallback = internalAction({
       await ctx.runMutation(internal.vtuInternal.refundAndRelease, {
         transactionId,
         reason: args.event.message ?? "Provider reported failure",
+        reversalReason:
+          args.event.failureKind === "cancelled" ? "provider_cancelled" : "provider_failed",
       });
       return { applied: true, outcome: "failed", status: "reversed" };
     }

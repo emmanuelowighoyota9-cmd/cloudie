@@ -112,6 +112,7 @@ describe("failed transaction reversal", () => {
     const refund = await t.mutation(internal.vtuInternal.refundAndRelease, {
       transactionId: reserved.transactionId,
       reason: "Provider rejected the purchase",
+      reversalReason: "provider_failed",
     });
     expect(refund.reversed).toBe(true);
     expect(refund.releasedKey).toBe(vtuPurchaseKey("vtu_reversal_case_one"));
@@ -143,6 +144,7 @@ describe("failed transaction reversal", () => {
     await t.mutation(internal.vtuInternal.refundAndRelease, {
       transactionId: first.transactionId,
       reason: "rejected",
+      reversalReason: "provider_failed",
     });
 
     // The claim is gone, so this is a genuinely new attempt rather than a
@@ -184,12 +186,14 @@ describe("failed transaction reversal", () => {
     await t.mutation(internal.vtuInternal.refundAndRelease, {
       transactionId: reserved.transactionId,
       reason: "first",
+      reversalReason: "provider_failed",
     });
     expect(await balanceOf(t, userId)).toBe(START_BALANCE);
 
     const again = await t.mutation(internal.vtuInternal.refundAndRelease, {
       transactionId: reserved.transactionId,
       reason: "second",
+      reversalReason: "provider_failed",
     });
     expect(again.reversed).toBe(false);
     expect(again.reason).toBe("already_reversed");
@@ -236,6 +240,7 @@ describe("failed transaction reversal", () => {
     await t.mutation(internal.vtuInternal.refundAndRelease, {
       transactionId: reserved.transactionId,
       reason: "rejected",
+      reversalReason: "provider_failed",
     });
 
     // Had the refund re-read the live rate it would have credited 134 points.
@@ -453,6 +458,7 @@ describe("status transitions", () => {
     const attempt = await t.mutation(internal.vtuInternal.refundAndRelease, {
       transactionId: reserved.transactionId,
       reason: "operator gave up",
+      reversalReason: "admin_override",
     });
     expect(attempt.reversed).toBe(false);
     expect(attempt.reason).toBe("illegal_transition");

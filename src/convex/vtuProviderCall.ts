@@ -18,6 +18,7 @@ import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { tryDecrypt, isSecretError } from "./lib/encryption";
 import { getAdapter } from "./vtuRegistry";
+import { composeAuthHeader } from "./vtuShared";
 import type { ProviderCallOptions, VtuProviderAdapter } from "./vtuShared";
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -103,12 +104,40 @@ async function resolveCall(
     return { ok: false, code: "CREDENTIAL_CORRUPT" };
   }
 
+  // ── Second sealed value ──────────────────────────────────────────
+  //
+  // The account PIN is a separate secret, not a second copy of the API key:
+  // it has its own lifetime and is rotated on its own. It is sealed
+  // independently for the same reason the webhook secret is.
+  //
+  // Absent is NOT an error. It is absent for every provider that has no
+  // equivalent (Pairgate), and the adapter that needs it is the one that must
+  // refuse cleanly. Failing here instead would take down a provider that is
+  // working perfectly.
+  //
+  // Present but unopenable IS an error: a row that claims a PIN we cannot read
+  // would otherwise dispatch a purchase with a silently empty one.
+  let accountPin: string | undefined;
+  const sealedPin = resolution.provider.encryptedAccountPin;
+  if (sealedPin) {
+    // ═══ PLAINTEXT CREDENTIAL LIFETIME — BEGINS ═══════════════════
+    const openedPin = await tryDecrypt(sealedPin);
+    // ═══ PLAINTEXT CREDENTIAL LIFETIME — ENDS ═════════════════════
+    if (!openedPin.ok) return { ok: false, code: "CREDENTIAL_CORRUPT" };
+    accountPin = openedPin.value;
+  }
+
   return {
     ok: true,
     adapter,
     opts: {
       baseUrl: resolution.provider.baseUrl,
       apiKey: opened.value,
+      // Omitted rather than set to undefined, so the key does not exist at all
+      // on the options object a provider with no PIN can read.
+      ...(accountPin !== undefined ? { accountPin } : {}),
+      authHeader: resolution.provider.authHeader,
+      authScheme: resolution.provider.authScheme,
       timeoutMs: resolution.provider.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       fetchImpl: fetch,
     },
@@ -183,6 +212,14 @@ export const testProviderConnection = action({
     }
 
     const url = `${String(row.baseUrl).replace(/\/+$/, "")}${row.healthPath}`;
+    // Composed by the SAME rule an adapter uses, so a provider configured for
+    // `Authorization: Bearer` is probed exactly the way it is called. Probing
+    // with a hand-built header would report a healthy provider as broken.
+    const authHeaders = composeAuthHeader({
+      authHeader: row.authHeader ?? undefined,
+      authScheme: row.authScheme ?? undefined,
+      apiKey: opened.value,
+    });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
     const started = Date.now();
@@ -193,7 +230,7 @@ export const testProviderConnection = action({
         method: "GET",
         headers: {
           accept: "application/json",
-          ...(row.authHeader ? { [row.authHeader]: opened.value } : {}),
+          ...authHeaders,
         },
         signal: controller.signal,
       });
