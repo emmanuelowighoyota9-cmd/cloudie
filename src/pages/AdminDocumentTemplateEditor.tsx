@@ -133,7 +133,7 @@ export default function DocumentTemplateEditor({
   const navigate = useNavigate();
 
   const adminExisting = useQuery(
-    api.docTemplates.adminGetTemplate,
+    api.docTemplateAdmin.adminGetTemplate,
     !isOwn && templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
   );
   const ownExisting = useQuery(
@@ -144,8 +144,8 @@ export default function DocumentTemplateEditor({
   const balanceLoading = pointsBalance === undefined;
   const canAffordDesign = typeof pointsBalance === "number" && pointsBalance >= designPrice.points;
   const existing = isOwn ? ownExisting : adminExisting;
-  const createTemplate = useMutation(api.docTemplates.adminCreateTemplate);
-  const publishVersion = useMutation(api.docTemplates.adminPublishTemplateVersion);
+  const createTemplate = useMutation(api.docTemplateAdmin.adminCreateTemplate);
+  const publishVersion = useMutation(api.docTemplateAdmin.adminPublishTemplateVersion);
   const createOwnTemplate = useMutation(api.docTemplates.createMyTemplate);
   const updateOwnTemplate = useMutation(api.docTemplates.updateMyTemplate);
   const backTo = isOwn ? "/documents" : "/admin/document-templates";

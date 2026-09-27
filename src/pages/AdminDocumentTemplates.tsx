@@ -45,11 +45,11 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 
 /** Admin: manage the platform template catalogue and see document usage. */
 export default function AdminDocumentTemplates() {
-  const templates = useQuery(api.docTemplates.adminListTemplates);
-  const stats = useQuery(api.docTemplates.adminDocumentStats);
-  const exportRows = useQuery(api.docTemplates.adminExportTemplates);
-  const setStatus = useMutation(api.docTemplates.adminSetTemplateStatus);
-  const bulkImport = useMutation(api.docTemplates.adminBulkImportTemplates);
+  const templates = useQuery(api.docTemplateAdmin.adminListTemplates);
+  const stats = useQuery(api.docTemplateAdmin.adminDocumentStats);
+  const exportRows = useQuery(api.docTemplateAdmin.adminExportTemplates);
+  const setStatus = useMutation(api.docTemplateAdmin.adminSetTemplateStatus);
+  const bulkImport = useMutation(api.docTemplateAdmin.adminBulkImportTemplates);
 
   const [importOpen, setImportOpen] = useState(false);
   const [paste, setPaste] = useState("");
@@ -379,7 +379,7 @@ export default function AdminDocumentTemplates() {
               >
                 <span className="truncate font-medium text-foreground">{doc.title}</span>
                 <span className="text-muted-foreground">
-                  {doc.category} · {doc.status} · {doc.pointsCost} pts · {formatDateTime(doc.createdAt)}
+                  {doc.category} · {doc.status} · {doc.renderPrice ?? doc.pointsCost} pts · {formatDateTime(doc.createdAt)}
                 </span>
               </div>
             ))}

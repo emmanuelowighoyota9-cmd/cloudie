@@ -108,7 +108,7 @@ export default function AdminCatalog() {
     | { services: ServiceRow[]; workspaces: { key: string; label: string }[] }
     | undefined;
   const billing = useQuery(api.pricing.getBillingConfig);
-  const templates = useQuery(api.docTemplates.adminListTemplates) as TemplateRow[] | undefined;
+  const templates = useQuery(api.docTemplateAdmin.adminListTemplates) as TemplateRow[] | undefined;
   const products = useQuery(api.marketplace.adminListAllProducts, { limit: 200 }) as
     | ProductRow[]
     | undefined;
@@ -116,11 +116,11 @@ export default function AdminCatalog() {
   const saveBatch = useMutation(api.adminApi.bulkUpsertPricing);
   const createService = useMutation(api.adminApi.upsertPricing);
   const seedDefaults = useMutation(api.adminApi.seedDefaultPricing);
-  const setTemplatePrice = useMutation(api.docTemplates.adminSetTemplatePrice);
+  const setTemplatePrice = useMutation(api.docTemplateAdmin.adminSetTemplatePrice);
   const setProductPrice = useMutation(api.marketplace.adminSetProductPrice);
   const bulkImportProducts = useMutation(api.marketplace.adminBulkImportProducts);
   const adminCreateProduct = useMutation(api.marketplace.adminCreateProduct);
-  const bulkImportTemplates = useMutation(api.docTemplates.adminBulkImportTemplates);
+  const bulkImportTemplates = useMutation(api.docTemplateAdmin.adminBulkImportTemplates);
 
   const ngnPerPoint = billing?.ngnPerPoint ?? 15;
   const usdPerPoint = billing?.usdPerPoint ?? 0.01;
