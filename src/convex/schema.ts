@@ -110,6 +110,18 @@ export const vtuTransactionStatusValidator = v.union(
   ...literals(VTU_TRANSACTION_STATUSES),
 );
 
+/**
+ * Provider lifecycle.
+ *
+ * `sandbox` exists because the live Pairgate integration is a sandbox
+ * integration. A boolean `active` cannot distinguish a test key from a real
+ * one, which is precisely the distinction an operator must be able to make
+ * before pointing real money at a provider.
+ *
+ * `active` is derived as `status === "active"` for routing. Disabling gates the
+ * RESOLVE step only, so it stops new purchases while leaving in-flight
+ * transactions to complete against the reference they already carry.
+ */
 export const VTU_PROVIDER_STATUSES = [
   "active",
   "sandbox",
@@ -1418,28 +1430,52 @@ const schema = defineSchema(
     // Aggregator configuration. The secret is stored sealed (AES-256-GCM) and
     // is only ever opened inside a "use node" action — never in the database
     // layer, never in the browser.
+    /**
+     * Aggregator configuration, as runtime DATA rather than env vars.
+     *
+     * `name` is the join key to `adapter.name` — the registry resolves a
+     * provider by matching these two, so a row can exist for an adapter that
+     * does not exist yet (slice 3 reaches that through the admin UI, and it
+     * must fail closed rather than null-deref).
+     *
+     * `status` is a three-value enum rather than a boolean on purpose: the
+     * live Pairgate key is a SANDBOX key, and an operator must be able to tell
+     * a sandbox key from a live one at a glance. `active` is derived as
+     * `status === "active"` wherever routing needs a yes/no.
+     */
     vtuProviders: defineTable({
-      provider: v.string(),
+      /** Matches `adapter.name`. */
+      name: v.string(),
       displayName: v.string(),
       status: v.union(...literals(VTU_PROVIDER_STATUSES)),
       baseUrl: v.string(),
-      /** Encrypted credential payload. See vtuCrypto.ts. */
-      encryptedSecret: v.string(),
-      /** Callback secret, also sealed. */
-      encryptedCallbackSecret: v.optional(v.string()),
+      /** Sealed with the platform master key. NEVER returned to a client —
+       *  admin queries return `hasApiKey: boolean` instead. */
+      encryptedApiKey: v.string(),
+      /** Sealed independently, so one provider's webhook secret can be
+       *  rotated without touching any other. */
+      encryptedWebhookSecret: v.optional(v.string()),
+      /** Read-only endpoint the "test connection" button GETs. Data, not
+       *  code, so a new adapter needs no health() method. */
+      healthPath: v.optional(v.string()),
       /** Header the aggregator sends its callback signature in. */
       callbackSignatureHeader: v.optional(v.string()),
       /** Header the request authorization is sent in. */
       authHeader: v.optional(v.string()),
       timeoutMs: v.optional(v.number()),
-      isDefault: v.optional(v.boolean()),
+      /** Lower runs first. Consumed by slice 3 routing; harmless before that. */
+      priority: v.optional(v.number()),
+      lastTestedAt: v.optional(v.number()),
+      lastTestOk: v.optional(v.boolean()),
+      /** Short code or message. Never derived from a credential. */
+      lastTestError: v.optional(v.string()),
       notes: v.optional(v.string()),
       updatedBy: v.optional(v.id("users")),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
-      .index("by_provider", ["provider"])
-      .index("by_status", ["status"]),
+      .index("by_name", ["name"])
+      .index("by_status_priority", ["status", "priority"]),
 
     /** Seedable catalog of purchasable products, independent of any live call. */
     vtuCatalog: defineTable({

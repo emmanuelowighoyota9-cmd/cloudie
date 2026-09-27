@@ -16,31 +16,11 @@ import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
-import { decryptVtuSecret } from "./vtuCrypto";
-import { getAdapter } from "./vtuRegistry";
+import { openForPurchase, openForVerification } from "./vtuProviderCall";
 import { isValidRequestId, parseServiceCode, validatePhone } from "../lib/vtu";
-
-const DEFAULT_TIMEOUT_MS = 20_000;
 
 /** The provider slice 1 ships with. Resolved via the registry, not imported. */
 const DEFAULT_PROVIDER = "pairgate";
-
-/**
- * The master key that seals provider credentials.
- *
- * Read here, in the Node runtime, rather than returned from a query, so the key
- * never travels through a Convex function result. The user sets this in the
- * project's Keys panel as `VTU_ENCRYPTION_SECRET`.
- */
-function encryptionSecret(): string {
-  const value = process.env.VTU_ENCRYPTION_SECRET;
-  if (!value) {
-    throw new Error(
-      "VTU_ENCRYPTION_SECRET is not configured. Add it in the project Keys panel.",
-    );
-  }
-  return value;
-}
 
 /**
  * Explicit result shapes.
@@ -147,32 +127,20 @@ export const purchaseAirtime = action({
       };
     };
 
-    // 2. Resolve the adapter through the registry.
-    const adapter = getAdapter(DEFAULT_PROVIDER);
-    if (!adapter) return fail("ADAPTER_MISSING", "Payment provider is unavailable");
-
-    const config = await ctx.runQuery(internal.vtuInternal.getProviderConfig, {
-      provider: adapter.name,
-    });
-    if (!config) {
-      return fail("PROVIDER_NOT_CONFIGURED", "This payment provider is not configured");
-    }
-
-    let apiKey: string;
-    try {
-      apiKey = decryptVtuSecret(config.encryptedSecret, encryptionSecret());
-    } catch {
-      return fail(
-        "CREDENTIAL_UNAVAILABLE",
-        "Payment provider credential could not be read",
-      );
-    }
+    // 2. Resolve the provider and open its credential.
+    //
+    // The adapter comes from the registry and the credential is opened INSIDE
+    // this action — the plaintext key never crosses a mutation boundary, never
+    // appears in a query result, and is never logged. Every failure mode is a
+    // typed code; there is no env fallback under any condition.
+    const call = await openForPurchase(ctx, DEFAULT_PROVIDER);
+    if (!call.ok) return fail(call.code, "This payment provider is not available");
 
     // 3. pending -> processing, immediately before dispatch.
     await ctx.runMutation(internal.vtuInternal.markProcessing, { transactionId });
 
     // 4. Call the aggregator.
-    const outcome = await adapter.purchase(
+    const outcome = await call.adapter.purchase(
       {
         requestId: args.clientRequestId,
         serviceType: "airtime",
@@ -180,12 +148,7 @@ export const purchaseAirtime = action({
         customerIdentifier: phone.value,
         network: parsed.network,
       },
-      {
-        baseUrl: config.baseUrl,
-        apiKey,
-        timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-        fetchImpl: fetch,
-      },
+      call.opts,
     );
 
     // 5. Record it. `success` stands, `unknown` waits for a webhook with the
@@ -251,6 +214,10 @@ export const purchaseAirtime = action({
  * It is never taken from the body — an unsigned body field would let a caller
  * choose which secret we verify against.
  */
+function hasSignatureHeader(headers: Record<string, string>): boolean {
+  return Object.keys(headers).some((k) => k.includes("signature"));
+}
+
 export const verifyCallback = internalAction({
   args: {
     rawBody: v.string(),
@@ -259,39 +226,47 @@ export const verifyCallback = internalAction({
   },
   handler: async (ctx, args): Promise<CallbackVerification> => {
     const provider = args.provider ?? DEFAULT_PROVIDER;
-    const adapter = getAdapter(provider);
-    if (!adapter) return { verified: false, reason: "unknown_provider" };
 
-    const config = await ctx.runQuery(internal.vtuInternal.getProviderConfig, { provider });
-    if (!config?.encryptedCallbackSecret) {
-      return { verified: false, reason: "no_callback_secret" };
-    }
-
-    let secret: string;
-    try {
-      secret = decryptVtuSecret(config.encryptedCallbackSecret, encryptionSecret());
-    } catch {
-      return { verified: false, reason: "secret_unreadable" };
+    // Webhook verification deliberately resolves even for a DISABLED
+    // provider: transactions dispatched before it was disabled must still be
+    // able to complete. Only a missing row or an unopenable secret fails.
+    const call = await openForVerification(ctx, provider);
+    if (!call.ok) {
+      return {
+        verified: false,
+        reason:
+          call.code === "CREDENTIAL_MISSING"
+            ? "no_callback_secret"
+            : call.code === "CREDENTIAL_CORRUPT"
+              ? "secret_unreadable"
+              : "unknown_provider",
+      };
     }
 
     // Lowercase every header name so lookup is case-insensitive.
     const lowered: Record<string, string> = {};
     for (const [k, val] of Object.entries(args.headers)) lowered[k.toLowerCase()] = val;
 
-    // Honour an admin-configured header name by aliasing it onto every name
-    // the adapter checks, so changing it needs no code change.
-    const configured = (config.callbackSignatureHeader ?? "").toLowerCase();
+    // Honour the row's admin-configured signature header by aliasing it onto
+    // every name the adapter checks, so changing the header needs no code
+    // change and no redeploy.
+    const configured = call.signatureHeader?.toLowerCase();
     if (configured && lowered[configured]) {
       for (const alias of ["x-signature", "x-pairgate-signature", "signature"]) {
         lowered[alias] ??= lowered[configured];
       }
     }
 
-    const hasSignature = Object.keys(lowered).some((k) => k.includes("signature"));
-    if (!hasSignature) return { verified: false, reason: "missing_signature" };
+    if (!hasSignatureHeader(lowered)) {
+      return { verified: false, reason: "missing_signature" };
+    }
 
     // ONE call: verify AND parse. Null means the body did not authenticate.
-    const event = adapter.verifyAndParseCallback(args.rawBody, lowered, secret);
+    const event = call.adapter.verifyAndParseCallback(
+      args.rawBody,
+      lowered,
+      call.opts.apiKey,
+    );
     if (!event) return { verified: false, reason: "signature_mismatch" };
 
     return {

@@ -3,8 +3,9 @@
  *
  * Shared by the V8 layer (`vtu.ts`, `vtuInternal.ts`), the Node action
  * (`vtuHttp.ts`), and every adapter. Not a "use node" module, so mutations may
- * import it; anything needing `node:crypto` lives in `vtuCrypto.ts` or
- * `vtuPairgate.ts`, which Convex will not let a V8 function import.
+ * import it; anything needing `crypto.subtle` or an outbound HTTP call lives in
+ * `lib/encryption.ts` or `vtuProviderCall.ts`, which Convex will not let a V8
+ * function import.
  *
  * The rule this file exists to enforce: no provider-specific concept appears
  * above this line. Everything here is the vocabulary an adapter maps ONTO.

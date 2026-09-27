@@ -31,6 +31,18 @@ export function getAdapter(name: string): VtuProviderAdapter | null {
   return REGISTRY[name] ?? null;
 }
 
+/**
+ * Add an adapter at runtime.
+ *
+ * Exists so the two-provider test can register a stub WITHOUT editing this
+ * file — which is the entire claim slice 2 makes: that resolution is a lookup
+ * against a set, not a hard-coded branch. Slice 4 will use the same path when
+ * it adds a real second adapter.
+ */
+export function registerAdapter(adapter: VtuProviderAdapter): void {
+  REGISTRY[adapter.name] = adapter;
+}
+
 /** Names the registry can serve. Used by admin UIs and tests. */
 export function listAdapterNames(): string[] {
   return Object.keys(REGISTRY);

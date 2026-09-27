@@ -475,32 +475,10 @@ export const auditUnmatchedCallback = internalMutation({
   },
 });
 
-/**
- * Provider connection config for the action layer.
- *
- * Internal, so only server code can read it. It returns the SEALED secrets and
- * never the encryption key: the action reads that from its own environment, so
- * the master key never transits through a query result.
- */
-export const getProviderConfig = internalQuery({
-  args: { provider: v.string() },
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("vtuProviders")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
-      .first();
-    if (!row || row.status === "disabled") return null;
-    return {
-      provider: row.provider,
-      displayName: row.displayName,
-      baseUrl: row.baseUrl,
-      encryptedSecret: row.encryptedSecret,
-      encryptedCallbackSecret: row.encryptedCallbackSecret,
-      callbackSignatureHeader: row.callbackSignatureHeader,
-      timeoutMs: row.timeoutMs,
-    };
-  },
-});
+// NOTE: provider configuration is no longer read here. Resolution lives in
+// `vtuProviderConfig.ts` (V8, testable) and credential opening in
+// `vtuProviderCall.ts` ("use node"), so a sealed credential never travels
+// through a mutation result on its way to the HTTP call.
 
 /** Subscribe to one transaction. Owner-only; the page renders whatever this says. */
 export const getTransaction = query({

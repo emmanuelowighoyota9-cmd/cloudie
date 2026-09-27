@@ -12,7 +12,7 @@ import {
   vtuRefundKey,
 } from "../src/lib/vtu";
 import { sanitizeForLog } from "../src/convex/vtuShared";
-import { decryptVtuSecret, encryptVtuSecret } from "../src/convex/vtuCrypto";
+import { decrypt, encrypt, isSecretError } from "../src/convex/lib/encryption";
 import { mapPurchaseResponse, pairgateAdapter } from "../src/convex/vtuPairgate";
 
 // ─── Idempotency keys ──────────────────────────────────────────────
@@ -171,31 +171,84 @@ describe("payload sanitisation", () => {
 });
 
 // ─── Credential sealing ────────────────────────────────────────────
+//
+// Now async and reading APP_MASTER_KEY from the environment, because the
+// platform helper is shared by V8 mutations (which seal) and Node actions
+// (which open), so it must run on WebCrypto in both runtimes.
 
-describe("VTU credential sealing", () => {
-  const SECRET = "a-32-byte-test-master-key-value!!";
+describe("credential sealing", () => {
+  const PRIMARY = "primary-master-key-for-tests-0001";
+  const OTHER = "a-completely-different-master-key-0002";
 
-  test("round-trips a credential", () => {
-    const sealed = encryptVtuSecret("pg_live_key_12345", SECRET);
-    expect(sealed).not.toContain("pg_live_key_12345");
-    expect(decryptVtuSecret(sealed, SECRET)).toBe("pg_live_key_12345");
+  function withMasterKey<T>(fn: () => Promise<T>, value = PRIMARY): Promise<T> {
+    const previous = process.env.APP_MASTER_KEY;
+    const previousLegacy = process.env.VTU_ENCRYPTION_SECRET;
+    process.env.APP_MASTER_KEY = value;
+    delete process.env.VTU_ENCRYPTION_SECRET;
+    return fn().finally(() => {
+      if (previous === undefined) delete process.env.APP_MASTER_KEY;
+      else process.env.APP_MASTER_KEY = previous;
+      if (previousLegacy !== undefined) {
+        process.env.VTU_ENCRYPTION_SECRET = previousLegacy;
+      }
+    });
+  }
+
+  test("round-trips a credential", async () => {
+    await withMasterKey(async () => {
+      const sealed = await encrypt("pg_live_key_12345");
+      expect(sealed).not.toContain("pg_live_key_12345");
+      expect(await decrypt(sealed)).toBe("pg_live_key_12345");
+    });
   });
 
-  test("a different key cannot open the payload", () => {
-    const sealed = encryptVtuSecret("pg_live_key_12345", SECRET);
-    expect(() => decryptVtuSecret(sealed, "wrong-key")).toThrow();
+  test("the format is self-describing and carries a key id", async () => {
+    await withMasterKey(async () => {
+      const sealed = await encrypt("pg_live_key_12345");
+      const parts = sealed.split(".");
+      // cex1 | alg | kid | iv | tag | ct
+      expect(parts).toHaveLength(6);
+      expect(parts[0]).toBe("cex1");
+      expect(parts[1]).toBe("aes-256-gcm");
+      // The kid is what makes a later rotation possible without downtime.
+      expect(parts[2]).toBe("master");
+    });
   });
 
-  test("a tampered payload is rejected, not silently mis-decrypted", () => {
-    const sealed = encryptVtuSecret("pg_live_key_12345", SECRET);
-    const parts = sealed.split(".");
-    expect(parts).toHaveLength(3); // "v1:iv" | tag | ciphertext
-    parts[2] = Buffer.from("tampered").toString("base64");
-    expect(() => decryptVtuSecret(parts.join("."), SECRET)).toThrow();
+  test("a different master key cannot open the payload", async () => {
+    await withMasterKey(async () => {
+      const sealed = await encrypt("pg_live_key_12345");
+      process.env.APP_MASTER_KEY = OTHER;
+      await expect(decrypt(sealed)).rejects.toThrow();
+    });
   });
 
-  test("refuses to seal without a key", () => {
-    expect(() => encryptVtuSecret("x", "")).toThrow();
+  test("a tampered payload is rejected, not silently mis-decrypted", async () => {
+    await withMasterKey(async () => {
+      const sealed = await encrypt("pg_live_key_12345");
+      const parts = sealed.split(".");
+      parts[5] = Buffer.from("tampered").toString("base64");
+      await expect(decrypt(parts.join("."))).rejects.toThrow();
+    });
+  });
+
+  test("a truncated payload is a typed failure, not a crash", async () => {
+    await withMasterKey(async () => {
+      const sealed = await encrypt("pg_live_key_12345");
+      await expect(decrypt(sealed.slice(0, 20))).rejects.toThrow();
+      const err = await decrypt("nonsense").catch((e) => e);
+      expect(isSecretError(err)).toBe(true);
+    });
+  });
+
+  test("refuses to seal without a master key", async () => {
+    const previous = process.env.APP_MASTER_KEY;
+    delete process.env.APP_MASTER_KEY;
+    try {
+      await expect(encrypt("x")).rejects.toThrow();
+    } finally {
+      if (previous !== undefined) process.env.APP_MASTER_KEY = previous;
+    }
   });
 });
 

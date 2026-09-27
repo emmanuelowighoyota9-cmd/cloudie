@@ -96,6 +96,7 @@ const AdminKYC = lazy(() => import("./pages/AdminKYC.tsx"));
 const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
 const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
 const AdminPricing = lazy(() => import("./pages/AdminPricing.tsx"));
+const AdminVtuProviders = lazy(() => import("./pages/AdminVtuProviders.tsx"));
 const AdminCatalog = lazy(() => import("./pages/AdminCatalog.tsx"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
 const AdminAppearance = lazy(() => import("./pages/AdminAppearance.tsx"));
@@ -314,6 +315,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="system-health" element={<AdminInfrastructure />} />
                   <Route path="infrastructure" element={<AdminInfrastructure />} />
                   <Route path="pricing" element={<AdminPricing />} />
+                  <Route path="vtu/providers" element={<AdminVtuProviders />} />
                   <Route path="catalog" element={<AdminCatalog />} />
                   <Route path="settings" element={<AdminSettings />} />
                   <Route path="appearance" element={<AdminAppearance />} />
