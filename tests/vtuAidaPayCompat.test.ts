@@ -446,7 +446,10 @@ describe("attemptId is carried on the request and ignored by Pairgate", () => {
       makeOptions(pg.impl, { accountPin: "1234" }),
     );
     expect(pg.bodies[0]).not.toContain("account_pin");
-    expect(pg.bodies[0]).not.toContain("1234");
+    // Scoped to the PIN's own field, not the raw string: "1234" occurs by
+    // coincidence inside `product_code: "airtime.mtn.1000"`, so a substring
+    // check on the whole body would fail for a reason unrelated to secrets.
+    expect(JSON.parse(pg.bodies[0]).account_pin).toBeUndefined();
     expect(JSON.parse(pg.bodies[0]).amount).toBeUndefined();
   });
 
