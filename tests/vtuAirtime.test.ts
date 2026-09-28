@@ -24,6 +24,7 @@ const modules = {
   "src/convex/_generated/server.js": () => import("../src/convex/_generated/server.js"),
   "src/convex/schema.ts": () => import("../src/convex/schema"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
+  "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
   "src/convex/vtu.ts": () => import("../src/convex/vtu"),
   "src/convex/vtuReversal.ts": () => import("../src/convex/vtuReversal"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
@@ -51,7 +52,52 @@ async function seed(t: Harness, balance = START_BALANCE) {
       createdAt: now,
     }),
   );
+  await seedRoute(t);
   return { userId };
+}
+
+/**
+ * The catalog row and the ONE route slice 3 ships with, so a purchase has
+ * somewhere to go. `pointPricing` is deliberately still left empty: the
+ * routing row carries no price override, so the cost falls through to the
+ * default conversion and the existing price assertions keep their meaning.
+ */
+async function seedRoute(t: Harness) {
+  const now = Date.now();
+  await t.run(async (ctx) => {
+    await ctx.db.insert("vtuProviders", {
+      name: "pairgate",
+      displayName: "Pairgate",
+      status: "active",
+      baseUrl: "https://api.pairgate.com",
+      encryptedApiKey: "sealed-not-opened-by-this-test",
+      priority: 100,
+      createdAt: now,
+      updatedAt: now,
+    } as any);
+    await ctx.db.insert("vtuServiceCatalog", {
+      serviceType: "airtime",
+      productCode: "airtime-mtn",
+      displayName: "MTN Airtime",
+      customerIdentifierLabel: "Phone number",
+      requiresAmount: true,
+      requiresPackageCode: false,
+      minAmount: 100,
+      maxAmount: 100_000,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert("vtuServiceRouting", {
+      productCode: "airtime-mtn",
+      provider: "pairgate",
+      providerProductCode: "airtime.mtn.{amount}",
+      priority: 1,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
 }
 
 const begin = (args: any) => (t: Harness) =>
@@ -80,7 +126,6 @@ async function toProcessing(t: Harness, userId: any, requestId: string) {
     clientRequestId: requestId,
     serviceCode: SERVICE_CODE,
     customerIdentifier: PHONE,
-    provider: "pairgate",
   })(t);
   await t.mutation(internal.vtuInternal.markProcessing, {
     transactionId: reserved.transactionId,
@@ -157,7 +202,6 @@ describe("failed transaction reversal", () => {
       clientRequestId: "vtu_retry_same_id",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     })(t);
 
     expect(second.reused).toBe(false);
@@ -211,7 +255,6 @@ describe("failed transaction reversal", () => {
       clientRequestId: "vtu_snapshot_case",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     })(t);
 
     const before = await txOf(t, reserved.transactionId);
@@ -263,7 +306,6 @@ describe("idempotency", () => {
       clientRequestId: "vtu_duplicate_request_id",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     };
 
     const first = await begin(args)(t);
@@ -301,7 +343,6 @@ describe("idempotency", () => {
       clientRequestId: "vtu_concurrent_request",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     };
 
     // A Convex mutation is a serializable transaction, so the
@@ -330,14 +371,12 @@ describe("idempotency", () => {
       clientRequestId: "vtu_distinct_one",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     })(t);
     await begin({
       userId,
       clientRequestId: "vtu_distinct_two",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     })(t);
 
     expect(await balanceOf(t, userId)).toBe(START_BALANCE - 134);
@@ -354,7 +393,6 @@ describe("idempotency", () => {
         clientRequestId: "vtu_too_poor",
         serviceCode: SERVICE_CODE,
         customerIdentifier: PHONE,
-        provider: "pairgate",
       })(t),
     ).rejects.toThrow();
 
@@ -474,7 +512,6 @@ describe("status transitions", () => {
       clientRequestId: "vtu_pending_guard",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     })(t);
 
     const attempt = await t.mutation(internal.vtuInternal.recordOutcome, {
@@ -499,7 +536,6 @@ describe("destination privacy", () => {
       clientRequestId: "vtu_masking_case",
       serviceCode: SERVICE_CODE,
       customerIdentifier: PHONE,
-      provider: "pairgate",
     })(t);
 
     const tx = await txOf(t, reserved.transactionId);

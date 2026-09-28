@@ -43,6 +43,7 @@ import {
   Truck,
   Users,
   Zap,
+  Waypoints,
 } from "lucide-react";
 
 const NAV = [
@@ -71,6 +72,7 @@ const NAV = [
   { to: "/admin/pricing", label: "Pricing", icon: BadgeDollarSign, pendingScope: "pricing" as const },
   { to: "/admin/payments", label: "Payment Providers", icon: CreditCard },
   { to: "/admin/vtu/providers", label: "VTU Providers", icon: Zap },
+  { to: "/admin/vtu/catalog", label: "VTU Catalog & Routing", icon: Waypoints },
   { to: "/admin/settings/email", label: "Email Settings", icon: Mail },
   { to: "/admin/appearance", label: "Appearance & Support", icon: Palette },
   { to: "/admin/settings", label: "Settings", icon: Settings, exact: true },

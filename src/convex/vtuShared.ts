@@ -70,6 +70,16 @@ export interface ProviderPurchaseRequest {
   serviceType: VtuServiceType;
   /** The aggregator's catalog id for the product. */
   productCode: string;
+  /**
+   * A package identifier for providers that split "which product" from "which
+   * size": data plans, cable bouquets, exam packages.
+   *
+   * Optional and separate from `productCode` because most providers have no
+   * such concept — Pairgate's airtime has no package — and a single required
+   * field would force every provider to invent a placeholder value. An adapter
+   * that does not understand packages must ignore it rather than send it.
+   */
+  providerPackageCode?: string;
   /** Already validated and masked. */
   customerIdentifier: string;
   network?: string;

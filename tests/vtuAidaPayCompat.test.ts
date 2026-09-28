@@ -41,6 +41,7 @@ const modules = {
   "src/convex/vtuProviderAdmin.ts": () => import("../src/convex/vtuProviderAdmin"),
   "src/convex/vtuRegistry.ts": () => import("../src/convex/vtuRegistry"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
+  "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
   "src/convex/lib/encryption.ts": () => import("../src/convex/lib/encryption"),
   "src/convex/points.ts": () => import("../src/convex/points"),
@@ -50,6 +51,64 @@ const modules = {
 };
 
 type Harness = ReturnType<typeof convexTest>;
+
+/**
+ * The catalog row and the one route slice 3 ships with.
+ *
+ * Every purchase in this file routes through `routeProduct` before it debits,
+ * so a purchase with no catalog row and no route is refused with
+ * NO_ROUTE_AVAILABLE rather than charged. These tests are about the AidaPay
+ * compatibility surface, not about routing, so the route is seeded with no
+ * price override — the cost still comes from the default conversion, exactly
+ * as it did in slice 1.
+ */
+async function seedRoute(t: Harness) {
+  const now = Date.now();
+  await t.run(async (ctx) => {
+    // Routing joins to `vtuProviders` and only accepts an `active` row, so a
+    // route with no provider behind it is never chosen. Some tests in this
+    // file already insert their own richer `pairgate` row; only add one when
+    // it is missing, so the two never compete.
+    const existing = await ctx.db
+      .query("vtuProviders")
+      .withIndex("by_name", (q: any) => q.eq("name", "pairgate"))
+      .first();
+    if (!existing) {
+      await ctx.db.insert("vtuProviders", {
+        name: "pairgate",
+        displayName: "Pairgate",
+        status: "active",
+        baseUrl: "https://api.pairgate.com",
+        encryptedApiKey: "sealed-not-opened-by-this-test",
+        priority: 100,
+        createdAt: now,
+        updatedAt: now,
+      } as any);
+    }
+    await ctx.db.insert("vtuServiceCatalog", {
+      serviceType: "airtime",
+      productCode: "airtime-mtn",
+      displayName: "MTN Airtime",
+      customerIdentifierLabel: "Phone number",
+      requiresAmount: true,
+      requiresPackageCode: false,
+      minAmount: 100,
+      maxAmount: 100_000,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await ctx.db.insert("vtuServiceRouting", {
+      productCode: "airtime-mtn",
+      provider: "pairgate",
+      providerProductCode: "airtime.mtn.{amount}",
+      priority: 1,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+}
 
 const MASTER = "test-master-key-0123456789abcdef";
 
@@ -366,6 +425,7 @@ describe("purchaseAirtime forwards the transaction id as attemptId", () => {
           updatedAt: now,
         } as any),
       );
+      await seedRoute(t);
 
       const seen: { attemptId: string; requestId: string; accountPin?: string }[] = [];
       const stub: VtuProviderAdapter = {
@@ -438,6 +498,7 @@ describe("purchaseAirtime forwards the transaction id as attemptId", () => {
           updatedAt: now,
         } as any),
       );
+      await seedRoute(t);
 
       let hadPin: string | undefined = "unset";
       registerAdapter({
@@ -732,12 +793,13 @@ describe("a reversed transaction always records why", () => {
         }),
       );
 
+      await seedRoute(t);
+
       const reserved: any = await t.mutation(internal.vtuInternal.beginPurchase, {
         userId,
         clientRequestId: "req_for_reversal",
         serviceCode: "airtime.mtn.1000",
         customerIdentifier: "08031234567",
-        provider: "pairgate",
       });
 
       await t.mutation(internal.vtuInternal.markProcessing, {
@@ -795,12 +857,12 @@ describe("a reversed transaction always records why", () => {
             createdAt: now,
           }),
         );
+        await seedRoute(t);
         const reserved: any = await t.mutation(internal.vtuInternal.beginPurchase, {
           userId,
           clientRequestId: `req_${reversalReason}`,
           serviceCode: "airtime.mtn.1000",
           customerIdentifier: "08031234567",
-          provider: "pairgate",
         });
         await t.mutation(internal.vtuInternal.markProcessing, {
           transactionId: reserved.transactionId,

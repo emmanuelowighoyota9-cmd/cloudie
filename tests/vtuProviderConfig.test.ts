@@ -4,6 +4,7 @@ import schema from "../src/convex/schema";
 import { internal, api } from "../src/convex/_generated/api";
 import { getAdapter, registerAdapter } from "../src/convex/vtuRegistry";
 import { encrypt } from "../src/convex/lib/encryption";
+import { routeProduct } from "../src/convex/vtuServiceRouting";
 import type { VtuProviderAdapter } from "../src/convex/vtuShared";
 
 /**
@@ -28,6 +29,7 @@ const modules = {
   "src/convex/vtuProviderConfig.ts": () => import("../src/convex/vtuProviderConfig"),
   "src/convex/vtuProviderAdmin.ts": () => import("../src/convex/vtuProviderAdmin"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
+  "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
   "src/convex/vtu.ts": () => import("../src/convex/vtu"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
   "src/convex/lib/encryption.ts": () => import("../src/convex/lib/encryption"),
@@ -282,6 +284,80 @@ describe("registry generalises to a second provider", () => {
     expect(stubAdapterAttempts).toEqual([
       { requestId: "req_shared_0001", attemptId: "tx_shared_0001" },
     ]);
+  });
+
+  test("the two-provider claim holds with ROUTING in the path", async () => {
+    // Slice 3 puts a routing table between the purchase and the registry, so
+    // the question is no longer "can two providers share a request type" but
+    // "does routing reintroduce a per-provider branch". It does not: one
+    // canonical product, two routes, two DIFFERENT provider product codes,
+    // and both adapters are handed the same request shape.
+    await withMasterKey(async () => {
+      registerAdapter(stubAdapter);
+      stubAdapterAttempts.length = 0;
+
+      const t = convexTest(schema, modules);
+      await seedProvider(t, { name: "pairgate", encryptedApiKey: await encrypt("pg_key") });
+      await seedProvider(t, {
+        name: "stubco",
+        displayName: "StubCo",
+        encryptedApiKey: await encrypt("stub_key"),
+      });
+      const now = Date.now();
+      await t.run(async (ctx) => {
+        await ctx.db.insert("vtuServiceCatalog", {
+          serviceType: "airtime",
+          productCode: "airtime-mtn",
+          displayName: "MTN Airtime",
+          customerIdentifierLabel: "Phone number",
+          requiresAmount: true,
+          requiresPackageCode: false,
+          minAmount: 100,
+          maxAmount: 100_000,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        // The two providers disagree about the product code — Pairgate embeds
+        // the amount, StubCo uses a fixed id. Neither knows about the other.
+        await ctx.db.insert("vtuServiceRouting", {
+          productCode: "airtime-mtn",
+          provider: "pairgate",
+          providerProductCode: "airtime.mtn.{amount}",
+          priority: 1,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.insert("vtuServiceRouting", {
+          productCode: "airtime-mtn",
+          provider: "stubco",
+          providerProductCode: "mtn-airtime",
+          priority: 2,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+      });
+
+      const before: any = await t.run((ctx) => routeProduct(ctx as any, "airtime-mtn"));
+
+      // Same product, same algorithm; the winner changes only because a DATA
+      // row changed, never because a branch in the code did.
+      expect(before.ok).toBe(true);
+      expect(before.winner.provider).toBe("pairgate");
+
+      await t.run(async (ctx) => {
+        const rows = await ctx.db.query("vtuProviders").collect();
+        await ctx.db.patch(rows.find((r) => r.name === "pairgate")!._id, { status: "disabled" });
+      });
+      const afterDisable: any = await t.run((ctx) => routeProduct(ctx as any, "airtime-mtn"));
+      expect(afterDisable.winner.provider).toBe("stubco");
+      // And the winning row supplies a DIFFERENT product code with no code
+      // change anywhere — which is the whole point of the routing table.
+      expect(afterDisable.winner.providerProductCode).toBe("mtn-airtime");
+      expect(before.winner.providerProductCode).toBe("airtime.mtn.{amount}");
+    });
   });
 
   test("a row with no registered adapter still resolves — the CALL fails closed", async () => {

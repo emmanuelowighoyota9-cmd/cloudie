@@ -35,6 +35,14 @@ import {
   vtuRefundKey,
 } from "../lib/vtu";
 import { readPointRate } from "./pricing";
+import {
+  canonicalProductCode,
+  composeProviderProductCode,
+  effectiveProvider,
+  resolvePointsCost,
+  ROUTE_MESSAGES,
+  routeProduct,
+} from "./vtuServiceRouting";
 
 /** Purchases allowed per minute, per user. Fixed window in Convex, no Redis. */
 export const PURCHASE_RATE_LIMIT = 10;
@@ -76,6 +84,11 @@ export type ResolvedCost = {
  *
  * `pointPricing` ships with no VTU rows, so this exercises the conversion
  * branch until an admin sets one.
+ *
+ * This is the ROUTING-UNAWARE cost, kept only for the user-facing price
+ * queries in `vtu.ts`, which run before a route has been chosen. Every path
+ * that has a route in hand calls `resolvePointsCost` instead, so the three
+ * levels of precedence live in exactly one function.
  */
 export async function resolveCost(
   ctx: any,
@@ -99,6 +112,26 @@ export async function resolveCost(
   };
 }
 
+/**
+ * A purchase that could not be routed.
+ *
+ * Thrown BEFORE the idempotency claim, the transaction row, and the debit —
+ * so a routing failure costs the customer nothing. A separate error type
+ * rather than a bare `Error` so the action can report a code the page can
+ * distinguish instead of showing a generic failure.
+ */
+export class VtuRoutingError extends Error {
+  readonly code: "PRODUCT_NOT_FOUND" | "PRODUCT_INACTIVE" | "NO_ROUTE_AVAILABLE";
+  constructor(
+    code: "PRODUCT_NOT_FOUND" | "PRODUCT_INACTIVE" | "NO_ROUTE_AVAILABLE",
+    message: string,
+  ) {
+    super(message);
+    this.name = "VtuRoutingError";
+    this.code = code;
+  }
+}
+
 export type BeginPurchaseResult =
   | {
       reused: true;
@@ -112,6 +145,11 @@ export type BeginPurchaseResult =
       status: "pending";
       pointsDebited: number;
       ngnPerPoint: number;
+      /** The route, snapshotted onto the row. The action dispatches through
+       *  exactly this and never re-routes. */
+      routedProvider: string;
+      routedProviderProductCode: string;
+      routedProviderPackageCode: string | null;
     };
 
 /**
@@ -124,14 +162,32 @@ export type BeginPurchaseResult =
  *      transaction WITHOUT debiting again. Checked before the limiter so a
  *      genuine retry of a request that timed out is served rather than being
  *      rate-limited into a failure the customer pays for.
- *   3. Claim the key FIRST. If a later step throws, this insert rolls back
- *      with it, so a failed attempt never burns the customer's request id.
- *   4. Insert the transaction, so the debit can be keyed on its own id.
- *   5. Debit, keyed per ATTEMPT. Throws on insufficient balance, unwinding
+ *   3. ROUTE. Which provider serves this product is decided here, before
+ *      anything is claimed or charged, so a product that cannot be routed
+ *      throws with no ledger row and no transaction.
+ *
+ *      Worth being precise about WHY it sits here rather than after the
+ *      claim: it is NOT the position that protects the claim. Convex rolls
+ *      the whole mutation back when a handler throws, so the `vtuIdempotency`
+ *      row would disappear either way — moving routing after the claim was
+ *      tried, and no test could tell the difference. What the position buys
+ *      is that the route, the price, and the provider are all settled BEFORE
+ *      any money moves, so a failure is a refusal rather than a refund, and a
+ *      reversal is never needed for a configuration mistake.
+ *   4. Claim the key. If a later step throws, this insert rolls back with it.
+ *   5. Insert the transaction, carrying the ROUTE SNAPSHOT, so the debit can
+ *      be keyed on its own id.
+ *   6. Debit, keyed per ATTEMPT. Throws on insufficient balance, unwinding
  *      the claim and the row above.
  *
- * Steps 3–5 are one Convex transaction, so there is no window in which the key
+ * Steps 4–6 are one Convex transaction, so there is no window in which the key
  * exists without a debit, or a debit without a row to reconcile against.
+ *
+ * The route is SNAPSHOTTED rather than looked up again later because the
+ * routing table is admin-editable and a purchase is not: an operator who
+ * re-points a product while a purchase is in flight must not change which
+ * provider settles it. Every downstream consumer — the dispatch action and the
+ * webhook handler — reads the snapshot off the transaction.
  *
  * `points.debit` returns the EXISTING ledger id on a replay rather than
  * failing, so its return value alone is not proof of a new debit — the
@@ -143,7 +199,6 @@ export const beginPurchase = internalMutation({
     clientRequestId: v.string(),
     serviceCode: v.string(),
     customerIdentifier: v.string(),
-    provider: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<BeginPurchaseResult> => {
     if (!isValidRequestId(args.clientRequestId)) {
@@ -186,7 +241,25 @@ export const beginPurchase = internalMutation({
       }
     }
 
-    // 3. Claim the key FIRST. Rolls back with everything below on throw.
+    // 3. ROUTE. Deliberately before the claim, the row, and the debit: a
+    //    product that cannot be served must cost the customer nothing, and a
+    //    burned request id would make their retry impossible.
+    const productCode = canonicalProductCode(args.serviceCode);
+    // Unreachable: `parseServiceCode` accepted this code a few lines above,
+    // and the two read the same parts. Asserted rather than defaulted, because
+    // a silent fallback here would route on a code nobody configured.
+    if (!productCode) throw new Error("Unsupported product");
+
+    const route = await routeProduct(ctx, productCode);
+    if (!route.ok) {
+      throw new VtuRoutingError(route.code, ROUTE_MESSAGES[route.code]);
+    }
+    const routedProviderProductCode = composeProviderProductCode(
+      route.winner.providerProductCode,
+      parsed.amountNgn,
+    );
+
+    // 4. Claim the key. Rolls back with everything below on throw.
     const now = Date.now();
     const claimId = await ctx.db.insert("vtuIdempotency", {
       key,
@@ -195,24 +268,33 @@ export const beginPurchase = internalMutation({
       createdAt: now,
     });
 
-    const { points, ngnPerPoint } = await resolveCost(
-      ctx,
-      args.serviceCode,
-      parsed.amountNgn,
-    );
+    // The ONE cost function. Level 1 (this route's override) is only
+    // consulted because a route exists; see `resolvePointsCost`.
+    const { points, ngnPerPoint } = await resolvePointsCost(ctx, {
+      productCode: route.winner.productCode,
+      serviceCode: args.serviceCode,
+      provider: route.winner.provider,
+      nairaPrice: parsed.amountNgn,
+    });
 
-    // 4. Insert the transaction FIRST, so the debit can be keyed on its id.
+    // 5. Insert the transaction FIRST, so the debit can be keyed on its id.
     //
     // The ledger key is per ATTEMPT (see `vtuLedgerPurchaseKey`). If it were
     // the client request id, the immutable ledger row from a FAILED attempt
     // would block this debit forever and the customer's retry would be free.
-    // All of steps 3–5 are one transaction, so this row cannot survive a
+    // All of steps 4–6 are one transaction, so this row cannot survive a
     // failed debit.
+    //
+    // `routedProvider*` are WRITE-ONCE. They are set here and never patched
+    // again; the settlement path reads them rather than re-routing.
     const transactionId = await ctx.db.insert("vtuTransactions", {
       userId: args.userId,
       clientRequestId: args.clientRequestId,
       serviceCode: args.serviceCode,
-      provider: args.provider ?? "pairgate",
+      routedProvider: route.winner.provider,
+      routedProviderProductCode,
+      routedProviderPackageCode: route.winner.providerPackageCode ?? undefined,
+      provider: route.winner.provider,
       status: "pending",
       customerIdentifier: maskIdentifier(phone.value),
       network: parsed.network,
@@ -225,13 +307,13 @@ export const beginPurchase = internalMutation({
       updatedAt: now,
     });
 
-    // 5. Debit, keyed on this attempt.
+    // 6. Debit, keyed on this attempt.
     const debitId = await ctx.runMutation(internal.points.debit, {
       userId: args.userId,
       amount: points,
       type: "vtu_purchase",
       description: `${args.serviceCode} for ${maskIdentifier(phone.value)}`,
-      reference: args.provider ?? "pairgate",
+      reference: route.winner.provider,
       idempotencyKey: vtuLedgerPurchaseKey(transactionId),
       metadata: {
         clientRequestId: args.clientRequestId,
@@ -252,6 +334,9 @@ export const beginPurchase = internalMutation({
       status: "pending",
       pointsDebited: points,
       ngnPerPoint,
+      routedProvider: route.winner.provider,
+      routedProviderProductCode,
+      routedProviderPackageCode: route.winner.providerPackageCode,
     };
   },
 });
@@ -463,7 +548,17 @@ export const refundAndRelease = internalMutation({
   },
 });
 
-/** Find a transaction by the reference the aggregator assigned. */
+/**
+ * Find a transaction by the reference the aggregator assigned.
+ *
+ * The provider is matched against the transaction's ROUTE SNAPSHOT, never
+ * against the routing table. The webhook arrives long after dispatch, and an
+ * operator may have re-pointed the product in between; re-routing here would
+ * let a Pairgate callback settle an AidaPay transaction, or vice versa.
+ *
+ * `effectiveProvider` is also what makes pre-slice-3 rows (no snapshot) keep
+ * matching, without this function knowing that slice history exists.
+ */
 export const findByProviderReference = internalQuery({
   args: { provider: v.string(), providerReference: v.string() },
   handler: async (ctx, args) => {
@@ -473,7 +568,7 @@ export const findByProviderReference = internalQuery({
         q.eq("providerReference", args.providerReference),
       )
       .take(5);
-    const row = matches.find((t) => t.provider === args.provider);
+    const row = matches.find((t) => effectiveProvider(t) === args.provider);
     return row?._id ?? null;
   },
 });

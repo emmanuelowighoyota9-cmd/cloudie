@@ -19,8 +19,17 @@ import type { Id } from "./_generated/dataModel";
 import { openForPurchase, openForVerification } from "./vtuProviderCall";
 import { isValidRequestId, parseServiceCode, validatePhone } from "../lib/vtu";
 
-/** The provider slice 1 ships with. Resolved via the registry, not imported. */
-const DEFAULT_PROVIDER = "pairgate";
+/**
+ * The provider slice 1 shipped with, used ONLY as the webhook's fallback
+ * provider hint.
+ *
+ * There is deliberately no default for the PURCHASE path: routing decides, and
+ * a product with no live route fails rather than being sent somewhere the
+ * operator did not choose. This constant survives for the one place a
+ * provider must be named before a transaction exists — the webhook, which
+ * arrives with only a header hint.
+ */
+const WEBHOOK_PROVIDER_FALLBACK = "pairgate";
 
 /**
  * Explicit result shapes.
@@ -37,6 +46,9 @@ export interface PurchaseResult {
   /** True when this requestId was already seen — nothing was re-charged. */
   reused: boolean;
   error?: string;
+  /** A machine-readable failure code, so the page can tell "no provider
+   *  serves this product" from "the provider rejected the purchase". */
+  code?: string;
 }
 
 export interface CallbackVerification {
@@ -85,15 +97,46 @@ export const purchaseAirtime = action({
     const phone = validatePhone(args.customerIdentifier);
     if (!phone.ok) throw new Error(phone.error);
 
-    // 1. Reserve: idempotency, rate limit, price, and the ledger debit, all
-    //    in one mutation.
-    const reserved = await ctx.runMutation(internal.vtuInternal.beginPurchase, {
-      userId,
-      clientRequestId: args.clientRequestId,
-      serviceCode: args.serviceCode,
-      customerIdentifier: phone.value,
-      provider: DEFAULT_PROVIDER,
-    });
+    // 1. Reserve: ROUTING, idempotency, rate limit, price, and the ledger
+    //    debit, all in one mutation. A routing failure throws before the
+    //    claim and the debit, so nothing is charged.
+    let reserved:
+      | {
+          reused: true;
+          transactionId: Id<"vtuTransactions">;
+          status: string;
+          pointsDebited: number;
+        }
+      | {
+          reused: false;
+          transactionId: Id<"vtuTransactions">;
+          status: "pending";
+          pointsDebited: number;
+          routedProvider: string;
+          routedProviderProductCode: string;
+          routedProviderPackageCode: string | null;
+        };
+    try {
+      reserved = await ctx.runMutation(internal.vtuInternal.beginPurchase, {
+        userId,
+        clientRequestId: args.clientRequestId,
+        serviceCode: args.serviceCode,
+        customerIdentifier: phone.value,
+      });
+    } catch (e) {
+      // Checked STRUCTURALLY, not with `instanceof`: Convex serialises a
+      // thrown error when it crosses the mutation -> action boundary, so the
+      // class identity does not survive and only the `code` property does.
+      const code = (e as { code?: unknown } | null | undefined)?.code;
+      if (typeof code !== "string") throw e;
+      return {
+        requestId: args.clientRequestId,
+        status: "rejected",
+        reused: false,
+        code,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
 
     if (reserved.reused) {
       return {
@@ -136,13 +179,15 @@ export const purchaseAirtime = action({
       };
     };
 
-    // 2. Resolve the provider and open its credential.
+    // 2. Open the ROUTED provider's credential. The name comes from the
+    //    snapshot `beginPurchase` wrote, so this cannot drift from the route
+    //    that was charged for.
     //
     // The adapter comes from the registry and the credential is opened INSIDE
     // this action — the plaintext key never crosses a mutation boundary, never
     // appears in a query result, and is never logged. Every failure mode is a
     // typed code; there is no env fallback under any condition.
-    const call = await openForPurchase(ctx, DEFAULT_PROVIDER);
+    const call = await openForPurchase(ctx, reserved.routedProvider);
     if (!call.ok) return fail(call.code, "This payment provider is not available");
 
     // 3. pending -> processing, immediately before dispatch.
@@ -157,7 +202,12 @@ export const purchaseAirtime = action({
         // id above is what the CLIENT retries with.
         attemptId: transactionId,
         serviceType: "airtime",
-        productCode: args.serviceCode,
+        // The PROVIDER's product code, from the route — not our service code.
+        // This is the single translation point between the two namespaces.
+        productCode: reserved.routedProviderProductCode,
+        ...(reserved.routedProviderPackageCode
+          ? { providerPackageCode: reserved.routedProviderPackageCode }
+          : {}),
         customerIdentifier: phone.value,
         network: parsed.network,
       },
@@ -245,7 +295,7 @@ export const verifyCallback = internalAction({
     provider: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<CallbackVerification> => {
-    const provider = args.provider ?? DEFAULT_PROVIDER;
+    const provider = args.provider ?? WEBHOOK_PROVIDER_FALLBACK;
 
     // Webhook verification deliberately resolves even for a DISABLED
     // provider: transactions dispatched before it was disabled must still be

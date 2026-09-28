@@ -1,0 +1,952 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AdminPageHeader, AdminSkeleton } from "@/components/admin/shared";
+import { Reveal } from "@/components/motion";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Ban,
+  CheckCircle2,
+  FlaskConical,
+  Loader2,
+  Pencil,
+  Plus,
+  Route as RouteIcon,
+  Trash2,
+  Waypoints,
+} from "lucide-react";
+import { toast } from "sonner";
+
+/**
+ * Admin management for the VTU catalog and its routing table.
+ *
+ * Two ideas hold this screen together:
+ *
+ *   1. Routing is a DECISION, not a constant. What an operator edits here is
+ *      read at purchase time by `routeProduct` in `vtuServiceRouting.ts`, and
+ *      that decision is snapshotted onto the transaction so changing this page
+ *      never moves a purchase that is already in flight.
+ *
+ *   2. The preview runs the REAL algorithm. It calls the same `routeProduct`
+ *      the purchase mutation calls, so what an operator verifies here is what
+ *      will actually happen. A reimplemented "simulation" would drift from the
+ *      rule the first time the rule changed, and would be worse than no
+ *      preview at all.
+ *
+ * The two warnings below are the ones that cost a customer money if ignored:
+ * a product with no active route, and a route pointing at a provider that can
+ * never be chosen.
+ */
+
+const SERVICE_TYPES = [
+  "airtime",
+  "data",
+  "cable",
+  "electricity",
+  "exam",
+  "betting",
+] as const;
+
+type ProductRow = {
+  _id: string;
+  serviceType: string;
+  productCode: string;
+  displayName: string;
+  customerIdentifierLabel: string;
+  requiresAmount: boolean;
+  requiresPackageCode: boolean;
+  minAmount: number | null;
+  maxAmount: number | null;
+  active: boolean;
+  activeRouteCount: number;
+};
+
+type RouteRow = {
+  _id: string;
+  productCode: string;
+  provider: string;
+  providerDisplayName: string;
+  providerStatus: "active" | "sandbox" | "disabled" | "missing";
+  providerProductCode: string;
+  providerPackageCode: string | null;
+  pointsCostOverride: number | null;
+  priority: number;
+  active: boolean;
+};
+
+type PreviewCandidate = {
+  provider: string;
+  providerProductCode: string;
+  providerPackageCode: string | null;
+  pointsCostOverride: number | null;
+  routePriority: number;
+  providerPriority: number;
+  providerStatus: string;
+  eligible: boolean;
+  skippedBecause?: string;
+};
+
+function providerStatusBadge(status: RouteRow["providerStatus"]) {
+  if (status === "active")
+    return <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">active</Badge>;
+  if (status === "sandbox")
+    return (
+      <Badge className="bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+        sandbox
+      </Badge>
+    );
+  if (status === "disabled")
+    return (
+      <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        disabled
+      </Badge>
+    );
+  return (
+    <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+      no provider row
+    </Badge>
+  );
+}
+
+const SKIP_REASON: Record<string, string> = {
+  provider_missing: "there is no provider row with this name",
+  provider_sandbox: "it is a sandbox provider, which never takes live money",
+  provider_disabled: "it is disabled",
+  route_inactive: "the route is switched off",
+};
+
+export default function AdminVtuCatalog() {
+  const products = useQuery(api.vtuServiceAdmin.listProducts, {});
+  const routes = useQuery(api.vtuServiceAdmin.listRoutes, {});
+  const migrate = useMutation(api.vtuServiceAdmin.migrateVtuServiceCatalog);
+
+  const [tab, setTab] = useState("products");
+  const [productDialog, setProductDialog] = useState<ProductRow | "new" | null>(null);
+  const [routeDialog, setRouteDialog] = useState<RouteRow | "new" | null>(null);
+  const [routeFilter, setRouteFilter] = useState("all");
+  const [previewCode, setPreviewCode] = useState("");
+
+  const providerNames = useMemo(() => {
+    const set = new Map<string, string>();
+    for (const r of routes ?? []) {
+      if (!set.has(r.provider)) set.set(r.provider, r.providerDisplayName);
+    }
+    return [...set.entries()];
+  }, [routes]);
+
+  const visibleRoutes = useMemo(
+    () => (routes ?? []).filter((r) => routeFilter === "all" || r.productCode === routeFilter),
+    [routes, routeFilter],
+  );
+
+  /** A product that cannot be routed is a product a customer can be refused. */
+  const unroutable = (products ?? []).filter((p) => p.active && p.activeRouteCount === 0);
+  /** A route to a provider that can never be chosen is a silent no-op. */
+  const deadRoutes = visibleRoutes.filter(
+    (r) => r.active && r.providerStatus !== "active",
+  );
+
+  return (
+    <div className="space-y-6">
+      <AdminPageHeader
+        title="VTU Catalog & Routing"
+        description="Which products can be bought, and which provider serves each one. Routing is read at purchase time and snapshotted onto the transaction."
+        actions={
+          <>
+            <Button
+              variant="outline"
+              disabled={migrate === undefined}
+              onClick={async () => {
+                try {
+                  const res = await migrate({});
+                  if (res.action === "blocked") {
+                    toast.error(res.reason);
+                    return;
+                  }
+                  toast.success(
+                    res.action === "noop"
+                      ? "Catalog and routing are already seeded. Nothing changed."
+                      : `Seeded ${res.productCode} → ${res.provider}.`,
+                  );
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Migration failed");
+                }
+              }}
+            >
+              {migrate === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+              Run seed migration
+            </Button>
+            <Button onClick={() => setProductDialog("new")}>
+              <Plus className="h-4 w-4" /> New product
+            </Button>
+          </>
+        }
+      />
+
+      {/* The two warnings that matter. Both are cheap to fix and expensive to
+          discover from a support ticket. */}
+      {(unroutable.length > 0 || deadRoutes.length > 0) && (
+        <Reveal>
+          <div className="space-y-2">
+            {unroutable.length > 0 && (
+              <div className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50/60 p-4 dark:border-rose-900 dark:bg-rose-950/30">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                <p className="text-sm text-rose-900 dark:text-rose-200">
+                  <span className="font-semibold">
+                    {unroutable.length} product{unroutable.length > 1 ? "s have" : " has"} no
+                    active route
+                  </span>{" "}
+                  — {unroutable.map((p) => p.productCode).join(", ")}. Buyers will be refused with
+                  NO_ROUTE_AVAILABLE.
+                </p>
+              </div>
+            )}
+            {deadRoutes.length > 0 && (
+              <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                <p className="text-sm text-amber-900 dark:text-amber-200">
+                  <span className="font-semibold">
+                    {deadRoutes.length} active route{deadRoutes.length > 1 ? "s point" : " points"} at
+                    a provider that can never be chosen
+                  </span>{" "}
+                  — {deadRoutes.map((r) => `${r.productCode} → ${r.provider} (${r.providerStatus})`).join(", ")}.
+                </p>
+              </div>
+            )}
+          </div>
+        </Reveal>
+      )}
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="products">Products</TabsTrigger>
+          <TabsTrigger value="routing">Routing</TabsTrigger>
+        </TabsList>
+
+        {/* ─── Products ─────────────────────────────────────────────── */}
+        <TabsContent value="products" className="mt-4 space-y-4">
+          {products === undefined ? (
+            <AdminSkeleton rows={4} />
+          ) : products.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-sm text-slate-500">
+                No products yet. Run the seed migration to add the MTN airtime product, or create
+                one by hand.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3">
+              {products.map((p) => (
+                <Card key={p._id} className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+                  <CardContent className="flex flex-wrap items-center gap-4 p-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-mono text-sm font-semibold text-slate-900 dark:text-white">
+                          {p.productCode}
+                        </p>
+                        <Badge variant="secondary">{p.serviceType}</Badge>
+                        {p.active ? (
+                          <Badge className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                            active
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            switched off
+                          </Badge>
+                        )}
+                        {p.active && p.activeRouteCount === 0 && (
+                          <Badge className="bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                            no route
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {p.displayName} · {p.customerIdentifierLabel}
+                        {p.requiresAmount &&
+                          ` · ₦${p.minAmount ?? 0}–₦${p.maxAmount ?? "∞"}`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-slate-500">
+                      <Waypoints className="h-4 w-4" />
+                      {p.activeRouteCount} active route{p.activeRouteCount === 1 ? "" : "s"}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setProductDialog(p)}>
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setRouteDialog("new")}
+                        title="Add a provider route for this product"
+                      >
+                        <RouteIcon className="h-3.5 w-3.5" /> Route
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ─── Routing ──────────────────────────────────────────────── */}
+        <TabsContent value="routing" className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-56 space-y-1.5">
+              <Label>Filter by product</Label>
+              <Select value={routeFilter} onValueChange={setRouteFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All products</SelectItem>
+                  {(products ?? []).map((p) => (
+                    <SelectItem key={p.productCode} value={p.productCode}>
+                      {p.productCode}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={() => setRouteDialog("new")}>
+              <Plus className="h-4 w-4" /> New route
+            </Button>
+          </div>
+
+          {routes === undefined ? (
+            <AdminSkeleton rows={4} />
+          ) : visibleRoutes.length === 0 ? (
+            <Card>
+              <CardContent className="p-8 text-center text-sm text-slate-500">
+                No routes yet. A product with no route refuses every purchase.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3">
+              {visibleRoutes.map((r) => (
+                <Card
+                  key={r._id}
+                  className={`rounded-xl border-slate-200 shadow-sm dark:border-slate-700 ${
+                    r.active && r.providerStatus !== "active" ? "border-amber-300 dark:border-amber-800" : ""
+                  }`}
+                >
+                  <CardContent className="flex flex-wrap items-center gap-4 p-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm font-semibold text-slate-900 dark:text-white">
+                          {r.productCode}
+                        </span>
+                        <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-sm text-slate-700 dark:text-slate-200">
+                          {r.providerDisplayName}
+                        </span>
+                        {providerStatusBadge(r.providerStatus)}
+                        {r.active ? null : (
+                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            route off
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">
+                        {r.providerProductCode}
+                        {r.providerPackageCode ? ` · package ${r.providerPackageCode}` : ""}
+                        {" · priority "}
+                        {r.priority}
+                        {r.pointsCostOverride != null
+                          ? ` · ${r.pointsCostOverride} pts`
+                          : " · default price"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setRouteDialog(r)}>
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </Button>
+                      <DeleteRouteButton route={r} />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <RoutePreview
+            products={(products ?? []).map((p) => p.productCode)}
+            previewCode={previewCode}
+            setPreviewCode={setPreviewCode}
+          />
+        </TabsContent>
+      </Tabs>
+
+      {productDialog !== null && (
+        <ProductDialog
+          product={productDialog === "new" ? null : productDialog}
+          onClose={() => setProductDialog(null)}
+        />
+      )}
+      {routeDialog !== null && (
+        <RouteDialog
+          route={routeDialog === "new" ? null : routeDialog}
+          productCodes={(products ?? []).map((p) => p.productCode)}
+          defaultProductCode={routeFilter === "all" ? undefined : routeFilter}
+          providers={providerNames}
+          onClose={() => setRouteDialog(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteRouteButton({ route }: { route: RouteRow }) {
+  const del = useMutation(api.vtuServiceAdmin.deleteRoute);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={busy}
+      onClick={async () => {
+        if (!confirm(`Delete the route ${route.productCode} → ${route.provider}?`)) return;
+        setBusy(true);
+        try {
+          await del({ productCode: route.productCode, provider: route.provider });
+          toast.success("Route deleted.");
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Delete failed");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+      <span className="sr-only">Delete route</span>
+    </Button>
+  );
+}
+
+/**
+ * The dry-run. READ-ONLY by construction: it renders a query result and
+ * offers no mutation anywhere in its subtree. Its job is to let an operator
+ * see the full ordered candidate list — including the routes that are being
+ * SKIPPED and why — before saving a change, rather than after a customer has
+ * been refused.
+ */
+function RoutePreview({
+  products,
+  previewCode,
+  setPreviewCode,
+}: {
+  products: string[];
+  previewCode: string;
+  setPreviewCode: (v: string) => void;
+}) {
+  const trimmed = previewCode.trim();
+  const preview = useQuery(
+    api.vtuServiceAdmin.previewRoute,
+    trimmed ? { productCode: trimmed } : "skip",
+  );
+
+  const candidates: PreviewCandidate[] =
+    preview && "candidates" in preview ? preview.candidates : [];
+
+  return (
+    <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+      <CardContent className="space-y-4 p-5">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white">Preview route</h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Runs the real routing algorithm and changes nothing.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-56 space-y-1.5">
+            <Label htmlFor="preview-code">Product code</Label>
+            <Input
+              id="preview-code"
+              value={previewCode}
+              onChange={(e) => setPreviewCode(e.target.value)}
+              placeholder="airtime-mtn"
+            />
+          </div>
+          {products.length > 0 && (
+            <Select value={previewCode} onValueChange={setPreviewCode}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Pick a product" />
+              </SelectTrigger>
+              <SelectContent>
+                {products.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {!trimmed ? null : preview === undefined ? (
+          <p className="text-sm text-slate-500">Checking…</p>
+        ) : preview.ok === false ? (
+          <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-sm text-rose-900 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">
+            <Ban className="h-4 w-4" />
+            <span className="font-mono font-semibold">{preview.code}</span>
+            <span>
+              {preview.code === "NO_ROUTE_AVAILABLE"
+                ? "The product exists but no live provider serves it."
+                : preview.code === "PRODUCT_INACTIVE"
+                  ? "The product is switched off."
+                  : "There is no such product in the catalog."}
+            </span>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+              <CheckCircle2 className="h-4 w-4" />
+              <span>
+                Purchases go to <span className="font-semibold">{preview.winner.provider}</span>
+                {preview.winner.pointsCostOverride != null
+                  ? ` at ${preview.winner.pointsCostOverride} points (route override)`
+                  : " at the default conversion price"}
+                .
+              </span>
+            </div>
+            <ol className="space-y-1.5">
+              {candidates.map((c, i) => (
+                <li
+                  key={`${c.provider}-${i}`}
+                  className={`flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
+                    c.eligible
+                      ? "border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                      : "border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50"
+                  }`}
+                >
+                  <span className="w-5 font-mono text-xs text-slate-400">#{i + 1}</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-100">
+                    {c.provider}
+                  </span>
+                  <span className="font-mono text-xs text-slate-500">
+                    {c.providerProductCode}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    route {c.routePriority} · provider {c.providerPriority}
+                  </span>
+                  {c.eligible ? (
+                    i === 0 ? (
+                      <Badge className="ml-auto bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+                        chosen
+                      </Badge>
+                    ) : (
+                      <Badge className="ml-auto" variant="secondary">
+                        standby
+                      </Badge>
+                    )
+                  ) : (
+                    <span className="ml-auto text-xs text-amber-700 dark:text-amber-400">
+                      skipped — {SKIP_REASON[c.skippedBecause ?? ""] ?? "not eligible"}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProductDialog({
+  product,
+  onClose,
+}: {
+  product: ProductRow | null;
+  onClose: () => void;
+}) {
+  const create = useMutation(api.vtuServiceAdmin.createProduct);
+  const update = useMutation(api.vtuServiceAdmin.updateProduct);
+  const del = useMutation(api.vtuServiceAdmin.deleteProduct);
+  const [busy, setBusy] = useState(false);
+
+  const [serviceType, setServiceType] = useState<string>(product?.serviceType ?? "airtime");
+  const [productCode, setProductCode] = useState(product?.productCode ?? "");
+  const [displayName, setDisplayName] = useState(product?.displayName ?? "");
+  const [identifierLabel, setIdentifierLabel] = useState(
+    product?.customerIdentifierLabel ?? "Phone number",
+  );
+  const [requiresAmount, setRequiresAmount] = useState(product?.requiresAmount ?? true);
+  const [requiresPackageCode, setRequiresPackageCode] = useState(
+    product?.requiresPackageCode ?? false,
+  );
+  const [minAmount, setMinAmount] = useState(String(product?.minAmount ?? 100));
+  const [maxAmount, setMaxAmount] = useState(String(product?.maxAmount ?? 100000));
+  const [active, setActive] = useState(product?.active ?? true);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      if (product) {
+        await update({
+          productCode: product.productCode,
+          displayName,
+          customerIdentifierLabel: identifierLabel,
+          requiresAmount,
+          requiresPackageCode,
+          minAmount: Number(minAmount),
+          maxAmount: Number(maxAmount),
+          active,
+        });
+        toast.success("Product updated.");
+      } else {
+        await create({
+          serviceType: serviceType as (typeof SERVICE_TYPES)[number],
+          productCode,
+          displayName,
+          customerIdentifierLabel: identifierLabel,
+          requiresAmount,
+          requiresPackageCode,
+          minAmount: Number(minAmount),
+          maxAmount: Number(maxAmount),
+        });
+        toast.success("Product created.");
+      }
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{product ? "Edit product" : "New product"}</DialogTitle>
+          <DialogDescription>
+            The product code is permanent — routing rows and price overrides reference it. Retire
+            a product by switching it off instead of deleting it.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {!product && (
+            <div className="space-y-1.5">
+              <Label>Service type</Label>
+              <Select value={serviceType} onValueChange={setServiceType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVICE_TYPES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="pc">Product code</Label>
+            <Input
+              id="pc"
+              value={productCode}
+              disabled={!!product}
+              onChange={(e) => setProductCode(e.target.value)}
+              placeholder="data-mtn-1gb-30d"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="dn">Display name</Label>
+            <Input
+              id="dn"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="MTN 1GB · 30 days"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ci">What the customer is asked for</Label>
+            <Select value={identifierLabel} onValueChange={setIdentifierLabel}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["Phone number", "Smartcard number", "Meter number", "Customer ID"].map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {l}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <Label htmlFor="ra">Customer picks an amount</Label>
+              <Switch id="ra" checked={requiresAmount} onCheckedChange={setRequiresAmount} />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <Label htmlFor="rp">Customer picks a package</Label>
+              <Switch
+                id="rp"
+                checked={requiresPackageCode}
+                onCheckedChange={setRequiresPackageCode}
+              />
+            </div>
+          </div>
+
+          {requiresAmount && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="mn">Min ₦</Label>
+                <Input id="mn" value={minAmount} onChange={(e) => setMinAmount(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="mx">Max ₦</Label>
+                <Input id="mx" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          {product && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <Label htmlFor="ac">Active</Label>
+              <Switch id="ac" checked={active} onCheckedChange={setActive} />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          {product && (
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={async () => {
+                if (!confirm(`Delete ${product.productCode} and its routes?`)) return;
+                setBusy(true);
+                try {
+                  const res = await del({ productCode: product.productCode });
+                  toast.success(`Deleted, along with ${res.routesDeleted} route(s).`);
+                  onClose();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Delete failed");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          )}
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={save}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {product ? "Save changes" : "Create product"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RouteDialog({
+  route,
+  productCodes,
+  defaultProductCode,
+  providers,
+  onClose,
+}: {
+  route: RouteRow | null;
+  productCodes: string[];
+  defaultProductCode?: string;
+  providers: [string, string][];
+  onClose: () => void;
+}) {
+  const create = useMutation(api.vtuServiceAdmin.createRoute);
+  const update = useMutation(api.vtuServiceAdmin.updateRoute);
+  const [busy, setBusy] = useState(false);
+
+  const [productCode, setProductCode] = useState(
+    route?.productCode ?? defaultProductCode ?? productCodes[0] ?? "",
+  );
+  const [provider, setProvider] = useState(route?.provider ?? providers[0]?.[0] ?? "");
+  const [providerProductCode, setProviderProductCode] = useState(
+    route?.providerProductCode ?? "",
+  );
+  const [providerPackageCode, setProviderPackageCode] = useState(
+    route?.providerPackageCode ?? "",
+  );
+  const [override, setOverride] = useState(
+    route?.pointsCostOverride != null ? String(route.pointsCostOverride) : "",
+  );
+  const [priority, setPriority] = useState(String(route?.priority ?? 1));
+  const [active, setActive] = useState(route?.active ?? true);
+
+  const save = async () => {
+    setBusy(true);
+    const overrideNumber = override.trim() === "" ? undefined : Number(override);
+    try {
+      if (route) {
+        await update({
+          productCode: route.productCode,
+          provider: route.provider,
+          providerProductCode,
+          providerPackageCode: providerPackageCode || undefined,
+          pointsCostOverride: overrideNumber,
+          priority: Number(priority),
+          active,
+        });
+        toast.success("Route updated.");
+      } else {
+        await create({
+          productCode,
+          provider,
+          providerProductCode,
+          providerPackageCode: providerPackageCode || undefined,
+          pointsCostOverride: overrideNumber,
+          priority: Number(priority),
+        });
+        toast.success("Route created.");
+      }
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{route ? "Edit route" : "New route"}</DialogTitle>
+          <DialogDescription>
+            The provider product code is what this aggregator expects. Use{" "}
+            <span className="font-mono">{"{amount}"}</span> where the purchase amount belongs.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Product</Label>
+            <Select value={productCode} onValueChange={setProductCode} disabled={!!route}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a product" />
+              </SelectTrigger>
+              <SelectContent>
+                {productCodes.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Provider</Label>
+            <Select value={provider} onValueChange={setProvider} disabled={!!route}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {providers.map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label} ({value})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="ppc">Provider product code</Label>
+            <Input
+              id="ppc"
+              value={providerProductCode}
+              onChange={(e) => setProviderProductCode(e.target.value)}
+              placeholder="airtime.mtn.{amount}"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="pkc">Provider package code (optional)</Label>
+            <Input
+              id="pkc"
+              value={providerPackageCode}
+              onChange={(e) => setProviderPackageCode(e.target.value)}
+              placeholder="1GB_30D"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ovr">Point price override</Label>
+              <Input
+                id="ovr"
+                value={override}
+                onChange={(e) => setOverride(e.target.value)}
+                placeholder="default conversion"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="pri">Priority</Label>
+              <Input id="pri" value={priority} onChange={(e) => setPriority(e.target.value)} />
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">
+            Lower priority wins. A tie falls back to the provider's own priority, then its name.
+            Leave the price override blank to use the standard conversion.
+          </p>
+
+          {route && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+              <Label htmlFor="rac">Active</Label>
+              <Switch id="rac" checked={active} onCheckedChange={setActive} />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={busy} onClick={save}>
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {route ? "Save changes" : "Create route"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

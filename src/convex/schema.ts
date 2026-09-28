@@ -1385,6 +1385,107 @@ const schema = defineSchema(
       .index("by_tenant_and_kind", ["tenantId", "kind", "createdAt"]),
 
     // ─── VTU / bill payments ────────────────────────────────────────────
+
+    /**
+     * The canonical list of buyable things.
+     *
+     * A row is a CATEGORY ("airtime-mtn"), NOT a purchasable instance. The
+     * amount a customer pays is a purchase-time input bounded by
+     * `minAmount` / `maxAmount`, because airtime is sold in whatever value
+     * the customer chooses and encoding the amount into the code would turn
+     * this table into an infinite list.
+     *
+     * That bound is not new: `parseServiceCode` in `src/lib/vtu.ts` already
+     * rejects amounts outside 100–100,000. Slice 3 moves that fact from code
+     * into data so a non-airtime product can declare a different range, and
+     * the migration seeds the same numbers so existing behaviour is identical.
+     */
+    vtuServiceCatalog: defineTable({
+      /**
+       * METADATA, not identity.
+       *
+       * `productCode` alone identifies a product; this column exists so the
+       * catalog can be filtered and browsed by service type, and so an
+       * adapter can be asked "what do you sell for data?" without parsing
+       * strings. Deliberately NOT part of any uniqueness constraint.
+       */
+      serviceType: vtuServiceTypeValidator,
+      /**
+       * Canonical id: `<serviceType>-<rest>`, lowercased and hyphenated —
+       * "airtime-mtn", "data-mtn-1gb-30d", "cable-dstv-compact".
+       *
+       * GLOBALLY UNIQUE across all service types, not unique per serviceType.
+       * Namespacing by prefix rather than by a table column means a lookup is
+       * a single indexed row instead of a list every caller must
+       * disambiguate — and routing, the price override, and the transaction
+       * snapshot all key off this one value. A collision across service types
+       * would turn every one of those lookups into a list query, which is a
+       * cheap thing to avoid now and an expensive thing to undo at hundreds
+       * of products.
+       *
+       * Convex declares no uniqueness constraint; the create mutation
+       * check-then-inserts inside a serializable transaction, which is what
+       * actually makes it unique.
+       */
+      productCode: v.string(),
+      displayName: v.string(),
+      /** "Phone number" | "Smartcard number" | "Meter number" — what the
+       *  customer is asked for. Data, not code, so adding a service type
+       *  never needs a deploy. */
+      customerIdentifierLabel: v.string(),
+      /** Airtime: true (customer picks an amount). Data/cable: false. */
+      requiresAmount: v.boolean(),
+      /** Data/cable: true (customer picks a size/bouquet). Airtime: false. */
+      requiresPackageCode: v.boolean(),
+      minAmount: v.optional(v.number()),
+      maxAmount: v.optional(v.number()),
+      active: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      // Catalog browsing: every product of one type that an operator can sell.
+      .index("by_serviceType_active", ["serviceType", "active"])
+      // Routing lookup. Globally unique, so this returns at most one row.
+      .index("by_productCode", ["productCode"]),
+
+    /**
+     * The mapping from a canonical product to a provider and to THAT
+     * provider's product code.
+     *
+     * One row per (canonical product, provider) pair. This is the table that
+     * makes routing a decision rather than a constant: MTN airtime and MTN
+     * data can point at different providers, and a single canonical product
+     * can be served by two providers with one preferred.
+     */
+    vtuServiceRouting: defineTable({
+      /** Joins to `vtuServiceCatalog.productCode`. */
+      productCode: v.string(),
+      /** Matches `vtuProviders.name` — the registry key. Not an FK: a route
+       *  may legitimately exist for a provider row that is missing, and
+       *  routing must skip it rather than null-deref. */
+      provider: v.string(),
+      /** The code THIS provider expects: "airtime.mtn" for AidaPay, whatever
+       *  Pairgate uses. Canonical and provider codes are deliberately
+       *  different namespaces; this column is the only translation between
+       *  them. */
+      providerProductCode: v.string(),
+      /** A package identifier when it differs from `providerProductCode` —
+       *  data plans, cable bouquets, exam packages. */
+      providerPackageCode: v.optional(v.string()),
+      /** Charge exactly this many points through this route. Most specific
+       *  price override there is (see `resolvePointsCost`). */
+      pointsCostOverride: v.optional(v.number()),
+      /** Lower runs first. Ties break on `vtuProviders.priority`. */
+      priority: v.number(),
+      active: v.boolean(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      // Purchase-time lookup: active routes for one product.
+      .index("by_productCode_active", ["productCode", "active"])
+      // Uniqueness by check-then-insert, and the admin edit path.
+      .index("by_productCode_provider", ["productCode", "provider"]),
+
     // The transaction log is deliberately SEPARATE from `pointLedger`. The
     // ledger records money only; this table records the provider-facing
     // lifecycle (customer phone/meter, provider reference, raw payloads,
@@ -1397,7 +1498,29 @@ const schema = defineSchema(
       /** e.g. "airtime.mtn.1000". Resolves the catalog cell and any price
        *  override, so the price can never be chosen by the client. */
       serviceCode: v.string(),
-      /** Matches `vtuProviders.name`, i.e. `adapter.name`. */
+      /**
+       * The ROUTE, snapshotted at purchase time. Write-once: set by
+       * `beginPurchase` in the same patch that inserts the row, and never
+       * updated afterwards.
+       *
+       * These three exist because the routing table is MUTABLE while a
+       * transaction is in flight. An operator who re-points "airtime-mtn"
+       * from Pairgate to AidaPay between dispatch and settlement must not
+       * change where an already-dispatched purchase settles, so the webhook
+       * handler reads the provider off THIS row and never re-routes.
+       *
+       * NULL on every pre-slice-3 row, and deliberately so. Backfilling would
+       * mean running Pairgate adapter logic inside a slice-3 migration, which
+       * couples the migration to the adapter — exactly the boundary this
+       * architecture exists to keep clean. Read these through
+       * `effectiveProvider` in `vtuServiceRouting.ts`, which treats a null as
+       * "routed implicitly to pairgate" and is the only place that knows it.
+       */
+      routedProvider: v.optional(v.string()),
+      routedProviderProductCode: v.optional(v.string()),
+      routedProviderPackageCode: v.optional(v.string()),
+      /** Matches `vtuProviders.name`, i.e. `adapter.name`. Kept as the
+       *  denormalised route for the slice-1/2 code paths that read it. */
       provider: v.string(),
       status: v.union(...literals(VTU_TRANSACTION_STATUSES)),
       /** Destination, stored MASKED — phone numbers are personal data. */
