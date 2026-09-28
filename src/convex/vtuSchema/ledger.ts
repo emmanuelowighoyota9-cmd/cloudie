@@ -1,0 +1,124 @@
+/**
+ * The VTU money log: transactions and their idempotency claims.
+ *
+ * These two tables are together because they are the same concern — "what
+ * happened to this purchase, and is its key still held" — and separating them
+ * would put the two halves of every reconciliation in different files.
+ *
+ * They are deliberately separate from `pointLedger`, which lives in
+ * `schema.ts` and is shared with the document engine. The ledger records
+ * money; these record the provider-facing lifecycle a ledger row has no
+ * business carrying.
+ */
+
+import { v } from "convex/values";
+import { defineTable } from "convex/server";
+import { vtuReversalReasonValidator, vtuTransactionStatusValidator } from "./types";
+
+export const vtuLedgerTables = {
+  // The transaction log is deliberately SEPARATE from `pointLedger`. The
+  // ledger records money only; this table records the provider-facing
+  // lifecycle (customer phone/meter, provider reference, raw payloads,
+  // status) that a ledger row has no business carrying.
+  vtuTransactions: defineTable({
+    userId: v.id("users"),
+    /** Client-generated. The idempotency key derives from this and is NEVER
+     *  namespaced by provider — a retry must dedupe across providers too. */
+    clientRequestId: v.string(),
+    /** e.g. "airtime.mtn.1000". Resolves the catalog cell and any price
+     *  override, so the price can never be chosen by the client. */
+    serviceCode: v.string(),
+    /**
+     * The ROUTE, snapshotted at purchase time. Write-once: set by
+     * `beginPurchase` in the same patch that inserts the row, and never
+     * updated afterwards.
+     *
+     * These three exist because the routing table is MUTABLE while a
+     * transaction is in flight. An operator who re-points "airtime-mtn"
+     * from Pairgate to AidaPay between dispatch and settlement must not
+     * change where an already-dispatched purchase settles, so the webhook
+     * handler reads the provider off THIS row and never re-routes.
+     *
+     * NULL on every pre-slice-3 row, and deliberately so. Backfilling would
+     * mean running Pairgate adapter logic inside a slice-3 migration, which
+     * couples the migration to the adapter — exactly the boundary this
+     * architecture exists to keep clean. Read these through
+     * `effectiveProvider` in `vtuServiceRouting.ts`, which treats a null as
+     * "routed implicitly to pairgate" and is the only place that knows it.
+     */
+    routedProvider: v.optional(v.string()),
+    routedProviderProductCode: v.optional(v.string()),
+    routedProviderPackageCode: v.optional(v.string()),
+    /** Matches `vtuProviders.name`, i.e. `adapter.name`. Kept as the
+     *  denormalised route for the slice-1/2 code paths that read it. */
+    provider: v.string(),
+    status: vtuTransactionStatusValidator,
+    /** Destination, stored MASKED — phone numbers are personal data. */
+    customerIdentifier: v.string(),
+    network: v.optional(v.string()),
+    amountNgn: v.optional(v.number()),
+
+    // ── Rate snapshot, frozen at debit time ──────────────────────
+    // These make a historical transaction auditable after the rate moves.
+    // Without them you cannot reconstruct what the customer was actually
+    // charged, and a reversal would credit a different number of points
+    // than were taken.
+    nairaPrice: v.number(),
+    ngnPerPoint: v.number(),
+    pointsDebited: v.number(),
+
+    providerReference: v.optional(v.string()),
+    /** "vtu:purchase:<clientRequestId>" — copied here so a refund can find
+     *  the claim to release without re-deriving it. */
+    idempotencyKey: v.string(),
+    debitLedgerId: v.optional(v.id("pointLedger")),
+    reversalLedgerId: v.optional(v.id("pointLedger")),
+    failureCode: v.optional(v.string()),
+    failureReason: v.optional(v.string()),
+    /**
+     * Required whenever `status` is `reversed`. Optional in the schema only
+     * because Convex cannot express a cross-field constraint; the mutation
+     * that writes the transition REQUIRES it, so a `reversed` row with no
+     * reason cannot be created.
+     */
+    reversalReason: v.optional(vtuReversalReasonValidator),
+    /** Which path wrote the last transition: provider_response | webhook. */
+    source: v.optional(v.string()),
+    /** Sanitized payloads. Secrets stripped on write by sanitizeForLog. */
+    rawRequest: v.optional(v.any()),
+    rawResponse: v.optional(v.any()),
+    resolvedAt: v.optional(v.number()),
+    reversedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_clientRequestId", ["clientRequestId"])
+    .index("by_provider_reference", ["providerReference"])
+    .index("by_status", ["status", "createdAt"]),
+
+  /**
+   * Idempotency key claims, in their own table rather than left implicit in
+   * `pointLedger`.
+   *
+   * The ledger answers "was this charged". This table answers "is this key
+   * currently claimed". They are different questions, because a FAILED
+   * transaction must RELEASE its key while its ledger rows stay forever. A
+   * ledger-only key cannot be released without either mutating an append-only
+   * record or lying about whether the debit happened.
+   *
+   * Convex indexes declare no uniqueness constraint; uniqueness is enforced
+   * by check-then-insert inside a mutation, which is a serializable
+   * transaction — two concurrent requests with the same key cannot both pass.
+   */
+  vtuIdempotency: defineTable({
+    /** "vtu:purchase:<clientRequestId>" */
+    key: v.string(),
+    scope: v.string(),
+    userId: v.id("users"),
+    transactionId: v.optional(v.id("vtuTransactions")),
+    createdAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_user", ["userId", "createdAt"]),
+};

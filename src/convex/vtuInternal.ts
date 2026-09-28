@@ -28,13 +28,11 @@ import {
   isValidRequestId,
   maskIdentifier,
   parseServiceCode,
-  resolveVtuPointsCost,
   validatePhone,
   vtuLedgerPurchaseKey,
   vtuPurchaseKey,
   vtuRefundKey,
 } from "../lib/vtu";
-import { readPointRate } from "./pricing";
 import {
   canonicalProductCode,
   composeProviderProductCode,
@@ -72,45 +70,19 @@ export async function consumeRateLimit(
   return true;
 }
 
-export type ResolvedCost = {
-  points: number;
-  ngnPerPoint: number;
-  override: boolean;
-};
-
 /**
  * Resolve the points cost for a service code: override first, conversion
- * second — the same precedence as `resolveRenderCost`.
+ * second.
  *
- * `pointPricing` ships with no VTU rows, so this exercises the conversion
- * branch until an admin sets one.
- *
- * This is the ROUTING-UNAWARE cost, kept only for the user-facing price
- * queries in `vtu.ts`, which run before a route has been chosen. Every path
- * that has a route in hand calls `resolvePointsCost` instead, so the three
- * levels of precedence live in exactly one function.
+ * DELETED as of slice 3's follow-up, deliberately. This was the ROUTING-UNAWARE
+ * copy of the precedence chain, kept for the user-facing price queries. Once
+ * the offer grid and the preview routed properly they had no callers, and a
+ * second implementation of a money rule is a liability even when it is
+ * currently correct: it is the first thing that drifts when an operator sets a
+ * `pointsCostOverride`. `resolvePointsCost` in `vtuServiceRouting.ts` is now
+ * the ONLY place the precedence exists, and every consumer — the purchase
+ * mutation, the offer grid, the preview, the admin dry-run — calls it.
  */
-export async function resolveCost(
-  ctx: any,
-  serviceCode: string,
-  nairaPrice: number,
-): Promise<ResolvedCost> {
-  const overrideRow = await ctx.db
-    .query("pointPricing")
-    .withIndex("by_serviceCode", (q: any) => q.eq("serviceCode", serviceCode))
-    .first();
-  const rate = await readPointRate(ctx);
-  const override = overrideRow?.active === true;
-  return {
-    points: resolveVtuPointsCost(
-      nairaPrice,
-      rate.ngnPerPoint,
-      override ? overrideRow.pointsCost : undefined,
-    ),
-    ngnPerPoint: rate.ngnPerPoint,
-    override,
-  };
-}
 
 /**
  * A purchase that could not be routed.
@@ -130,6 +102,53 @@ export class VtuRoutingError extends Error {
     this.name = "VtuRoutingError";
     this.code = code;
   }
+}
+
+/**
+ * A purchase whose amount falls outside the bounds the CATALOG row declares.
+ *
+ * Separate from `VtuRoutingError` because it is a different fault with a
+ * different fix: a routing error is an operator problem, an amount outside
+ * the range is the customer's input, and the page says so differently.
+ *
+ * The bounds are read from `vtuServiceCatalog`, NOT from a constant. That is
+ * the point of the field: a product whose face values are not 100–100,000
+ * declares its own range and the same code enforces it, so slice 4 can add a
+ * fixed-price product with no code change and no chance of the two disagreeing
+ * about what is sellable.
+ */
+export class VtuAmountRangeError extends Error {
+  readonly code = "AMOUNT_OUT_OF_RANGE" as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "VtuAmountRangeError";
+  }
+}
+
+/**
+ * Check a purchase amount against the bounds on the catalog row.
+ *
+ * Absent bounds mean "no bound declared", not "zero and zero" — a fixed-price
+ * product with no `minAmount` is not refusing everything. An inverted range
+ * is a configuration mistake, so it is treated as unbounded rather than
+ * silently refusing every purchase.
+ */
+export function assertAmountInRange(
+  product: { minAmount?: number; maxAmount?: number },
+  amountNgn: number,
+): void {
+  const { minAmount, maxAmount } = product;
+  if (minAmount !== undefined && maxAmount !== undefined && minAmount > maxAmount) return;
+
+  const tooSmall = minAmount !== undefined && amountNgn < minAmount;
+  const tooLarge = maxAmount !== undefined && amountNgn > maxAmount;
+  if (!tooSmall && !tooLarge) return;
+
+  const low = minAmount !== undefined ? `₦${minAmount.toLocaleString()}` : "any amount";
+  const high = maxAmount !== undefined ? `₦${maxAmount.toLocaleString()}` : "any amount";
+  throw new VtuAmountRangeError(
+    `Enter an amount between ${low} and ${high}. Your balance was not touched.`,
+  );
 }
 
 export type BeginPurchaseResult =
@@ -254,6 +273,14 @@ export const beginPurchase = internalMutation({
     if (!route.ok) {
       throw new VtuRoutingError(route.code, ROUTE_MESSAGES[route.code]);
     }
+
+    // The catalog row's bounds are the authority, not a constant in this
+    // file. The migration seeds exactly the 100–100,000 that
+    // `parseServiceCode` already enforced above, so nothing changes for
+    // existing users — but a product that declares different bounds is now
+    // actually held to them.
+    assertAmountInRange(route.product, parsed.amountNgn);
+
     const routedProviderProductCode = composeProviderProductCode(
       route.winner.providerProductCode,
       parsed.amountNgn,

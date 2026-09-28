@@ -10,8 +10,13 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { consumeRateLimit, resolveCost } from "./vtuInternal";
+import { consumeRateLimit } from "./vtuInternal";
 import { readPointRate } from "./pricing";
+import {
+  canonicalProductCode,
+  resolvePointsCost,
+  routeProduct,
+} from "./vtuServiceRouting";
 import { AIRTIME_NETWORKS, airtimeServiceCode, parseServiceCode } from "../lib/vtu";
 
 /** Fixed airtime amounts. Slice 1 has no catalog browser by design. */
@@ -22,6 +27,17 @@ const AIRTIME_AMOUNTS = [100, 200, 500, 1000, 2000, 5000] as const;
  *
  * Resolving the price server-side means the page never displays a number the
  * backend has not agreed to, and the figure stays correct when the rate moves.
+ *
+ * THE OFFER GRID RUNS THE SAME ROUTING AND THE SAME COST FUNCTION THE PURCHASE
+ * DOES. That is not tidiness, it is correctness: an operator can set a
+ * `pointsCostOverride` on a routing row, and if this grid read the price from
+ * anywhere else it would advertise one number and charge another. A customer
+ * picking the amount the grid quoted is the exact case where a drift between
+ * display and charge turns into a complaint.
+ *
+ * A network whose product cannot be routed is omitted entirely. Showing an
+ * offer that the purchase path will refuse with NO_ROUTE_AVAILABLE would be
+ * advertising something that does not exist.
  */
 export const getAirtimeOffers = query({
   args: {},
@@ -33,25 +49,32 @@ export const getAirtimeOffers = query({
       amountNgn: number;
       points: number;
       override: boolean;
+      /** Which price level produced this number, for the admin's benefit. */
+      costSource: string;
     }> = [];
 
     for (const network of AIRTIME_NETWORKS) {
+      // Route once per network, not once per (network, amount): all six
+      // amounts of one network are the same product going to the same
+      // provider, and routing is a per-product decision.
+      const route = await routeProduct(ctx, `airtime-${network}`);
+      if (!route.ok) continue;
+
       for (const amountNgn of AIRTIME_AMOUNTS) {
         const serviceCode = airtimeServiceCode(network, amountNgn);
-        const overrideRow = await ctx.db
-          .query("pointPricing")
-          .withIndex("by_serviceCode", (q) => q.eq("serviceCode", serviceCode))
-          .first();
+        const cost = await resolvePointsCost(ctx, {
+          productCode: route.winner.productCode,
+          serviceCode,
+          provider: route.winner.provider,
+          nairaPrice: amountNgn,
+        });
         offers.push({
           serviceCode,
           network,
           amountNgn,
-          points: overrideRow?.active
-            ? overrideRow.pointsCost
-            : // Conversion branch — the one exercised while pointPricing has
-              // no VTU rows, and the one that moves when the rate does.
-              Math.ceil(amountNgn / rate.ngnPerPoint),
-          override: overrideRow?.active === true,
+          points: cost.points,
+          override: cost.override,
+          costSource: cost.source,
         });
       }
     }
@@ -60,14 +83,41 @@ export const getAirtimeOffers = query({
   },
 });
 
-/** Single-product price preview, used to re-check cost before submit. */
+/**
+ * Single-product price preview, used to re-check cost before submit.
+ *
+ * Routes for the same reason the offer grid does: a preview that quotes the
+ * pre-routing price is worse than no preview, because it looks authoritative.
+ * Returns null when the product cannot be served, so the caller cannot render
+ * a cost for something that will be refused.
+ */
 export const previewCost = query({
   args: { serviceCode: v.string() },
   handler: async (ctx, args) => {
     const parsed = parseServiceCode(args.serviceCode);
     if (!parsed) return null;
-    const resolved = await resolveCost(ctx, args.serviceCode, parsed.amountNgn);
-    return { ...resolved, nairaPrice: parsed.amountNgn };
+
+    const productCode = canonicalProductCode(args.serviceCode);
+    if (!productCode) return null;
+
+    const route = await routeProduct(ctx, productCode);
+    if (!route.ok) return null;
+
+    const cost = await resolvePointsCost(ctx, {
+      productCode: route.winner.productCode,
+      serviceCode: args.serviceCode,
+      provider: route.winner.provider,
+      nairaPrice: parsed.amountNgn,
+    });
+
+    return {
+      points: cost.points,
+      ngnPerPoint: cost.ngnPerPoint,
+      override: cost.override,
+      costSource: cost.source,
+      provider: route.winner.provider,
+      nairaPrice: parsed.amountNgn,
+    };
   },
 });
 

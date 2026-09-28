@@ -5,6 +5,7 @@ import { internal, api } from "../src/convex/_generated/api";
 import { registerAdapter, getAdapter } from "../src/convex/vtuRegistry";
 import { pairgateAdapter } from "../src/convex/vtuPairgate";
 import { encrypt } from "../src/convex/lib/encryption";
+import { assertAmountInRange } from "../src/convex/vtuInternal";
 import {
   canonicalProductCode,
   composeProviderProductCode,
@@ -43,6 +44,7 @@ const modules = {
   "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
   "src/convex/vtuRegistry.ts": () => import("../src/convex/vtuRegistry"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
+  "src/convex/vtu.ts": () => import("../src/convex/vtu"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
   "src/convex/lib/encryption.ts": () => import("../src/convex/lib/encryption"),
   "src/convex/points.ts": () => import("../src/convex/points"),
@@ -968,5 +970,254 @@ describe("routing does not reintroduce a hard-coded provider", () => {
     } finally {
       registerAdapter(pairgateAdapter);
     }
+  });
+});
+
+// ─── The catalog bounds are load-bearing ───────────────────────────
+
+describe("the catalog row's amount bounds are enforced, not documented", () => {
+  /** Widen or narrow the seeded row's bounds and re-read it. */
+  async function setBounds(t: Harness, bounds: { minAmount?: number; maxAmount?: number }) {
+    await t.run(async (ctx) => {
+      const row = await ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q: any) => q.eq("productCode", "airtime-mtn"))
+        .unique();
+      await ctx.db.patch(row!._id, bounds);
+    });
+  }
+
+  test("the seeded bounds match what parseServiceCode already enforced", async () => {
+    const t = convexTest(schema, modules);
+    const product = await seedProduct(t);
+    // If the migration seeds different numbers from these, slice 3 silently
+    // widened or narrowed what customers could buy. Pin them.
+    const row: any = await t.run(async (ctx) =>
+      ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q: any) => q.eq("productCode", product))
+        .unique(),
+    );
+    expect(row.minAmount).toBe(100);
+    expect(row.maxAmount).toBe(100_000);
+  });
+
+  test("an amount inside the row's bounds is accepted", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+    await setBounds(t, { minAmount: 500, maxAmount: 2000 });
+
+    const reserved: any = await begin({
+      userId,
+      clientRequestId: "req_within_bounds",
+      serviceCode: "airtime.mtn.1000",
+      customerIdentifier: PHONE,
+    })(t);
+    expect(reserved.pointsDebited).toBe(67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+  });
+
+  test("an amount BELOW the row's min is refused and debits nothing", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+    // ₦200 is a real slice-1 offer and passes `parseServiceCode`; only the
+    // CATALOG row knows this product now starts at ₦500.
+    await setBounds(t, { minAmount: 500, maxAmount: 2000 });
+
+    await expect(
+      begin({
+        userId,
+        clientRequestId: "req_below_min",
+        serviceCode: "airtime.mtn.200",
+        customerIdentifier: PHONE,
+      })(t),
+    ).rejects.toThrow();
+
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE);
+    expect(await txCount(t)).toBe(0);
+    expect(await claims(t)).toHaveLength(0);
+  });
+
+  test("an amount ABOVE the row's max is refused and debits nothing", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+    await setBounds(t, { minAmount: 100, maxAmount: 1000 });
+
+    await expect(
+      begin({
+        userId,
+        clientRequestId: "req_above_max",
+        serviceCode: "airtime.mtn.2000",
+        customerIdentifier: PHONE,
+      })(t),
+    ).rejects.toThrow();
+
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE);
+    expect(await txCount(t)).toBe(0);
+  });
+
+  test("the refusal carries its OWN code, distinct from every routing code", async () => {
+    // An operator problem and a customer input problem need different words on
+    // the page, so they must not arrive under the same code.
+    let thrown: any = null;
+    try {
+      assertAmountInRange({ minAmount: 100, maxAmount: 100_000 }, 99);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).not.toBeNull();
+    expect(thrown.code).toBe("AMOUNT_OUT_OF_RANGE");
+    // The three routing codes are the only other things a purchase can be
+    // refused with; none of them may be confused with this one.
+    for (const code of ["PRODUCT_NOT_FOUND", "PRODUCT_INACTIVE", "NO_ROUTE_AVAILABLE"]) {
+      expect(thrown.code).not.toBe(code);
+    }
+  });
+
+  test("the action reports AMOUNT_OUT_OF_RANGE and debits nothing", async () => {
+    // The refusal has to survive the mutation -> action boundary as a CODE,
+    // because that is what the page branches on. Convex serialises the thrown
+    // error, so only the property survives — which is why it is a plain field.
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+    await setBounds(t, { minAmount: 5000, maxAmount: 20000 });
+
+    const result: any = await t
+      .withIdentity({ subject: userId })
+      .action(api.vtuHttp.purchaseAirtime, {
+        clientRequestId: "req_range_action",
+        serviceCode: "airtime.mtn.1000",
+        customerIdentifier: PHONE,
+      });
+
+    expect(result.status).toBe("rejected");
+    expect(result.code).toBe("AMOUNT_OUT_OF_RANGE");
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE);
+    expect(await txCount(t)).toBe(0);
+  });
+
+  test("absent bounds mean unbounded, not zero-to-zero", async () => {
+    // A fixed-price product with no minAmount is not refusing everything.
+    expect(() => assertAmountInRange({}, 1)).not.toThrow();
+    expect(() => assertAmountInRange({ minAmount: 100 }, 99_999)).not.toThrow();
+    expect(() => assertAmountInRange({ maxAmount: 100 }, 1)).not.toThrow();
+    expect(() => assertAmountInRange({ minAmount: 100 }, 99)).toThrow();
+    expect(() => assertAmountInRange({ maxAmount: 100 }, 101)).toThrow();
+  });
+
+  test("an inverted range is treated as unbounded rather than refusing everything", async () => {
+    // A configuration mistake that silently blocked all sales would be worse
+    // than a configuration mistake that is simply not enforced.
+    expect(() => assertAmountInRange({ minAmount: 5000, maxAmount: 100 }, 1000)).not.toThrow();
+  });
+});
+
+// ─── Display and charge cannot disagree ────────────────────────────
+
+describe("the offer grid and the purchase agree on the price", () => {
+  test("a routing-row override shows on the grid AND is charged", async () => {
+    // The drift this exists to prevent: an operator sets pointsCostOverride,
+    // the grid quotes the old conversion price, and the customer is charged a
+    // different number than the one they were shown.
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate", pointsCostOverride: 42 });
+
+    const offers: any = await t.query(api.vtu.getAirtimeOffers, {});
+    const quoted = offers.offers.find((o: any) => o.serviceCode === SERVICE_CODE);
+    expect(quoted.points).toBe(42);
+    expect(quoted.costSource).toBe("routing_override");
+
+    const reserved: any = await begin({
+      userId,
+      clientRequestId: "req_grid_agrees",
+      serviceCode: SERVICE_CODE,
+      customerIdentifier: PHONE,
+    })(t);
+
+    // Quoted == charged. That is the whole assertion.
+    expect(reserved.pointsDebited).toBe(quoted.points);
+  });
+
+  test("with no override the grid falls back to the conversion, as before", async () => {
+    const t = convexTest(schema, modules);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+
+    const offers: any = await t.query(api.vtu.getAirtimeOffers, {});
+    const quoted = offers.offers.find((o: any) => o.serviceCode === SERVICE_CODE);
+    // ₦1,000 at 15 naira/point = 67.
+    expect(quoted.points).toBe(67);
+    expect(quoted.costSource).toBe("default_conversion");
+    expect(offers.ngnPerPoint).toBe(15);
+  });
+
+  test("a network with no live route is omitted rather than advertised", async () => {
+    // Offering a product the purchase path will refuse with NO_ROUTE_AVAILABLE
+    // is advertising something that does not exist.
+    const t = convexTest(schema, modules);
+    await seedProvider(t, { name: "pairgate", status: "sandbox" });
+    await seedProduct(t, { productCode: "airtime-mtn" });
+    await seedRoute(t, { provider: "pairgate" });
+
+    const offers: any = await t.query(api.vtu.getAirtimeOffers, {});
+    expect(offers.offers).toHaveLength(0);
+  });
+
+  test("a routed network's whole grid is present", async () => {
+    const t = convexTest(schema, modules);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+
+    const offers: any = await t.query(api.vtu.getAirtimeOffers, {});
+    // 6 fixed amounts for the one routable network.
+    expect(offers.offers).toHaveLength(6);
+    expect(new Set(offers.offers.map((o: any) => o.network))).toEqual(new Set(["mtn"]));
+  });
+
+  test("previewCost quotes the ROUTED price and refuses an unroutable product", async () => {
+    const t = convexTest(schema, modules);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate", pointsCostOverride: 42 });
+
+    const preview: any = await t.query(api.vtu.previewCost, { serviceCode: SERVICE_CODE });
+    expect(preview.points).toBe(42);
+    expect(preview.costSource).toBe("routing_override");
+    expect(preview.provider).toBe("pairgate");
+
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("vtuServiceRouting").first();
+      await ctx.db.patch(row!._id, { active: false });
+    });
+    // No route means no preview, rather than a confident wrong number.
+    const refused: any = await t.query(api.vtu.previewCost, { serviceCode: SERVICE_CODE });
+    expect(refused).toBeNull();
+  });
+
+  test("only ONE cost function survives — the routing-unaware copy is gone", async () => {
+    // A second implementation of a money rule drifts the moment an operator
+    // changes the rule. This asserts there is exactly one left.
+    const source = await Bun.file(
+      new URL("../src/convex/vtuInternal.ts", import.meta.url),
+    ).text();
+    expect(source).not.toContain("export async function resolveCost");
+    expect(source).not.toContain("resolveVtuPointsCost");
   });
 });
