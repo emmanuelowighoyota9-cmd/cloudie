@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
 import { convexTest } from "convex-test";
 import schema from "../src/convex/schema";
 import { api, internal } from "../src/convex/_generated/api";
@@ -1012,5 +1013,126 @@ describe("a reversed transaction always records why", () => {
         expect(stored.reversalReason).toBe(reversalReason);
       });
     }
+  });
+});
+
+// ─── AidaPay webhook signature ──────────────────────────────────────
+
+describe("AidaPay callback verification is timing-safe and total", () => {
+  const SECRET = "ap_access_token_material";
+  const RAW = JSON.stringify({
+    status: "Completed",
+    hash: "AP-HASH-1",
+    amount: 1000,
+    reference: "AP-REF-1",
+  });
+
+  /** The exact digest AidaPay computes: HMAC-SHA256 over the raw body. */
+  function sign(rawBody: string, secret = SECRET): string {
+    return createHmac("sha256", secret).update(rawBody).digest("hex");
+  }
+
+  /** Headers as `vtuHttp` delivers them: lowercased. */
+  function headersWith(signature: string | undefined): Record<string, string> {
+    return signature === undefined ? {} : { signature };
+  }
+
+  test("a correctly signed body parses to a terminal event", () => {
+    const event = aidapayAdapter.verifyAndParseCallback(RAW, headersWith(sign(RAW)), SECRET);
+    expect(event).not.toBeNull();
+    expect(event?.providerReference).toBe("AP-HASH-1");
+    expect(event?.outcome).toBe("confirmed");
+    expect(event?.costNgn).toBe(1000);
+  });
+
+  test("a TAMPERED body returns null even though the signature is well formed", () => {
+    // The signature is valid for the ORIGINAL bytes. Verifying the tampered
+    // body against it must fail — this is the whole point of hashing the raw
+    // bytes rather than a re-serialised object.
+    const goodSignature = sign(RAW);
+    const tampered = JSON.stringify({
+      status: "Completed",
+      hash: "AP-HASH-1",
+      amount: 999_999,
+      reference: "AP-REF-1",
+    });
+    expect(
+      aidapayAdapter.verifyAndParseCallback(tampered, headersWith(goodSignature), SECRET),
+    ).toBeNull();
+  });
+
+  test("the WRONG secret returns null", () => {
+    expect(
+      aidapayAdapter.verifyAndParseCallback(
+        RAW,
+        headersWith(sign(RAW, "some_other_token")),
+        SECRET,
+      ),
+    ).toBeNull();
+  });
+
+  test("a MISSING signature header returns null", () => {
+    expect(aidapayAdapter.verifyAndParseCallback(RAW, headersWith(undefined), SECRET)).toBeNull();
+  });
+
+  test("an EMPTY secret returns null rather than matching anything", () => {
+    // A provider row with no sealed webhook secret must not accept callbacks
+    // signed with the empty string.
+    expect(aidapayAdapter.verifyAndParseCallback(RAW, headersWith(sign(RAW, "")), "")).toBeNull();
+  });
+
+  test("a valid signature over a NON-JSON body returns null", () => {
+    const garbage = "not json at all";
+    expect(
+      aidapayAdapter.verifyAndParseCallback(garbage, headersWith(sign(garbage)), SECRET),
+    ).toBeNull();
+  });
+
+  test("a valid signature with no reference returns null", () => {
+    const noRef = JSON.stringify({ status: "Completed", amount: 1000 });
+    expect(
+      aidapayAdapter.verifyAndParseCallback(noRef, headersWith(sign(noRef)), SECRET),
+    ).toBeNull();
+  });
+
+  test("a non-terminal status resolves nothing", () => {
+    // A Processing/Pending callback is a real delivery but not a resolution;
+    // returning an event would settle a transaction that is still in flight.
+    for (const status of ["Processing", "Pending"]) {
+      const body = JSON.stringify({ status, hash: "AP-HASH-1" });
+      expect(
+        aidapayAdapter.verifyAndParseCallback(body, headersWith(sign(body)), SECRET),
+      ).toBeNull();
+    }
+  });
+
+  test("Refund and Cancelled settle as failures, and stay distinguishable", () => {
+    const refund = JSON.stringify({ status: "Refund", hash: "AP-1", amount: 1000 });
+    const cancelled = JSON.stringify({ status: "Cancelled", hash: "AP-1", amount: 1000 });
+
+    const r = aidapayAdapter.verifyAndParseCallback(refund, headersWith(sign(refund)), SECRET);
+    const c = aidapayAdapter.verifyAndParseCallback(cancelled, headersWith(sign(cancelled)), SECRET);
+
+    expect(r?.outcome).toBe("failed");
+    expect(c?.outcome).toBe("failed");
+    // The distinction survives to the event, which is what selects
+    // `provider_cancelled` as the reversal reason for one and not the other.
+    expect(r?.failureKind).toBe("rejected");
+    expect(c?.failureKind).toBe("cancelled");
+  });
+
+  test("a base64-encoded signature is also accepted", () => {
+    const b64 = Buffer.from(sign(RAW), "hex").toString("base64");
+    const event = aidapayAdapter.verifyAndParseCallback(RAW, headersWith(b64), SECRET);
+    expect(event?.providerReference).toBe("AP-HASH-1");
+  });
+
+  test("a sha256=-prefixed signature is accepted", () => {
+    const event = aidapayAdapter.verifyAndParseCallback(
+      RAW,
+      headersWith(`sha256=${sign(RAW)}`),
+      SECRET,
+    );
+    expect(event?.providerReference).toBe("AP-HASH-1");
   });
 });
