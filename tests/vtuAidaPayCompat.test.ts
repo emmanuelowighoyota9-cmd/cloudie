@@ -6,10 +6,11 @@ import { registerAdapter } from "../src/convex/vtuRegistry";
 import { encrypt } from "../src/convex/lib/encryption";
 import {
   PAIRGATE_STATUS_VOCABULARY,
-  mapProviderStatus,
+  mapPurchaseResponse,
   pairgateAdapter,
 } from "../src/convex/vtuPairgate";
-import type { ProviderStatusVerdict } from "../src/convex/vtuPairgate";
+import { mapProviderStatus } from "../src/convex/vtuProviderStatus";
+import type { ProviderStatusVerdict } from "../src/convex/vtuProviderStatus";
 import { composeAuthHeader } from "../src/convex/vtuShared";
 import type {
   ProviderCallOptions,
