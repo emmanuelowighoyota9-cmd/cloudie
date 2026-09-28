@@ -16,7 +16,8 @@
  * of it — none of them know which aggregator produced a response.
  */
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac } from "node:crypto";
+import { safeEqualHex } from "./providers/signature";
 import { mapProviderStatus } from "./vtuProviderStatus";
 import type { ProviderStatusVocabulary } from "./vtuProviderStatus";
 import { composeAuthHeader } from "./vtuShared";
@@ -157,21 +158,10 @@ export function mapPurchaseResponse(
 // ─── Signature helpers ─────────────────────────────────────────────
 
 /**
- * Constant-time comparison.
- *
- * `timingSafeEqual` throws on a length mismatch, so the length check runs
- * first and returns false rather than throwing — an early return on length
- * leaks only the digest length, which is not a secret.
+ * Constant-time comparison is imported from `./providers/signature` rather
+ * than reimplemented here, so the length-mismatch guard exists in exactly one
+ * place and every adapter inherits it.
  */
-function safeEqualHex(a: string, b: string): boolean {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  if (a.length !== b.length) return false;
-  try {
-    return timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
-  } catch {
-    return false;
-  }
-}
 
 /** Header names Pairgate may sign under, in preference order. */
 const SIGNATURE_HEADERS = [

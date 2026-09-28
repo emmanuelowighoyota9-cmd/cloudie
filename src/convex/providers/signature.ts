@@ -12,6 +12,8 @@
  * equivalent, and Convex will not bundle a Node builtin through a V8 module.
  */
 
+import { timingSafeEqual } from "node:crypto";
+
 /**
  * Constant-time comparison.
  *
@@ -19,8 +21,8 @@
  * first and returns false rather than throwing — an early return on length
  * leaks only the digest length, which is not a secret.
  *
- * Both hex and base64 provider signatures are accepted by the callers, because
- * vendors disagree on the encoding of the same algorithm.
+ * Hex and base64 are both accepted by the callers, because vendors disagree
+ * on the encoding of the same algorithm.
  */
 export function safeEqualHex(a: string, b: string): boolean {
   if (typeof a !== "string" || typeof b !== "string") return false;
@@ -31,5 +33,3 @@ export function safeEqualHex(a: string, b: string): boolean {
     return false;
   }
 }
-
-import { timingSafeEqual } from "node:crypto";

@@ -12,6 +12,12 @@
  * slice 4 adds an entry. Neither requires touching `beginPurchase`, the
  * webhook handler, or the purchase page.
  *
+ * Two adapters are registered as of slice 4. That the list is still two LINES
+ * and nothing else moved is the point of the whole design: `beginPurchase`
+ * routes to a provider by name, the credential layer opens its row, and the
+ * ledger reads a three-state result. Adding AidaPay changed the routing table
+ * and this list, and no money-handling code at all.
+ *
  * Marked "use node" because every adapter is Node-only (they use
  * `node:crypto` and make outbound HTTP calls). Without the marker Convex
  * treats this as a V8 module, and the bundler cannot resolve `node:crypto`
@@ -19,11 +25,13 @@
  * the correct place for it to live.
  */
 
+import { aidapayAdapter } from "./providers/aidapay";
 import { pairgateAdapter } from "./vtuPairgate";
 import type { VtuProviderAdapter } from "./vtuShared";
 
 const REGISTRY: Record<string, VtuProviderAdapter> = {
   [pairgateAdapter.name]: pairgateAdapter,
+  [aidapayAdapter.name]: aidapayAdapter,
 };
 
 /** Resolve an adapter by name, or null when the name is unknown. */

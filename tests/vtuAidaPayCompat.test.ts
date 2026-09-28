@@ -11,6 +11,7 @@ import {
 } from "../src/convex/vtuPairgate";
 import { mapProviderStatus } from "../src/convex/vtuProviderStatus";
 import type { ProviderStatusVerdict } from "../src/convex/vtuProviderStatus";
+import { AIDAPAY_STATUS_VOCABULARY, mapAidaPayStatus } from "../src/convex/providers/aidapay";
 import { composeAuthHeader } from "../src/convex/vtuShared";
 import type {
   ProviderCallOptions,
@@ -140,12 +141,15 @@ async function withMasterKey<T>(fn: () => Promise<T>): Promise<T> {
  * able to set it. The classifier has no way to express it, which is exactly
  * the property these tests pin down.
  */
-const AIDAPAY_STATUS_VOCABULARY = {
-  confirmed: ["completed"],
-  failed: ["refund"],
-  cancelled: ["cancelled"],
-  processing: ["pending", "processing"],
-} as const;
+// The AidaPay vocabulary is imported from the ADAPTER (see the imports above),
+// not restated here. A local copy was a transcription that could drift from
+// the mapping the adapter actually ships: these tests would keep passing
+// against a stale vocabulary while production used a different one.
+//
+// The `mapProviderStatus(...)` call sites below are left in place deliberately.
+// They exercise the SHARED classifier with AidaPay's words, and a separate
+// suite asserts that `mapAidaPayStatus` — the function the adapter itself
+// calls — agrees with them on every word. Two paths, one mapping.
 
 /** How a verdict becomes a row status, once the provider has been consulted. */
 function toTransactionStatus(verdict: ProviderStatusVerdict): string {
@@ -228,6 +232,47 @@ describe("AidaPay status words map onto our vocabulary", () => {
     expect(toTransactionStatus(mapProviderStatus("Processing", AIDAPAY_STATUS_VOCABULARY))).toBe(
       "processing",
     );
+  });
+
+  test("the adapter's own mapAidaPayStatus agrees with the shared classifier", () => {
+    // The rest of this suite calls the SHARED `mapProviderStatus` with
+    // AidaPay's vocabulary; production calls `mapAidaPayStatus`, the wrapper
+    // inside the adapter. If those two ever diverge, every assertion above
+    // would still pass while the adapter mapped statuses differently.
+    //
+    // This walks the published words AND a pile of noise, so a vocabulary
+    // change in `aidapay.ts` cannot silently disagree with the contract.
+    const words = [
+      ...AIDAPAY_STATUS_VOCABULARY.confirmed,
+      ...AIDAPAY_STATUS_VOCABULARY.failed,
+      ...AIDAPAY_STATUS_VOCABULARY.cancelled,
+      ...AIDAPAY_STATUS_VOCABULARY.processing,
+      "Completed",
+      "completed",
+      "  COMPLETED  ",
+      "Refund",
+      "Cancelled",
+      "Pending",
+      "Processing",
+      "Queued",
+      "",
+      undefined,
+      42,
+      { status: "Completed" },
+    ];
+    for (const word of words) {
+      expect(mapAidaPayStatus(word)).toEqual(
+        mapProviderStatus(word, AIDAPAY_STATUS_VOCABULARY),
+      );
+    }
+  });
+
+  test("the adapter's mapper still cannot produce a reversal", () => {
+    // Same guarantee as the shared classifier, asserted through the function
+    // production actually calls.
+    for (const word of ["Completed", "Refund", "Cancelled", "Pending", "Queued"]) {
+      expect(mapAidaPayStatus(word).kind).not.toBe("reversed");
+    }
   });
 
   test("Pairgate's own vocabulary is unaffected by AidaPay's words", () => {
