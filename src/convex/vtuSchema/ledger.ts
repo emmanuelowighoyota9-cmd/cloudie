@@ -13,7 +13,11 @@
 
 import { v } from "convex/values";
 import { defineTable } from "convex/server";
-import { vtuReversalReasonValidator, vtuTransactionStatusValidator } from "./types";
+import {
+  vtuReversalReasonValidator,
+  vtuTransactionStatusValidator,
+  vtuUnresolvedReasonValidator,
+} from "./types";
 
 export const vtuLedgerTables = {
   // The transaction log is deliberately SEPARATE from `pointLedger`. The
@@ -82,20 +86,59 @@ export const vtuLedgerTables = {
      * reason cannot be created.
      */
     reversalReason: v.optional(vtuReversalReasonValidator),
-    /** Which path wrote the last transition: provider_response | webhook. */
+    /**
+     * Which path wrote the last transition.
+     *
+     * One of `dispatch | webhook | reconciliation | admin`. A free string
+     * rather than an enum, so a new writer needs no migration.
+     *
+     * `dispatch` supersedes the historical `provider_response` spelling: rows
+     * written before slice 5 still carry the old value, and they are left
+     * alone. Nothing filters on this field, so the two spellings coexist
+     * without a backfill — and a backfill would rewrite an audit trail to say
+     * something it did not say at the time.
+     */
     source: v.optional(v.string()),
     /** Sanitized payloads. Secrets stripped on write by sanitizeForLog. */
     rawRequest: v.optional(v.any()),
     rawResponse: v.optional(v.any()),
     resolvedAt: v.optional(v.number()),
     reversedAt: v.optional(v.number()),
+
+    // ── Reconciliation bookkeeping ─────────────────────────────────
+
+    /**
+     * How many times the sweep has polled the provider about this row.
+     *
+     * Counted so `maxReconcileAttempts` can be enforced, and incremented
+     * BEFORE the verdict is applied so a poll whose result is `unknown` still
+     * counts — otherwise a transaction the provider never answers would be
+     * polled forever without ever reaching the escalation threshold.
+     */
+    reconcileAttempts: v.optional(v.number()),
+    lastReconcileAt: v.optional(v.number()),
+    /**
+     * Why the sweep gave up. Set only alongside `status: "unresolved"`.
+     *
+     * `never_dispatched` is here for a row found in `pending` past its
+     * dispatch window: no HTTP call was ever made, so the money is provably
+     * refundable, but the cause is a defect in our own dispatch path and is
+     * surfaced for a human rather than silently cleaned up.
+     */
+    unresolvedReason: v.optional(vtuUnresolvedReasonValidator),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_clientRequestId", ["clientRequestId"])
     .index("by_provider_reference", ["providerReference"])
-    .index("by_status", ["status", "createdAt"]),
+    .index("by_status", ["status", "createdAt"])
+    // The sweep's index. Staleness is measured on `updatedAt`, not
+    // `createdAt`: a row that went pending -> processing at T+30s must not be
+    // judged stale by when it was created. Cannot reuse `by_status`, which
+    // sorts on `createdAt`, and `.filter()` on a table scan is forbidden.
+    .index("by_status_updatedAt", ["status", "updatedAt"]),
 
   /**
    * Idempotency key claims, in their own table rather than left implicit in

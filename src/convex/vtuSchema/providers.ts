@@ -71,6 +71,72 @@ export const vtuProviderTables = {
     lastTestOk: v.optional(v.boolean()),
     /** Short code or message. Never derived from a credential. */
     lastTestError: v.optional(v.string()),
+
+    // ── Reconciliation, as provider configuration ──────────────────
+    //
+    // Rate limits and staleness thresholds are properties of the AGGREGATOR,
+    // exactly like `baseUrl` and `healthPath`. Keeping them on the row means a
+    // new provider's limits are set in admin rather than in code, and no
+    // deploy is needed when the vendor adjusts them — which they do without
+    // notice.
+
+    /**
+     * How long a transaction may sit in a non-terminal state before the sweep
+     * considers it stuck.
+     *
+     * Resolution order, and the row WINS when set:
+     *   1. this field, if present (a single number for the provider, so an
+     *      operator setting it does not have to reason about which status
+     *      they meant)
+     *   2. `processing` -> 60_000 ms
+     *   3. `unknown`    -> 30_000 ms
+     */
+    reconcileAfterMs: v.optional(v.number()),
+    /**
+     * The provider's published request budget, as a FRACTIONAL rate.
+     *
+     * 0.6 for AidaPay (their published 3-per-5-minutes); default 60 for
+     * providers without published limits.
+     *
+     * The decimal is CORRECT and looks like a typo, which is exactly why it
+     * has a comment. `GET /transaction/{ref}` at AidaPay is throttled to three
+     * calls per five minutes PER ACCOUNT, so a free-polling sweep exhausts the
+     * budget in seconds once more than three transactions are stuck — and a
+     * blocked account takes every purchase down with it, not just
+     * reconciliation.
+     *
+     * Kept fractional rather than pre-divided per sweep so the arithmetic
+     * stays derived from the provider's own published number. The allowance
+     * for a window is `floor(rate * windowMinutes)`, floored rather than
+     * rounded UP on purpose: rounding up would exceed the provider's stated
+     * budget, and exceeding it is the one outcome that gets the account
+     * blocked. A 5-minute sweep therefore lands on AidaPay's exact 3, and a
+     * 1-minute sweep correctly lands on 0 — at 0.6/min there is no budget for
+     * a call every single minute, so some sweeps legitimately poll nothing.
+     *
+     * The floor is applied to a DIFFERENCE against what the current window has
+     * already spent (see `reconcileCallsInWindow`), not to the whole window
+     * repeatedly, so several sweeps inside one window cannot each claim the
+     * full allowance.
+     */
+    rateLimitPerMinute: v.optional(v.number()),
+    /** Polls before a transaction escalates to `unresolved`. Default 5. */
+    maxReconcileAttempts: v.optional(v.number()),
+    /** Observability: when a sweep last ran for this provider. */
+    lastReconcileSweepAt: v.optional(v.number()),
+    /**
+     * Start of the current budget window, and how many calls it has spent.
+     *
+     * These two exist so the budget can be enforced BEFORE a call is made,
+     * rather than by counting calls afterwards. Post-hoc counting needs a
+     * second source of truth (which rows were polled) and races with a sweep
+     * that overlaps its predecessor — two sweeps each reading "1 used" would
+     * both dispatch. A read-modify-write on the row makes the reservation
+     * atomic, which is the only way the limit is actually a limit.
+     */
+    reconcileWindowStartAt: v.optional(v.number()),
+    reconcileCallsInWindow: v.optional(v.number()),
+
     notes: v.optional(v.string()),
     updatedBy: v.optional(v.id("users")),
     createdAt: v.number(),
