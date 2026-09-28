@@ -11,7 +11,7 @@ import {
 } from "../src/convex/vtuPairgate";
 import { mapProviderStatus } from "../src/convex/vtuProviderStatus";
 import type { ProviderStatusVerdict } from "../src/convex/vtuProviderStatus";
-import { AIDAPAY_STATUS_VOCABULARY, mapAidaPayStatus } from "../src/convex/providers/aidapay";
+import { AIDAPAY_STATUS_VOCABULARY, aidapayAdapter, mapAidaPayStatus } from "../src/convex/providers/aidapay";
 import { composeAuthHeader } from "../src/convex/vtuShared";
 import type {
   ProviderCallOptions,
@@ -372,31 +372,113 @@ describe("attemptId is carried on the request and ignored by Pairgate", () => {
     expect(bodies[0]).not.toContain("tx_one");
   });
 
-  test("an adapter that needs a never-repeating ref reads attemptId", async () => {
-    // This is the AidaPay case: it 403s a duplicate `ref`, so a released-key
-    // retry must forward a fresh one. Proven here with a stub, because the
-    // real adapter is slice 4.
-    const seen: string[] = [];
-    const aidapayish: VtuProviderAdapter = {
-      name: "aidapay",
-      displayName: "AidaPay",
-      async purchase(req) {
-        seen.push(req.attemptId);
-        return { status: "success", providerReference: "AP-1", costNgn: 100, raw: {} };
-      },
-      verifyAndParseCallback() {
-        return null;
-      },
-      async verify() {
-        return { status: "unknown", message: "unused", raw: {} };
-      },
-    };
+  test("AidaPay forwards the PHYSICAL attempt id as its ref", async () => {
+    // The real adapter now exists, so this asserts the wire bytes rather than
+    // a stub's intentions. AidaPay 403s a duplicate `ref`, and our own rule
+    // releases the idempotency key on failure so a customer can retry with the
+    // SAME client request id — forwarding that upstream would 403 every
+    // legitimate retry.
+    const { impl, bodies } = recordingFetch();
+    const opts = makeOptions(impl, {
+      accountPin: "1234",
+      authHeader: "Authorization",
+      authScheme: "bearer",
+    });
 
-    await aidapayish.purchase(makeRequest({ attemptId: "attempt_A" }), makeOptions(recordingFetch().impl));
-    await aidapayish.purchase(makeRequest({ attemptId: "attempt_B" }), makeOptions(recordingFetch().impl));
+    await aidapayAdapter.purchase(
+      makeRequest({ requestId: "req_same", attemptId: "tx_one" }),
+      opts,
+    );
 
-    // Same logical purchase, two physical dispatches, two distinct refs.
-    expect(seen).toEqual(["attempt_A", "attempt_B"]);
+    const sent = JSON.parse(bodies[0]);
+    expect(sent.ref).toBe("tx_one");
+    // The logical id must appear NOWHERE in the payload.
+    expect(bodies[0]).not.toContain("req_same");
+  });
+
+  test("two attempts of the same logical purchase carry two distinct AidaPay refs", async () => {
+    const { impl, bodies } = recordingFetch();
+    const opts = makeOptions(impl, { accountPin: "1234" });
+
+    await aidapayAdapter.purchase(
+      makeRequest({ requestId: "req_same", attemptId: "tx_one" }),
+      opts,
+    );
+    await aidapayAdapter.purchase(
+      makeRequest({ requestId: "req_same", attemptId: "tx_two" }),
+      opts,
+    );
+
+    // Same logical purchase, two physical dispatches, two distinct refs — so
+    // AidaPay 403s neither.
+    expect(JSON.parse(bodies[0]).ref).toBe("tx_one");
+    expect(JSON.parse(bodies[1]).ref).toBe("tx_two");
+  });
+
+  test("the ref clears AidaPay's 5-character minimum", async () => {
+    // A Convex transaction id is ~30 chars. This is the property that makes
+    // the attempt id the right ref, so it is pinned explicitly rather than
+    // left to the reader to infer.
+    const { impl, bodies } = recordingFetch();
+    await aidapayAdapter.purchase(
+      makeRequest({ attemptId: "tx_physical_0001" }),
+      makeOptions(impl, { accountPin: "1234" }),
+    );
+    expect(JSON.parse(bodies[0]).ref.length).toBeGreaterThanOrEqual(5);
+  });
+
+  test("AidaPay sends the PIN and the amount; Pairgate sends neither", async () => {
+    const aid = recordingFetch();
+    await aidapayAdapter.purchase(
+      makeRequest({ amountNgn: 1000 }),
+      makeOptions(aid.impl, { accountPin: "1234" }),
+    );
+    const sent = JSON.parse(aid.bodies[0]);
+    expect(sent.account_pin).toBe("1234");
+    expect(sent.amount).toBe(1000);
+    expect(sent.provider_code).toBe("mtn");
+
+    // Pairgate must not gain either field: its code already carries the amount
+    // and it has no PIN concept.
+    const pg = recordingFetch();
+    await pairgateAdapter.purchase(
+      makeRequest({ amountNgn: 1000 }),
+      makeOptions(pg.impl, { accountPin: "1234" }),
+    );
+    expect(pg.bodies[0]).not.toContain("account_pin");
+    expect(pg.bodies[0]).not.toContain("1234");
+    expect(JSON.parse(pg.bodies[0]).amount).toBeUndefined();
+  });
+
+  test("a row with no PIN fails cleanly instead of dispatching an empty one", async () => {
+    const { impl, bodies } = recordingFetch();
+    const result = await aidapayAdapter.purchase(makeRequest(), makeOptions(impl));
+
+    expect(result.status).toBe("failed");
+    if (result.status === "failed") {
+      // Distinct from a provider rejection, so an operator can tell a config
+      // mistake from an AidaPay-side refusal.
+      expect(result.code).toBe("ACCOUNT_PIN_NOT_CONFIGURED");
+    }
+    // Nothing was sent, so there is nothing to reconcile.
+    expect(bodies).toHaveLength(0);
+  });
+
+  test("AidaPay authenticates with the bearer header composed from the row", async () => {
+    const { impl, headers } = recordingFetch();
+    await aidapayAdapter.purchase(
+      makeRequest(),
+      makeOptions(impl, {
+        accountPin: "1234",
+        authHeader: "Authorization",
+        authScheme: "bearer",
+        apiKey: "tok_abc",
+      }),
+    );
+    // Composed by the shared rule, not hand-built, so the probe and the real
+    // call cannot authenticate differently.
+    expect(headers[0].Authorization).toBe("Bearer tok_abc");
+    expect(headers[0]["x-api-key"]).toBeUndefined();
   });
 });
 
