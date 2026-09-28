@@ -205,6 +205,10 @@ export const purchaseAirtime = action({
         // The PROVIDER's product code, from the route — not our service code.
         // This is the single translation point between the two namespaces.
         productCode: reserved.routedProviderProductCode,
+        // The face value, for an aggregator whose purchase endpoint takes the
+        // size as its own number rather than inside the product code (AidaPay).
+        // Pairgate ignores this — its code already carries `{amount}`.
+        ...(parsed.amountNgn !== undefined ? { amountNgn: parsed.amountNgn } : {}),
         ...(reserved.routedProviderPackageCode
           ? { providerPackageCode: reserved.routedProviderPackageCode }
           : {}),

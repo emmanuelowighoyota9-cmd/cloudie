@@ -71,6 +71,34 @@ export interface ProviderPurchaseRequest {
   /** The aggregator's catalog id for the product. */
   productCode: string;
   /**
+   * The face value of the top-up in naira, when the product has one.
+   *
+   * WHICH FIELD AN ADAPTER READS, and why both of these exist:
+   *
+   * Aggregators split two ways on how a purchase's SIZE reaches the wire.
+   *
+   *  - A product code that ENCODES the amount. Slice 3's `{amount}` token
+   *    composes it, so `airtime.mtn.1000` becomes the provider's own string
+   *    and the adapter needs nothing further. Pairgate is here: it reads
+   *    `productCode` and MUST IGNORE this field.
+   *
+   *  - A fixed product code PLUS a separate numeric `amount` in the request
+   *    body. AidaPay's `POST /buy` is here: its catalog ids name the product
+   *    and network, and the size travels as its own number. Such an adapter
+   *    reads THIS field and treats `productCode` as opaque.
+   *
+   * Neither convention is more correct, and neither is a vendor quirk to be
+   * corrected — each is simply how that aggregator was built. The split lives
+   * in the ADAPTER rather than being normalised here, because normalising it
+   * would mean this file learned a provider's request shape, which is the one
+   * thing it exists to prevent.
+   *
+   * Optional, and undefined for anything without a fixed price (cable
+   * bouquets, exam packages). An adapter that needs it must fail cleanly when
+   * it is absent rather than dispatch a zero-amount purchase.
+   */
+  amountNgn?: number;
+  /**
    * A package identifier for providers that split "which product" from "which
    * size": data plans, cable bouquets, exam packages.
    *
