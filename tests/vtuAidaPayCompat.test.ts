@@ -552,7 +552,7 @@ describe("purchaseAirtime forwards the transaction id as attemptId", () => {
           encryptedAccountPin: await encrypt("1234"),
           authHeader: "Authorization",
           authScheme: "bearer",
-          healthPath: "/balance",
+          healthPath: "/account",
           createdAt: now,
           updatedAt: now,
         } as any),
@@ -690,7 +690,7 @@ describe("test connection authenticates the way the provider is really called", 
           encryptedApiKey: await encrypt("ap_live_token_0001"),
           authHeader: "Authorization",
           authScheme: "bearer",
-          healthPath: "/balance",
+          healthPath: "/account",
           createdAt: Date.now(),
           updatedAt: Date.now(),
         } as any),
@@ -710,7 +710,7 @@ describe("test connection authenticates the way the provider is really called", 
 
         expect(result.ok).toBe(true);
         expect(calls).toHaveLength(1);
-        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/balance");
+        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/account");
         // GET only. A test button wired to a spending path is a foot-gun
         // holding a live key.
         expect(calls[0].init.method).toBe("GET");
@@ -802,7 +802,7 @@ describe("admin provider surface handles the third secret", () => {
         accountPin: "1234",
         authHeader: "Authorization",
         authScheme: "bearer",
-        healthPath: "/balance",
+        healthPath: "/account",
         status: "sandbox",
       });
 
@@ -1134,5 +1134,142 @@ describe("AidaPay callback verification is timing-safe and total", () => {
       SECRET,
     );
     expect(event?.providerReference).toBe("AP-HASH-1");
+  });
+});
+
+// ─── The operator's AidaPay onboarding, end to end ─────────────────
+
+/**
+ * The exact sequence an operator performs in `/admin/vtu/providers` when
+ * adding AidaPay: no deploy, no code change, no migration.
+ *
+ * This is the step-3 claim stated as a test rather than a screenshot. Every
+ * value below is one an operator types, and the assertion is that the
+ * resulting row is complete enough to (a) authenticate a real call and
+ * (b) pass a connection test.
+ */
+describe("an operator can add AidaPay entirely from the admin page", () => {
+  async function seedAdminUser(t: Harness) {
+    return t.run(async (ctx) =>
+      ctx.db.insert("users", {
+        name: "Root",
+        email: "root@example.com",
+        role: "admin",
+        pointsBalance: 0,
+        createdAt: Date.now(),
+      }),
+    );
+  }
+
+  test("the row is created, sealed, and probed with the configured values", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const adminId = await seedAdminUser(t);
+      const client = t.withIdentity({ subject: adminId });
+
+      // Exactly the fields the operator fills in.
+      await client.mutation(api.vtuProviderAdmin.createProvider, {
+        name: "aidapay",
+        displayName: "AidaPay",
+        baseUrl: "https://aidapay.ng/api/v1",
+        // The access token, sealed TWICE: once as the API credential and once
+        // as the webhook secret, because AidaPay keys its HMAC with the same
+        // material. Sealed separately so either can be rotated alone.
+        apiKey: "ap_access_token_x",
+        webhookSecret: "ap_access_token_x",
+        accountPin: "1234",
+        authHeader: "Authorization",
+        authScheme: "bearer",
+        callbackSignatureHeader: "Signature",
+        healthPath: "/account",
+        status: "sandbox",
+      });
+
+      // 1. The row reads back with booleans, never values.
+      const rows: any[] = await client.query(api.vtuProviderAdmin.listProviders, {});
+      expect(rows).toHaveLength(1);
+      expect(rows[0].name).toBe("aidapay");
+      expect(rows[0].authScheme).toBe("bearer");
+      expect(rows[0].authHeader).toBe("Authorization");
+      expect(rows[0].callbackSignatureHeader).toBe("Signature");
+      expect(rows[0].healthPath).toBe("/account");
+      expect(rows[0].hasApiKey).toBe(true);
+      expect(rows[0].hasWebhookSecret).toBe(true);
+      expect(rows[0].hasAccountPin).toBe(true);
+
+      // 2. No secret is recoverable from the admin surface.
+      const serialised = JSON.stringify(rows);
+      expect(serialised).not.toContain("ap_access_token_x");
+      expect(serialised).not.toContain("1234");
+      expect(serialised).not.toContain("cex1.");
+
+      // 3. Test connection hits GET /account with the bearer header.
+      const calls: { url: string; init: any }[] = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (url: any, init: any) => {
+        calls.push({ url: String(url), init });
+        return new Response(
+          JSON.stringify({ name: "Crestline", email: "ops@example.com", balance: 5000 }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as unknown as typeof fetch;
+
+      try {
+        const result: any = await client.action(api.vtuProviderCall.testProviderConnection, {
+          name: "aidapay",
+        });
+        expect(result.ok).toBe(true);
+        expect(calls).toHaveLength(1);
+        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/account");
+        expect(calls[0].init.method).toBe("GET");
+        expect(calls[0].init.headers.Authorization).toBe("Bearer ap_access_token_x");
+        // The PIN is a PURCHASE credential and must not be spent on a health
+        // probe. A test button that shipped the PIN would leak it to a
+        // read-only endpoint for no benefit.
+        expect(JSON.stringify(calls[0])).not.toContain("1234");
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+  });
+
+  test("a sandbox row is refused for purchases until the operator activates it", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const adminId = await seedAdminUser(t);
+
+      await t.run(async (ctx) =>
+        ctx.db.insert("vtuProviders", {
+          name: "aidapay",
+          displayName: "AidaPay",
+          status: "sandbox",
+          baseUrl: "https://sandbox.aidapay.ng/api/v1",
+          encryptedApiKey: await encrypt("ap_sandbox_token"),
+          encryptedWebhookSecret: await encrypt("ap_sandbox_token"),
+          encryptedAccountPin: await encrypt("1234"),
+          authHeader: "Authorization",
+          authScheme: "bearer",
+          callbackSignatureHeader: "Signature",
+          healthPath: "/account",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any),
+      );
+
+      // The resolver, not the UI, is the gate. A sandbox row must never serve
+      // a customer purchase.
+      const resolved: any = await t.run(async (ctx: any) =>
+        ctx.runQuery(internal.vtuProviderConfig.resolveForPurchase, { name: "aidapay" }),
+      );
+      expect(resolved.ok).toBe(false);
+      expect(resolved.code).toBe("PROVIDER_DISABLED");
+
+      // Verification still resolves: transactions dispatched before the row
+      // was switched must still be able to complete.
+      const verify: any = await t.run(async (ctx: any) =>
+        ctx.runQuery(internal.vtuProviderConfig.resolveForVerification, { name: "aidapay" }),
+      );
+      expect(verify.ok).toBe(true);
+    });
   });
 });
