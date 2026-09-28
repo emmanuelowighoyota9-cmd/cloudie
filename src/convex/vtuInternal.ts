@@ -21,6 +21,17 @@ import { internal } from "./_generated/api";
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+// Type-only: `MutationCtx` is what the reversal helper takes, so an action
+// cannot pass an action context to it.
+import type { MutationCtx } from "./_generated/server";
+// The reversal-reason and unresolved-reason vocabularies, from the one file
+// that owns the enums, so the mutation argument and the schema field cannot
+// drift apart.
+import {
+  vtuReversalReasonValidator,
+  vtuUnresolvedReasonValidator,
+} from "./vtuSchema/types";
+import type { VtuReversalReason } from "./vtuSchema/types";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { sanitizeForLog } from "./vtuShared";
 import type { VtuTransactionStatus } from "./vtuShared";
@@ -369,99 +380,265 @@ export const beginPurchase = internalMutation({
 });
 
 /**
- * States a transaction may be written OUT of.
+ * WHICH WRITER may move a transaction out of WHICH status, per verdict.
  *
- * `recordOutcome` is the single owner of every terminal transition. Both input
- * paths — the provider's synchronous response and its webhook — write through
- * it, which makes "no status with two owners" true by construction rather than
- * by convention: a second writer cannot be added without landing outside this
- * set.
+ * The safety property this table encodes is narrow and load-bearing, and it is
+ * the reason `failed` exists as its own status even though it never rests: a
+ * transaction is reversed only when something DEFINITIVELY told us the top-up
+ * did not happen. Every automatic reversal therefore passes through the
+ * `failed` verdict, and `unknown` — the state where the top-up may well have
+ * landed at the carrier — is not reversible at all.
+ *
+ * Every row here matches the transition comment in `vtuSchema/types.ts`. A
+ * verdict absent from a status's row is refused, not coerced.
  */
-const OUTCOME_ALLOWED_FROM: readonly VtuTransactionStatus[] = ["processing", "unknown"];
+const SETTLE_ALLOWED_FROM = {
+  confirmed: ["processing", "unknown", "unresolved"],
+  failed: ["pending", "processing", "unknown"],
+  reversed: ["unresolved"],
+  unresolved: ["pending", "processing", "unknown"],
+} as const satisfies Record<SettleVerdictStatus, readonly VtuTransactionStatus[]>;
 
-export type RecordOutcomeResult =
-  | { applied: true; status: VtuTransactionStatus }
-  | { applied: false; reason: "not_found" | "illegal_transition" | "already_resolved" };
+/** Statuses a transaction never leaves again, except by a human (`unresolved`). */
+const TERMINAL_STATUSES: readonly VtuTransactionStatus[] = [
+  "confirmed",
+  "reversed",
+  "unresolved",
+];
+
+/** Which of our code paths wrote a transition. Recorded on the row as `source`. */
+export type SettleSource = "dispatch" | "webhook" | "reconciliation" | "admin";
+
+export type SettleVerdictStatus = "confirmed" | "failed" | "reversed" | "unresolved";
+
+export type SettleResult =
+  | {
+      settled: true;
+      status: "confirmed" | "reversed" | "unresolved";
+      /** Present only on the `reversed` verdicts — the refund ledger row. */
+      creditId?: Id<"pointLedger">;
+    }
+  | {
+      settled: false;
+      reason: "not_found" | "already_terminal" | "illegal_transition";
+      status?: VtuTransactionStatus;
+    };
 
 /**
- * The ONLY writer permitted to move a transaction out of `processing` or
- * `unknown`.
+ * THE single writer of every terminal transaction status.
  *
- * Refused, loudly:
- *   - anything from `failed` (its only exit is `reversed`) — this is what
- *     blocks `failed -> confirmed`
- *   - anything from `confirmed` (terminal) — blocks `confirmed -> failed`
- *   - anything from `reversed` (terminal)
- *   - anything from `pending` (must pass through `markProcessing` first)
+ * Before this mutation there were two writers of a terminal status — the
+ * synchronous provider response in `purchaseAirtime` and the webhook handler in
+ * `applyCallback` — and slice 5 adds a third (the reconciliation sweep). Three
+ * writers of one state is a race, and the race is not theoretical: a webhook
+ * that lands in the same tick as a sweep's verdict would double-credit the
+ * customer under the old shape, because the two wrote independently.
+ *
+ * It is impossible now, and by construction rather than by discipline:
+ *
+ *   1. Every caller goes through this one mutation.
+ *   2. The FIRST thing it does is check the verdict's transition against the
+ *      transaction's CURRENT status. A transaction that is already terminal
+ *      no-ops, so the second caller in a race sees the first caller's write and
+ *      returns `already_terminal` instead of re-crediting.
+ *      (Convex serialises mutations, so "the second caller" is guaranteed to
+ *      observe the first caller's committed write — this is a real
+ *      happens-before edge, not a hopeful one.)
+ *   3. The reversal and its ledger credit happen INSIDE this mutation, in the
+ *      same Convex transaction as the status write. The credit cannot land
+ *      without the status, and the status cannot commit without the credit.
+ *
+ * The ledger is credited through `reverseAndRelease`, which is a plain helper
+ * rather than a mutation precisely so that this is the ONLY way to reach it:
+ * there is no `refundAndRelease` API for an action to call out of order.
  */
-export const recordOutcome = internalMutation({
+export const settleTransaction = internalMutation({
   args: {
     transactionId: v.id("vtuTransactions"),
-    outcome: v.union(
+    source: v.union(
+      v.literal("dispatch"),
+      v.literal("webhook"),
+      v.literal("reconciliation"),
+      v.literal("admin"),
+    ),
+    verdict: v.union(
+      // Delivered. The debit stands.
       v.object({
-        status: v.union(v.literal("success"), v.literal("failed"), v.literal("unknown")),
+        status: v.literal("confirmed"),
         providerReference: v.optional(v.string()),
         costNgn: v.optional(v.number()),
+        raw: v.optional(v.any()),
+      }),
+      // Definitively rejected or cancelled. Reverses in this same mutation,
+      // which is why `failed` is never observable on a committed row.
+      v.object({
+        status: v.literal("failed"),
+        reversalReason: v.union(
+          v.literal("provider_failed"),
+          v.literal("provider_cancelled"),
+          v.literal("reconciliation"),
+        ),
+        providerReference: v.optional(v.string()),
         code: v.optional(v.string()),
         message: v.optional(v.string()),
         raw: v.optional(v.any()),
       }),
+      // An operator refunding a transaction the system could not settle.
+      v.object({
+        status: v.literal("reversed"),
+        reversalReason: vtuReversalReasonValidator,
+        reason: v.optional(v.string()),
+        raw: v.optional(v.any()),
+      }),
+      // Neither delivered nor provably failed. Escalated to a human, never
+      // auto-reversed.
+      v.object({
+        status: v.literal("unresolved"),
+        unresolvedReason: vtuUnresolvedReasonValidator,
+        message: v.optional(v.string()),
+        raw: v.optional(v.any()),
+      }),
     ),
-    source: v.union(v.literal("provider_response"), v.literal("webhook")),
   },
-  handler: async (ctx, args): Promise<RecordOutcomeResult> => {
+  handler: async (ctx, args): Promise<SettleResult> => {
     const tx = await ctx.db.get(args.transactionId);
-    if (!tx) return { applied: false, reason: "not_found" };
+    if (!tx) return { settled: false, reason: "not_found" };
 
-    if (tx.status === "confirmed" || tx.status === "reversed") {
-      return { applied: false, reason: "already_resolved" };
+    const verdict = args.verdict;
+    const allowedFrom: readonly VtuTransactionStatus[] = SETTLE_ALLOWED_FROM[verdict.status];
+    if (!allowedFrom.includes(tx.status)) {
+      return {
+        settled: false,
+        reason: TERMINAL_STATUSES.includes(tx.status)
+          ? "already_terminal"
+          : "illegal_transition",
+        status: tx.status,
+      };
     }
-    if (tx.status === "failed") return { applied: false, reason: "illegal_transition" };
-    if (!OUTCOME_ALLOWED_FROM.includes(tx.status)) {
-      return { applied: false, reason: "illegal_transition" };
+
+    // A never-dispatched row may only be declared failed by the one writer that
+    // KNOWS nothing was sent. The status alone cannot tell us that, so the
+    // source has to, and the check fails closed for every other source.
+    if (verdict.status === "failed" && tx.status === "pending" && args.source !== "dispatch") {
+      return { settled: false, reason: "illegal_transition", status: tx.status };
     }
 
     const now = Date.now();
-    const o = args.outcome;
 
-    if (o.status === "success") {
+    if (verdict.status === "confirmed") {
       await ctx.db.patch(args.transactionId, {
         status: "confirmed",
-        providerReference: o.providerReference ?? tx.providerReference,
-        ...(o.costNgn !== undefined ? { nairaPrice: o.costNgn } : {}),
+        providerReference: verdict.providerReference ?? tx.providerReference,
+        ...(verdict.costNgn !== undefined ? { nairaPrice: verdict.costNgn } : {}),
         source: args.source,
         failureReason: undefined,
         failureCode: undefined,
-        rawResponse: sanitizeForLog(o.raw ?? null),
+        rawResponse: sanitizeForLog(verdict.raw ?? null),
         resolvedAt: now,
         updatedAt: now,
       });
-      return { applied: true, status: "confirmed" };
+      return { settled: true, status: "confirmed" };
     }
 
-    if (o.status === "failed") {
+    if (verdict.status === "unresolved") {
       await ctx.db.patch(args.transactionId, {
-        status: "failed",
-        providerReference: o.providerReference ?? tx.providerReference,
-        failureCode: o.code,
-        failureReason: o.message,
+        status: "unresolved",
+        unresolvedReason: verdict.unresolvedReason,
+        failureReason: verdict.message,
         source: args.source,
-        rawResponse: sanitizeForLog(o.raw ?? null),
+        rawResponse: sanitizeForLog(verdict.raw ?? null),
         updatedAt: now,
       });
-      return { applied: true, status: "failed" };
+      return { settled: true, status: "unresolved" };
     }
 
-    // unknown — a REAL status, never coerced to pending or failed.
+    if (verdict.status === "failed") {
+      // The intermediate `failed` write is not decoration: `reverseAndRelease`
+      // requires it, which is what keeps "a reversal is only reachable from a
+      // failure verdict" true at the single point where it could break. Both
+      // writes commit together or neither does.
+      await ctx.db.patch(args.transactionId, {
+        status: "failed",
+        providerReference: verdict.providerReference ?? tx.providerReference,
+        failureCode: verdict.code,
+        failureReason: verdict.message,
+        source: args.source,
+        rawResponse: sanitizeForLog(verdict.raw ?? null),
+        updatedAt: now,
+      });
+      const reversal = await reverseAndRelease(ctx, {
+        transactionId: args.transactionId,
+        reason: verdict.message ?? "Provider reported failure",
+        reversalReason: verdict.reversalReason,
+        authorizedBy: "provider_verdict",
+      });
+      return reversal.reversed
+        ? { settled: true, status: "reversed", creditId: reversal.creditId }
+        : { settled: false, reason: "illegal_transition", status: "failed" };
+    }
+
+    // verdict.status === "reversed": a human decided to refund.
+    const reversal = await reverseAndRelease(ctx, {
+      transactionId: args.transactionId,
+      reason: verdict.reason ?? "Reversed by an operator",
+      reversalReason: verdict.reversalReason,
+      authorizedBy: "operator_override",
+    });
+    return reversal.reversed
+      ? { settled: true, status: "reversed", creditId: reversal.creditId }
+      : { settled: false, reason: "illegal_transition", status: tx.status };
+  },
+});
+
+/**
+ * `processing -> unknown`. NOT a terminal write, which is why it is not
+ * `settleTransaction`.
+ *
+ * "We asked and the transport gave us nothing" is a real, resting, non-terminal
+ * state: the points stay debited, the webhook may still arrive, and the sweep
+ * will poll it. The name says what it writes; the previous `recordOutcome`
+ * could write `confirmed` and `failed` too, and keeping that name around after
+ * those two moved out would have left a function whose name promised a
+ * capability it no longer had — exactly how a second terminal writer gets
+ * reintroduced by accident.
+ */
+const UNKNOWN_ALLOWED_FROM: readonly VtuTransactionStatus[] = ["processing", "unknown"];
+
+export type MarkUnknownResult =
+  | { applied: true }
+  | { applied: false; reason: "not_found" | "illegal_transition" };
+
+export const markUnknown = internalMutation({
+  args: {
+    transactionId: v.id("vtuTransactions"),
+    message: v.optional(v.string()),
+    providerReference: v.optional(v.string()),
+    raw: v.optional(v.any()),
+    source: v.union(
+      v.literal("dispatch"),
+      v.literal("webhook"),
+      v.literal("reconciliation"),
+      v.literal("admin"),
+    ),
+  },
+  handler: async (ctx, args): Promise<MarkUnknownResult> => {
+    const tx = await ctx.db.get(args.transactionId);
+    if (!tx) return { applied: false, reason: "not_found" };
+    // Refuses `pending` deliberately: a row that was never dispatched has not
+    // been asked, so "we do not know" would be a lie about what happened.
+    if (!UNKNOWN_ALLOWED_FROM.includes(tx.status)) {
+      return { applied: false, reason: "illegal_transition" };
+    }
+
     await ctx.db.patch(args.transactionId, {
       status: "unknown",
-      providerReference: o.providerReference ?? tx.providerReference,
-      failureReason: o.message,
+      providerReference: args.providerReference ?? tx.providerReference,
+      failureReason: args.message,
       source: args.source,
-      rawResponse: sanitizeForLog(o.raw ?? null),
-      updatedAt: now,
+      rawResponse: sanitizeForLog(args.raw ?? null),
+      updatedAt: Date.now(),
     });
-    return { applied: true, status: "unknown" };
+    return { applied: true };
   },
 });
 
@@ -490,90 +667,126 @@ export type RefundResult =
   | { reversed: false; reason: "not_found" | "illegal_transition" | "already_reversed" };
 
 /**
- * The ONLY exit from `failed`: credit the points back and release the
- * idempotency key so the customer can retry the same request id.
+ * WHO is allowed to reverse, and from which status.
  *
- * Two properties make the release safe to rely on:
+ * Two very different authorities, deliberately not one:
+ *
+ *   `provider_verdict` — something told us definitively that the top-up did
+ *     not happen. Only reachable from `failed`, which `settleTransaction`
+ *     writes immediately before calling this.
+ *
+ *   `operator_override` — a human decided to refund. Reachable only from
+ *     `unresolved`, the state that exists BECAUSE the system could not reach a
+ *     verdict. This is the one case where we refund something unconfirmed, and
+ *     it is a decision, not a policy.
+ *
+ * Making the authority an explicit parameter is what lets the guard stay
+ * meaningful after the admin path arrived: the alternative — fetching the row,
+ * faking an intermediate `failed` write, and reusing the provider path — would
+ * have been a one-line lie that dissolved the property the guard exists to
+ * protect.
+ */
+type ReversalAuthority = "provider_verdict" | "operator_override";
+
+const REVERSIBLE_FROM: Record<ReversalAuthority, readonly VtuTransactionStatus[]> = {
+  provider_verdict: ["failed"],
+  operator_override: ["unresolved"],
+};
+
+/**
+ * Credit the points back and release the idempotency key so the customer can
+ * retry the same request id.
+ *
+ * A plain helper, NOT a mutation. That is the whole point: `settleTransaction`
+ * is the only caller, so there is no way for an action — or a future sweep — to
+ * reach a reversal without going through the terminal-status guard first. As a
+ * mutation this was reachable in isolation, which is exactly the second writer
+ * slice 5 removes.
+ *
+ * Running inside `settleTransaction`'s mutation context also means the credit
+ * and the status write commit together. The credit cannot land without the
+ * status, and the status cannot commit without the credit.
+ *
+ * Two further properties make the release safe to rely on:
  *   1. The credit amount is `pointsDebited` — the FROZEN snapshot. Re-reading
  *      the live rate would refund a different number of points than were
  *      taken and the balance would not return to where it started.
  *   2. The credit key derives from the transaction id, so a duplicate call
  *      cannot pay twice; the status guard also short-circuits first.
  */
-export const refundAndRelease = internalMutation({
+async function reverseAndRelease(
+  ctx: MutationCtx,
   args: {
-    transactionId: v.id("vtuTransactions"),
-    reason: v.string(),
+    transactionId: Id<"vtuTransactions">;
+    reason: string;
     /**
      * WHY this reversal happened, as a closed enum.
      *
-     * REQUIRED, not optional, and that is the point: `refundAndRelease` is the
-     * only writer of `status: "reversed"`, so making the argument mandatory
-     * here is what makes `reversalReason` non-null on every reversed row by
-     * CONSTRUCTION rather than by discipline. Convex cannot express a
-     * cross-field constraint (`reversed` implies a reason), so the invariant
-     * is enforced at the one place that can break it.
+     * REQUIRED, not optional, and that is the point: this is the only writer of
+     * `status: "reversed"`, so making the argument mandatory here is what makes
+     * `reversalReason` non-null on every reversed row by CONSTRUCTION rather
+     * than by discipline. Convex cannot express a cross-field constraint
+     * (`reversed` implies a reason), so the invariant is enforced at the one
+     * place that can break it.
      *
      * The schema field stays optional only because a table validator has no
      * way to say "required when status is reversed".
      */
-    reversalReason: v.union(
-      v.literal("provider_failed"),
-      v.literal("provider_cancelled"),
-      v.literal("admin_override"),
-      v.literal("reconciliation"),
-    ),
+    reversalReason: VtuReversalReason;
+    authorizedBy: ReversalAuthority;
   },
-  handler: async (ctx, args): Promise<RefundResult> => {
-    const tx = await ctx.db.get(args.transactionId);
-    if (!tx) return { reversed: false, reason: "not_found" };
-    if (tx.status === "reversed") return { reversed: false, reason: "already_reversed" };
-    // Notably refuses `unknown`: releasing an unresolved transaction risks
-    // charging a customer twice for a top-up that may have landed.
-    if (tx.status !== "failed") return { reversed: false, reason: "illegal_transition" };
-    if (tx.reversalLedgerId) return { reversed: false, reason: "already_reversed" };
+): Promise<RefundResult> {
+  const tx = await ctx.db.get(args.transactionId);
+  if (!tx) return { reversed: false, reason: "not_found" };
+  if (tx.status === "reversed") return { reversed: false, reason: "already_reversed" };
+  // Notably refuses `unknown`: releasing an unresolved transaction risks
+  // charging a customer twice for a top-up that may have landed.
+  const allowedFrom = REVERSIBLE_FROM[args.authorizedBy];
+  if (!allowedFrom.includes(tx.status)) {
+    return { reversed: false, reason: "illegal_transition" };
+  }
+  if (tx.reversalLedgerId) return { reversed: false, reason: "already_reversed" };
 
-    const creditId = await ctx.runMutation(internal.points.credit, {
-      userId: tx.userId,
-      amount: tx.pointsDebited,
-      type: "vtu_refund",
-      description: `VTU refund: ${tx.serviceCode} (${tx.customerIdentifier})`,
-      reference: tx.provider,
-      idempotencyKey: vtuRefundKey(tx._id),
-      metadata: {
-        transactionId: tx._id,
-        serviceCode: tx.serviceCode,
-        reason: args.reason,
-        reversalReason: args.reversalReason,
-        pointsDebited: tx.pointsDebited,
-        ngnPerPoint: tx.ngnPerPoint,
-      },
-    });
-
-    // Deleting the claim is what lets the customer retry the same
-    // clientRequestId without being charged a second time for one attempt.
-    const claim = await ctx.db
-      .query("vtuIdempotency")
-      .withIndex("by_key", (q) => q.eq("key", tx.idempotencyKey))
-      .unique();
-    if (claim) await ctx.db.delete(claim._id);
-
-    const now = Date.now();
-    await ctx.db.patch(args.transactionId, {
-      status: "reversed",
-      // Written in the SAME patch as the status, so there is no intermediate
-      // state in which the row is reversed without a reason.
+  const creditId = await ctx.runMutation(internal.points.credit, {
+    userId: tx.userId,
+    amount: tx.pointsDebited,
+    type: "vtu_refund",
+    description: `VTU refund: ${tx.serviceCode} (${tx.customerIdentifier})`,
+    reference: tx.provider,
+    idempotencyKey: vtuRefundKey(tx._id),
+    metadata: {
+      transactionId: tx._id,
+      serviceCode: tx.serviceCode,
+      reason: args.reason,
       reversalReason: args.reversalReason,
-      reversalLedgerId: creditId,
-      reversedAt: now,
-      resolvedAt: now,
-      failureReason: args.reason,
-      updatedAt: now,
-    });
+      pointsDebited: tx.pointsDebited,
+      ngnPerPoint: tx.ngnPerPoint,
+    },
+  });
 
-    return { reversed: true, creditId, releasedKey: tx.idempotencyKey };
-  },
-});
+  // Deleting the claim is what lets the customer retry the same
+  // clientRequestId without being charged a second time for one attempt.
+  const claim = await ctx.db
+    .query("vtuIdempotency")
+    .withIndex("by_key", (q) => q.eq("key", tx.idempotencyKey))
+    .unique();
+  if (claim) await ctx.db.delete(claim._id);
+
+  const now = Date.now();
+  await ctx.db.patch(args.transactionId, {
+    status: "reversed",
+    // Written in the SAME patch as the status, so there is no intermediate
+    // state in which the row is reversed without a reason.
+    reversalReason: args.reversalReason,
+    reversalLedgerId: creditId,
+    reversedAt: now,
+    resolvedAt: now,
+    failureReason: args.reason,
+    updatedAt: now,
+  });
+
+  return { reversed: true, creditId, releasedKey: tx.idempotencyKey };
+}
 
 /**
  * Find a transaction by the reference the aggregator assigned.

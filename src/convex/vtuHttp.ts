@@ -149,7 +149,17 @@ export const purchaseAirtime = action({
 
     const transactionId = reserved.transactionId;
 
-    /** Every post-debit failure funnels through here, so points always come back. */
+    /**
+     * Every post-debit failure funnels through here, so points always come
+     * back.
+     *
+     * It is also the ONE place `pending -> failed` is legitimate, and it says
+     * so with `source: "dispatch"`: this runs before any HTTP call was made, so
+     * "nothing was sent" is a fact this action knows and the transaction's
+     * status alone cannot express. Without that distinction the only honest
+     * outcome for a missing credential would be a row stuck in `pending` with
+     * the customer's points still spent.
+     */
     const fail = async (
       code: string,
       message: string,
@@ -158,21 +168,14 @@ export const purchaseAirtime = action({
       // refund, so the difference is recorded rather than acted on.
       reversalReason: "provider_failed" | "provider_cancelled" = "provider_failed",
     ): Promise<PurchaseResult> => {
-      const outcome = await ctx.runMutation(internal.vtuInternal.recordOutcome, {
+      const settled = await ctx.runMutation(internal.vtuInternal.settleTransaction, {
         transactionId,
-        outcome: { status: "failed", code, message },
-        source: "provider_response",
+        source: "dispatch",
+        verdict: { status: "failed", reversalReason, code, message },
       });
-      if (outcome.applied && outcome.status === "failed") {
-        await ctx.runMutation(internal.vtuInternal.refundAndRelease, {
-          transactionId,
-          reason: message,
-          reversalReason,
-        });
-      }
       return {
         requestId: args.clientRequestId,
-        status: "reversed",
+        status: settled.settled ? settled.status : "unchanged",
         transactionId,
         reused: false,
         error: message,
@@ -218,61 +221,60 @@ export const purchaseAirtime = action({
       call.opts,
     );
 
-    // 5. Record it. `success` stands, `unknown` waits for a webhook with the
-    //    points still debited, `failed` refunds and releases the key.
-    const recorded = await ctx.runMutation(internal.vtuInternal.recordOutcome, {
+    // 5. Settle. ONE mutation decides the terminal state and moves the ledger
+    //    with it: `success` stands, `failed` refunds and releases the key.
+    //
+    //    `unknown` is deliberately not settled here — it is not terminal. The
+    //    points stay debited and the row waits for a webhook or the sweep,
+    //    which is the only honest thing to do when the transport told us
+    //    nothing about a top-up that may already have reached the carrier.
+    if (outcome.status === "unknown") {
+      const marked = await ctx.runMutation(internal.vtuInternal.markUnknown, {
+        transactionId,
+        source: "dispatch",
+        message: outcome.message,
+        providerReference: outcome.providerReference,
+        raw: outcome.raw,
+      });
+      return {
+        requestId: args.clientRequestId,
+        status: marked.applied ? "unknown" : "unchanged",
+        transactionId,
+        reused: false,
+      };
+    }
+
+    const settled = await ctx.runMutation(internal.vtuInternal.settleTransaction, {
       transactionId,
-      source: "provider_response",
-      outcome:
+      source: "dispatch",
+      verdict:
         outcome.status === "success"
           ? {
-              status: "success",
+              status: "confirmed",
               providerReference: outcome.providerReference,
               costNgn: outcome.costNgn,
               raw: outcome.raw,
             }
-          : outcome.status === "failed"
-            ? {
-                status: "failed",
-                code: outcome.code,
-                message: outcome.message,
-                ...(outcome.failureKind ? { failureKind: outcome.failureKind } : {}),
-                providerReference: outcome.providerReference,
-                raw: outcome.raw,
-              }
-            : {
-                status: "unknown",
-                message: outcome.message,
-                providerReference: outcome.providerReference,
-                raw: outcome.raw,
-              },
+          : {
+              status: "failed",
+              // The adapter told us which kind of failure it was; an adapter
+              // that could not tell us defaults to the conservative
+              // provider_failed.
+              reversalReason:
+                outcome.failureKind === "cancelled" ? "provider_cancelled" : "provider_failed",
+              code: outcome.code,
+              message: outcome.message,
+              providerReference: outcome.providerReference,
+              raw: outcome.raw,
+            },
     });
-
-    if (recorded.applied && recorded.status === "failed") {
-      await ctx.runMutation(internal.vtuInternal.refundAndRelease, {
-        transactionId,
-        reason: "Provider rejected the purchase",
-        // The adapter told us which kind of failure it was; an adapter that
-        // could not tell us defaults to the conservative provider_failed.
-        reversalReason:
-          outcome.status === "failed" && outcome.failureKind === "cancelled"
-            ? "provider_cancelled"
-            : "provider_failed",
-      });
-      return {
-        requestId: args.clientRequestId,
-        status: "reversed",
-        transactionId,
-        reused: false,
-        error: "Provider rejected the purchase",
-      };
-    }
 
     return {
       requestId: args.clientRequestId,
-      status: recorded.applied ? recorded.status : "unchanged",
+      status: settled.settled ? settled.status : "unchanged",
       transactionId,
       reused: false,
+      ...(outcome.status === "failed" ? { error: outcome.message } : {}),
     };
   },
 });
@@ -400,20 +402,26 @@ export const applyCallback = internalAction({
       return { applied: false, outcome: "unmatched" };
     }
 
-    // One owner for the transition, whichever path we arrived from.
-    const recorded = await ctx.runMutation(internal.vtuInternal.recordOutcome, {
+    // One owner for the transition, whichever path we arrived from. The
+    // reversal is NOT a second call: `settleTransaction` moves the status and
+    // the ledger together, which is what makes a webhook landing in the same
+    // tick as a reconciliation verdict settle exactly once instead of paying
+    // the customer twice.
+    const settled = await ctx.runMutation(internal.vtuInternal.settleTransaction, {
       transactionId,
       source: "webhook",
-      outcome:
+      verdict:
         args.event.outcome === "confirmed"
           ? {
-              status: "success",
+              status: "confirmed",
               providerReference: args.event.providerReference,
               costNgn: args.event.costNgn,
               raw: { via: "webhook", eventId: args.event.eventId ?? null },
             }
           : {
               status: "failed",
+              reversalReason:
+                args.event.failureKind === "cancelled" ? "provider_cancelled" : "provider_failed",
               providerReference: args.event.providerReference,
               code: args.event.code,
               message: args.event.message ?? "Provider reported failure",
@@ -421,21 +429,15 @@ export const applyCallback = internalAction({
             },
     });
 
-    if (recorded.applied && recorded.status === "failed") {
-      await ctx.runMutation(internal.vtuInternal.refundAndRelease, {
-        transactionId,
-        reason: args.event.message ?? "Provider reported failure",
-        reversalReason:
-          args.event.failureKind === "cancelled" ? "provider_cancelled" : "provider_failed",
-      });
-      return { applied: true, outcome: "failed", status: "reversed" };
+    if (!settled.settled) {
+      return {
+        applied: false,
+        outcome: args.event.outcome,
+        status: "unchanged",
+        reason: settled.reason,
+      };
     }
 
-    return {
-      applied: recorded.applied,
-      outcome: args.event.outcome,
-      status: recorded.applied ? recorded.status : "unchanged",
-      ...(recorded.applied ? {} : { reason: "illegal_transition" }),
-    };
+    return { applied: true, outcome: args.event.outcome, status: settled.status };
   },
 });

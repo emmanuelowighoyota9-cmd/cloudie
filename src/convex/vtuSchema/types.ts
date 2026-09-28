@@ -67,15 +67,25 @@ export const vtuServiceTypeValidator = v.union(
  *
  *   (none)     -> pending        beginPurchase
  *   pending    -> processing     markProcessing
+ *   pending    -> failed         settleTransaction   (source "dispatch" ONLY)
  *   processing -> confirmed      settleTransaction   (response, webhook, or sweep)
  *   processing -> failed         settleTransaction
- *   processing -> unknown        recordOutcome       (transport gave us nothing)
+ *   processing -> unknown        markUnknown         (transport gave us nothing)
  *   unknown    -> confirmed      settleTransaction   (late webhook, or a sweep)
  *   unknown    -> failed         settleTransaction
  *   failed     -> reversed       settleTransaction   (same mutation, see below)
  *   *          -> unresolved     settleTransaction   (escalation to a human)
  *   unresolved -> confirmed      settleTransaction   (admin: confirm delivered)
  *   unresolved -> reversed       settleTransaction   (admin: refund customer)
+ *
+ * `pending -> failed` is legal for exactly ONE writer and one reason: the
+ * dispatch action discovering, BEFORE it made an HTTP call, that it cannot make
+ * one (a provider row with no credential, or one whose ciphertext will not
+ * open). Nothing was sent, so reversing is provably safe — which is why the
+ * transition is gated on `source: "dispatch"` rather than on the status alone.
+ * A webhook cannot reach a `pending` row (it has no provider reference yet),
+ * and the sweep escalates a stuck `pending` row to `unresolved`,
+ * never to `failed`.
  *
  * POLLING. Only `processing` and `unknown` are ever polled by the
  * reconciliation sweep. Everything else is either decided (`failed`), done

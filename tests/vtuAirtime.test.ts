@@ -26,7 +26,6 @@ const modules = {
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
   "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
   "src/convex/vtu.ts": () => import("../src/convex/vtu"),
-  "src/convex/vtuReversal.ts": () => import("../src/convex/vtuReversal"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
   "src/convex/points.ts": () => import("../src/convex/points"),
   "src/convex/pricing.ts": () => import("../src/convex/pricing"),
@@ -145,22 +144,25 @@ describe("failed transaction reversal", () => {
     expect(reserved.pointsDebited).toBe(67);
     expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
 
-    // Provider definitively rejected it.
-    const recorded = await t.mutation(internal.vtuInternal.recordOutcome, {
+    // Provider definitively rejected it. ONE mutation settles the status AND
+    // moves the ledger — there is no second call a caller can forget, which is
+    // exactly the shape that made the webhook/sweep race possible before.
+    const settled = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "failed", code: "INVALID_PRODUCT", message: "Unknown product" },
+      source: "dispatch",
+      verdict: {
+        status: "failed",
+        reversalReason: "provider_failed",
+        code: "INVALID_PRODUCT",
+        message: "Unknown product",
+      },
     });
-    expect(recorded.applied).toBe(true);
-    expect(recorded.status).toBe("failed");
-
-    const refund = await t.mutation(internal.vtuInternal.refundAndRelease, {
-      transactionId: reserved.transactionId,
-      reason: "Provider rejected the purchase",
-      reversalReason: "provider_failed",
-    });
-    expect(refund.reversed).toBe(true);
-    expect(refund.releasedKey).toBe(vtuPurchaseKey("vtu_reversal_case_one"));
+    expect(settled.settled).toBe(true);
+    // The verdict asked for `failed`; the committed row reads `reversed`,
+    // because the two writes are one Convex transaction. `failed` is a state
+    // the mutation passes THROUGH, never a state a client can observe.
+    expect(settled.status).toBe("reversed");
+    expect(await claimsFor(t)).toHaveLength(0);
 
     // Points are back exactly where they started.
     expect(await balanceOf(t, userId)).toBe(START_BALANCE);
@@ -181,15 +183,15 @@ describe("failed transaction reversal", () => {
     const { userId } = await seed(t);
 
     const first = await toProcessing(t, userId, "vtu_retry_same_id");
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: first.transactionId,
-      source: "provider_response",
-      outcome: { status: "failed", code: "X", message: "rejected" },
-    });
-    await t.mutation(internal.vtuInternal.refundAndRelease, {
-      transactionId: first.transactionId,
-      reason: "rejected",
-      reversalReason: "provider_failed",
+      source: "dispatch",
+      verdict: {
+        status: "failed",
+        reversalReason: "provider_failed",
+        code: "X",
+        message: "rejected",
+      },
     });
 
     // The claim is gone, so this is a genuinely new attempt rather than a
@@ -222,25 +224,34 @@ describe("failed transaction reversal", () => {
     const { userId } = await seed(t);
 
     const reserved = await toProcessing(t, userId, "vtu_double_refund");
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "failed", code: "X", message: "rejected" },
-    });
-    await t.mutation(internal.vtuInternal.refundAndRelease, {
-      transactionId: reserved.transactionId,
-      reason: "first",
-      reversalReason: "provider_failed",
+      source: "dispatch",
+      verdict: {
+        status: "failed",
+        reversalReason: "provider_failed",
+        code: "X",
+        message: "first",
+      },
     });
     expect(await balanceOf(t, userId)).toBe(START_BALANCE);
 
-    const again = await t.mutation(internal.vtuInternal.refundAndRelease, {
+    // A SECOND verdict for the same transaction, from a DIFFERENT writer. This
+    // is the race the single writer exists to make impossible: the sweep's
+    // verdict arrives after the first settlement and must no-op rather than
+    // credit the customer twice.
+    const again = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      reason: "second",
-      reversalReason: "provider_failed",
+      source: "reconciliation",
+      verdict: {
+        status: "failed",
+        reversalReason: "reconciliation",
+        code: "X",
+        message: "second",
+      },
     });
-    expect(again.reversed).toBe(false);
-    expect(again.reason).toBe("already_reversed");
+    expect(again.settled).toBe(false);
+    expect(again.reason).toBe("already_terminal");
 
     expect(await balanceOf(t, userId)).toBe(START_BALANCE);
     expect((await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund")).toHaveLength(1);
@@ -275,15 +286,15 @@ describe("failed transaction reversal", () => {
     await t.mutation(internal.vtuInternal.markProcessing, {
       transactionId: reserved.transactionId,
     });
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "failed", code: "X", message: "rejected" },
-    });
-    await t.mutation(internal.vtuInternal.refundAndRelease, {
-      transactionId: reserved.transactionId,
-      reason: "rejected",
-      reversalReason: "provider_failed",
+      source: "dispatch",
+      verdict: {
+        status: "failed",
+        reversalReason: "provider_failed",
+        code: "X",
+        message: "rejected",
+      },
     });
 
     // Had the refund re-read the live rate it would have credited 134 points.
@@ -408,28 +419,35 @@ describe("idempotency", () => {
 // ─── Transition guards ─────────────────────────────────────────────
 
 describe("status transitions", () => {
-  test("failed cannot be resurrected to confirmed", async () => {
+  test("a reversed transaction cannot be resurrected to confirmed", async () => {
     const t = convexTest(schema, modules);
     const { userId } = await seed(t);
 
     const reserved = await toProcessing(t, userId, "vtu_no_resurrect");
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "failed", code: "X", message: "rejected" },
+      source: "dispatch",
+      verdict: {
+        status: "failed",
+        reversalReason: "provider_failed",
+        code: "X",
+        message: "rejected",
+      },
     });
 
-    // A late webhook claiming success must not revive it.
-    const attempt = await t.mutation(internal.vtuInternal.recordOutcome, {
+    // A late webhook claiming success must not revive it — and must not
+    // re-credit a customer who has already been refunded.
+    const attempt = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
       source: "webhook",
-      outcome: { status: "success", providerReference: "PG-1" },
+      verdict: { status: "confirmed", providerReference: "PG-1" },
     });
-    expect(attempt.applied).toBe(false);
-    expect(attempt.reason).toBe("illegal_transition");
+    expect(attempt.settled).toBe(false);
+    expect(attempt.reason).toBe("already_terminal");
 
     const tx = await txOf(t, reserved.transactionId);
-    expect(tx.status).toBe("failed");
+    expect(tx.status).toBe("reversed");
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE);
   });
 
   test("confirmed is terminal", async () => {
@@ -437,19 +455,24 @@ describe("status transitions", () => {
     const { userId } = await seed(t);
 
     const reserved = await toProcessing(t, userId, "vtu_confirmed_terminal");
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
       source: "webhook",
-      outcome: { status: "success", providerReference: "PG-2" },
+      verdict: { status: "confirmed", providerReference: "PG-2" },
     });
 
-    const attempt = await t.mutation(internal.vtuInternal.recordOutcome, {
+    const attempt = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
       source: "webhook",
-      outcome: { status: "failed", code: "X", message: "late failure" },
+      verdict: {
+        status: "failed",
+        reversalReason: "provider_failed",
+        code: "X",
+        message: "late failure",
+      },
     });
-    expect(attempt.applied).toBe(false);
-    expect(attempt.reason).toBe("already_resolved");
+    expect(attempt.settled).toBe(false);
+    expect(attempt.reason).toBe("already_terminal");
 
     // The debit stands on a delivered top-up.
     expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
@@ -460,12 +483,12 @@ describe("status transitions", () => {
     const { userId } = await seed(t);
 
     const reserved = await toProcessing(t, userId, "vtu_timeout_case");
-    const outcome = await t.mutation(internal.vtuInternal.recordOutcome, {
+    const outcome = await t.mutation(internal.vtuInternal.markUnknown, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "unknown", message: "Network error contacting provider" },
+      source: "dispatch",
+      message: "Network error contacting provider",
     });
-    expect(outcome.status).toBe("unknown");
+    expect(outcome.applied).toBe(true);
 
     const tx = await txOf(t, reserved.transactionId);
     expect(tx.status).toBe("unknown");
@@ -473,12 +496,12 @@ describe("status transitions", () => {
     expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
 
     // A late webhook can still resolve it.
-    const resolved = await t.mutation(internal.vtuInternal.recordOutcome, {
+    const resolved = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
       source: "webhook",
-      outcome: { status: "success", providerReference: "PG-3" },
+      verdict: { status: "confirmed", providerReference: "PG-3" },
     });
-    expect(resolved.applied).toBe(true);
+    expect(resolved.settled).toBe(true);
     expect((await txOf(t, reserved.transactionId)).status).toBe("confirmed");
   });
 
@@ -487,23 +510,26 @@ describe("status transitions", () => {
     const { userId } = await seed(t);
 
     const reserved = await toProcessing(t, userId, "vtu_no_release_unknown");
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.markUnknown, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "unknown", message: "timeout" },
+      source: "dispatch",
+      message: "timeout",
     });
 
-    const attempt = await t.mutation(internal.vtuInternal.refundAndRelease, {
+    // An operator can only refund a transaction that reached `unresolved`.
+    // `unknown` means the top-up may have landed, so the operator path is
+    // refused here rather than paying the customer twice.
+    const attempt = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      reason: "operator gave up",
-      reversalReason: "admin_override",
+      source: "admin",
+      verdict: { status: "reversed", reversalReason: "admin_override", reason: "operator gave up" },
     });
-    expect(attempt.reversed).toBe(false);
+    expect(attempt.settled).toBe(false);
     expect(attempt.reason).toBe("illegal_transition");
     expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
   });
 
-  test("pending must pass through markProcessing before any outcome", async () => {
+  test("pending must pass through markProcessing before a provider verdict", async () => {
     const t = convexTest(schema, modules);
     const { userId } = await seed(t);
 
@@ -514,13 +540,125 @@ describe("status transitions", () => {
       customerIdentifier: PHONE,
     })(t);
 
-    const attempt = await t.mutation(internal.vtuInternal.recordOutcome, {
+    const attempt = await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "success", providerReference: "PG-4" },
+      source: "webhook",
+      verdict: { status: "confirmed", providerReference: "PG-4" },
     });
-    expect(attempt.applied).toBe(false);
+    expect(attempt.settled).toBe(false);
     expect(attempt.reason).toBe("illegal_transition");
+  });
+
+  test("a never-dispatched row may only be failed by the dispatch writer", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+
+    const reserved = await begin({
+      userId,
+      clientRequestId: "vtu_pending_failure_source",
+      serviceCode: SERVICE_CODE,
+      customerIdentifier: PHONE,
+    })(t);
+
+    const verdict = {
+      status: "failed" as const,
+      reversalReason: "provider_failed" as const,
+      code: "CREDENTIAL_MISSING",
+      message: "This payment provider is not available",
+    };
+
+    // A webhook or a sweep cannot declare a never-sent purchase failed. They
+    // have no way to know nothing was sent, and the sweep escalates a stuck
+    // `pending` row to `unresolved` instead — see the reconciliation tests.
+    for (const source of ["webhook", "reconciliation", "admin"] as const) {
+      const refused = await t.mutation(internal.vtuInternal.settleTransaction, {
+        transactionId: reserved.transactionId,
+        source,
+        verdict,
+      });
+      expect(refused.settled).toBe(false);
+      expect(refused.reason).toBe("illegal_transition");
+    }
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+
+    // The dispatch action knows nothing was sent, so it may reverse — and the
+    // reversal is real, not reported-but-skipped.
+    const settled = await t.mutation(internal.vtuInternal.settleTransaction, {
+      transactionId: reserved.transactionId,
+      source: "dispatch",
+      verdict,
+    });
+    expect(settled.settled).toBe(true);
+    expect(settled.status).toBe("reversed");
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE);
+    expect((await txOf(t, reserved.transactionId))?.status).toBe("reversed");
+  });
+});
+
+// ─── The single writer ─────────────────────────────────────────────
+
+describe("settleTransaction is the only writer of a terminal status", () => {
+  test("a verdict and a webhook for the same transaction settle exactly once", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+
+    const reserved = await toProcessing(t, userId, "vtu_same_tick_race");
+
+    // Fired together, as the sweep and the aggregator's webhook would in the
+    // same tick. Convex serialises mutations, so the loser of the race reads
+    // the winner's committed write and refuses — the assertion is that the
+    // customer is credited ONCE and not twice.
+    const [fromWebhook, fromSweep] = await Promise.all([
+      t.mutation(internal.vtuInternal.settleTransaction, {
+        transactionId: reserved.transactionId,
+        source: "webhook",
+        verdict: { status: "confirmed", providerReference: "PG-RACE", costNgn: 1000 },
+      }),
+      t.mutation(internal.vtuInternal.settleTransaction, {
+        transactionId: reserved.transactionId,
+        source: "reconciliation",
+        verdict: {
+          status: "failed",
+          reversalReason: "reconciliation",
+          code: "NOT_FOUND",
+          message: "provider has no record of it",
+        },
+      }),
+    ]);
+
+    const winners = [fromWebhook, fromSweep].filter((r) => r.settled);
+    expect(winners).toHaveLength(1);
+
+    const ledger = await ledgerFor(t, userId);
+    expect(ledger.filter((l: any) => l.type === "vtu_refund")).toHaveLength(
+      fromWebhook.settled ? 0 : 1,
+    );
+    // And the balance is consistent with whichever verdict won, never with
+    // both: the debit stands on a confirmation, and is returned on a reversal.
+    expect(await balanceOf(t, userId)).toBe(
+      fromWebhook.settled ? START_BALANCE - 67 : START_BALANCE,
+    );
+  });
+
+  test("the source is recorded, so a settled row says who settled it", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+
+    const reserved = await toProcessing(t, userId, "vtu_source_recorded");
+    await t.mutation(internal.vtuInternal.settleTransaction, {
+      transactionId: reserved.transactionId,
+      source: "reconciliation",
+      verdict: {
+        status: "failed",
+        reversalReason: "reconciliation",
+        code: "NOT_FOUND",
+        message: "provider has no record of it",
+      },
+    });
+
+    const tx = await txOf(t, reserved.transactionId);
+    expect(tx.source).toBe("reconciliation");
+    expect(tx.reversalReason).toBe("reconciliation");
   });
 });
 

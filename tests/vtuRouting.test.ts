@@ -435,11 +435,11 @@ describe("the route is snapshotted, not re-read at settlement", () => {
     await t.mutation(internal.vtuInternal.markProcessing, {
       transactionId: reserved.transactionId,
     });
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.settleTransaction, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: {
-        status: "success",
+      source: "dispatch",
+      verdict: {
+        status: "confirmed",
         providerReference: "PG-REF-1",
         costNgn: 1000,
       },
@@ -487,10 +487,11 @@ describe("the route is snapshotted, not re-read at settlement", () => {
     await t.mutation(internal.vtuInternal.markProcessing, {
       transactionId: reserved.transactionId,
     });
-    await t.mutation(internal.vtuInternal.recordOutcome, {
+    await t.mutation(internal.vtuInternal.markUnknown, {
       transactionId: reserved.transactionId,
-      source: "provider_response",
-      outcome: { status: "unknown", message: "no answer", providerReference: "REF-XYZ" },
+      source: "dispatch",
+      message: "no answer",
+      providerReference: "REF-XYZ",
     });
 
     // Re-point the product at AidaPay AFTER Pairgate was dispatched.

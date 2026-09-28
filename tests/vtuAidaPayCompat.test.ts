@@ -910,8 +910,29 @@ describe("admin provider surface handles the third secret", () => {
 
 // ─── Reversal reason ───────────────────────────────────────────────
 
+/**
+ * A transaction that reached `processing`, ready for a terminal verdict.
+ *
+ * `settleTransaction` replaced `recordOutcome` + `refundAndRelease` in slice 5:
+ * the status write and the ledger movement are now one mutation, and these
+ * tests exercise that single entry point rather than the pair it replaced.
+ */
+async function toProcessing(t: Harness, userId: any, requestId: string) {
+  await seedRoute(t);
+  const reserved: any = await t.mutation(internal.vtuInternal.beginPurchase, {
+    userId,
+    clientRequestId: requestId,
+    serviceCode: "airtime.mtn.1000",
+    customerIdentifier: "08031234567",
+  });
+  await t.mutation(internal.vtuInternal.markProcessing, {
+    transactionId: reserved.transactionId,
+  });
+  return reserved;
+}
+
 describe("a reversed transaction always records why", () => {
-  test("refundAndRelease requires a reason — the mutation, not the schema, enforces it", async () => {
+  test("the verdict's reason is REQUIRED by the argument validator, not the schema", async () => {
     await withMasterKey(async () => {
       const t = convexTest(schema, modules);
       const now = Date.now();
@@ -925,49 +946,45 @@ describe("a reversed transaction always records why", () => {
         }),
       );
 
-      await seedRoute(t);
-
-      const reserved: any = await t.mutation(internal.vtuInternal.beginPurchase, {
-        userId,
-        clientRequestId: "req_for_reversal",
-        serviceCode: "airtime.mtn.1000",
-        customerIdentifier: "08031234567",
-      });
-
-      await t.mutation(internal.vtuInternal.markProcessing, {
-        transactionId: reserved.transactionId,
-      });
-      await t.mutation(internal.vtuInternal.recordOutcome, {
-        transactionId: reserved.transactionId,
-        source: "provider_response",
-        outcome: { status: "failed", code: "X", message: "nope" },
-      });
+      const reserved: any = await toProcessing(t, userId, "req_for_reversal");
 
       // Omitting the reason is rejected by the ARGUMENT VALIDATOR. This is the
-      // invariant the user asked for: enforced at the mutation that writes the
-      // transition, so a `reversed` row without a reason cannot exist.
+      // invariant the user asked for: enforced at the one mutation that writes
+      // the transition, so a `reversed` row without a reason cannot exist.
       await expect(
-        t.mutation(internal.vtuInternal.refundAndRelease, {
+        t.mutation(internal.vtuInternal.settleTransaction, {
           transactionId: reserved.transactionId,
-          reason: "provider said no",
+          source: "dispatch",
+          verdict: { status: "failed", code: "X", message: "nope" },
         }),
       ).rejects.toThrow();
 
       // And an invented reason outside the enum is equally rejected.
       await expect(
-        t.mutation(internal.vtuInternal.refundAndRelease, {
+        t.mutation(internal.vtuInternal.settleTransaction, {
           transactionId: reserved.transactionId,
-          reason: "provider said no",
-          reversalReason: "because_i_said_so",
+          source: "dispatch",
+          verdict: {
+            status: "failed",
+            reversalReason: "because_i_said_so",
+            code: "X",
+            message: "nope",
+          },
         }),
       ).rejects.toThrow();
 
-      const row: any = await t.mutation(internal.vtuInternal.refundAndRelease, {
+      const row: any = await t.mutation(internal.vtuInternal.settleTransaction, {
         transactionId: reserved.transactionId,
-        reason: "provider said no",
-        reversalReason: "provider_cancelled",
+        source: "dispatch",
+        verdict: {
+          status: "failed",
+          reversalReason: "provider_cancelled",
+          code: "X",
+          message: "provider said no",
+        },
       });
-      expect(row.reversed).toBe(true);
+      expect(row.settled).toBe(true);
+      expect(row.status).toBe("reversed");
 
       const stored: any = await t.run(async (ctx) => ctx.db.get(reserved.transactionId));
       expect(stored.status).toBe("reversed");
@@ -976,8 +993,14 @@ describe("a reversed transaction always records why", () => {
     });
   });
 
-  test("the reserved reasons are accepted now so the table does not have to move later", async () => {
-    for (const reversalReason of ["provider_failed", "provider_cancelled", "admin_override", "reconciliation"] as const) {
+  test("all four reasons are reachable, so the table does not have to move later", async () => {
+    // Three arrive as failure verdicts (the provider told us), one as an
+    // operator refund of an escalated transaction. Every member of the enum is
+    // reachable through `settleTransaction`, which is the property that made
+    // baking the enum in early worthwhile.
+    const viaProvider = ["provider_failed", "provider_cancelled", "reconciliation"] as const;
+
+    for (const reversalReason of viaProvider) {
       await withMasterKey(async () => {
         const t = convexTest(schema, modules);
         const now = Date.now();
@@ -989,30 +1012,48 @@ describe("a reversed transaction always records why", () => {
             createdAt: now,
           }),
         );
-        await seedRoute(t);
-        const reserved: any = await t.mutation(internal.vtuInternal.beginPurchase, {
-          userId,
-          clientRequestId: `req_${reversalReason}`,
-          serviceCode: "airtime.mtn.1000",
-          customerIdentifier: "08031234567",
-        });
-        await t.mutation(internal.vtuInternal.markProcessing, {
+        const reserved: any = await toProcessing(t, userId, `req_${reversalReason}`);
+        await t.mutation(internal.vtuInternal.settleTransaction, {
           transactionId: reserved.transactionId,
-        });
-        await t.mutation(internal.vtuInternal.recordOutcome, {
-          transactionId: reserved.transactionId,
-          source: "provider_response",
-          outcome: { status: "failed", code: "X", message: "no" },
-        });
-        await t.mutation(internal.vtuInternal.refundAndRelease, {
-          transactionId: reserved.transactionId,
-          reason: "no",
-          reversalReason,
+          source: "reconciliation",
+          verdict: { status: "failed", reversalReason, code: "X", message: "no" },
         });
         const stored: any = await t.run(async (ctx) => ctx.db.get(reserved.transactionId));
         expect(stored.reversalReason).toBe(reversalReason);
       });
     }
+
+    // `admin_override` needs an escalated row: the operator path only accepts
+    // `unresolved`, so a refund cannot be issued for a transaction the system
+    // is still trying to resolve.
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const now = Date.now();
+      const userId = await t.run(async (ctx) =>
+        ctx.db.insert("users", {
+          name: "Dee",
+          email: "dee@example.com",
+          pointsBalance: 5_000,
+          createdAt: now,
+        }),
+      );
+      const reserved: any = await toProcessing(t, userId, "req_admin_override");
+      await t.mutation(internal.vtuInternal.settleTransaction, {
+        transactionId: reserved.transactionId,
+        source: "reconciliation",
+        verdict: { status: "unresolved", unresolvedReason: "max_attempts_exceeded" },
+      });
+      const refunded = await t.mutation(internal.vtuInternal.settleTransaction, {
+        transactionId: reserved.transactionId,
+        source: "admin",
+        verdict: { status: "reversed", reversalReason: "admin_override", reason: "refund" },
+      });
+      expect(refunded.settled).toBe(true);
+
+      const stored: any = await t.run(async (ctx) => ctx.db.get(reserved.transactionId));
+      expect(stored.reversalReason).toBe("admin_override");
+      expect(stored.status).toBe("reversed");
+    });
   });
 });
 
