@@ -27,6 +27,11 @@ import {
   val,
   type StarterTemplate,
 } from "./starterTemplates";
+import {
+  VTU_AMENDED_RECEIPT_TEMPLATE_SLUG,
+  VTU_RECEIPT_LIBRARY_TAG,
+  VTU_RECEIPT_TEMPLATE_SLUG,
+} from "./vtu";
 
 // ─── Quotation ────────────────────────────────────────────────────────────────
 
@@ -624,10 +629,270 @@ export const itemSchedule: StarterTemplate = {
   },
 };
 
+// ─── Payment receipt (VTU purchases) ──────────────────────────────────────────
+//
+// One reasoning block for BOTH receipt templates below, because they differ in
+// copy and in one notice strip and in nothing else:
+//
+// NOT BILLABLE. Every other template in this file SELLS a document. These two
+// record money the customer has already spent, and charging for the paperwork
+// that proves a charge is a loop with no good answer. `billable: false` is
+// honoured at creation, at render and in the quote — see `resolveDocumentCost`.
+//
+// FILED UNDER `financial`, TAGGED `vtu_receipt`. The templates belong on the
+// financial shelf with the rest of the payment paperwork. The DOCUMENTS they
+// produce carry the tag instead, which is what keeps them out of the customer's
+// document library: a receipt is something the platform issues, not something
+// the customer made, and a library that fills up with receipts as you use the
+// product stops being a library of your work.
+//
+// EVERY FIELD IS HIDDEN AND REQUIRED, WITH NO DEFAULT, and that pairing is
+// load-bearing. A hidden field is absent from the rendered form, and an absent
+// value fails `validateValues` — so a receipt can only be produced by the
+// server-side generator that fills these from the transaction record. Nobody can
+// hand-type a receipt, and a blank one cannot render, because "no value" is not
+// a value these fields accept.
+//
+// NO EXTERNAL ASSETS, like every other template here: text, rules, panels and a
+// QR module, and nothing else. Nothing fetches a font or an image at render
+// time, so a receipt opened in five years, with the network unplugged, looks
+// exactly like the one issued today.
+//
+// THE `status` FIELD CARRIES THE CUSTOMER-FACING WORDS, NOT THE INTERNAL ENUM.
+// A receipt is a record of what the customer was TOLD at the time, pinned when
+// the document is generated and never recomputed — the same doctrine the rate
+// snapshot follows. That is also why a later reversal issues the amended
+// sibling instead of editing this one: the first receipt is not wrong, it is
+// superseded, and both remain true statements about when they were issued.
+
+/**
+ * The receipt a VTU purchase is owed.
+ *
+ * Layout is a 420×740 slip rather than a page: it is read on a phone, and a
+ * receipt that has to be pinch-zoomed to find the amount has failed at the one
+ * thing it is for.
+ */
+export const vtuReceipt: StarterTemplate = {
+  slug: VTU_RECEIPT_TEMPLATE_SLUG,
+  name: "Payment Receipt",
+  documentType: "financial",
+  description:
+    "The record of a completed airtime or bill payment: what was bought, the number it went to, the rate frozen at purchase and the reference the provider issued.",
+  sensitivity: "standard",
+  requiredCredits: 0,
+  billable: false,
+  libraryTag: VTU_RECEIPT_LIBRARY_TAG,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "issuer", type: "text", label: "Issued by", required: true, hidden: true, maxLength: 30 },
+      { id: "receiptNumber", type: "reference", label: "Receipt number", required: true, hidden: true },
+      {
+        id: "issuedOn",
+        type: "datetime",
+        label: "Receipt issued",
+        required: true,
+        hidden: true,
+        // ISO-8601 WITH an offset. The renderer formats through `new Date`, so
+        // an offsetless string would be read as the viewer's local time and the
+        // same receipt would show a different clock depending on who opens it.
+        help: "ISO-8601 instant, e.g. 2026-09-28T14:05:00+01:00",
+      },
+      { id: "serviceName", type: "text", label: "Service", required: true, hidden: true, maxLength: 40 },
+      { id: "destination", type: "text", label: "Destination (masked)", required: true, hidden: true, maxLength: 24 },
+      { id: "ngnPerPoint", type: "number", label: "Naira per point", required: true, hidden: true },
+      { id: "status", type: "text", label: "Status as shown to the customer", required: true, hidden: true, maxLength: 32 },
+      { id: "providerReference", type: "text", label: "Provider reference", required: false, hidden: true, maxLength: 40 },
+      {
+        id: "settledAt",
+        type: "datetime",
+        label: "Settled at",
+        required: false,
+        hidden: true,
+        help: "Absent while the transaction is still awaiting a verdict from the provider.",
+      },
+      { id: "statusDetail", type: "text", label: "Status explanation", required: true, hidden: true, maxLength: 180 },
+      { id: "amountPaid", type: "currency", currency: "NGN", label: "Amount paid", required: true, hidden: true },
+      { id: "pointsDebited", type: "number", label: "Points debited", required: true, hidden: true },
+      { id: "qrValue", type: "text", label: "QR payload", required: true, hidden: true, maxLength: 120 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 420,
+        height: 740,
+        background: PAPER,
+        elements: [
+          box(0, 0, 420, 112, "#28504a", 0),
+          txt(30, 52, "PAYMENT RECEIPT", { size: 10, weight: 700, color: "#a8eadc", letterSpacing: 2.8 }),
+          val(30, 82, "issuer", { size: 18, weight: 800, color: "#ffffff", maxChars: 24 }),
+          cap(240, 52, "Receipt no", { color: "#a8eadc", align: "right", w: 150 }),
+          val(240, 72, "receiptNumber", { size: 12, weight: 700, color: "#ffffff", align: "right", w: 150, maxChars: 22 }),
+          val(240, 92, "issuedOn", { size: 9.5, color: "#cfe9e1", align: "right", w: 150, maxChars: 30 }),
+
+          box(30, 142, 360, 92, SURFACE, 14, RULE),
+          cap(52, 168, "Amount paid"),
+          val(52, 198, "amountPaid", { size: 26, weight: 800, color: INK }),
+          cap(238, 168, "Points debited", { align: "right", w: 130 }),
+          val(238, 192, "pointsDebited", { size: 17, weight: 700, color: INK, align: "right", w: 130, maxChars: 12 }),
+          txt(238, 214, "from your points balance", { size: 9.5, color: MUTED, align: "right", w: 130 }),
+
+          rule(30, 268, 390, 268),
+          cap(30, 292, "Service"),
+          val(30, 314, "serviceName", { size: 13.5, weight: 600, color: INK, maxChars: 24 }),
+          cap(220, 292, "Rate at purchase"),
+          val(220, 314, "ngnPerPoint", { size: 13.5, color: INK, maxChars: 10 }),
+          txt(220, 332, "naira per point", { size: 9, color: MUTED }),
+
+          cap(30, 360, "Destination"),
+          val(30, 382, "destination", { size: 13.5, weight: 600, color: INK, maxChars: 24 }),
+          cap(220, 360, "Status"),
+          val(220, 382, "status", { size: 13.5, weight: 600, color: INK, maxChars: 26 }),
+
+          cap(30, 428, "Provider reference"),
+          val(30, 450, "providerReference", { size: 12, color: MUTED, maxChars: 30 }),
+          cap(220, 428, "Settled"),
+          val(220, 450, "settledAt", { size: 11, color: INK, maxChars: 30 }),
+
+          box(30, 486, 360, 78, SURFACE, 12, RULE),
+          // Pre-wrapped by the generator at roughly one line per 70 characters:
+          // the renderer breaks on newlines and does not word-wrap, so an
+          // unwrapped sentence would run off the panel rather than reflow.
+          val(48, 512, "statusDetail", { size: 10.5, color: MUTED, maxChars: 150, lineHeight: 14 }),
+
+          rule(30, 590, 390, 590),
+          qr(30, 610, 86, "qrValue"),
+          val(132, 640, "receiptNumber", { size: 11, weight: 700, color: INK, maxChars: 22 }),
+          txt(132, 660, "Scan to verify this receipt", { size: 10, color: MUTED }),
+          txt(30, 716, "Amounts and rates are frozen at purchase.", { size: 9, color: FAINT, maxChars: 80 }),
+        ],
+      },
+    ],
+  },
+};
+
+/**
+ * The receipt issued after a reversal.
+ *
+ * A SIBLING, not a mutated original. The first receipt is immutable — it may
+ * already have been downloaded, forwarded or filed — so a reversal issues a
+ * second document that names the first as the one it supersedes. A template
+ * variant keyed on `reversalReason` was the alternative and was rejected: it
+ * would have to render for every reason, including ones it has no sensible copy
+ * for, and "generate nothing" is not a receipt.
+ */
+export const vtuAmendedReceipt: StarterTemplate = {
+  slug: VTU_AMENDED_RECEIPT_TEMPLATE_SLUG,
+  name: "Payment Receipt (Amended)",
+  documentType: "financial",
+  description:
+    "Issued when a purchase that already had a receipt was later refunded. Names the receipt it replaces and keeps the original untouched.",
+  sensitivity: "standard",
+  requiredCredits: 0,
+  billable: false,
+  libraryTag: VTU_RECEIPT_LIBRARY_TAG,
+  supportedFormats: ["png", "pdf"],
+  schema: {
+    fields: [
+      { id: "issuer", type: "text", label: "Issued by", required: true, hidden: true, maxLength: 30 },
+      { id: "receiptNumber", type: "reference", label: "Receipt number", required: true, hidden: true },
+      { id: "amendsReceiptNumber", type: "reference", label: "Receipt this replaces", required: true, hidden: true },
+      {
+        id: "issuedOn",
+        type: "datetime",
+        label: "Receipt issued",
+        required: true,
+        hidden: true,
+        help: "ISO-8601 instant, e.g. 2026-09-28T14:05:00+01:00",
+      },
+      { id: "serviceName", type: "text", label: "Service", required: true, hidden: true, maxLength: 40 },
+      { id: "destination", type: "text", label: "Destination (masked)", required: true, hidden: true, maxLength: 24 },
+      { id: "ngnPerPoint", type: "number", label: "Naira per point", required: true, hidden: true },
+      { id: "status", type: "text", label: "Status as shown to the customer", required: true, hidden: true, maxLength: 32 },
+      { id: "providerReference", type: "text", label: "Provider reference", required: false, hidden: true, maxLength: 40 },
+      {
+        id: "settledAt",
+        type: "datetime",
+        label: "Settled at",
+        required: false,
+        hidden: true,
+        help: "Absent while the transaction is still awaiting a verdict from the provider.",
+      },
+      { id: "statusDetail", type: "text", label: "Status explanation", required: true, hidden: true, maxLength: 180 },
+      { id: "amountPaid", type: "currency", currency: "NGN", label: "Amount paid", required: true, hidden: true },
+      { id: "pointsDebited", type: "number", label: "Points debited", required: true, hidden: true },
+      { id: "qrValue", type: "text", label: "QR payload", required: true, hidden: true, maxLength: 120 },
+      { id: "amendmentNote", type: "text", label: "What changed", required: true, hidden: true, maxLength: 130 },
+    ],
+  },
+  configuration: {
+    renderScale: 2,
+    pages: [
+      {
+        width: 420,
+        height: 800,
+        background: PAPER,
+        elements: [
+          box(0, 0, 420, 112, "#28504a", 0),
+          txt(30, 52, "AMENDED RECEIPT", { size: 10, weight: 700, color: "#a8eadc", letterSpacing: 2.8 }),
+          val(30, 82, "issuer", { size: 18, weight: 800, color: "#ffffff", maxChars: 24 }),
+          cap(240, 52, "Replaces", { color: "#a8eadc", align: "right", w: 150 }),
+          val(240, 72, "amendsReceiptNumber", { size: 12, weight: 700, color: "#ffffff", align: "right", w: 150, maxChars: 22 }),
+          val(240, 92, "issuedOn", { size: 9.5, color: "#cfe9e1", align: "right", w: 150, maxChars: 30 }),
+
+          // The one strip the original does not have, and deliberately the most
+          // contrast on the page: a customer who has both documents open needs
+          // to see at a glance which one is current.
+          box(30, 132, 360, 70, "#fdf3e3", 12, "#e7d3ae"),
+          txt(48, 156, "This receipt replaces", { size: 9.5, weight: 700, color: "#8a5a12", uppercase: true, letterSpacing: 1.4 }),
+          val(48, 180, "amendmentNote", { size: 10.5, color: "#7a4f10", maxChars: 130, lineHeight: 14 }),
+
+          box(30, 218, 360, 92, SURFACE, 14, RULE),
+          cap(52, 244, "Amount paid"),
+          val(52, 274, "amountPaid", { size: 26, weight: 800, color: INK }),
+          cap(238, 244, "Points refunded", { align: "right", w: 130 }),
+          val(238, 268, "pointsDebited", { size: 17, weight: 700, color: INK, align: "right", w: 130, maxChars: 12 }),
+          txt(238, 290, "back on your balance", { size: 9.5, color: MUTED, align: "right", w: 130 }),
+
+          rule(30, 344, 390, 344),
+          cap(30, 368, "Service"),
+          val(30, 390, "serviceName", { size: 13.5, weight: 600, color: INK, maxChars: 24 }),
+          cap(220, 368, "Rate at purchase"),
+          val(220, 390, "ngnPerPoint", { size: 13.5, color: INK, maxChars: 10 }),
+          txt(220, 408, "naira per point", { size: 9, color: MUTED }),
+
+          cap(30, 436, "Destination"),
+          val(30, 458, "destination", { size: 13.5, weight: 600, color: INK, maxChars: 24 }),
+          cap(220, 436, "Status"),
+          val(220, 458, "status", { size: 13.5, weight: 600, color: INK, maxChars: 26 }),
+
+          cap(30, 504, "Provider reference"),
+          val(30, 526, "providerReference", { size: 12, color: MUTED, maxChars: 30 }),
+          cap(220, 504, "Settled"),
+          val(220, 526, "settledAt", { size: 11, color: INK, maxChars: 30 }),
+
+          box(30, 562, 360, 78, SURFACE, 12, RULE),
+          val(48, 588, "statusDetail", { size: 10.5, color: MUTED, maxChars: 150, lineHeight: 14 }),
+
+          rule(30, 666, 390, 666),
+          qr(30, 686, 86, "qrValue"),
+          val(132, 716, "receiptNumber", { size: 11, weight: 700, color: INK, maxChars: 22 }),
+          txt(132, 736, "Scan to verify this receipt", { size: 10, color: MUTED }),
+          txt(30, 780, "Amounts and rates are frozen at purchase.", { size: 9, color: FAINT, maxChars: 80 }),
+        ],
+      },
+    ],
+  },
+};
+
 export const COMMERCIAL_TEMPLATES: StarterTemplate[] = [
   quotation,
   deliveryNote,
   statementOfAccount,
   expenseClaim,
   itemSchedule,
+  vtuReceipt,
+  vtuAmendedReceipt,
 ];

@@ -16,6 +16,7 @@ import {
   documentCreationKey,
   shouldChargeForRender,
   renderIdempotencyKey,
+  resolveDocumentCost,
   resolveRenderCost,
   sanitizeText,
   buildPreviewSvg,
@@ -27,6 +28,7 @@ import {
   type TemplateSchema,
 } from "../lib/docTemplateEngine";
 import { PLATFORM_SEED_VERSION, PLATFORM_TEMPLATES } from "../lib/platformTemplates";
+import { VTU_RECEIPT_LIBRARY_TAG } from "../lib/vtu";
 
 /**
  * Cloudie document workspace.
@@ -64,6 +66,18 @@ export type VersionBlocks = {
   sensitivity: string;
   requiredCredits: number;
   supportedFormats: string[];
+  /**
+   * Frozen with the version, like every other rail field here. Absent means
+   * billable — see `resolveDocumentCost`, the only reader.
+   */
+  billable?: boolean;
+  /**
+   * Value written to a created document's `metadata.category` when it has to
+   * differ from the template's `documentType`. Frozen with the version so a
+   * document created today is filed the way the version that made it said, not
+   * the way a later edit says.
+   */
+  libraryTag?: string;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -261,7 +275,8 @@ export const getTemplate = query({
       supportedFormats: template.supportedFormats ?? ["png", "pdf"],
       currentVersion: template.currentVersion,
       versionId: version._id,
-      requiredCredits: resolveRenderCost(
+      requiredCredits: resolveDocumentCost(
+        blocks?.billable ?? template.billable,
         await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
         blocks?.requiredCredits ?? template.requiredCredits ?? 0,
         DEFAULT_RENDER_COST,
@@ -337,6 +352,8 @@ export const ensureStarterTemplates = mutation({
         sensitivity: starter.sensitivity,
         requiredCredits: starter.requiredCredits,
         supportedFormats: starter.supportedFormats,
+        billable: starter.billable,
+        libraryTag: starter.libraryTag,
       };
 
       const existing = await ctx.db
@@ -361,6 +378,7 @@ export const ensureStarterTemplates = mutation({
           description: starter.description,
           sensitivity: starter.sensitivity,
           requiredCredits: starter.requiredCredits,
+          billable: starter.billable,
           supportedFormats: starter.supportedFormats,
           schema: starter.schema,
           configuration: starter.configuration,
@@ -381,6 +399,7 @@ export const ensureStarterTemplates = mutation({
         visibility: "public",
         sensitivity: starter.sensitivity,
         requiredCredits: starter.requiredCredits,
+        billable: starter.billable,
         supportedFormats: starter.supportedFormats,
         schema: starter.schema,
         configuration: starter.configuration,
@@ -459,7 +478,8 @@ export const createDocument = mutation({
     }
 
     const blocks = version.blocks as VersionBlocks;
-    const cost = resolveRenderCost(
+    const cost = resolveDocumentCost(
+      blocks?.billable ?? template.billable,
       await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
       blocks?.requiredCredits ?? template.requiredCredits ?? 0,
       DEFAULT_RENDER_COST,
@@ -506,7 +526,17 @@ export const createDocument = mutation({
       // which accumulates across re-renders and is only an accounting total.
       renderPrice: cost,
       metadata: {
-        category: template.documentType,
+        // The version's library tag wins over the template's category when it
+        // declares one, which is how a receipt files under `vtu_receipt` and
+        // stays out of the library while its template sits on the `financial`
+        // shelf.
+        category: blocks?.libraryTag ?? template.documentType,
+        // The shelf the TEMPLATE is on, kept beside the tag so an admin view can
+        // still say "this is a financial document" about a document whose
+        // category is a library-filter tag. Write-once, like the rest of the
+        // metadata: which shelf a template sits on can be edited, which shelf
+        // the document was created from cannot.
+        templateCategory: template.documentType,
         sensitivity: template.sensitivity ?? "standard",
         // Marker read back by `finalizeDocument` so the render never charges
         // for a document that was already paid for at creation.
@@ -517,21 +547,28 @@ export const createDocument = mutation({
     });
 
     // ── Debit (exactly once per document) ──
-    const idempotencyKey = documentCreationKey(documentId);
-    const balanceAfter = balance - cost;
-    await ctx.db.patch(userId, { pointsBalance: balanceAfter });
-    await ctx.db.insert("pointLedger", {
-      userId,
-      amount: -cost,
-      balanceAfter,
-      description: `${title} — document created`,
-      type: "document_generation",
-      reference: "document",
-      referenceId: documentId,
-      idempotencyKey,
-      metadata: { stage: "creation", cost },
-      createdAt: now,
-    });
+    //
+    // Skipped entirely at zero rather than written as a zero-amount row. The
+    // ledger is the money log; a 0-point entry in it is noise that every later
+    // reader has to filter, and it would also make a free document look like a
+    // paid one to anything counting rows rather than amounts.
+    if (cost > 0) {
+      const idempotencyKey = documentCreationKey(documentId);
+      const balanceAfter = balance - cost;
+      await ctx.db.patch(userId, { pointsBalance: balanceAfter });
+      await ctx.db.insert("pointLedger", {
+        userId,
+        amount: -cost,
+        balanceAfter,
+        description: `${title} — document created`,
+        type: "document_generation",
+        reference: "document",
+        referenceId: documentId,
+        idempotencyKey,
+        metadata: { stage: "creation", cost },
+        createdAt: now,
+      });
+    }
 
     return { documentId, values, charged: cost };
   },
@@ -621,7 +658,11 @@ export const finalizeDocument = mutation({
       throw new Error("No rendered artifacts were uploaded");
     }
 
-    const cost = resolveRenderCost(
+    const cost = resolveDocumentCost(
+      // No fallback to `template.billable` here: this mutation deliberately does
+      // not load the template row, and the flag is frozen into the version this
+      // document was created from — which is the one that must be honoured.
+      blocks?.billable,
       await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
       blocks?.requiredCredits ?? 0,
       DEFAULT_RENDER_COST,
@@ -632,16 +673,22 @@ export const finalizeDocument = mutation({
     // customer renders after that — a re-render of an edited document — is new
     // work and is billed again. Retries of the same attemptId are held free by
     // the ledger key below, so a flaky network never costs twice.
-    const billThisAttempt = shouldChargeForRender(meta);
-
-    const idempotencyKey = renderIdempotencyKey(args.documentId, "pdf", attemptId);
-    const prior = await ctx.db
-      .query("pointLedger")
-      .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idempotencyKey))
-      .first();
+    //
+    // `cost > 0` is the non-billable exemption, applied HERE as well as at
+    // creation. It has to be: `pointsChargedAtCreation: 0` is a number, so
+    // `shouldChargeForRender` reads a free document as "already paid for once"
+    // and would bill every subsequent re-render. The exemption is a property of
+    // the TEMPLATE, not of the first render, and this is the second of the three
+    // places that has to know it.
+    const billThisAttempt = shouldChargeForRender(meta) && cost > 0;
 
     let charged = 0;
     if (billThisAttempt) {
+      const idempotencyKey = renderIdempotencyKey(args.documentId, "pdf", attemptId);
+      const prior = await ctx.db
+        .query("pointLedger")
+        .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idempotencyKey))
+        .first();
       const freshUser = await ctx.db.get(userId);
       const balance = freshUser?.pointsBalance ?? 0;
       if (!prior) {
@@ -762,13 +809,24 @@ export const listMyDocuments = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
     const limit = Math.min(Math.max(args.limit ?? 30, 1), MAX_DOCUMENTS);
+    // Receipts live in this table but not in this library, and they are filtered
+    // AFTER the read (there is no index on a metadata field, and adding one for
+    // a tag would be the tail wagging the dog). That means reading `limit` rows
+    // and then dropping some could let a run of receipts empty the page — so
+    // read a bounded multiple and cut back to `limit` at the end. Bounded, not
+    // unbounded: at most three times the page, never the whole table.
+    const scan = Math.min(limit * 3, MAX_DOCUMENTS * 3);
     const rows = await ctx.db
       .query("renderedDocuments")
       .withIndex("by_owner", (q) => q.eq("ownerId", userId))
       .order("desc")
-      .take(limit);
+      .take(scan);
+    const meta = (d: (typeof rows)[number]) =>
+      (d.metadata ?? {}) as Record<string, unknown>;
     return rows
+      .filter((d) => meta(d).category !== VTU_RECEIPT_LIBRARY_TAG)
       .filter((d) => (args.status ? d.status === args.status : true))
+      .slice(0, limit)
       .map((d) => ({
         _id: d._id,
         title: d.title ?? "Untitled document",
@@ -914,7 +972,8 @@ export const getRenderQuote = query({
       .order("desc")
       .first();
     const blocks = version?.blocks as VersionBlocks | undefined;
-    const cost = resolveRenderCost(
+    const cost = resolveDocumentCost(
+      blocks?.billable ?? template.billable,
       await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
       blocks?.requiredCredits ?? template.requiredCredits ?? 0,
       DEFAULT_RENDER_COST,

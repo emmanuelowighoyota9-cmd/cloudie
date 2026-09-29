@@ -24,6 +24,35 @@ export interface StarterTemplate {
   sensitivity: "standard" | "sensitive";
   requiredCredits: number;
   supportedFormats: string[];
+  /**
+   * Whether documents made from this template cost the customer anything.
+   *
+   * ABSENT MEANS BILLABLE, so every template written before this flag existed
+   * keeps its behaviour exactly. `false` zeroes creation, re-render and the
+   * render quote alike — see `resolveDocumentCost`, which is the only place the
+   * flag is read.
+   *
+   * It exists for documents the platform OWES the customer rather than sells
+   * them. The VTU receipt is the first: charging a customer for the record of a
+   * charge they have already paid is a loop nobody should have to reason about.
+   */
+  billable?: boolean;
+  /**
+   * Value written to a generated document's `metadata.category`, when it has to
+   * differ from the template's own `documentType`.
+   *
+   * Two different questions, deliberately answered separately: `documentType`
+   * says which SHELF the template sits on in the library, while this says which
+   * tag its DOCUMENTS carry. A receipt is a financial document and belongs on
+   * the financial shelf, but it is not something the customer made, so it is
+   * tagged out of the document library instead of hiding the whole shelf.
+   *
+   * This is why the flag exists rather than a new `CategoryKey`: `CategoryKey`
+   * is a public vocabulary that the category list, the template editor and every
+   * iterator over categories move together with, and widening it to keep one
+   * document out of one list would be cosmetic churn with real reach.
+   */
+  libraryTag?: string;
   schema: TemplateSchema;
   configuration: TemplateConfiguration;
 }

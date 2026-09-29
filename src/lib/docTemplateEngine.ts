@@ -740,6 +740,37 @@ export function resolveRenderCost(base: number, templateRequiredCredits: number 
   return Math.max(platformBase, premium);
 }
 
+/**
+ * The effective charge for a document, honouring a template's `billable` flag.
+ *
+ * A template may declare itself NON-BILLABLE (`billable: false`), which makes
+ * every stage of its life free: creation, re-render, and the quote shown before
+ * either.
+ *
+ * The flag is checked HERE, once, rather than at each call site, because the
+ * call sites are exactly where a half-applied exemption gets written.
+ * `resolveRenderCost` takes a `requiredCredits` NUMBER, and a free template's
+ * `requiredCredits` is 0 — which `max(platformBase, 0)` turns straight back
+ * into the platform's standard render price. A caller that remembered the flag
+ * at creation and forgot it at render would charge for a document it had
+ * already decided was free, and the customer would be billed for the paperwork
+ * that proves an earlier charge. Routing every caller through this one function
+ * is what makes that mistake unavailable.
+ *
+ * Anything other than an explicit `false` is billable, so a template stored
+ * before this flag existed — or one whose flag arrived from a form as a string —
+ * keeps charging rather than silently becoming free.
+ */
+export function resolveDocumentCost(
+  billable: unknown,
+  base: number,
+  templateRequiredCredits: number | undefined,
+  fallback: number,
+): number {
+  if (billable === false) return 0;
+  return resolveRenderCost(base, templateRequiredCredits, fallback);
+}
+
 /** Idempotency key for a render debit — retries with the same attempt never double-charge. */
 export function renderIdempotencyKey(documentId: string, format: "image" | "pdf", attemptId: string): string {
   return `docrender:${format}:${documentId}:${attemptId}`;

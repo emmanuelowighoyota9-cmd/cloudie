@@ -941,6 +941,13 @@ const schema = defineSchema(
       // Legacy: kept for document metadata only. Watermark has been removed.
       sensitivity: v.optional(v.string()), // standard | sensitive (no longer renders a stamp)
       requiredCredits: v.optional(v.number()), // points charged per PDF render
+      // FALSE makes every stage free — creation, re-render and the quote alike.
+      // ABSENT MEANS BILLABLE, so every row written before this flag existed
+      // keeps charging. Read only through `resolveDocumentCost`, which is what
+      // stops the exemption from being applied at one stage and forgotten at
+      // another. The VTU receipt is the reason it exists: documents the platform
+      // owes the customer rather than sells them.
+      billable: v.optional(v.boolean()),
       supportedFormats: v.optional(v.array(v.string())), // ["png", "pdf"]
       schema: v.optional(v.any()), // { fields: FieldDef[] }
       configuration: v.optional(v.any()), // { pages: TemplatePage[], background, renderScale }

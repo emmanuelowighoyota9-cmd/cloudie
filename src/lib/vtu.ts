@@ -16,6 +16,44 @@ import type {
   VtuUnresolvedReason,
 } from "../convex/vtuSchema/types";
 
+// ─── Receipt documents ──────────────────────────────────────────────
+
+/**
+ * Template slug for the receipt generated on first view.
+ *
+ * Defined here rather than written out at each call site because two places
+ * have to agree on it — the template set that SEEDS the row, and the generator
+ * that looks it up by slug — and a typo in either would surface as a receipt
+ * that never generates.
+ *
+ * Note what is NOT here: there is no "receipt" table and no "receipt" status.
+ * A receipt is a document like any other, produced by the existing engine from
+ * an existing transaction.
+ */
+export const VTU_RECEIPT_TEMPLATE_SLUG = "vtu-receipt";
+
+/**
+ * Template slug for the amended receipt issued after a reversal.
+ *
+ * A generated document is immutable, so a reversal cannot edit the receipt that
+ * already exists and may already be in the customer's inbox. It issues a SECOND
+ * document instead. Kept as a sibling template rather than a variant keyed on
+ * `reversalReason`, so a reversal reason the receipt cannot explain does not
+ * leave the customer holding a document that was never produced.
+ */
+export const VTU_AMENDED_RECEIPT_TEMPLATE_SLUG = "vtu-receipt-amended";
+
+/**
+ * `metadata.category` written on a generated receipt.
+ *
+ * The receipt TEMPLATES sit on the `financial` shelf with every other payment
+ * document, but the DOCUMENTS they produce carry this tag instead, which is what
+ * keeps them out of the customer's document library. Two different questions —
+ * "which shelf is this template on" and "does this file belong in the list of
+ * things the customer made" — so two different values.
+ */
+export const VTU_RECEIPT_LIBRARY_TAG = "vtu_receipt";
+
 /** Namespace for the debit taken when a purchase begins. */
 export const VTU_PURCHASE_NAMESPACE = "vtu:purchase";
 

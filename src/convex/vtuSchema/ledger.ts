@@ -127,6 +127,44 @@ export const vtuLedgerTables = {
      */
     unresolvedReason: v.optional(vtuUnresolvedReasonValidator),
 
+    // ── Receipt pointer ────────────────────────────────────────────
+
+    /**
+     * The receipt document the customer should be shown RIGHT NOW, or absent
+     * when no receipt has been asked for yet.
+     *
+     * CURRENT AUTHORITATIVE, not one-per-transaction, and the difference is the
+     * whole point of the pair below. A receipt is generated lazily, on the first
+     * "View receipt" click, and a generated document is IMMUTABLE — so when the
+     * transaction is later reversed, the pre-reversal receipt cannot be edited
+     * to say so. It is superseded instead: `vtu-receipt-amended` is generated as
+     * a SECOND document and this pointer MOVES to it. The original stays in
+     * storage with its own share link, still readable and still a true statement
+     * about the moment it was issued, while every future click follows the
+     * pointer to the document that is currently true.
+     *
+     * An append-only history of receipts per transaction was the alternative and
+     * was rejected: it would need a second table, an ordering rule, and a
+     * "which one is current" question asked at every read — all to answer a
+     * question the customer does not have, which is "what does my receipt say
+     * now". Reading a superseded receipt stays possible through the document's
+     * own share link and through `receiptTemplateKey`, which records WHICH
+     * template produced what this pointer currently names.
+     */
+    receiptDocumentId: v.optional(v.id("renderedDocuments")),
+    /**
+     * The template that produced `receiptDocumentId` — `"vtu-receipt"` or
+     * `"vtu-receipt-amended"`.
+     *
+     * Stored beside the id rather than derived from the document row, because
+     * the two answer different questions: the id says WHERE the receipt is, this
+     * says WHICH KIND it is. A read that needs "is this receipt still the current
+     * kind" must not have to load a second table to find out, and a template
+     * that is later renamed or re-seeded cannot make a historical pointer lie
+     * about what was issued.
+     */
+    receiptTemplateKey: v.optional(v.string()),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
