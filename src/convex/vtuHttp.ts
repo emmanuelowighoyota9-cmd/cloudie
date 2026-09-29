@@ -390,27 +390,22 @@ export const verifyCallback = internalAction({
       return { verified: false, reason: "missing_signature" };
     }
 
-    // Guarded BEFORE the call, because the alternative is a TypeError escaping
-    // this action: the HTTP layer sees a 500, and a 500 is the one answer that
+    // ONE call: verify AND parse. Null means the body did not authenticate.
+    //
+    // Guarded because the alternative is a TypeError escaping this action,
+    // which the HTTP layer sees as a 500 — and a 500 is the one answer that
     // makes an aggregator retry forever against a handler that cannot improve.
-    // A typed reason lets the route answer with a 4xx instead, and lets
-    // reconciliation — which does not need this method — settle the row.
+    // Returning a typed reason instead lets the route answer with a 4xx and
+    // lets reconciliation, which does not need this method, settle the row.
     if (typeof call.adapter.verifyAndParseCallback !== "function") {
       return { verified: false, reason: "adapter_incomplete" };
     }
 
-    let event;
-    try {
-      event = call.adapter.verifyAndParseCallback(args.rawBody, lowered, call.opts.apiKey);
-    } catch {
-      // The method exists and threw — the signature check it sits behind
-      // already passed, so this is authentic bytes that our own parser could
-      // not handle (a classifier missing from a hand-written adapter, a shape
-      // it did not guard). `null` would be a lie about the signature; letting
-      // it escape would be a 500 the aggregator retries forever against a
-      // payload that will always throw. Typed, and treated as ours.
-      return { verified: false, reason: "adapter_error" };
-    }
+    const event = call.adapter.verifyAndParseCallback(
+      args.rawBody,
+      lowered,
+      call.opts.apiKey,
+    );
     if (!event) return { verified: false, reason: "signature_mismatch" };
 
     return {
