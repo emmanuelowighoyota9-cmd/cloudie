@@ -392,10 +392,43 @@ export const beginPurchase = internalMutation({
  * Every row here matches the transition comment in `vtuSchema/types.ts`. A
  * verdict absent from a status's row is refused, not coerced.
  */
+/**
+ * WHO is allowed to reverse, and from which status.
+ *
+ * Two very different authorities, deliberately not one:
+ *
+ *   `provider_verdict` — something told us definitively that the top-up did
+ *     not happen. Only reachable from `failed`, which `settleTransaction`
+ *     writes immediately before calling this.
+ *
+ *   `operator_override` — a human decided to refund. Reachable only from
+ *     `unresolved`, the state that exists BECAUSE the system could not reach a
+ *     verdict. This is the one case where we refund something unconfirmed, and
+ *     it is a decision, not a policy.
+ *
+ * Making the authority an explicit parameter is what lets the guard stay
+ * meaningful after the admin path arrived: the alternative — fetching the row,
+ * faking an intermediate `failed` write, and reusing the provider path — would
+ * have been a one-line lie that dissolved the property the guard exists to
+ * protect.
+ */
+type ReversalAuthority = "provider_verdict" | "operator_override";
+
+const REVERSIBLE_FROM: Record<ReversalAuthority, readonly VtuTransactionStatus[]> = {
+  provider_verdict: ["failed"],
+  operator_override: ["unresolved"],
+};
+
 const SETTLE_ALLOWED_FROM = {
   confirmed: ["processing", "unknown", "unresolved"],
   failed: ["pending", "processing", "unknown"],
-  reversed: ["unresolved"],
+  // Derived, NOT restated. The operator-refund verdict and the reversal helper
+  // are two gates on one fact ("a human may refund a transaction that reached
+  // `unresolved`"), and writing the list twice is how one copy quietly stops
+  // being true — a mutation that widened only this line was absorbed by the
+  // helper and survived every test. Reading it from `REVERSIBLE_FROM` makes
+  // that class of drift impossible rather than merely unlikely.
+  reversed: REVERSIBLE_FROM.operator_override,
   unresolved: ["pending", "processing", "unknown"],
 } as const satisfies Record<SettleVerdictStatus, readonly VtuTransactionStatus[]>;
 
@@ -665,33 +698,6 @@ export const markProcessing = internalMutation({
 export type RefundResult =
   | { reversed: true; creditId: Id<"pointLedger">; releasedKey: string }
   | { reversed: false; reason: "not_found" | "illegal_transition" | "already_reversed" };
-
-/**
- * WHO is allowed to reverse, and from which status.
- *
- * Two very different authorities, deliberately not one:
- *
- *   `provider_verdict` — something told us definitively that the top-up did
- *     not happen. Only reachable from `failed`, which `settleTransaction`
- *     writes immediately before calling this.
- *
- *   `operator_override` — a human decided to refund. Reachable only from
- *     `unresolved`, the state that exists BECAUSE the system could not reach a
- *     verdict. This is the one case where we refund something unconfirmed, and
- *     it is a decision, not a policy.
- *
- * Making the authority an explicit parameter is what lets the guard stay
- * meaningful after the admin path arrived: the alternative — fetching the row,
- * faking an intermediate `failed` write, and reusing the provider path — would
- * have been a one-line lie that dissolved the property the guard exists to
- * protect.
- */
-type ReversalAuthority = "provider_verdict" | "operator_override";
-
-const REVERSIBLE_FROM: Record<ReversalAuthority, readonly VtuTransactionStatus[]> = {
-  provider_verdict: ["failed"],
-  operator_override: ["unresolved"],
-};
 
 /**
  * Credit the points back and release the idempotency key so the customer can

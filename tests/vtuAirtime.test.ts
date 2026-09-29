@@ -24,6 +24,9 @@ const modules = {
   "src/convex/_generated/server.js": () => import("../src/convex/_generated/server.js"),
   "src/convex/schema.ts": () => import("../src/convex/schema"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
+  // Registered so the webhook handler is exercised as the ACTION it really is,
+  // rather than the tests only ever calling the mutation it delegates to.
+  "src/convex/vtuHttp.ts": () => import("../src/convex/vtuHttp"),
   "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
   "src/convex/vtu.ts": () => import("../src/convex/vtu"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
@@ -638,6 +641,119 @@ describe("settleTransaction is the only writer of a terminal status", () => {
     expect(await balanceOf(t, userId)).toBe(
       fromWebhook.settled ? START_BALANCE - 67 : START_BALANCE,
     );
+  });
+
+  /**
+   * A dispatched-but-unanswered row the aggregator can reference, which is the
+   * only state a real webhook ever matches.
+   */
+  async function toAwaitingWebhook(t: Harness, userId: any, requestId: string, ref: string) {
+    const reserved = await toProcessing(t, userId, requestId);
+    await t.mutation(internal.vtuInternal.markUnknown, {
+      transactionId: reserved.transactionId,
+      source: "dispatch",
+      message: "timeout",
+      providerReference: ref,
+    });
+    return reserved;
+  }
+
+  test("the webhook ACTION settles a confirmation through the one writer", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+    const reserved = await toAwaitingWebhook(t, userId, "vtu_webhook_confirm", "PG-WEB-1");
+
+    const result: any = await t.action(internal.vtuHttp.applyCallback, {
+      provider: "pairgate",
+      event: { providerReference: "PG-WEB-1", outcome: "confirmed", costNgn: 1000 },
+    });
+    expect(result.applied).toBe(true);
+    expect(result.status).toBe("confirmed");
+
+    const tx = await txOf(t, reserved.transactionId);
+    expect(tx.status).toBe("confirmed");
+    // The one writer records WHO settled it, so the path is auditable rather
+    // than merely correct.
+    expect(tx.source).toBe("webhook");
+    // A delivered top-up keeps the debit.
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+  });
+
+  test("the webhook ACTION reverses a failure in the same mutation it settles", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+    const reserved = await toAwaitingWebhook(t, userId, "vtu_webhook_cancel", "PG-WEB-2");
+
+    const result: any = await t.action(internal.vtuHttp.applyCallback, {
+      provider: "pairgate",
+      event: {
+        providerReference: "PG-WEB-2",
+        outcome: "failed",
+        failureKind: "cancelled",
+        message: "withdrawn",
+      },
+    });
+    // `failed` as requested, `reversed` as committed: the action's single call
+    // did both the status and the ledger, and the customer has their points.
+    expect(result.status).toBe("reversed");
+
+    const tx = await txOf(t, reserved.transactionId);
+    expect(tx.status).toBe("reversed");
+    expect(tx.reversalReason).toBe("provider_cancelled");
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE);
+    expect((await claimsFor(t))).toHaveLength(0);
+  });
+
+  test("a webhook racing a sweep in the same tick settles exactly once", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+    const reserved = await toAwaitingWebhook(t, userId, "vtu_webhook_race", "PG-WEB-3");
+
+    // Fired together. This is the pairing the old two-writer shape
+    // double-credited: the webhook wrote the status, the sweep wrote the status
+    // AND the ledger, and neither saw the other.
+    const [webhook, sweep] = await Promise.all([
+      t.action(internal.vtuHttp.applyCallback, {
+        provider: "pairgate",
+        event: { providerReference: "PG-WEB-3", outcome: "confirmed", costNgn: 1000 },
+      }),
+      t.mutation(internal.vtuInternal.settleTransaction, {
+        transactionId: reserved.transactionId,
+        source: "reconciliation",
+        verdict: {
+          status: "failed",
+          reversalReason: "reconciliation",
+          code: "NOT_FOUND",
+          message: "provider has no record of it",
+        },
+      }),
+    ]);
+
+    // Exactly one of the two writers brought the transaction to rest…
+    expect([webhook.applied, sweep.settled].filter(Boolean)).toHaveLength(1);
+
+    // …and the ledger agrees with whichever that was: a confirmation keeps the
+    // debit, a reversal returns it. Never both, which is what the old shape
+    // produced and what this test exists to keep impossible.
+    const refunds = (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund");
+    expect(refunds).toHaveLength(webhook.applied ? 0 : 1);
+    expect(await balanceOf(t, userId)).toBe(webhook.applied ? START_BALANCE - 67 : START_BALANCE);
+  });
+
+  test("an unmatched webhook reference is audited, not settled", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t);
+    await toProcessing(t, userId, "vtu_webhook_unmatched");
+
+    const result: any = await t.action(internal.vtuHttp.applyCallback, {
+      provider: "pairgate",
+      event: { providerReference: "PG-NEVER-SENT", outcome: "confirmed" },
+    });
+    expect(result.applied).toBe(false);
+    expect(result.outcome).toBe("unmatched");
+
+    const audits = await t.run(async (ctx) => ctx.db.query("auditLogs").collect());
+    expect(audits.some((a: any) => a.action === "vtu_callback_unmatched")).toBe(true);
   });
 
   test("the source is recorded, so a settled row says who settled it", async () => {
