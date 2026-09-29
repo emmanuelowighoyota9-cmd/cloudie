@@ -401,11 +401,20 @@ export const verifyCallback = internalAction({
       return { verified: false, reason: "adapter_incomplete" };
     }
 
-    const event = call.adapter.verifyAndParseCallback(
-      args.rawBody,
-      lowered,
-      call.opts.apiKey,
-    );
+    // Two failure modes, two reasons. The guard above catches a method that is
+    // absent; this catches a method that exists and throws. Both are our
+    // defect, both must be a 4xx and never a 500, and the body must never be
+    // treated as authenticated.
+    let event: ReturnType<typeof call.adapter.verifyAndParseCallback>;
+    try {
+      event = call.adapter.verifyAndParseCallback(
+        args.rawBody,
+        lowered,
+        call.opts.apiKey,
+      );
+    } catch {
+      return { verified: false, reason: "adapter_error" };
+    }
     if (!event) return { verified: false, reason: "signature_mismatch" };
 
     return {
