@@ -305,16 +305,6 @@ both:
 
 The two are named in each other deliberately so neither can drift alone.
 
-## Why this file is still called "sandbox"
-
-It was written when a sandbox was believed to exist, and the name is now wrong:
-the body describes production verification because that is the only kind
-available. The name is kept because two documents point at this path —
-`docs/vtu-slice-5.md` and the `aidapay.ts` header — and a rename is worth doing
-in the same commit as those two references rather than leaving one dangling.
-
----
-
 ## Two defects this runbook assumes still exist
 
 Neither is fixed by this runbook, and both are things the live run will expose

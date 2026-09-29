@@ -34,7 +34,7 @@
  * ── No sandbox ───────────────────────────────────────────────────────
  * AidaPay publishes no sandbox endpoint. Verification is against production,
  * with Pairgate temporarily disabled so nothing reaches a real customer — see
- * `docs/vtu-sandbox-runbook.md`. This adapter has NOT been exercised against a
+ * `docs/vtu-verification-runbook.md`. This adapter has NOT been exercised against a
  * live AidaPay endpoint. Status and scope: see `docs/vtu-slice-5.md`, section
  * "Slice 4 status" — which this file is named in, so the two stay in sync.
  */

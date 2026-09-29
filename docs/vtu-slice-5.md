@@ -89,7 +89,7 @@ rather than code and both are easy to get wrong:
   The health path therefore carries the prefix instead:
   `healthPath /api/v1/my_account`.
 - **AidaPay publishes no sandbox.** Verification runs against production with
-  Pairgate temporarily disabled, per `docs/vtu-sandbox-runbook.md`.
+  Pairgate temporarily disabled, per `docs/vtu-verification-runbook.md`.
 
 `src/convex/providers/aidapay.ts` names this section from its own file header,
 so the two are read together: when the live run changes this status, change
