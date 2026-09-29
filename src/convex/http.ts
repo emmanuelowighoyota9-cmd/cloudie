@@ -517,6 +517,24 @@ const vtuWebhookHandler = httpAction(async (ctx, req) => {
   });
 
   if (!verification.verified) {
+    // OUR adapter cannot process callbacks — a defect on our side, not a bad
+    // credential on theirs. 401 would tell the aggregator to rotate a key that
+    // is fine and it would still be refused; a 500 would have it retry forever
+    // against a handler that cannot get better. A 4xx stops the retries, the
+    // body names the reason, and the transaction the callback was about is
+    // settled by reconciliation instead — which does not need this method at
+    // all. Typed first, status second: the reason is the contract, the status
+    // is what the aggregator does about it.
+    if (
+      verification.reason === "adapter_incomplete" ||
+      verification.reason === "adapter_error"
+    ) {
+      return json(
+        { error: "Provider adapter cannot process callbacks", reason: verification.reason },
+        422,
+      );
+    }
+
     // 401 for a bad or absent signature: this request is not from the
     // aggregator and must not be processed at all.
     return json({ error: "Invalid signature", reason: verification.reason }, 401);

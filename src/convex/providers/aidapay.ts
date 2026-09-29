@@ -17,7 +17,10 @@
  *
  * ── Sandbox ──────────────────────────────────────────────────────────
  * Written against AidaPay's sandbox contract and harness-verified only. It has
- * NOT been exercised against a live AidaPay endpoint; see the changelog note.
+ * NOT been exercised against a live AidaPay endpoint. Status and scope: see
+ * `docs/vtu-slice-5.md`, section "Slice 4 status" — which this file is named
+ * in, so the two stay in sync. What the live run must prove is listed in
+ * `docs/vtu-sandbox-runbook.md`.
  */
 
 import { createHmac } from "node:crypto";

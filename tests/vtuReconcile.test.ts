@@ -788,9 +788,12 @@ describe("reconciliation escalation", () => {
         providerReference: "PG-NOVERIFY",
       });
 
-      // TypeScript's interface is not a runtime guarantee: an adapter added
-      // through `registerAdapter` can arrive without the method.
-      registerAdapter({
+      // The registry refuses an adapter like this at registration — that is
+      // the first line of defence and is asserted in vtuAidaPayCompat.test.ts.
+      // This exercises the SECOND one, for an adapter that was complete when
+      // it was registered and is not now (a factory that mutates, a reload
+      // path, a hand-built object that slipped past a cast).
+      const stub: VtuProviderAdapter = {
         name: "pairgate",
         displayName: "No verify",
         async purchase() {
@@ -799,7 +802,12 @@ describe("reconciliation escalation", () => {
         verifyAndParseCallback() {
           return null;
         },
-      } as unknown as VtuProviderAdapter);
+        async verify() {
+          return { status: "unknown", message: "unused", raw: {} };
+        },
+      };
+      registerAdapter(stub);
+      delete (stub as any).verify;
 
       let report: any;
       try {

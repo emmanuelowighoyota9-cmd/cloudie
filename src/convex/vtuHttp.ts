@@ -18,6 +18,12 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { openForPurchase, openForVerification } from "./vtuProviderCall";
 import { isValidRequestId, parseServiceCode, validatePhone } from "../lib/vtu";
+import type {
+  ProviderCallOptions,
+  ProviderPurchaseRequest,
+  ProviderPurchaseResult,
+  VtuProviderAdapter,
+} from "./vtuShared";
 
 /**
  * The provider slice 1 shipped with, used ONLY as the webhook's fallback
@@ -59,7 +65,15 @@ export interface CallbackVerification {
     | "secret_unreadable"
     | "missing_signature"
     | "signature_mismatch"
-    | "unparseable";
+    | "unparseable"
+    /** OUR adapter cannot process callbacks. Distinct from every other reason
+     *  because none of them are the aggregator's fault, and the HTTP layer
+     *  answers it with a different status for exactly that reason. */
+    | "adapter_incomplete"
+    /** Same cause, later symptom: the method exists and threw on a payload it
+     *  did not guard — the shape a bad classifier produces. Still ours, still
+     *  not retryable by the aggregator. */
+    | "adapter_error";
   event?: {
     providerReference: string;
     outcome: "confirmed" | "failed";
@@ -69,6 +83,39 @@ export interface CallbackVerification {
     failureKind?: "rejected" | "cancelled";
     eventId?: string;
   };
+}
+
+/**
+ * Call an adapter's `purchase` without letting the adapter's own defect escape.
+ *
+ * The debit has already committed by the time this runs, so an exception
+ * reaching the action would strand the points in `pending` and hand the client
+ * a 500 for a failure we could have described. `unknown` is the honest result:
+ * an adapter throws when something it expected is missing or a response shape
+ * it did not guard against arrives, and in that moment we genuinely do not know
+ * whether the request reached the carrier — so the points stay debited and the
+ * row becomes pollable by the reconciliation sweep, which is the same state a
+ * transport timeout produces and the same one that already has a recovery path.
+ *
+ * Refunding here instead would return money for a top-up that may have been
+ * delivered, which is the one thing this system never does by accident.
+ *
+ * `try`/`await` rather than `.catch()` deliberately: a method that throws
+ * synchronously (a non-async implementation, a helper evaluated at call time)
+ * never produces a promise for `.catch` to attach to, so only `try` covers
+ * both shapes.
+ */
+async function callPurchase(
+  adapter: VtuProviderAdapter,
+  req: ProviderPurchaseRequest,
+  opts: ProviderCallOptions,
+): Promise<ProviderPurchaseResult> {
+  try {
+    return await adapter.purchase(req, opts);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Provider call failed";
+    return { status: "unknown", message, raw: { thrown: message } };
+  }
 }
 
 /**
@@ -179,6 +226,11 @@ export const purchaseAirtime = action({
         transactionId,
         reused: false,
         error: message,
+        // The typed code the caller already had — surfaced rather than
+        // swallowed, because "the provider rejected this" and "the provider's
+        // adapter is not implemented" need different responses from the page
+        // and from an operator reading a failed purchase.
+        code,
       };
     };
 
@@ -196,8 +248,9 @@ export const purchaseAirtime = action({
     // 3. pending -> processing, immediately before dispatch.
     await ctx.runMutation(internal.vtuInternal.markProcessing, { transactionId });
 
-    // 4. Call the aggregator.
-    const outcome = await call.adapter.purchase(
+    // 4. Call the aggregator, through the wrapper below.
+    const outcome = await callPurchase(
+      call.adapter,
       {
         requestId: args.clientRequestId,
         // Physical dispatch identity: a fresh value per attempt, so an adapter
@@ -337,12 +390,27 @@ export const verifyCallback = internalAction({
       return { verified: false, reason: "missing_signature" };
     }
 
-    // ONE call: verify AND parse. Null means the body did not authenticate.
-    const event = call.adapter.verifyAndParseCallback(
-      args.rawBody,
-      lowered,
-      call.opts.apiKey,
-    );
+    // Guarded BEFORE the call, because the alternative is a TypeError escaping
+    // this action: the HTTP layer sees a 500, and a 500 is the one answer that
+    // makes an aggregator retry forever against a handler that cannot improve.
+    // A typed reason lets the route answer with a 4xx instead, and lets
+    // reconciliation — which does not need this method — settle the row.
+    if (typeof call.adapter.verifyAndParseCallback !== "function") {
+      return { verified: false, reason: "adapter_incomplete" };
+    }
+
+    let event;
+    try {
+      event = call.adapter.verifyAndParseCallback(args.rawBody, lowered, call.opts.apiKey);
+    } catch {
+      // The method exists and threw — the signature check it sits behind
+      // already passed, so this is authentic bytes that our own parser could
+      // not handle (a classifier missing from a hand-written adapter, a shape
+      // it did not guard). `null` would be a lie about the signature; letting
+      // it escape would be a 500 the aggregator retries forever against a
+      // payload that will always throw. Typed, and treated as ours.
+      return { verified: false, reason: "adapter_error" };
+    }
     if (!event) return { verified: false, reason: "signature_mismatch" };
 
     return {

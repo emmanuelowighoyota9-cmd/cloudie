@@ -80,6 +80,10 @@ The AidaPay adapter, its admin configuration (bearer / `Authorization` /
 harness tests are in place; no request has been made to aidapay.ng production
 or sandbox, and the same is true of every `verify()` call this slice makes.
 
+`src/convex/providers/aidapay.ts` names this section from its own file header,
+so the two are read together: when the live run changes this status, change
+that header in the same commit.
+
 ---
 
 ## On the two items slices 2–4 deliberately left unbuilt

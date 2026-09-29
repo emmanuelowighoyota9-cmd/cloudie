@@ -29,6 +29,7 @@ export type ProviderCallErrorCode =
   | "CREDENTIAL_MISSING"
   | "CREDENTIAL_CORRUPT"
   | "ADAPTER_UNKNOWN"
+  | "ADAPTER_INCOMPLETE"
   | "ADMIN_REQUIRED";
 
 /**
@@ -86,6 +87,25 @@ async function resolveCall(
   // slice 3 will make that reachable through the admin UI. Fail closed.
   const adapter = getAdapter(name);
   if (!adapter) return { ok: false, code: "ADAPTER_UNKNOWN" };
+
+  // The registry validates an adapter on entry, but an object can satisfy
+  // registration and still be missing a method by the time it is called, and
+  // each mode needs a different one. Checked HERE — before the credential is
+  // opened and before the caller has dispatched anything — so the failure is a
+  // typed code on a path that has spent nothing yet.
+  //
+  // That placement is what makes the failure cheap:
+  //   purchase  -> `purchaseAirtime` has already reserved and debited, and its
+  //                `fail()` path settles and refunds, so the points come back
+  //                in the same action instead of stranding in `pending`;
+  //   reconcile -> the sweep escalates without consuming a rate-limited call;
+  //   verification -> no method is needed to OPEN a webhook secret, so the
+  //                guard for that one lives where the method is called.
+  const requiredMethod =
+    mode === "purchase" ? "purchase" : mode === "reconcile" ? "verify" : null;
+  if (requiredMethod && typeof (adapter as any)[requiredMethod] !== "function") {
+    return { ok: false, code: "ADAPTER_INCOMPLETE" };
+  }
 
   // Which sealed value this mode opens. A purchase authenticates with the API
   // key, a webhook proves itself with the webhook secret, and a reconciliation
