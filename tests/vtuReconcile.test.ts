@@ -30,6 +30,12 @@ const modules = {
   "src/convex/vtuReconcile.ts": () => import("../src/convex/vtuReconcile"),
   "src/convex/vtuReconcileSweep.ts": () => import("../src/convex/vtuReconcileSweep"),
   "src/convex/vtuUnresolvedAdmin.ts": () => import("../src/convex/vtuUnresolvedAdmin"),
+  // Registered so the webhook is exercised as the ACTION it really is when it
+  // races the sweep, rather than only through the mutation it delegates to.
+  "src/convex/vtuHttp.ts": () => import("../src/convex/vtuHttp"),
+  // Registered so the webhook is exercised as the ACTION it really is when it
+  // races the sweep, rather than only through the mutation it delegates to.
+  "src/convex/vtuHttp.ts": () => import("../src/convex/vtuHttp"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
   "src/convex/vtuProviderCall.ts": () => import("../src/convex/vtuProviderCall"),
   "src/convex/vtuProviderConfig.ts": () => import("../src/convex/vtuProviderConfig"),
@@ -678,6 +684,206 @@ describe("admin unresolved queue", () => {
         .withIdentity({ subject: adminId })
         .query(internal.vtuUnresolvedAdmin.listUnresolved, {});
       expect(queue).toHaveLength(1);
+    });
+  });
+});
+
+// ─── Escalation ──────────────────────────────────────────────────
+
+describe("reconciliation escalation", () => {
+  test("the poll limit escalates instead of reversing, and the queue shows it", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const adminId = await seedAdmin(t);
+      const reserved = await toStuckUnknown(t, userId, "vtu_sweep_max_attempts", {
+        providerReference: "PG-MAX-1",
+      });
+
+      const seen: { providerReference: string }[] = [];
+      registerAdapter(
+        stubAdapter(seen, () => ({ status: "unknown", message: "still processing", raw: {} })),
+      );
+
+      try {
+        // Five sweeps, one poll each — the configured limit.
+        for (let i = 0; i < 5; i++) await sweep(t);
+        expect(seen).toHaveLength(5);
+        expect((await txOf(t, reserved.transactionId)).status).toBe("unknown");
+
+        // The sixth has no budget left for THIS transaction and escalates
+        // instead of polling a sixth time…
+        const sixth = await sweep(t);
+        expect(sixth.providers[0].attempted).toBe(0);
+        expect(sixth.providers[0].escalated).toBe(1);
+        expect(seen).toHaveLength(5);
+      } finally {
+        restorePairgate();
+      }
+
+      const row = await txOf(t, reserved.transactionId);
+      // …and the escalation is NOT a refund: the provider never confirmed
+      // failure, so the points stay debited pending a human.
+      expect(row.status).toBe("unresolved");
+      expect(row.unresolvedReason).toBe("max_attempts_exceeded");
+      expect(row.reversalLedgerId).toBeUndefined();
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(
+        (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
+      ).toHaveLength(0);
+
+      const queue = await t
+        .withIdentity({ subject: adminId })
+        .query(internal.vtuUnresolvedAdmin.listUnresolved, {});
+      expect(queue).toHaveLength(1);
+      expect(queue[0].unresolvedReason).toBe("max_attempts_exceeded");
+      expect(queue[0].reconcileAttempts).toBe(5);
+      expect(queue[0].provider).toBe("pairgate");
+    });
+  });
+
+  test("a row left in pending escalates as never_dispatched, never polled", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const reserved = await t.mutation(internal.vtuInternal.beginPurchase, {
+        userId,
+        clientRequestId: "vtu_sweep_never_sent",
+        serviceCode: SERVICE_CODE,
+        customerIdentifier: PHONE,
+      });
+      // Older than the dispatch window: no HTTP call ever left our side.
+      await t.run(async (ctx) =>
+        ctx.db.patch(reserved.transactionId, { updatedAt: Date.now() - 10 * 60_000 }),
+      );
+
+      const seen: { providerReference: string }[] = [];
+      registerAdapter(stubAdapter(seen, () => ({ status: "unknown", message: "x", raw: {} })));
+
+      try {
+        const report = await sweep(t);
+        // Nothing to ask about: there is no reference and no request.
+        expect(seen).toHaveLength(0);
+        expect(report.providers[0].attempted).toBe(0);
+        expect(report.providers[0].escalated).toBe(1);
+      } finally {
+        restorePairgate();
+      }
+
+      const row = await txOf(t, reserved.transactionId);
+      expect(row.status).toBe("unresolved");
+      expect(row.unresolvedReason).toBe("never_dispatched");
+      // Escalated, not refunded: the points come back only when a human says
+      // so, because the cause is a defect in our own dispatch path.
+      expect(row.reversalLedgerId).toBeUndefined();
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    });
+  });
+
+  test("an adapter with no verify() fails closed without spending budget", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const reserved = await toStuckUnknown(t, userId, "vtu_sweep_no_verify", {
+        providerReference: "PG-NOVERIFY",
+      });
+
+      // TypeScript's interface is not a runtime guarantee: an adapter added
+      // through `registerAdapter` can arrive without the method.
+      registerAdapter({
+        name: "pairgate",
+        displayName: "No verify",
+        async purchase() {
+          throw new Error("unused");
+        },
+        verifyAndParseCallback() {
+          return null;
+        },
+      } as unknown as VtuProviderAdapter);
+
+      let report: any;
+      try {
+        report = await sweep(t);
+      } finally {
+        restorePairgate();
+      }
+
+      expect(report.providers[0].skipped).toBe("no_verify");
+      expect(report.providers[0].attempted).toBe(0);
+      expect(report.providers[0].escalated).toBe(1);
+
+      const row = await txOf(t, reserved.transactionId);
+      expect(row.status).toBe("unresolved");
+      expect(row.unresolvedReason).toBe("provider_unreachable");
+      // The message says what is actually wrong, rather than reporting a
+      // transport failure for an error that never touched the network.
+      expect(row.failureReason).toContain("verify()");
+      expect(row.reversalLedgerId).toBeUndefined();
+
+      // Budget untouched: failing closed must not consume the provider's
+      // rate-limited calls.
+      const provider = await t.run(async (ctx) =>
+        ctx.db
+          .query("vtuProviders")
+          .withIndex("by_name", (q) => q.eq("name", "pairgate"))
+          .unique(),
+      );
+      expect(provider?.reconcileCallsInWindow).toBeUndefined();
+      expect(provider?.lastReconcileSweepAt).toBeGreaterThan(0);
+    });
+  });
+
+  test("the sweep action racing a webhook in the same tick settles once", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const reserved = await toStuckUnknown(t, userId, "vtu_sweep_action_race", {
+        providerReference: "PG-RACE-9",
+      });
+
+      const seen: { providerReference: string }[] = [];
+      registerAdapter(
+        stubAdapter(seen, () => ({
+          status: "failed",
+          code: "NOT_FOUND",
+          message: "Provider has no record of it",
+          failureKind: "rejected",
+          raw: {},
+        })),
+      );
+
+      let webhook: any;
+      let report: any;
+      try {
+        // Both paths end to end — the webhook action and the whole sweep
+        // (selection, reservation, poll, settle) — fired together.
+        [webhook, report] = await Promise.all([
+          t.action(internal.vtuHttp.applyCallback, {
+            provider: "pairgate",
+            event: { providerReference: "PG-RACE-9", outcome: "confirmed", costNgn: 1000 },
+          }),
+          sweep(t),
+        ]);
+      } finally {
+        restorePairgate();
+      }
+
+      const row = await txOf(t, reserved.transactionId);
+      expect(["confirmed", "reversed"]).toContain(row.status);
+
+      // Exactly one of them brought it to rest…
+      const claimed = (webhook.applied ? 1 : 0) + (report.providers[0]?.resolved ?? 0);
+      expect(claimed).toBe(1);
+
+      // …and the ledger agrees with that winner and no one else: one debit,
+      // at most one refund, and a balance that matches the status.
+      const ledger = await ledgerFor(t, userId);
+      expect(ledger.filter((l: any) => l.type === "vtu_purchase")).toHaveLength(1);
+      const refunds = ledger.filter((l: any) => l.type === "vtu_refund");
+      expect(refunds).toHaveLength(row.status === "reversed" ? 1 : 0);
+      expect(await balanceOf(t, userId)).toBe(
+        row.status === "reversed" ? START_BALANCE : START_BALANCE - 67,
+      );
     });
   });
 });

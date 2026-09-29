@@ -70,6 +70,7 @@ export type ProviderSweepReport = {
   skipped:
     | null
     | "no_adapter"
+    | "no_verify"
     | "provider_missing"
     | "budget_exhausted"
     | "credential_unavailable";
@@ -202,17 +203,15 @@ async function sweepProvider(
   // under-use a scarce allowance. Also the fail-closed rule: an unknown
   // provider name escalates its rows instead of throwing, so a provider row
   // deleted mid-flight cannot crash the sweep or leave rows stuck.
-  if (!getAdapter(providerName)) {
-    for (const row of toPoll) {
-      const escalatedOk = await escalate(
-        ctx,
-        row.transactionId,
-        "provider_unreachable",
-        `No adapter is registered for provider "${providerName}", so its transactions cannot be verified. Awaiting an operator decision.`,
-        { provider: providerName, attempts: row.reconcileAttempts },
-      );
-      if (escalatedOk) report.escalated++;
-    }
+  const adapter = getAdapter(providerName);
+  if (!adapter) {
+    escalateAll(
+      ctx,
+      toPoll,
+      report,
+      providerName,
+      `No adapter is registered for provider "${providerName}", so its transactions cannot be verified.`,
+    );
     await ctx.runMutation(internal.vtuReconcile.recordSweepOutcome, {
       providerName,
       attempted: 0,
@@ -220,6 +219,33 @@ async function sweepProvider(
       stillPending: fresh,
     });
     report.skipped = "no_adapter";
+    report.stillPending = fresh;
+    return report;
+  }
+
+  // The interface requires `verify`, but TypeScript is not a runtime check:
+  // an adapter registered through `registerAdapter` (or one that predates the
+  // method) can arrive without it. Calling `undefined` would throw inside the
+  // poll loop and turn a programming error into a transport failure that
+  // burns a rate-limited call per sweep for five sweeps before escalating —
+  // and only then, by accident, for the right reason. Detecting it here
+  // fails closed on the first sweep, spends no budget, and says what is
+  // actually wrong.
+  if (typeof adapter.verify !== "function") {
+    escalateAll(
+      ctx,
+      toPoll,
+      report,
+      providerName,
+      `The adapter for provider "${providerName}" does not implement verify(), so its transactions cannot be reconciled.`,
+    );
+    await ctx.runMutation(internal.vtuReconcile.recordSweepOutcome, {
+      providerName,
+      attempted: 0,
+      resolved: 0,
+      stillPending: fresh,
+    });
+    report.skipped = "no_verify";
     report.stillPending = fresh;
     return report;
   }
@@ -232,16 +258,13 @@ async function sweepProvider(
   });
 
   if (!reserved.ok) {
-    for (const row of toPoll) {
-      const escalatedOk = await escalate(
-        ctx,
-        row.transactionId,
-        "provider_unreachable",
-        `The provider row for "${providerName}" no longer exists, so its transactions cannot be verified. Awaiting an operator decision.`,
-        { attempts: row.reconcileAttempts },
-      );
-      if (escalatedOk) report.escalated++;
-    }
+    escalateAll(
+      ctx,
+      toPoll,
+      report,
+      providerName,
+      `The provider row for "${providerName}" no longer exists, so its transactions cannot be verified.`,
+    );
     report.skipped = "provider_missing";
     report.stillPending = fresh;
     return report;
@@ -265,16 +288,13 @@ async function sweepProvider(
   // ── 6. Credentials ────────────────────────────────────────────────
   const call: ResolvedCall = await openForReconcile(ctx, providerName);
   if (!call.ok) {
-    for (const row of toPoll) {
-      const escalatedOk = await escalate(
-        ctx,
-        row.transactionId,
-        "provider_unreachable",
-        `Provider "${providerName}" cannot be reached for reconciliation (${call.code}). Awaiting an operator decision.`,
-        { provider: providerName, code: call.code },
-      );
-      if (escalatedOk) report.escalated++;
-    }
+    escalateAll(
+      ctx,
+      toPoll,
+      report,
+      providerName,
+      `Provider "${providerName}" cannot be reached for reconciliation (${call.code}).`,
+    );
     await ctx.runMutation(internal.vtuReconcile.recordSweepOutcome, {
       providerName,
       attempted: 0,
@@ -362,6 +382,32 @@ async function sweepProvider(
   });
 
   return report;
+}
+
+/**
+ * Escalate every row in `rows` as unreachable, counting those that moved.
+ *
+ * The shared shape of every fail-closed branch: we cannot ask the provider
+ * about these, so each one becomes a human's decision rather than an error, a
+ * retry, or a refund.
+ */
+async function escalateAll(
+  ctx: any,
+  rows: SweepCandidate[],
+  report: ProviderSweepReport,
+  providerName: string,
+  message: string,
+): Promise<void> {
+  for (const row of rows) {
+    const escalatedOk = await escalate(
+      ctx,
+      row.transactionId,
+      "provider_unreachable",
+      message,
+      { provider: providerName, attempts: row.reconcileAttempts },
+    );
+    if (escalatedOk) report.escalated++;
+  }
 }
 
 /**

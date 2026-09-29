@@ -114,6 +114,13 @@ interface break.
 
 ## Still deliberately unbuilt
 
+> **Superseded by slice 5.** Both items below shipped in `vtu-slice-5.md` —
+> the reconciliation poller and the audited admin reversal. Kept as written,
+> because the reasoning is what made them safe to defer: the poller needed a
+> rate budget before it could be written without risking a blocked provider
+> account, and the reversal needed a single writer of terminal status before
+> widening the allow-set would mean anything.
+
 **The reconciliation poller.** Slice 1 is webhook-only by decision, so a
 transport timeout leaves a transaction in `unknown` with the points still
 debited and no automatic recovery. That is a real gap, accepted on purpose:
