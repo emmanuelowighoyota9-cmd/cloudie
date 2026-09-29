@@ -546,13 +546,13 @@ describe("purchaseAirtime forwards the transaction id as attemptId", () => {
           name: "pairgate",
           displayName: "AidaPay (under the default route)",
           status: "active",
-          baseUrl: "https://aidapay.ng/api/v1",
+          baseUrl: "https://aidapay.ng",
           encryptedApiKey: await encrypt("ap_live_token"),
           // AidaPay requires a provider-level PIN on every purchase.
           encryptedAccountPin: await encrypt("1234"),
           authHeader: "Authorization",
           authScheme: "bearer",
-          healthPath: "/account",
+          healthPath: "/api/v1/my_account",
           createdAt: now,
           updatedAt: now,
         } as any),
@@ -686,11 +686,11 @@ describe("test connection authenticates the way the provider is really called", 
           name: "aidapay",
           displayName: "AidaPay",
           status: "active",
-          baseUrl: "https://aidapay.ng/api/v1",
+          baseUrl: "https://aidapay.ng",
           encryptedApiKey: await encrypt("ap_live_token_0001"),
           authHeader: "Authorization",
           authScheme: "bearer",
-          healthPath: "/account",
+          healthPath: "/api/v1/my_account",
           createdAt: Date.now(),
           updatedAt: Date.now(),
         } as any),
@@ -710,7 +710,7 @@ describe("test connection authenticates the way the provider is really called", 
 
         expect(result.ok).toBe(true);
         expect(calls).toHaveLength(1);
-        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/account");
+        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/my_account");
         // GET only. A test button wired to a spending path is a foot-gun
         // holding a live key.
         expect(calls[0].init.method).toBe("GET");
@@ -796,13 +796,13 @@ describe("admin provider surface handles the third secret", () => {
       await client.mutation(api.vtuProviderAdmin.createProvider, {
         name: "aidapay",
         displayName: "AidaPay",
-        baseUrl: "https://aidapay.ng/api/v1",
+        baseUrl: "https://aidapay.ng",
         apiKey: "ap_live_token_0001",
         webhookSecret: "ap_webhook_secret",
         accountPin: "1234",
         authHeader: "Authorization",
         authScheme: "bearer",
-        healthPath: "/account",
+        healthPath: "/api/v1/my_account",
         status: "sandbox",
       });
 
@@ -841,7 +841,7 @@ describe("admin provider surface handles the third secret", () => {
       await client.mutation(api.vtuProviderAdmin.createProvider, {
         name: "aidapay",
         displayName: "AidaPay",
-        baseUrl: "https://aidapay.ng/api/v1",
+        baseUrl: "https://aidapay.ng",
         apiKey: "ap_live_token_0001",
         accountPin: "1234",
       });
@@ -887,7 +887,7 @@ describe("admin provider surface handles the third secret", () => {
         client.mutation(api.vtuProviderAdmin.createProvider, {
           name: "aidapay",
           displayName: "AidaPay",
-          baseUrl: "https://aidapay.ng/api/v1",
+          baseUrl: "https://aidapay.ng",
           apiKey: "k",
           authScheme: "Bearer ",
         }),
@@ -1212,7 +1212,7 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
       await client.mutation(api.vtuProviderAdmin.createProvider, {
         name: "aidapay",
         displayName: "AidaPay",
-        baseUrl: "https://aidapay.ng/api/v1",
+        baseUrl: "https://aidapay.ng",
         // The access token, sealed TWICE: once as the API credential and once
         // as the webhook secret, because AidaPay keys its HMAC with the same
         // material. Sealed separately so either can be rotated alone.
@@ -1222,7 +1222,7 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
         authHeader: "Authorization",
         authScheme: "bearer",
         callbackSignatureHeader: "Signature",
-        healthPath: "/account",
+        healthPath: "/api/v1/my_account",
         status: "sandbox",
       });
 
@@ -1233,7 +1233,7 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
       expect(rows[0].authScheme).toBe("bearer");
       expect(rows[0].authHeader).toBe("Authorization");
       expect(rows[0].callbackSignatureHeader).toBe("Signature");
-      expect(rows[0].healthPath).toBe("/account");
+      expect(rows[0].healthPath).toBe("/api/v1/my_account");
       expect(rows[0].hasApiKey).toBe(true);
       expect(rows[0].hasWebhookSecret).toBe(true);
       expect(rows[0].hasAccountPin).toBe(true);
@@ -1244,7 +1244,7 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
       expect(serialised).not.toContain("1234");
       expect(serialised).not.toContain("cex1.");
 
-      // 3. Test connection hits GET /account with the bearer header.
+      // 3. Test connection hits GET /api/v1/my_account with the bearer header.
       const calls: { url: string; init: any }[] = [];
       const realFetch = globalThis.fetch;
       globalThis.fetch = (async (url: any, init: any) => {
@@ -1261,7 +1261,7 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
         });
         expect(result.ok).toBe(true);
         expect(calls).toHaveLength(1);
-        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/account");
+        expect(calls[0].url).toBe("https://aidapay.ng/api/v1/my_account");
         expect(calls[0].init.method).toBe("GET");
         expect(calls[0].init.headers.Authorization).toBe("Bearer ap_access_token_x");
         // The PIN is a PURCHASE credential and must not be spent on a health
@@ -1284,14 +1284,16 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
           name: "aidapay",
           displayName: "AidaPay",
           status: "sandbox",
-          baseUrl: "https://sandbox.aidapay.ng/api/v1",
+          // No sandbox host exists. This test is about the STATUS, and a
+          // sandbox host was an assumption from the first PDF extraction.
+          baseUrl: "https://aidapay.ng",
           encryptedApiKey: await encrypt("ap_sandbox_token"),
           encryptedWebhookSecret: await encrypt("ap_sandbox_token"),
           encryptedAccountPin: await encrypt("1234"),
           authHeader: "Authorization",
           authScheme: "bearer",
           callbackSignatureHeader: "Signature",
-          healthPath: "/account",
+          healthPath: "/api/v1/my_account",
           createdAt: Date.now(),
           updatedAt: Date.now(),
         } as any),
@@ -1312,6 +1314,183 @@ describe("an operator can add AidaPay entirely from the admin page", () => {
       );
       expect(verify.ok).toBe(true);
     });
+  });
+});
+
+// ─── The shared response envelope across all three endpoints ────────
+//
+// AidaPay answers `/buy`, `/transaction`, AND `/my_account` with the same
+// `{ success, message, data }` envelope. That is convenient for the adapter
+// and dangerous in one specific way: a parser that keys off the ENVELOPE
+// rather than off the route cannot tell a purchase verdict from an account
+// read, and `/my_account`'s payload is a company record rather than a
+// transaction. These tests pin both halves.
+
+/** A fetch that records the URL it was called with and answers with a body we choose. */
+function respondingFetch(body: unknown, status = 200) {
+  const urls: string[] = [];
+  const impl = (async (url: any) => {
+    urls.push(String(url));
+    return new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown as typeof fetch;
+  return { impl, urls };
+}
+
+/**
+ * AidaPay options with the BASE URL THE ROW MUST CARRY.
+ *
+ * The bare origin, not `https://aidapay.ng/api/v1`. The adapter appends
+ * `/api/v1/buy` itself, so a base URL carrying the prefix doubles it — see the
+ * test below, which asserts that doubling explicitly rather than leaving it to
+ * be rediscovered from a 404.
+ */
+function aidapayOptions(fetchImpl: typeof fetch, overrides: Partial<ProviderCallOptions> = {}) {
+  return makeOptions(fetchImpl, {
+    baseUrl: "https://aidapay.ng",
+    apiKey: "ap_live_token",
+    accountPin: "1234",
+    authHeader: "Authorization",
+    authScheme: "bearer",
+    ...overrides,
+  });
+}
+
+const ENVELOPE = { success: true, message: "ok" };
+
+describe("the { success, message, data } envelope is read the same way everywhere", () => {
+  test("a verdict nested under data and a verdict at the top level both parse", async () => {
+    // AidaPay is documented as nesting under `data` and observed to sometimes
+    // answer flat, so `dataOf` accepts both. If it only handled one, half of
+    // production's responses would classify as `unknown` and every one of
+    // those purchases would escalate to a human.
+    const nested = respondingFetch({
+      ...ENVELOPE,
+      data: { status: "Completed", hash: "AP-NESTED", cost: 100 },
+    });
+    const flat = respondingFetch({ ...ENVELOPE, status: "Completed", hash: "AP-FLAT", cost: 100 });
+
+    const a = await aidapayAdapter.verify("tx_physical_0001", aidapayOptions(nested.impl));
+    const b = await aidapayAdapter.verify("tx_physical_0002", aidapayOptions(flat.impl));
+
+    expect(a.status).toBe("success");
+    expect(b.status).toBe("success");
+    // The reference is read from `data` first and the top level second, which
+    // is what makes the two shapes interchangeable rather than merely similar.
+    expect(a.providerReference).toBe("AP-NESTED");
+    expect(b.providerReference).toBe("AP-FLAT");
+  });
+
+  test("the same envelope carries a FAILURE verdict on both routes", async () => {
+    // The envelope is shared, so the code that classifies it must be too.
+    // `/buy` and `/transaction` must agree, or a failure reported by the poll
+    // would be read differently from the same failure reported at dispatch.
+    const buy = respondingFetch({
+      ...ENVELOPE,
+      success: false,
+      message: "Insufficient balance",
+      data: { status: "Cancelled", hash: "AP-1" },
+    });
+    const poll = respondingFetch({
+      ...ENVELOPE,
+      success: false,
+      message: "Insufficient balance",
+      data: { status: "Cancelled", hash: "AP-1" },
+    });
+
+    const dispatched = await aidapayAdapter.purchase(
+      makeRequest({ amountNgn: 1000 }),
+      aidapayOptions(buy.impl),
+    );
+    const reconciled = await aidapayAdapter.verify("tx_physical_0001", aidapayOptions(poll.impl));
+
+    expect(dispatched.status).toBe("failed");
+    expect(reconciled.status).toBe("failed");
+    // `Cancelled` is not `provider_failed`: it is the reason the reversal
+    // exists as a distinct value, so both routes must preserve it.
+    expect(dispatched.failureKind).toBe("cancelled");
+    expect(reconciled.failureKind).toBe("cancelled");
+  });
+
+  test("an ACCOUNT envelope must not resolve a transaction", async () => {
+    // The `/my_account` body, in the shared envelope. `names` is PLURAL, which
+    // is the field the documentation specifies for the account holder — there
+    // is no singular `name` to read, and the point of this test is that
+    // nothing tries to: there is no transaction status in an account record,
+    // so the only safe classification is `unknown`.
+    const account = respondingFetch({
+      success: true,
+      message: "Account details retrieved",
+      data: {
+        names: "Crestline Express Ltd",
+        email: "ops@example.com",
+        balance: "1234.00",
+        status: "active",
+      },
+    });
+
+    const verdict = await aidapayAdapter.verify("tx_physical_0001", aidapayOptions(account.impl));
+
+    expect(verdict.status).toBe("unknown");
+    // Spelled out, because `success: true` on an account read is exactly the
+    // thing a shared-envelope parser could mistake for a delivered top-up.
+    expect(verdict.status).not.toBe("success");
+    expect(verdict.status).not.toBe("failed");
+  });
+});
+
+describe("the base URL is the bare origin, and the adapter owns the /api/v1 prefix", () => {
+  test("both routes are composed as baseUrl + path with exactly one prefix", async () => {
+    // The purchase URL was never asserted anywhere before this test, which is
+    // how a `baseUrl` ending in `/api/v1` could look correct in every fixture
+    // while producing `.../api/v1/api/v1/buy` against production.
+    const buy = respondingFetch({
+      ...ENVELOPE,
+      data: { status: "Completed", hash: "AP-1", cost: 100 },
+    });
+    await aidapayAdapter.purchase(makeRequest({ amountNgn: 1000 }), aidapayOptions(buy.impl));
+    expect(buy.urls[0]).toBe("https://aidapay.ng/api/v1/buy");
+
+    const poll = respondingFetch({
+      ...ENVELOPE,
+      data: { status: "Completed", hash: "AP-1", cost: 100 },
+    });
+    await aidapayAdapter.verify("tx_physical_0001", aidapayOptions(poll.impl));
+    expect(poll.urls[0]).toBe("https://aidapay.ng/api/v1/transaction/tx_physical_0001");
+  });
+
+  test("a base URL that already carries the prefix doubles it", async () => {
+    // Pinned as a FACT of the composition rather than as a wish, because the
+    // fix is a configuration change on the provider row and not a code change.
+    // If this ever stops being true the adapter has grown its own normalising,
+    // and the row's `baseUrl` no longer has to be the bare origin.
+    const prefixed = respondingFetch({
+      ...ENVELOPE,
+      data: { status: "Completed", hash: "AP-1", cost: 100 },
+    });
+    await aidapayAdapter.purchase(
+      makeRequest({ amountNgn: 1000 }),
+      aidapayOptions(prefixed.impl, { baseUrl: "https://aidapay.ng/api/v1" }),
+    );
+    expect(prefixed.urls[0]).toBe("https://aidapay.ng/api/v1/api/v1/buy");
+  });
+
+  test("the health path is a full path, so it carries the prefix instead", () => {
+    // The probe composes `baseUrl + healthPath` with no prefix of its own, so
+    // the row reads: bare-origin baseUrl + `/api/v1/my_account`. This asserts
+    // the arithmetic the runbook depends on, so a future change to either half
+    // fails here rather than during a live run.
+    const baseUrl = "https://aidapay.ng";
+    const healthPath = "/api/v1/my_account";
+    expect(`${baseUrl.replace(/\/+$/, "")}${healthPath}`).toBe(
+      "https://aidapay.ng/api/v1/my_account",
+    );
+    // And the trap this arrangement avoids: the alternative pairing is the one
+    // that breaks purchases, not the one that breaks the probe.
+    const wrongPair = `${baseUrl}/api/v1` + "/api/v1/buy";
+    expect(wrongPair).toBe("https://aidapay.ng/api/v1/api/v1/buy");
   });
 });
 

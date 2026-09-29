@@ -11,16 +11,32 @@
  *
  * ── Endpoint shapes ──────────────────────────────────────────────────
  * AidaPay publishes documented endpoints, so unlike Pairgate's speculative
- * paths these are transcribed from AidaPay's API reference. They are still
- * isolated in `purchasePath()`, `accountPath()`, and the mappers below so a
- * correction is a two-line change here and nowhere else.
+ * paths these are transcribed from AidaPay's API reference. The two this
+ * adapter owns are isolated in `purchasePath()` and `transactionPath()`, plus
+ * the mappers below, so a correction is a two-line change here and nowhere
+ * else.
  *
- * ── Sandbox ──────────────────────────────────────────────────────────
- * Written against AidaPay's sandbox contract and harness-verified only. It has
- * NOT been exercised against a live AidaPay endpoint. Status and scope: see
- * `docs/vtu-slice-5.md`, section "Slice 4 status" — which this file is named
- * in, so the two stay in sync. What the live run must prove is listed in
- * `docs/vtu-sandbox-runbook.md`.
+ * THE HEALTH PATH IS NOT HERE, and that is deliberate rather than an
+ * omission. `GET /my_account` is a read-only probe an operator runs from
+ * `/admin/vtu/providers`, not a step in any purchase, so it is admin data on
+ * `vtuProviders.healthPath` rather than adapter code — the same way it works
+ * for Pairgate. A previous revision of this comment named an `accountPath()`
+ * function that was never written, which is how the wrong path went
+ * unnoticed: the comment described a seam the code did not have.
+ *
+ * WHAT `baseUrl` IS, because the two halves of the system read it differently
+ * and this is the trap. This adapter composes `baseUrl + purchasePath()`, and
+ * `purchasePath()` already carries the `/api/v1` prefix — so the row's `baseUrl`
+ * must be the BARE ORIGIN (`https://aidapay.ng`), and the health path must
+ * therefore be the full `/api/v1/my_account`. Setting `baseUrl` to
+ * `https://aidapay.ng/api/v1` yields `.../api/v1/api/v1/buy` on every purchase.
+ *
+ * ── No sandbox ───────────────────────────────────────────────────────
+ * AidaPay publishes no sandbox endpoint. Verification is against production,
+ * with Pairgate temporarily disabled so nothing reaches a real customer — see
+ * `docs/vtu-sandbox-runbook.md`. This adapter has NOT been exercised against a
+ * live AidaPay endpoint. Status and scope: see `docs/vtu-slice-5.md`, section
+ * "Slice 4 status" — which this file is named in, so the two stay in sync.
  */
 
 import { createHmac } from "node:crypto";

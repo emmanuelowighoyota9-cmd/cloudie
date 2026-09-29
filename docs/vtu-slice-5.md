@@ -76,9 +76,20 @@ Two operator-visible behaviours worth knowing, both deliberate:
 
 Slice 4 is **adapter implemented, harness-verified, pending live verification**.
 The AidaPay adapter, its admin configuration (bearer / `Authorization` /
-`Signature` / `/account`, token sealed twice, PIN sealed separately), and its
-harness tests are in place; no request has been made to aidapay.ng production
-or sandbox, and the same is true of every `verify()` call this slice makes.
+`Signature` / `GET /my_account`, token sealed twice, PIN sealed separately), and
+its harness tests are in place; no request has been made to aidapay.ng, and the
+same is true of every `verify()` call this slice makes.
+
+Two configuration facts belong with this status, because both are admin data
+rather than code and both are easy to get wrong:
+
+- **`baseUrl` is the bare origin** (`https://aidapay.ng`). The adapter composes
+  `baseUrl + purchasePath()` and `purchasePath()` returns `/api/v1/buy`, so a
+  `baseUrl` carrying the `/api/v1` prefix produces `.../api/v1/api/v1/buy`.
+  The health path therefore carries the prefix instead:
+  `healthPath /api/v1/my_account`.
+- **AidaPay publishes no sandbox.** Verification runs against production with
+  Pairgate temporarily disabled, per `docs/vtu-sandbox-runbook.md`.
 
 `src/convex/providers/aidapay.ts` names this section from its own file header,
 so the two are read together: when the live run changes this status, change
