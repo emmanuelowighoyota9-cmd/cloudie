@@ -1,17 +1,6 @@
 import { Link } from "react-router";
 import { useQuery } from "convex/react";
-import {
-  ArrowRight,
-  Coins,
-  GraduationCap,
-  Info,
-  Lightbulb,
-  Radio,
-  Trophy,
-  Tv,
-  Wifi,
-  Zap,
-} from "lucide-react";
+import { ArrowRight, Coins, Info } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { CatalogProductView } from "@/convex/vtuCatalog";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
+// Shared with the history rows and the purchase page, so one service type has
+// one glyph everywhere it appears.
+import { VtuServiceIcon } from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
 import { VTU_SERVICE_TYPE_COPY, vtuServiceTypeLabel } from "@/lib/vtu";
 import { cn } from "@/lib/utils";
@@ -37,15 +29,6 @@ import { cn } from "@/lib/utils";
  * service exists; showing it as buyable would advertise a purchase the server
  * will refuse.
  */
-
-const SERVICE_ICONS: Record<string, typeof Zap> = {
-  airtime: Radio,
-  data: Wifi,
-  cable: Tv,
-  electricity: Lightbulb,
-  exam: GraduationCap,
-  betting: Trophy,
-};
 
 export default function VtuCatalog() {
   const catalog = useQuery(api.vtuCatalog.listCatalog, {});
@@ -92,13 +75,15 @@ export default function VtuCatalog() {
       ) : (
         catalog.groups.map((group, groupIndex) => {
           const copy = VTU_SERVICE_TYPE_COPY[group.serviceType];
-          const Icon = SERVICE_ICONS[group.serviceType] ?? Zap;
           return (
             <Reveal key={group.serviceType} delay={groupIndex * 0.04}>
               <section className="space-y-3">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Icon className="h-4 w-4" />
+                    <VtuServiceIcon
+                      serviceType={group.serviceType}
+                      className="h-4 w-4"
+                    />
                   </span>
                   <div className="min-w-0">
                     <h2 className="text-sm font-semibold uppercase tracking-wider">

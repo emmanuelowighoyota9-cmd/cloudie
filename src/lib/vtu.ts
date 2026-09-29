@@ -229,6 +229,40 @@ export function parseServiceCode(
   return { serviceType: "airtime", network: parts[1], amountNgn };
 }
 
+/**
+ * Display names for the four Nigerian networks.
+ *
+ * Shared rather than re-declared per page so that "9mobile" cannot be spelled
+ * three ways on three screens, and so the receipt renderer uses the same words
+ * the browse page did.
+ */
+export const AIRTIME_NETWORK_LABELS: Record<string, string> = {
+  mtn: "MTN",
+  airtel: "Airtel",
+  glo: "Glo",
+  "9mobile": "9mobile",
+};
+
+/**
+ * A name for a service, derived from the service code ALONE.
+ *
+ * This is the FALLBACK for a surface whose catalog row is gone. A transaction
+ * outlives the product it was sold from — a deleted catalog row leaves its
+ * completed sales behind — and `airtime.mtn.1000` is a row that has stopped
+ * explaining itself. Whenever a catalog `displayName` still exists it wins,
+ * because that is the name the customer saw when they bought.
+ *
+ * Returns the code unchanged for anything `parseServiceCode` does not
+ * recognise. That is the honest answer: a made-up label for an unknown product
+ * would be worse than the raw identifier.
+ */
+export function vtuServiceCodeLabel(serviceCode: string): string {
+  const parsed = parseServiceCode(serviceCode);
+  if (!parsed) return serviceCode;
+  const network = AIRTIME_NETWORK_LABELS[parsed.network] ?? parsed.network;
+  return `${network} airtime`;
+}
+
 /** Validate a Nigerian mobile number. Stored masked — see maskIdentifier. */
 export function validatePhone(
   raw: string,

@@ -15,17 +15,12 @@ import {
   validatePhone,
   vtuStatusCopy,
   vtuStatusReasonCopy,
-  type VtuVisibleStatus,
 } from "@/lib/vtu";
 import { cn } from "@/lib/utils";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Clock,
-  HelpCircle,
-  Loader2,
-  Radio,
-} from "lucide-react";
+// The status chrome is SHARED with /vtu/history, so the same status cannot be
+// green on one screen and amber on another.
+import { VTU_STATUS_TONE } from "@/components/vtu/shared";
+import { ArrowLeft, Loader2, Radio } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -38,46 +33,6 @@ const NETWORKS = [
 ] as const;
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000] as const;
-
-/**
- * Tone and icon per status.
- *
- * The WORDS are not here — they come from `vtuStatusCopy` in `@/lib/vtu`, so
- * this page and the history page describe a status identically. Typing the map
- * on `VtuVisibleStatus` (which excludes `failed`) means there is no entry to
- * add for a state a client can never observe, and no fallback wording to
- * accidentally show in its place.
- */
-const STATUS_TONE: Record<
-  VtuVisibleStatus,
-  { tone: string; icon: typeof Clock; spin?: boolean }
-> = {
-  pending: {
-    tone: "text-muted-foreground border-border bg-muted/50",
-    icon: Clock,
-  },
-  processing: {
-    tone: "text-sky-700 dark:text-sky-400 border-sky-500/25 bg-sky-500/10",
-    icon: Loader2,
-    spin: true,
-  },
-  confirmed: {
-    tone: "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/10",
-    icon: CheckCircle2,
-  },
-  reversed: {
-    tone: "text-muted-foreground border-border bg-muted/50",
-    icon: CheckCircle2,
-  },
-  unknown: {
-    tone: "text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/10",
-    icon: HelpCircle,
-  },
-  unresolved: {
-    tone: "text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/10",
-    icon: HelpCircle,
-  },
-};
 
 export default function VtuAirtime() {
   // The catalog deep-links here with the network it selected. Validated against
@@ -346,7 +301,7 @@ export default function VtuAirtime() {
                 // rather than borrowing another status's wording.
                 const copy = vtuStatusCopy(tx.status);
                 if (!copy) return null;
-                const view = STATUS_TONE[copy.status];
+                const view = VTU_STATUS_TONE[copy.status];
                 const Icon = view.icon;
                 const reason = vtuStatusReasonCopy(tx);
                 return (

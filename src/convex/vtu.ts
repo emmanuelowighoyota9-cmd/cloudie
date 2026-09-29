@@ -7,9 +7,11 @@
  * public is everything the page subscribes to.
  */
 
-import { query } from "./_generated/server";
+import { query, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Doc, Id } from "./_generated/dataModel";
 import { consumeRateLimit } from "./vtuInternal";
 import { readPointRate } from "./pricing";
 import {
@@ -17,7 +19,12 @@ import {
   resolvePointsCost,
   routeProduct,
 } from "./vtuServiceRouting";
-import { AIRTIME_NETWORKS, airtimeServiceCode, parseServiceCode } from "../lib/vtu";
+import {
+  AIRTIME_NETWORKS,
+  airtimeServiceCode,
+  parseServiceCode,
+  vtuServiceCodeLabel,
+} from "../lib/vtu";
 
 /** Fixed airtime amounts. Slice 1 has no catalog browser by design. */
 const AIRTIME_AMOUNTS = [100, 200, 500, 1000, 2000, 5000] as const;
@@ -121,24 +128,139 @@ export const previewCost = query({
   },
 });
 
-/** A customer's own VTU history. */
-export const listMyTransactions = query({
-  args: { limit: v.optional(v.number()) },
+/** One history row, exactly as the customer's browser is allowed to see it. */
+export interface VtuHistoryItem {
+  _id: Id<"vtuTransactions">;
+  status: string;
+  serviceCode: string;
+  /** What the service is CALLED — the catalog name where one still exists. */
+  serviceLabel: string;
+  /** The first segment of the service code, so the client picks an icon
+   *  without parsing an internal code string itself. */
+  serviceType: string;
+  /** Stored masked; see the query below. */
+  customerIdentifier: string;
+  nairaPrice: number;
+  ngnPerPoint: number;
+  pointsDebited: number;
+  /** The route, snapshotted at purchase. Null on pre-slice-3 rows. */
+  routedProvider: string | null;
+  routedProviderProductCode: string | null;
+  providerReference: string | null;
+  reversalReason: string | null;
+  unresolvedReason: string | null;
+  resolvedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Display names for the distinct products on ONE page.
+ *
+ * Deduped on purpose. A page of fifteen transactions is typically one to three
+ * distinct products, and a catalog read per ROW would be the N+1 pattern this
+ * codebase forbids. The reads are concurrent because they do not depend on each
+ * other.
+ *
+ * A product that has been deleted simply has no entry, and the caller falls
+ * back to a label derived from the row's own service code.
+ */
+async function resolveCatalogLabels(
+  ctx: QueryCtx,
+  rows: Doc<"vtuTransactions">[],
+): Promise<Map<string, string>> {
+  const codes = new Set<string>();
+  for (const row of rows) {
+    const code = canonicalProductCode(row.serviceCode);
+    if (code) codes.add(code);
+  }
+
+  const found = await Promise.all(
+    [...codes].map(async (productCode) => {
+      const product = await ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q) => q.eq("productCode", productCode))
+        .unique();
+      return product ? ([productCode, product.displayName] as const) : null;
+    }),
+  );
+
+  const labels = new Map<string, string>();
+  for (const entry of found) if (entry) labels.set(entry[0], entry[1]);
+  return labels;
+}
+
+/** Copied field by field so a future internal column cannot leak by accident. */
+function toHistoryItem(
+  tx: Doc<"vtuTransactions">,
+  labels: Map<string, string>,
+): VtuHistoryItem {
+  const productCode = canonicalProductCode(tx.serviceCode);
+  return {
+    _id: tx._id,
+    status: tx.status,
+    serviceCode: tx.serviceCode,
+    serviceLabel:
+      (productCode ? labels.get(productCode) : undefined) ??
+      vtuServiceCodeLabel(tx.serviceCode),
+    serviceType: tx.serviceCode.split(".")[0] ?? "",
+    customerIdentifier: tx.customerIdentifier,
+    nairaPrice: tx.nairaPrice,
+    ngnPerPoint: tx.ngnPerPoint,
+    pointsDebited: tx.pointsDebited,
+    routedProvider: tx.routedProvider ?? null,
+    routedProviderProductCode: tx.routedProviderProductCode ?? null,
+    providerReference: tx.providerReference ?? null,
+    reversalReason: tx.reversalReason ?? null,
+    unresolvedReason: tx.unresolvedReason ?? null,
+    resolvedAt: tx.resolvedAt ?? null,
+    createdAt: tx.createdAt,
+    updatedAt: tx.updatedAt,
+  };
+}
+
+/**
+ * A customer's own VTU history, newest first, cursor-paginated.
+ *
+ * PAGINATED, NOT `take(n)`. A customer's VTU rows grow without bound, and a
+ * `take(limit)` that quietly stops at the limit is indistinguishable from a
+ * complete history — the page would look finished while dropping the older
+ * half. A cursor makes "there is more" a fact the UI can state and act on.
+ *
+ * Indexed on `by_user` — `["userId", "createdAt"]` — so `order("desc")` walks
+ * the caller's own rows newest-first without scanning the table, and nothing
+ * here `.filter()`s a large dataset.
+ *
+ * The identifier comes back ALREADY MASKED because it is STORED masked:
+ * `beginPurchase` runs `maskIdentifier` before the insert, so the digits were
+ * never written down in the first place. There is no un-masked copy in the
+ * database for a read path to forget to hide.
+ */
+export const listMyHistory = query({
+  args: { paginationOpts: paginationOptsValidator },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const rows = await ctx.db
+
+    // Signed out: an EMPTY, finished page rather than a throw. This route sits
+    // behind auth, so the only way here is a session expiring mid-page, and an
+    // error would replace the customer's history with a crash screen.
+    if (!userId) {
+      return { page: [] as VtuHistoryItem[], isDone: true, continueCursor: "" };
+    }
+
+    const result = await ctx.db
       .query("vtuTransactions")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(args.limit ?? 10);
-    return rows.map((t) => ({
-      _id: t._id,
-      status: t.status,
-      serviceCode: t.serviceCode,
-      pointsDebited: t.pointsDebited,
-      createdAt: t.createdAt,
-    }));
+      .paginate(args.paginationOpts);
+
+    const labels = await resolveCatalogLabels(ctx, result.page);
+
+    return {
+      page: result.page.map((tx) => toHistoryItem(tx, labels)),
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
   },
 });
 

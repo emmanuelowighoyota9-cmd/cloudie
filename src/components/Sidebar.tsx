@@ -21,6 +21,7 @@ import {
   Cloud,
   Store,
   Receipt,
+  History,
   Zap,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ const mainNav = [
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
+  { label: "VTU History", icon: History, to: "/vtu/history" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
