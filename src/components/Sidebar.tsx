@@ -29,7 +29,7 @@ const mainNav = [
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
-  { label: "Airtime Top-Up", icon: Zap, to: "/vtu/airtime" },
+  { label: "Airtime & Data", icon: Zap, to: "/vtu" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
@@ -69,7 +69,11 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = user?.role === "admin";
 
   const isActive = (path: string) => {
-    if (path === "/dashboard") return location.pathname === "/dashboard";
+    // `/vtu` is the parent of `/vtu/airtime` and `/vtu/history`, so it must match
+    // exactly — otherwise every VTU child page lights up the catalog entry too.
+    if (path === "/dashboard" || path === "/vtu") {
+      return location.pathname === path;
+    }
     return location.pathname.startsWith(path);
   };
 

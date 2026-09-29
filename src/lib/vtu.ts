@@ -5,7 +5,16 @@
  * Deliberately free of Convex imports so the test suite can exercise the money
  * arithmetic directly, with no database. Nothing here performs I/O; the
  * database-touching counterpart lives in `src/convex/vtuShared.ts`.
+ *
+ * The one import below is TYPE-ONLY and is erased at build time, so this module
+ * still pulls no Convex runtime into a bundle or a test.
  */
+
+import type {
+  VtuReversalReason,
+  VtuTransactionStatus,
+  VtuUnresolvedReason,
+} from "../convex/vtuSchema/types";
 
 /** Namespace for the debit taken when a purchase begins. */
 export const VTU_PURCHASE_NAMESPACE = "vtu:purchase";
@@ -232,4 +241,176 @@ export function validatePhone(
     return { ok: false, error: "Enter a valid Nigerian number, e.g. 0803 123 4567" };
   }
   return { ok: true, value: digits };
+}
+
+// ─── Customer-facing status copy ────────────────────────────────────
+
+/**
+ * A status a customer can actually be shown.
+ *
+ * `failed` is absent BY CONSTRUCTION, not by an oversight: it is not a resting
+ * state, so no client can ever observe it (the verdict and the reversal that
+ * follows it commit inside one mutation — see `vtuSchema/types.ts`). Excluding
+ * it from the type is what makes the exclusion enforceable: a copy map typed
+ * `Record<VtuVisibleStatus, …>` cannot carry a `failed` label, and cannot be
+ * silently redefined to drop a real one. A test asserting that a `failed` row
+ * renders is therefore testing something that cannot happen.
+ */
+export type VtuVisibleStatus = Exclude<VtuTransactionStatus, "failed">;
+
+export interface VtuStatusCopy {
+  /** The status this copy belongs to, so a caller can index a local
+   *  tone/icon map without casting the raw status string. */
+  status: VtuVisibleStatus;
+  label: string;
+  detail: string;
+}
+
+/**
+ * The ONE place a transaction status is described to a customer.
+ *
+ * Both the purchase page and the history page read this, so an operator reading
+ * two screens cannot find the same status described two ways. Every sentence is
+ * provider-neutral on purpose: routing moves between aggregators, and a
+ * customer-facing string naming one of them is wrong the day the route changes.
+ *
+ * `unknown` keeps its deliberately careful wording — "we have not heard back"
+ * is a different fact from "it failed", and telling a customer either of those
+ * when we do not know is worse than admitting we do not know yet. `unresolved`
+ * is a THIRD distinct fact: a human is on it.
+ */
+const STATUS_COPY: Record<VtuVisibleStatus, { label: string; detail: string }> = {
+  pending: {
+    label: "Queued",
+    detail: "Reserved. Waiting to reach the provider.",
+  },
+  processing: {
+    label: "Processing",
+    detail:
+      "Contacting the provider. This updates as soon as they answer — if nothing arrives, support can resolve it.",
+  },
+  confirmed: {
+    label: "Delivered",
+    detail: "The provider confirmed it.",
+  },
+  reversed: {
+    label: "Refunded",
+    detail: "It did not go through and your points are back.",
+  },
+  unknown: {
+    label: "Awaiting confirmation",
+    detail:
+      "We have not heard back from the provider. Your points are held and will be returned if it did not go through — please do not retry yet.",
+  },
+  unresolved: {
+    label: "We're looking into this",
+    detail:
+      "Your points are held while our team confirms it with the provider. This page updates automatically — there is no need to retry, and you will not be charged twice.",
+  },
+};
+
+/** Exported for tests that pin the six visible statuses and the `failed` gap. */
+export const VTU_STATUS_COPY = STATUS_COPY;
+
+/**
+ * Copy for a raw status string, or `null` when there is nothing to show.
+ *
+ * Returns `null` for `failed` and for anything unrecognised, and callers render
+ * NOTHING in that case. The alternative — falling back to the `pending` wording
+ * — is the defect this replaces: it told a customer "Queued" while their
+ * transaction was actually waiting on a human.
+ */
+export function vtuStatusCopy(status: string): VtuStatusCopy | null {
+  const copy = (STATUS_COPY as Record<string, { label: string; detail: string } | undefined>)[
+    status
+  ];
+  if (!copy) return null;
+  return { status: status as VtuVisibleStatus, label: copy.label, detail: copy.detail };
+}
+
+/**
+ * Why a refund happened, in the customer's terms.
+ *
+ * A reversal reason is a provenance record (`provider_failed` vs
+ * `reconciliation` is OUR distinction about which code path heard the
+ * verdict). A customer is owed the outcome, so these are phrased as outcomes
+ * and the internal distinction never reaches the screen.
+ */
+export const VTU_REVERSAL_COPY: Record<VtuReversalReason, string> = {
+  provider_failed: "The provider rejected it.",
+  provider_cancelled: "The provider cancelled it after accepting.",
+  admin_override: "Refunded by our support team.",
+  reconciliation: "Confirmed failed when we checked with the provider.",
+};
+
+/** Why a top-up needed a human, in the customer's terms. */
+export const VTU_UNRESOLVED_COPY: Record<VtuUnresolvedReason, string> = {
+  max_attempts_exceeded: "The provider has not confirmed it after several attempts.",
+  provider_unreachable: "We could not reach the provider to confirm it.",
+  never_dispatched: "It never reached the provider.",
+};
+
+/**
+ * The one-line reason beneath a terminal status, or `null` when there is none.
+ *
+ * Kept here rather than in either page so the purchase screen and the history
+ * row cannot explain the same refund differently.
+ */
+export function vtuStatusReasonCopy(tx: {
+  status: string;
+  reversalReason?: string | null;
+  unresolvedReason?: string | null;
+}): string | null {
+  if (tx.status === "reversed" && tx.reversalReason) {
+    return VTU_REVERSAL_COPY[tx.reversalReason as VtuReversalReason] ?? null;
+  }
+  if (tx.status === "unresolved" && tx.unresolvedReason) {
+    return VTU_UNRESOLVED_COPY[tx.unresolvedReason as VtuUnresolvedReason] ?? null;
+  }
+  return null;
+}
+
+// ─── Catalog copy ───────────────────────────────────────────────────
+
+/**
+ * What each service type is CALLED on screen.
+ *
+ * The catalog stores `"cable"`; a customer buys a television subscription.
+ * Headings come from here rather than from the raw enum so the browse page
+ * never shows a database value, and so the same four words appear everywhere
+ * the catalog is described to a customer.
+ */
+export const VTU_SERVICE_TYPE_COPY: Record<
+  string,
+  { label: string; blurb: string }
+> = {
+  airtime: {
+    label: "Airtime",
+    blurb: "Top up any Nigerian number; you choose the amount.",
+  },
+  data: {
+    label: "Data",
+    blurb: "Mobile data bundles, sold by size and validity.",
+  },
+  cable: {
+    label: "Cable TV",
+    blurb: "Renew or upgrade a television subscription.",
+  },
+  electricity: {
+    label: "Electricity",
+    blurb: "Prepaid meter top-ups for any distribution company.",
+  },
+  exam: {
+    label: "Exam pins",
+    blurb: "Registration pins and result checkers.",
+  },
+  betting: {
+    label: "Betting",
+    blurb: "Fund a betting wallet from your points.",
+  },
+};
+
+/** Label for a service type, falling back to the raw value for an unknown one. */
+export function vtuServiceTypeLabel(serviceType: string): string {
+  return VTU_SERVICE_TYPE_COPY[serviceType]?.label ?? serviceType;
 }

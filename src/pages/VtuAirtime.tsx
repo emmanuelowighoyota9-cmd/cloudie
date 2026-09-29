@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
@@ -9,10 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
 import { formatNgn } from "@/lib/pricing";
-import { maskIdentifier, validatePhone } from "@/lib/vtu";
+import {
+  maskIdentifier,
+  validatePhone,
+  vtuStatusCopy,
+  vtuStatusReasonCopy,
+  type VtuVisibleStatus,
+} from "@/lib/vtu";
 import { cn } from "@/lib/utils";
 import {
-  AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   Clock,
   HelpCircle,
@@ -33,59 +40,54 @@ const NETWORKS = [
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000] as const;
 
 /**
- * How each record status is described to the customer.
+ * Tone and icon per status.
  *
- * `unknown` gets its own wording on purpose. "We have not heard back from
- * Pairgate" is a different fact from "it failed", and telling a customer their
- * airtime failed when it may have been delivered — or succeeded when it may
- * not have been — is worse than admitting we do not know yet.
+ * The WORDS are not here — they come from `vtuStatusCopy` in `@/lib/vtu`, so
+ * this page and the history page describe a status identically. Typing the map
+ * on `VtuVisibleStatus` (which excludes `failed`) means there is no entry to
+ * add for a state a client can never observe, and no fallback wording to
+ * accidentally show in its place.
  */
-const STATUS_VIEW: Record<
-  string,
-  { label: string; detail: string; tone: string; icon: typeof Clock }
+const STATUS_TONE: Record<
+  VtuVisibleStatus,
+  { tone: string; icon: typeof Clock; spin?: boolean }
 > = {
   pending: {
-    label: "Queued",
-    detail: "Reserved. Waiting to reach the provider.",
     tone: "text-muted-foreground border-border bg-muted/50",
     icon: Clock,
   },
   processing: {
-    label: "Processing",
-    detail:
-      "Contacting Pairgate. This updates as soon as they answer — if nothing arrives, support can resolve it.",
     tone: "text-sky-700 dark:text-sky-400 border-sky-500/25 bg-sky-500/10",
     icon: Loader2,
+    spin: true,
   },
   confirmed: {
-    label: "Delivered",
-    detail: "Pairgate confirmed the top-up.",
     tone: "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/10",
     icon: CheckCircle2,
   },
-  failed: {
-    label: "Failed",
-    detail: "The provider rejected this top-up. Your points are being returned.",
-    tone: "text-destructive border-destructive/25 bg-destructive/10",
-    icon: AlertTriangle,
+  reversed: {
+    tone: "text-muted-foreground border-border bg-muted/50",
+    icon: CheckCircle2,
   },
   unknown: {
-    label: "Awaiting confirmation",
-    detail:
-      "We have not heard back from the provider. Your points are held and will be returned if the top-up did not go through — please do not retry yet.",
     tone: "text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/10",
     icon: HelpCircle,
   },
-  reversed: {
-    label: "Refunded",
-    detail: "The top-up did not go through and your points are back.",
-    tone: "text-muted-foreground border-border bg-muted/50",
-    icon: CheckCircle2,
+  unresolved: {
+    tone: "text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/10",
+    icon: HelpCircle,
   },
 };
 
 export default function VtuAirtime() {
-  const [network, setNetwork] = useState<string>("mtn");
+  // The catalog deep-links here with the network it selected. Validated against
+  // the known list so a hand-edited URL cannot preselect something the purchase
+  // path would then refuse.
+  const [searchParams] = useSearchParams();
+  const requestedNetwork = searchParams.get("network");
+  const [network, setNetwork] = useState<string>(
+    NETWORKS.some((n) => n.key === requestedNetwork) ? requestedNetwork! : "mtn",
+  );
   const [amount, setAmount] = useState<number>(1000);
   const [phone, setPhone] = useState("");
   const [transactionId, setTransactionId] = useState<Id<"vtuTransactions"> | null>(
@@ -158,13 +160,20 @@ export default function VtuAirtime() {
             </h1>
             <Badge variant="secondary" className="gap-1.5">
               <Radio className="h-3 w-3" />
-              Pairgate
+              Instant top-up
             </Badge>
           </div>
           <p className="max-w-2xl text-sm text-muted-foreground">
             Buy airtime for any Nigerian number using your points balance. A
-            failed top-up returns your points automatically.
+            top-up that does not go through returns your points automatically.
           </p>
+          <Link
+            to="/vtu"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            All services
+          </Link>
         </div>
       </Reveal>
 
@@ -332,8 +341,14 @@ export default function VtuAirtime() {
           <Card>
             <CardContent className="p-6">
               {(() => {
-                const view = STATUS_VIEW[tx.status] ?? STATUS_VIEW.pending;
+                // No fallback: a status we have no wording for (including the
+                // non-observable `failed`) renders the details and no banner,
+                // rather than borrowing another status's wording.
+                const copy = vtuStatusCopy(tx.status);
+                if (!copy) return null;
+                const view = STATUS_TONE[copy.status];
                 const Icon = view.icon;
+                const reason = vtuStatusReasonCopy(tx);
                 return (
                   <div className="space-y-3">
                     <div
@@ -342,14 +357,14 @@ export default function VtuAirtime() {
                       aria-live="polite"
                     >
                       <Icon
-                        className={cn(
-                          "mt-0.5 h-4 w-4 shrink-0",
-                          tx.status === "processing" && "animate-spin",
-                        )}
+                        className={cn("mt-0.5 h-4 w-4 shrink-0", view.spin && "animate-spin")}
                       />
                       <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-medium">{view.label}</p>
-                        <p className="text-sm opacity-90">{view.detail}</p>
+                        <p className="text-sm font-medium">{copy.label}</p>
+                        <p className="text-sm opacity-90">{copy.detail}</p>
+                        {reason && (
+                          <p className="text-xs opacity-80">{reason}</p>
+                        )}
                       </div>
                     </div>
 
