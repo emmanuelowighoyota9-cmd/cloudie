@@ -403,11 +403,11 @@ export const aidapayAdapter: VtuProviderAdapter = {
   },
 
   /**
-   * Authoritative re-read. NOT called in slice 4.
+   * Authoritative re-read. Called only by the reconciliation sweep.
    *
-   * AidaPay rate-limits this to 3 calls per 5 minutes, so it exists to satisfy
-   * the interface — slice 5 adds the reconciliation poller and owns the rate
-   * budget. Nothing in this slice schedules or retries a call to it.
+   * AidaPay rate-limits this to 3 calls per 5 minutes, so the sweep enforces
+   * that budget BEFORE dispatching (see `reserveReconcileBudget`); nothing
+   * else in the codebase calls this.
    */
   async verify(
     providerReference: string,
@@ -452,10 +452,34 @@ export const aidapayAdapter: VtuProviderAdapter = {
       if (!response.ok) {
         const b = parsed as Record<string, unknown>;
         const d = dataOf(parsed);
+        const verdict = mapAidaPayStatus(d.status ?? b.status);
+
+        // A non-2xx body can still NAME a terminal state — AidaPay reports a
+        // Cancelled transaction with one — and only a classified status word
+        // is a provider verdict. Everything else here (a 404 for a reference
+        // AidaPay does not recognise, a 401 from a rotated token) is "we could
+        // not read it", which the three-state union spells `unknown`.
+        //
+        // This distinction is load-bearing. `failed` is the one word that makes
+        // the reconciliation sweep refund a customer, so returning it for
+        // "could not resolve that reference" would reverse money on the
+        // strength of an HTTP status line rather than on anything the provider
+        // said about the transaction.
+        if (verdict.kind === "failed") {
+          return {
+            status: "failed",
+            code: str(b.code) ?? str(d.code) ?? `HTTP_${response.status}`,
+            message: str(b.message) ?? str(d.message) ?? "AidaPay rejected this transaction",
+            failureKind: verdict.failureKind,
+            providerReference,
+            raw: parsed,
+          };
+        }
+        if (verdict.kind === "confirmed") return mapPurchaseResponse(parsed, providerReference);
+
         return {
-          status: "failed",
-          code: str(b.code) ?? str(d.code) ?? `HTTP_${response.status}`,
-          message: str(b.message) ?? str(d.message) ?? "AidaPay could not resolve that reference",
+          status: "unknown",
+          message: `AidaPay could not resolve that reference (HTTP ${response.status})`,
           providerReference,
           raw: parsed,
         };

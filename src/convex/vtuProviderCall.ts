@@ -67,12 +67,14 @@ export type ResolvedCall =
 async function resolveCall(
   ctx: any,
   name: string,
-  mode: "purchase" | "verification",
+  mode: "purchase" | "verification" | "reconcile",
 ): Promise<ResolvedCall> {
   const resolution: any = await ctx.runQuery(
     mode === "purchase"
       ? internal.vtuProviderConfig.resolveForPurchase
-      : internal.vtuProviderConfig.resolveForVerification,
+      : mode === "verification"
+        ? internal.vtuProviderConfig.resolveForVerification
+        : internal.vtuProviderConfig.resolveForReconcile,
     { name },
   );
 
@@ -85,8 +87,14 @@ async function resolveCall(
   const adapter = getAdapter(name);
   if (!adapter) return { ok: false, code: "ADAPTER_UNKNOWN" };
 
+  // Which sealed value this mode opens. A purchase authenticates with the API
+  // key, a webhook proves itself with the webhook secret, and a reconciliation
+  // poll authenticates as the API again — it is a read of the same account the
+  // purchase path bills against, so it opens the same material.
   const sealed =
-    mode === "purchase" ? resolution.provider.encryptedApiKey : resolution.provider.encryptedWebhookSecret;
+    mode === "verification"
+      ? resolution.provider.encryptedWebhookSecret
+      : resolution.provider.encryptedApiKey;
   if (!sealed) return { ok: false, code: "CREDENTIAL_MISSING" };
 
   // ═══ PLAINTEXT CREDENTIAL LIFETIME — BEGINS ═══════════════════
@@ -117,8 +125,15 @@ async function resolveCall(
   //
   // Present but unopenable IS an error: a row that claims a PIN we cannot read
   // would otherwise dispatch a purchase with a silently empty one.
+  // Only the PURCHASE path opens it. A webhook proves itself with a signature
+  // and a reconciliation poll is a read-only GET — neither ever sends a PIN,
+  // so decrypting one would put a spend credential in memory for no benefit.
+  // This makes "the account PIN is opened only by the purchase path" a
+  // property of this function rather than something every caller must
+  // remember.
   let accountPin: string | undefined;
-  const sealedPin = resolution.provider.encryptedAccountPin;
+  const sealedPin =
+    mode === "purchase" ? resolution.provider.encryptedAccountPin : undefined;
   if (sealedPin) {
     // ═══ PLAINTEXT CREDENTIAL LIFETIME — BEGINS ═══════════════════
     const openedPin = await tryDecrypt(sealedPin);
@@ -158,6 +173,17 @@ export async function openForPurchase(ctx: any, name: string): Promise<ResolvedC
 /** Open a provider's webhook secret for callback verification. */
 export async function openForVerification(ctx: any, name: string): Promise<ResolvedCall> {
   return resolveCall(ctx, name, "verification");
+}
+
+/**
+ * Open a provider's API key for a reconciliation poll (`adapter.verify`).
+ *
+ * Read-only by construction: this mode never carries the account PIN, and it
+ * never resolves a disabled or sandbox row for a NEW purchase — it settles
+ * transactions that were already dispatched.
+ */
+export async function openForReconcile(ctx: any, name: string): Promise<ResolvedCall> {
+  return resolveCall(ctx, name, "reconcile");
 }
 
 // ─── Test connection ────────────────────────────────────────────────

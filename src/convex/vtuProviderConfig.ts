@@ -90,3 +90,40 @@ export const resolveForVerification = internalQuery({
     return { ok: true, provider };
   },
 });
+
+/**
+ * Resolve a provider for a RECONCILIATION poll (`adapter.verify`).
+ *
+ * The one path that is neither a new purchase nor a webhook, and it sits
+ * between the other two on purpose:
+ *
+ *   - It needs the API KEY, like a purchase, because `verify` authenticates as
+ *     the API. It does NOT need the webhook secret, and it does NOT need the
+ *     account PIN: a read-only GET that decrypted a spend credential would be
+ *     a path where plaintext exists for no reason.
+ *   - It does NOT require `status === "active"`, like webhook verification.
+ *     A provider disabled AFTER these transactions were dispatched still has
+ *     to answer for them, and failing here would escalate rows the provider
+ *     could have settled with one call — turning an operator's deliberate
+ *     pause into a queue of unresolved transactions.
+ *   - `sandbox` is therefore allowed too, for the same reason: the rows the
+ *     sweep is asking about were dispatched under whatever credential was live
+ *     at the time, and this call settles THOSE, it does not move new money.
+ *
+ * Same rule as the other two: a missing row fails loudly, with no env fallback
+ * under any condition.
+ */
+export const resolveForReconcile = internalQuery({
+  args: { name: v.string() },
+  handler: async (ctx, args): Promise<ProviderResolution> => {
+    const provider = await ctx.db
+      .query("vtuProviders")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .unique();
+
+    if (!provider) return { ok: false, code: "PROVIDER_NOT_FOUND" };
+    if (!provider.encryptedApiKey) return { ok: false, code: "CREDENTIAL_MISSING" };
+
+    return { ok: true, provider };
+  },
+});

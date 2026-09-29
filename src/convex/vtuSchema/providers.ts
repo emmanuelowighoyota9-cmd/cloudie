@@ -122,8 +122,29 @@ export const vtuProviderTables = {
     rateLimitPerMinute: v.optional(v.number()),
     /** Polls before a transaction escalates to `unresolved`. Default 5. */
     maxReconcileAttempts: v.optional(v.number()),
-    /** Observability: when a sweep last ran for this provider. */
+    /** Observability: when a sweep last COMPLETED for this provider. */
     lastReconcileSweepAt: v.optional(v.number()),
+    /**
+     * What that last sweep actually did, for the admin queue.
+     *
+     * `attempted` is polls dispatched (which is what consumes the budget),
+     * `resolved` is rows that reached `confirmed` or `reversed` — money
+     * settled — and `stillPending` is rows left in `processing`/`unknown`
+     * after it finished, i.e. rows the next sweep will look at again.
+     *
+     * Escalations are deliberately NOT one of the three: a row moved to
+     * `unresolved` is neither settled nor still awaiting a verdict, and
+     * counting it either way would make the numbers lie in a way an operator
+     * reading "3 attempted, 3 still pending" could not detect. Escalations
+     * are visible in the unresolved queue instead.
+     *
+     * Last-sweep snapshots rather than running totals, because the question
+     * an operator asks is "is it working right now", and a lifetime total
+     * answers a question nobody has.
+     */
+    lastSweepAttempted: v.optional(v.number()),
+    lastSweepResolved: v.optional(v.number()),
+    lastSweepStillPending: v.optional(v.number()),
     /**
      * Start of the current budget window, and how many calls it has spent.
      *

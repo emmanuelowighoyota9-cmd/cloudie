@@ -39,6 +39,36 @@ export const DEFAULT_RATE_LIMIT_PER_MINUTE = 60;
 /** Polls before escalating to `unresolved` for a human. */
 export const DEFAULT_MAX_RECONCILE_ATTEMPTS = 5;
 
+/**
+ * The shipped sweep window, and therefore the cron interval.
+ *
+ * Five minutes rather than a shorter cadence for two reasons: Convex enforces
+ * a 5-minute minimum on cron intervals, and it is exactly the window in which
+ * AidaPay's published budget (3 calls) is spent at its published rate
+ * (0.6/min) — `floor(0.6 * 5) = 3`. The two facts agree, so the shipped sweep
+ * neither waits longer than it must nor asks more often than the provider
+ * allows.
+ *
+ * NOT a default for the argument: tests pass a shorter window explicitly to
+ * exercise budget arithmetic they could not otherwise reach.
+ */
+export const DEFAULT_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/**
+ * How long a `pending` row may sit before it is escalated as `never_dispatched`.
+ *
+ * A `pending` row is NOT polled — nothing was sent, so there is nothing to
+ * ask — which means `reconcileAfterMs` (the "when is a dispatched row stuck"
+ * threshold) does not describe it. This is the window for the other question:
+ * how long the dispatch path gets before we call it a defect.
+ *
+ * Generous on purpose. Dispatch is bounded by a 20-second provider timeout,
+ * so five minutes separates "slow" from "never happened" by a wide margin,
+ * and escalating an in-flight row to a human is a false alarm that costs more
+ * than waiting does.
+ */
+export const DEFAULT_DISPATCH_WINDOW_MS = 5 * 60_000;
+
 /** The subset of a provider row this module reads. */
 export interface ReconcilePolicySource {
   reconcileAfterMs?: number;
