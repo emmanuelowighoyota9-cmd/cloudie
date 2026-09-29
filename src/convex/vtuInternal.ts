@@ -604,6 +604,7 @@ export const settleTransaction = internalMutation({
         reason: verdict.message ?? "Provider reported failure",
         reversalReason: verdict.reversalReason,
         authorizedBy: "provider_verdict",
+        source: args.source,
       });
       return reversal.reversed
         ? { settled: true, status: "reversed", creditId: reversal.creditId }
@@ -616,6 +617,7 @@ export const settleTransaction = internalMutation({
       reason: verdict.reason ?? "Reversed by an operator",
       reversalReason: verdict.reversalReason,
       authorizedBy: "operator_override",
+      source: args.source,
     });
     return reversal.reversed
       ? { settled: true, status: "reversed", creditId: reversal.creditId }
@@ -740,6 +742,18 @@ async function reverseAndRelease(
      */
     reversalReason: VtuReversalReason;
     authorizedBy: ReversalAuthority;
+    /**
+     * Which path is performing the reversal, written onto the row by this
+     * patch.
+     *
+     * Required because `source` is defined as "which path wrote the LAST
+     * transition", and for a reversal this patch IS that transition. Without
+     * it an operator's refund would leave the escalation's `reconciliation`
+     * sitting on the row — an audit trail naming the wrong actor, which is
+     * exactly the sort of drift that is invisible until someone is asked who
+     * authorised a refund months later.
+     */
+    source: SettleSource;
   },
 ): Promise<RefundResult> {
   const tx = await ctx.db.get(args.transactionId);
@@ -784,6 +798,7 @@ async function reverseAndRelease(
     // Written in the SAME patch as the status, so there is no intermediate
     // state in which the row is reversed without a reason.
     reversalReason: args.reversalReason,
+    source: args.source,
     reversalLedgerId: creditId,
     reversedAt: now,
     resolvedAt: now,

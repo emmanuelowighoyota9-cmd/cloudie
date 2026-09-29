@@ -29,6 +29,7 @@ const modules = {
   "src/convex/schema.ts": () => import("../src/convex/schema"),
   "src/convex/vtuReconcile.ts": () => import("../src/convex/vtuReconcile"),
   "src/convex/vtuReconcileSweep.ts": () => import("../src/convex/vtuReconcileSweep"),
+  "src/convex/vtuUnresolvedAdmin.ts": () => import("../src/convex/vtuUnresolvedAdmin"),
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
   "src/convex/vtuProviderCall.ts": () => import("../src/convex/vtuProviderCall"),
   "src/convex/vtuProviderConfig.ts": () => import("../src/convex/vtuProviderConfig"),
@@ -184,6 +185,49 @@ const sweep = (t: Harness, sweepIntervalMs = 60_000) =>
 
 /** Put the real adapter back so the rest of the file is unaffected. */
 const restorePairgate = () => registerAdapter(pairgateAdapter);
+
+/** An operator: the queue's actions are gated server-side on this role. */
+async function seedAdmin(t: Harness) {
+  const now = Date.now();
+  return t.run(async (ctx) =>
+    ctx.db.insert("users", {
+      name: "Root",
+      email: "root@example.com",
+      role: "admin",
+      pointsBalance: 0,
+      createdAt: now,
+    }),
+  );
+}
+
+/**
+ * Park a transaction in `unresolved` — the state the queue exists for.
+ *
+ * Written through `settleTransaction` rather than patched, so the fixture is
+ * the same shape the sweep produces and the admin actions are tested against
+ * a real escalation rather than a hand-built row.
+ */
+async function toUnresolved(t: Harness, userId: any, requestId: string) {
+  const reserved = await t.mutation(internal.vtuInternal.beginPurchase, {
+    userId,
+    clientRequestId: requestId,
+    serviceCode: SERVICE_CODE,
+    customerIdentifier: PHONE,
+  });
+  await t.mutation(internal.vtuInternal.markProcessing, {
+    transactionId: reserved.transactionId,
+  });
+  await t.mutation(internal.vtuInternal.settleTransaction, {
+    transactionId: reserved.transactionId,
+    source: "reconciliation",
+    verdict: {
+      status: "unresolved",
+      unresolvedReason: "max_attempts_exceeded",
+      message: "Polled 5 times with no terminal verdict",
+    },
+  });
+  return reserved;
+}
 
 // ─── The core path ──────────────────────────────────────────────────
 
@@ -474,6 +518,166 @@ describe("reconciliation sweep", () => {
       // confirmed about the top-up either way.
       expect(tx.reversalLedgerId).toBeUndefined();
       expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    });
+  });
+});
+
+// ─── The admin queue ────────────────────────────────────────────────
+
+describe("admin unresolved queue", () => {
+  test("confirm delivered closes the row and moves no money", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const adminId = await seedAdmin(t);
+      const reserved = await toUnresolved(t, userId, "vtu_admin_confirm");
+
+      const queue = await t
+        .withIdentity({ subject: adminId })
+        .query(internal.vtuUnresolvedAdmin.listUnresolved, {});
+      expect(queue).toHaveLength(1);
+      expect(queue[0].unresolvedReason).toBe("max_attempts_exceeded");
+      expect(queue[0].pointsDebited).toBe(67);
+      // Enough context to decide: why it is here, in words.
+      expect(queue[0].failureReason).toContain("Polled 5 times");
+      expect(queue[0].provider).toBe("pairgate");
+      // No credential material reaches the browser, sealed or otherwise.
+      const serialised = JSON.stringify(queue);
+      expect(serialised).not.toContain("pg_live_key");
+      expect(serialised).not.toContain("cex1.");
+
+      const result = await t
+        .withIdentity({ subject: adminId })
+        .mutation(internal.vtuUnresolvedAdmin.confirmDelivered, {
+          transactionId: reserved.transactionId,
+        });
+      expect(result.settled).toBe(true);
+
+      const row = await txOf(t, reserved.transactionId);
+      expect(row.status).toBe("confirmed");
+      expect(row.source).toBe("admin");
+      // Delivered: the debit stands, and no credit is issued.
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(
+        (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
+      ).toHaveLength(0);
+
+      const audits = await t.run(async (ctx) => ctx.db.query("auditLogs").collect());
+      expect(
+        audits.filter((a: any) => a.action === "vtu_transaction_confirmed_delivered"),
+      ).toHaveLength(1);
+    });
+  });
+
+  test("refund customer credits back exactly once, through settleTransaction", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const adminId = await seedAdmin(t);
+      const reserved = await toUnresolved(t, userId, "vtu_admin_refund");
+
+      const result = await t
+        .withIdentity({ subject: adminId })
+        .mutation(internal.vtuUnresolvedAdmin.refundCustomer, {
+          transactionId: reserved.transactionId,
+          note: "Provider dashboard shows no such transaction",
+        });
+      expect(result.settled).toBe(true);
+
+      const row = await txOf(t, reserved.transactionId);
+      expect(row.status).toBe("reversed");
+      // Provenance, not policy: a human did this, and it is distinguishable
+      // from a provider verdict by the reason alone.
+      expect(row.reversalReason).toBe("admin_override");
+      expect(row.source).toBe("admin");
+
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE);
+      const refunds = (await ledgerFor(t, userId)).filter(
+        (l: any) => l.type === "vtu_refund",
+      );
+      expect(refunds).toHaveLength(1);
+      expect(refunds[0].metadata.reversalReason).toBe("admin_override");
+
+      const audits = await t.run(async (ctx) => ctx.db.query("auditLogs").collect());
+      expect(audits.filter((a: any) => a.action === "vtu_transaction_refunded")).toHaveLength(1);
+    });
+  });
+
+  test("both actions no-op when the transaction is already terminal", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const adminId = await seedAdmin(t);
+      const reserved = await toUnresolved(t, userId, "vtu_admin_noop");
+      const asAdmin = t.withIdentity({ subject: adminId });
+
+      const first = await asAdmin.mutation(internal.vtuUnresolvedAdmin.confirmDelivered, {
+        transactionId: reserved.transactionId,
+      });
+      expect(first.settled).toBe(true);
+
+      // A stale queue tab acting on a row someone else already settled: both
+      // actions must refuse rather than re-write or pay a second time.
+      const again = await asAdmin.mutation(internal.vtuUnresolvedAdmin.confirmDelivered, {
+        transactionId: reserved.transactionId,
+      });
+      expect(again.settled).toBe(false);
+      expect((again as { reason?: string }).reason).toBe("already_terminal");
+
+      const refund = await asAdmin.mutation(internal.vtuUnresolvedAdmin.refundCustomer, {
+        transactionId: reserved.transactionId,
+      });
+      expect(refund.settled).toBe(false);
+      expect((refund as { reason?: string }).reason).toBe("already_terminal");
+
+      const row = await txOf(t, reserved.transactionId);
+      expect(row.status).toBe("confirmed");
+      expect(row.reversalLedgerId).toBeUndefined();
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(
+        (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
+      ).toHaveLength(0);
+    });
+  });
+
+  test("the queue and both actions are admin-only server-side", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const { userId } = await seed(t);
+      const adminId = await seedAdmin(t);
+      const reserved = await toUnresolved(t, userId, "vtu_admin_authz");
+
+      // A regular customer, with a valid session: the guard is the role, not
+      // the presence of credentials.
+      await expect(
+        t
+          .withIdentity({ subject: userId })
+          .query(internal.vtuUnresolvedAdmin.listUnresolved, {}),
+      ).rejects.toThrow();
+      await expect(
+        t
+          .withIdentity({ subject: userId })
+          .mutation(internal.vtuUnresolvedAdmin.refundCustomer, {
+            transactionId: reserved.transactionId,
+          }),
+      ).rejects.toThrow();
+
+      // No session at all.
+      await expect(
+        t.query(internal.vtuUnresolvedAdmin.listUnresolved, {}),
+      ).rejects.toThrow();
+
+      // And the refusal left the money exactly where it was.
+      const row = await txOf(t, reserved.transactionId);
+      expect(row.status).toBe("unresolved");
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+
+      // The admin's own call still works, proving the failures above are the
+      // guard rather than a broken fixture.
+      const queue = await t
+        .withIdentity({ subject: adminId })
+        .query(internal.vtuUnresolvedAdmin.listUnresolved, {});
+      expect(queue).toHaveLength(1);
     });
   });
 });
