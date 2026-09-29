@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router";
-import { usePaginatedQuery } from "convex/react";
-import { ArrowLeft, ChevronDown, Loader2, Zap } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { useMutation, usePaginatedQuery } from "convex/react";
+import { ArrowLeft, ChevronDown, Loader2, ReceiptText, Zap } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import type { VtuHistoryItem } from "@/convex/vtu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +12,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
 import { VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
+import {
+  newAttemptId,
+  renderDocumentArtifacts,
+  uploadArtifact,
+} from "@/lib/renderClient";
 import { formatNgn } from "@/lib/pricing";
 import {
   maskIdentifier,
@@ -132,6 +139,85 @@ export default function VtuHistory() {
 }
 
 /**
+ * Opens a transaction's receipt, generating it on the first click.
+ *
+ * THE WORK IS SPLIT FOR A REASON. `prepareReceipt` runs on the server and owns
+ * every fact that must not come from the browser: the money figures, read from
+ * the transaction's own snapshot, and the receipt number, derived from the
+ * transaction id. What comes back is a frozen schema, layout and value map, and
+ * this function only turns that into bytes — through the same
+ * SVG → canvas → PNG/PDF pipeline every other document in the product uses, so
+ * there is one renderer and not two.
+ *
+ * A second click on an already-issued receipt renders nothing at all: the
+ * server answers with the existing document and this navigates straight to it.
+ * That is what makes a double-click, or a refresh mid-render, harmless.
+ */
+function useReceiptOpener() {
+  const navigate = useNavigate();
+  const prepareReceipt = useMutation(api.vtuReceipt.prepareReceipt);
+  const finalizeDocument = useMutation(api.docTemplates.finalizeDocument);
+  const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
+  // One at a time, across the whole page: two concurrent renders would race for
+  // the same upload slots and one of them would lose its artifacts.
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const openReceipt = async (transactionId: Id<"vtuTransactions">) => {
+    if (busyId !== null) return;
+    setBusyId(transactionId);
+    try {
+      const prepared = await prepareReceipt({ transactionId });
+      if (!prepared.needsRender) {
+        navigate(`/documents/${prepared.documentId}`);
+        return;
+      }
+
+      const artifacts = await renderDocumentArtifacts(
+        prepared.configuration,
+        prepared.schema,
+        prepared.values,
+        { title: prepared.title, creationDate: Date.now() },
+      );
+
+      const [imageUploadUrl, pdfUploadUrl] = await Promise.all([
+        generateUploadUrl({}),
+        generateUploadUrl({}),
+      ]);
+      const [imageStorageId, pdfStorageId] = await Promise.all([
+        uploadArtifact(imageUploadUrl, artifacts.imagePng),
+        uploadArtifact(
+          pdfUploadUrl,
+          new Blob([artifacts.pdfBytes.slice().buffer as ArrayBuffer], {
+            type: "application/pdf",
+          }),
+        ),
+      ]);
+
+      await finalizeDocument({
+        documentId: prepared.documentId,
+        attemptId: newAttemptId(),
+        imageStorageId: imageStorageId as Id<"_storage">,
+        pdfStorageId: pdfStorageId as Id<"_storage">,
+        pageCount: artifacts.pageCount,
+        sizeBytes: artifacts.sizeBytes,
+      });
+
+      navigate(`/documents/${prepared.documentId}`);
+    } catch (error) {
+      // A partial attempt is not lost: the row keeps its pointer, so the next
+      // click resumes the draft rather than starting a second receipt.
+      toast.error(
+        error instanceof Error ? error.message : "Could not prepare the receipt",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return { openReceipt, busyId };
+}
+
+/**
  * One row, collapsed to the facts a customer scans for and expanded to the
  * facts they only need when something is wrong.
  *
@@ -148,6 +234,7 @@ function HistoryRow({
   open: boolean;
   onToggle: () => void;
 }) {
+  const { openReceipt, busyId } = useReceiptOpener();
   // Null for a status we have no wording for. `failed` is the only one of
   // those, and it is not a resting state — nothing here substitutes another
   // status's words for it, and nothing here names it.
@@ -249,12 +336,35 @@ function HistoryRow({
             </dl>
           </div>
 
-          {/* A "View receipt" action lands here in the next step of this slice,
-              once the receipt document can actually be generated. A link to a
-              document that does not exist yet is worse than no link. */}
           {copy && (
             <p className="text-[11px] text-muted-foreground">{copy.detail}</p>
           )}
+
+          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11 gap-1.5"
+              onClick={() => openReceipt(tx._id)}
+              disabled={busyId !== null}
+            >
+              {busyId === tx._id ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Preparing receipt…
+                </>
+              ) : (
+                <>
+                  <ReceiptText className="h-3.5 w-3.5" />
+                  View receipt
+                </>
+              )}
+            </Button>
+            <p className="min-w-0 flex-1 text-[11px] text-muted-foreground">
+              The receipt is created the first time you open it and never
+              changes after that.
+            </p>
+          </div>
         </div>
       )}
     </Card>

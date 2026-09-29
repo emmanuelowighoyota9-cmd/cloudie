@@ -220,6 +220,34 @@ function toHistoryItem(
 }
 
 /**
+ * The name to show for ONE service code.
+ *
+ * Prefers the catalog's `displayName`, because that is the name the customer
+ * saw when they bought. Falls back to a label derived from the service code
+ * itself, because a transaction outlives the product it was sold from and a
+ * deleted catalog row must not leave a receipt reading `airtime.mtn.1000`.
+ *
+ * Deliberately NOT built on `resolveCatalogLabels` below: that one exists to
+ * price a PAGE of rows with one read per distinct product, and this exists to
+ * name a single row. Sharing them would mean either a batch of one or a loop of
+ * un-deduped reads, and both are worse than four duplicated lines.
+ */
+export async function resolveServiceLabel(
+  ctx: QueryCtx,
+  serviceCode: string,
+): Promise<string> {
+  const productCode = canonicalProductCode(serviceCode);
+  if (productCode) {
+    const product = await ctx.db
+      .query("vtuServiceCatalog")
+      .withIndex("by_productCode", (q) => q.eq("productCode", productCode))
+      .unique();
+    if (product) return product.displayName;
+  }
+  return vtuServiceCodeLabel(serviceCode);
+}
+
+/**
  * A customer's own VTU history, newest first, cursor-paginated.
  *
  * PAGINATED, NOT `take(n)`. A customer's VTU rows grow without bound, and a

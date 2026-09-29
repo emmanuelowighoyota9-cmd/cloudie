@@ -32,6 +32,21 @@ async function readRow(ctx: QueryCtx | MutationCtx, key: string) {
     .first();
 }
 
+/**
+ * Server-side read of the platform's own brand configuration.
+ *
+ * A plain function rather than a registered query, for two reasons: a mutation
+ * that needs the platform's name on a document it is issuing — a receipt, say —
+ * should not have to spend a `runQuery` to get it, and a value read this way can
+ * never be handed to a browser as the raw settings row.
+ *
+ * Returns the same sanitized shape the public query serves, so the name on a
+ * receipt and the name in the navbar cannot disagree.
+ */
+export async function readBrand(ctx: QueryCtx | MutationCtx) {
+  return sanitizeBrand((await readRow(ctx, BRAND_KEY))?.value);
+}
+
 async function writeRow(
   ctx: MutationCtx,
   adminId: Id<"users">,

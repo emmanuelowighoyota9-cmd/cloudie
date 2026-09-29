@@ -711,7 +711,11 @@ export const vtuReceipt: StarterTemplate = {
         hidden: true,
         help: "Absent while the transaction is still awaiting a verdict from the provider.",
       },
-      { id: "statusDetail", type: "text", label: "Status explanation", required: true, hidden: true, maxLength: 180 },
+      // 220 is not arbitrary: the longest sentence the app can produce for a
+      // status (the `unresolved` one) is ~165 characters, and the element below
+      // wraps it at 68 characters a line. 220 leaves three lines of headroom, so
+      // a future rewording shortens nothing and truncates nothing.
+      { id: "statusDetail", type: "text", label: "Status explanation", required: true, hidden: true, maxLength: 220 },
       { id: "amountPaid", type: "currency", currency: "NGN", label: "Amount paid", required: true, hidden: true },
       { id: "pointsDebited", type: "number", label: "Points debited", required: true, hidden: true },
       { id: "qrValue", type: "text", label: "QR payload", required: true, hidden: true, maxLength: 120 },
@@ -760,12 +764,16 @@ export const vtuReceipt: StarterTemplate = {
           // Pre-wrapped by the generator at roughly one line per 70 characters:
           // the renderer breaks on newlines and does not word-wrap, so an
           // unwrapped sentence would run off the panel rather than reflow.
-          val(48, 512, "statusDetail", { size: 10.5, color: MUTED, maxChars: 150, lineHeight: 14 }),
+          val(48, 512, "statusDetail", { size: 10.5, color: MUTED, maxChars: 220, lineHeight: 14 }),
 
           rule(30, 590, 390, 590),
           qr(30, 610, 86, "qrValue"),
           val(132, 640, "receiptNumber", { size: 11, weight: 700, color: INK, maxChars: 22 }),
-          txt(132, 660, "Scan to verify this receipt", { size: 10, color: MUTED }),
+          // Not "scan to verify": nothing on this deployment can serve a
+          // receipt to an unauthenticated scanner. The code carries the
+          // receipt number and the provider's reference, which is what a
+          // support agent actually types in.
+          txt(132, 660, "Present this code to support", { size: 10, color: MUTED }),
           txt(30, 716, "Amounts and rates are frozen at purchase.", { size: 9, color: FAINT, maxChars: 80 }),
         ],
       },
@@ -820,11 +828,15 @@ export const vtuAmendedReceipt: StarterTemplate = {
         hidden: true,
         help: "Absent while the transaction is still awaiting a verdict from the provider.",
       },
-      { id: "statusDetail", type: "text", label: "Status explanation", required: true, hidden: true, maxLength: 180 },
+      // 220 is not arbitrary: the longest sentence the app can produce for a
+      // status (the `unresolved` one) is ~165 characters, and the element below
+      // wraps it at 68 characters a line. 220 leaves three lines of headroom, so
+      // a future rewording shortens nothing and truncates nothing.
+      { id: "statusDetail", type: "text", label: "Status explanation", required: true, hidden: true, maxLength: 220 },
       { id: "amountPaid", type: "currency", currency: "NGN", label: "Amount paid", required: true, hidden: true },
       { id: "pointsDebited", type: "number", label: "Points debited", required: true, hidden: true },
       { id: "qrValue", type: "text", label: "QR payload", required: true, hidden: true, maxLength: 120 },
-      { id: "amendmentNote", type: "text", label: "What changed", required: true, hidden: true, maxLength: 130 },
+      { id: "amendmentNote", type: "text", label: "What changed", required: true, hidden: true, maxLength: 160 },
     ],
   },
   configuration: {
@@ -847,7 +859,7 @@ export const vtuAmendedReceipt: StarterTemplate = {
           // to see at a glance which one is current.
           box(30, 132, 360, 70, "#fdf3e3", 12, "#e7d3ae"),
           txt(48, 156, "This receipt replaces", { size: 9.5, weight: 700, color: "#8a5a12", uppercase: true, letterSpacing: 1.4 }),
-          val(48, 180, "amendmentNote", { size: 10.5, color: "#7a4f10", maxChars: 130, lineHeight: 14 }),
+          val(48, 180, "amendmentNote", { size: 10.5, color: "#7a4f10", maxChars: 160, lineHeight: 14 }),
 
           box(30, 218, 360, 92, SURFACE, 14, RULE),
           cap(52, 244, "Amount paid"),
@@ -874,12 +886,12 @@ export const vtuAmendedReceipt: StarterTemplate = {
           val(220, 526, "settledAt", { size: 11, color: INK, maxChars: 30 }),
 
           box(30, 562, 360, 78, SURFACE, 12, RULE),
-          val(48, 588, "statusDetail", { size: 10.5, color: MUTED, maxChars: 150, lineHeight: 14 }),
+          val(48, 588, "statusDetail", { size: 10.5, color: MUTED, maxChars: 220, lineHeight: 14 }),
 
           rule(30, 666, 390, 666),
           qr(30, 686, 86, "qrValue"),
           val(132, 716, "receiptNumber", { size: 11, weight: 700, color: INK, maxChars: 22 }),
-          txt(132, 736, "Scan to verify this receipt", { size: 10, color: MUTED }),
+          txt(132, 736, "Present this code to support", { size: 10, color: MUTED }),
           txt(30, 780, "Amounts and rates are frozen at purchase.", { size: 9, color: FAINT, maxChars: 80 }),
         ],
       },

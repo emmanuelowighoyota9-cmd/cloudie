@@ -450,6 +450,203 @@ export const ensureStarterTemplates = mutation({
 
 // ─── Drafts & generation ──────────────────────────────────────────────────────
 
+/**
+ * Create a document record and take its creation charge.
+ *
+ * Shared by the two ways a document comes into existence: the customer-authored
+ * `createDocument` below, and the server-authored receipt in `vtuReceipt.ts`.
+ * They must charge, file and record identically — a second copy of this body
+ * would be a second place for the money logic to drift, which is the exact
+ * problem `resolveDocumentCost` was written to make unavailable.
+ *
+ * What the CALLER decides, rather than this function, is the three things that
+ * genuinely differ between the two paths: whether the values came from a human
+ * (re-derivable, and defaulted from their profile) or from the server (already
+ * final), whether creating documents by hand at speed is worth throttling, and
+ * whether an unrenderable draft should be refused outright.
+ *
+ * Exported so `vtuReceipt.ts` can call it. It is a plain function, not a
+ * registered Convex function, so it is not in the API surface.
+ */
+export async function insertDocumentRecord(
+  ctx: MutationCtx,
+  input: {
+    userId: Id<"users">;
+    templateId: Id<"documentTemplates">;
+    /** Blank falls back to the template's own name. */
+    title: string;
+    values: DocumentValues;
+    /** Fill a blank `organization` field from the user's profile setting. */
+    applyOrganizationDefault: boolean;
+    /**
+     * Throttle this creation.
+     *
+     * Off for server-authored documents, which are idempotent per subject and
+     * therefore bounded by the caller's own data rather than by how fast they
+     * can click. A customer with thirty transactions to receipts is doing
+     * exactly what the product asked and should not meet a rate limiter.
+     */
+    rateLimited: boolean;
+    /**
+     * Refuse to create a row whose values could never pass validation.
+     *
+     * Only worth having on for server-authored documents. A human can fix an
+     * incomplete draft; a receipt whose values are wrong can never render, and
+     * would error on every future click while sitting in the table looking
+     * like a document. Failing at creation at least fails once, and says why.
+     */
+    requireRenderable: boolean;
+  },
+): Promise<{
+  documentId: Id<"renderedDocuments">;
+  values: DocumentValues;
+  charged: number;
+  title: string;
+  /** The FROZEN schema and layout the new row points at, so a server-authored
+   *  caller can hand them straight to the renderer without a second read. */
+  schema: TemplateSchema;
+  configuration: TemplateConfiguration;
+}> {
+  const template = await ctx.db.get(input.templateId);
+  if (!template || !template.isActive) throw new Error("Template unavailable");
+  const version = await ctx.db
+    .query("documentTemplateVersions")
+    .withIndex("by_template", (q) => q.eq("templateId", input.templateId))
+    .order("desc")
+    .first();
+  if (!version) throw new Error("Template has no published version");
+
+  // ── Points are taken HERE, once, for the full render cost ──
+  // Creating a document is a chargeable act. A draft is therefore a paid object
+  // from the moment it exists, and the price quoted at this instant is the price
+  // the customer keeps for the whole render.
+  if (input.rateLimited && !(await consumeRateLimit(ctx, `createDocument:${input.userId}`, 30, 60_000))) {
+    throw new Error("Too many documents created. Try again in a minute.");
+  }
+
+  const blocks = version.blocks as VersionBlocks;
+  const cost = resolveDocumentCost(
+    blocks?.billable ?? template.billable,
+    await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
+    blocks?.requiredCredits ?? template.requiredCredits ?? 0,
+    DEFAULT_RENDER_COST,
+  );
+
+  // Checked before the insert so an unaffordable request never leaves an orphan
+  // draft behind. Convex mutations are transactional, so the debit below cannot
+  // outlive the row it belongs to.
+  const payer = await ctx.db.get(input.userId);
+  if (!payer) throw new Error("User not found");
+  const balance = payer.pointsBalance ?? 0;
+  if (balance < cost) {
+    throw new Error(
+      `Insufficient points. Creating a document costs ${cost} points and your balance is ${balance}.`,
+    );
+  }
+
+  const schema = blocks?.schema ?? { fields: [] };
+  const values = sanitizeValues(schema, input.values);
+  // A customer's own documents are issued under their organization name: the
+  // letterhead field starts from their profile setting when left blank. A
+  // server-authored document has no such field to fill, and filling it would
+  // invent an issuer for a document the PLATFORM issued.
+  if (
+    input.applyOrganizationDefault &&
+    schema.fields.some((f) => f.id === "organization") &&
+    !String(values.organization ?? "").trim()
+  ) {
+    const org = payer.organizationName?.trim();
+    if (org) values.organization = sanitizeText(org, 60);
+  }
+
+  if (input.requireRenderable) {
+    const check = validateValues(schema, values);
+    if (!check.ok) {
+      throw new Error(
+        `This document cannot be produced: ${check.issues.map((i) => i.message).join("; ")}`.slice(0, 300),
+      );
+    }
+  }
+
+  const title = sanitizeText(input.title.trim() || template.name, 120);
+  const now = Date.now();
+
+  const documentId = await ctx.db.insert("renderedDocuments", {
+    templateVersionId: version._id,
+    templateId: template._id,
+    templateVersion: version.version,
+    ownerId: input.userId,
+    title,
+    status: "draft",
+    inputData: values,
+    fileName: `${slugify(title)}.pdf`,
+    pageCount: 0,
+    sizeBytes: 0,
+    viewCount: 0,
+    isPublic: false,
+    pointsCost: cost,
+    // What one render of this document costs. Kept separate from pointsCost,
+    // which accumulates across re-renders and is only an accounting total.
+    renderPrice: cost,
+    metadata: {
+      // The version's library tag wins over the template's category when it
+      // declares one, which is how a receipt files under `vtu_receipt` and
+      // stays out of the library while its template sits on the `financial`
+      // shelf.
+      category: blocks?.libraryTag ?? template.documentType,
+      // The shelf the TEMPLATE is on, kept beside the tag so an admin view can
+      // still say "this is a financial document" about a document whose
+      // category is a library-filter tag. Write-once, like the rest of the
+      // metadata: which shelf a template sits on can be edited, which shelf the
+      // document was created from cannot.
+      templateCategory: template.documentType,
+      sensitivity: template.sensitivity ?? "standard",
+      // Marker read back by `finalizeDocument` so the render never charges for a
+      // document that was already paid for at creation.
+      pointsChargedAtCreation: cost,
+    },
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // ── Debit (exactly once per document) ──
+  //
+  // Skipped entirely at zero rather than written as a zero-amount row. The
+  // ledger is the money log; a 0-point entry in it is noise that every later
+  // reader has to filter, and it would also make a free document look like a
+  // paid one to anything counting rows rather than amounts.
+  if (cost > 0) {
+    const idempotencyKey = documentCreationKey(documentId);
+    const balanceAfter = balance - cost;
+    await ctx.db.patch(input.userId, { pointsBalance: balanceAfter });
+    await ctx.db.insert("pointLedger", {
+      userId: input.userId,
+      amount: -cost,
+      balanceAfter,
+      description: `${title} — document created`,
+      type: "document_generation",
+      reference: "document",
+      referenceId: documentId,
+      idempotencyKey,
+      metadata: { stage: "creation", cost },
+      createdAt: now,
+    });
+  }
+
+  return {
+    documentId,
+    values,
+    charged: cost,
+    title,
+    schema,
+    configuration: blocks?.configuration ?? { pages: [] },
+  };
+}
+
+/**
+ * Customer-authored creation: values come from a form, and creating documents
+ * by hand is throttled.
+ */
 export const createDocument = mutation({
   args: {
     templateId: v.id("documentTemplates"),
@@ -460,117 +657,19 @@ export const createDocument = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
-    const template = await ctx.db.get(args.templateId);
-    if (!template || !template.isActive) throw new Error("Template unavailable");
-    const version = await ctx.db
-      .query("documentTemplateVersions")
-      .withIndex("by_template", (q) => q.eq("templateId", args.templateId))
-      .order("desc")
-      .first();
-    if (!version) throw new Error("Template has no published version");
-
-    // ── Points are taken HERE, once, for the full render cost ──
-    // Creating a document is a chargeable act. A draft is therefore a paid
-    // object from the moment it exists, and the price quoted at this instant
-    // is the price the customer keeps for the whole render.
-    if (!(await consumeRateLimit(ctx, `createDocument:${userId}`, 30, 60_000))) {
-      throw new Error("Too many documents created. Try again in a minute.");
-    }
-
-    const blocks = version.blocks as VersionBlocks;
-    const cost = resolveDocumentCost(
-      blocks?.billable ?? template.billable,
-      await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
-      blocks?.requiredCredits ?? template.requiredCredits ?? 0,
-      DEFAULT_RENDER_COST,
-    );
-
-    // Checked before the insert so an unaffordable request never leaves an
-    // orphan draft behind. Convex mutations are transactional, so the debit
-    // below cannot outlive the row it belongs to.
-    const payer = await ctx.db.get(userId);
-    if (!payer) throw new Error("User not found");
-    const balance = payer.pointsBalance ?? 0;
-    if (balance < cost) {
-      throw new Error(
-        `Insufficient points. Creating a document costs ${cost} points and your balance is ${balance}.`,
-      );
-    }
-
-    const schema = blocks?.schema ?? { fields: [] };
-    const values = sanitizeValues(schema, args.values);
-    // A customer's own documents are issued under their organization name:
-    // the letterhead field starts from their profile setting when left blank.
-    if (schema.fields.some((f) => f.id === "organization") && !String(values.organization ?? "").trim()) {
-      const org = (await ctx.db.get(userId))?.organizationName?.trim();
-      if (org) values.organization = sanitizeText(org, 60);
-    }
-    const title = sanitizeText(args.title?.trim() || template.name, 120);
-    const now = Date.now();
-
-    const documentId = await ctx.db.insert("renderedDocuments", {
-      templateVersionId: version._id,
-      templateId: template._id,
-      templateVersion: version.version,
-      ownerId: userId,
-      title,
-      status: "draft",
-      inputData: values,
-      fileName: `${slugify(title)}.pdf`,
-      pageCount: 0,
-      sizeBytes: 0,
-      viewCount: 0,
-      isPublic: false,
-      pointsCost: cost,
-      // What one render of this document costs. Kept separate from pointsCost,
-      // which accumulates across re-renders and is only an accounting total.
-      renderPrice: cost,
-      metadata: {
-        // The version's library tag wins over the template's category when it
-        // declares one, which is how a receipt files under `vtu_receipt` and
-        // stays out of the library while its template sits on the `financial`
-        // shelf.
-        category: blocks?.libraryTag ?? template.documentType,
-        // The shelf the TEMPLATE is on, kept beside the tag so an admin view can
-        // still say "this is a financial document" about a document whose
-        // category is a library-filter tag. Write-once, like the rest of the
-        // metadata: which shelf a template sits on can be edited, which shelf
-        // the document was created from cannot.
-        templateCategory: template.documentType,
-        sensitivity: template.sensitivity ?? "standard",
-        // Marker read back by `finalizeDocument` so the render never charges
-        // for a document that was already paid for at creation.
-        pointsChargedAtCreation: cost,
-      },
-      createdAt: now,
-      updatedAt: now,
+    const created = await insertDocumentRecord(ctx, {
+      userId,
+      templateId: args.templateId,
+      title: args.title?.trim() ?? "",
+      values: (args.values ?? {}) as DocumentValues,
+      applyOrganizationDefault: true,
+      rateLimited: true,
+      // A customer can complete an incomplete draft, so this path keeps its
+      // long-standing behaviour of allowing one.
+      requireRenderable: false,
     });
 
-    // ── Debit (exactly once per document) ──
-    //
-    // Skipped entirely at zero rather than written as a zero-amount row. The
-    // ledger is the money log; a 0-point entry in it is noise that every later
-    // reader has to filter, and it would also make a free document look like a
-    // paid one to anything counting rows rather than amounts.
-    if (cost > 0) {
-      const idempotencyKey = documentCreationKey(documentId);
-      const balanceAfter = balance - cost;
-      await ctx.db.patch(userId, { pointsBalance: balanceAfter });
-      await ctx.db.insert("pointLedger", {
-        userId,
-        amount: -cost,
-        balanceAfter,
-        description: `${title} — document created`,
-        type: "document_generation",
-        reference: "document",
-        referenceId: documentId,
-        idempotencyKey,
-        metadata: { stage: "creation", cost },
-        createdAt: now,
-      });
-    }
-
-    return { documentId, values, charged: cost };
+    return { documentId: created.documentId, values: created.values, charged: created.charged };
   },
 });
 
@@ -917,18 +1016,31 @@ export const getStudioStats = query({
       .take(200);
 
     const user = await ctx.db.get(userId);
+    let libraryDocuments = 0;
     let generated = 0;
     let shared = 0;
     let drafts = 0;
     let credits = 0;
     let storageBytes = 0;
     for (const d of docs) {
+      // Storage is counted for EVERY row, receipts included: it is a physical
+      // fact about the account, and under-reporting it would be a lie about
+      // disk. The four counts below are about the customer's own library, and
+      // they exclude receipts for the same reason the library list does —
+      // otherwise the Documents page prints "5 documents" above "No documents
+      // yet", which is the numbers contradicting the list directly beneath
+      // them.
+      storageBytes += d.sizeBytes ?? 0;
+
+      if ((d.metadata as Record<string, unknown> | undefined)?.category === VTU_RECEIPT_LIBRARY_TAG) {
+        continue;
+      }
+      libraryDocuments++;
       const status = d.status ?? "draft";
       if (status === "completed" || status === "shared") generated++;
       if (d.isPublic && !d.revokedAt) shared++;
       if (status === "draft") drafts++;
       credits += d.pointsCost ?? 0;
-      storageBytes += d.sizeBytes ?? 0;
     }
     const templateCount = (
       await ctx.db
@@ -938,7 +1050,7 @@ export const getStudioStats = query({
     ).length;
 
     return {
-      documents: docs.length,
+      documents: libraryDocuments,
       generated,
       shared,
       drafts,
