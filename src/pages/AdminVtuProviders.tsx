@@ -310,6 +310,12 @@ export default function AdminVtuProviders() {
         toast.success("Pairgate provider seeded from environment");
       } else if (result.action === "upgraded_legacy") {
         toast.success("Existing Pairgate row upgraded in place");
+      } else if (result.action === "no_env") {
+        // The mutation reports this instead of throwing, because a thrown
+        // message is redacted in production and arrives as "Server Error".
+        toast.error(
+          "PAIRGATE_API_KEY is not set in this project, so there is nothing to seed. Add the provider from this page instead.",
+        );
       } else {
         toast.info("Pairgate already configured — nothing changed");
       }
@@ -357,7 +363,8 @@ export default function AdminVtuProviders() {
                 Seeds the Pairgate row from{" "}
                 <code className="text-xs">PAIRGATE_API_KEY</code> and seals it.
                 Re-running is a no-op and never overwrites an admin-set key. After
-                it runs, those env vars are no longer read at runtime.
+                it runs, those env vars are no longer read at runtime. If the key
+                is not set, this says so and writes nothing.
               </p>
             </div>
             <Button
@@ -426,6 +433,14 @@ export default function AdminVtuProviders() {
                     placeholder="https://api.pairgate.com"
                     className="min-h-11"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Origin only — the adapter appends its own path, so version
+                    prefixes belong in the path fields, not here. AidaPay is{" "}
+                    <code className="text-xs">https://aidapay.ng</code>; adding{" "}
+                    <code className="text-xs">/api/v1</code> yields{" "}
+                    <code className="text-xs">/api/v1/api/v1/buy</code> on every
+                    purchase.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

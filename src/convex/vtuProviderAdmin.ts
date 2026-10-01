@@ -400,6 +400,13 @@ export const deleteProvider = mutation({
  * Also upgrades a slice-1 row that still carries the old `provider` /
  * `encryptedSecret` field names, so a pre-cutover row is repaired in place
  * rather than duplicated.
+ *
+ * A missing `PAIRGATE_API_KEY` is REPORTED (`action: "no_env"`) rather than
+ * thrown. Convex redacts the message of a thrown error in a production
+ * deployment, so the admin saw "Server Error / Called by client" and a request
+ * ID while the one actionable sentence stayed on the server. A status in the
+ * return value survives redaction, which is the only reason this is a return
+ * instead of a throw.
  */
 export const migratePairgateFromEnv = mutation({
   args: {},
@@ -461,9 +468,14 @@ export const migratePairgateFromEnv = mutation({
 
     const apiKey = process.env.PAIRGATE_API_KEY;
     if (!apiKey) {
-      throw new Error(
-        "PAIRGATE_API_KEY is not configured. Add it in the project Keys panel, or create the provider from the admin page.",
-      );
+      await auditLog(ctx, adminId, {
+        action: "vtu_provider_migration_skipped",
+        resource: "vtuProvider",
+        resourceId: "pairgate",
+        reason:
+          "PAIRGATE_API_KEY is not configured; nothing to seed, and no row was written",
+      });
+      return { action: "no_env" as const, provider: "pairgate" };
     }
 
     const sealedKey = await sealOrThrow(apiKey);

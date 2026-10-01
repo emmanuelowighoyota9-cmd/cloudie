@@ -572,6 +572,40 @@ describe("admin provider surface", () => {
       }
     });
   });
+
+  test("a missing PAIRGATE_API_KEY is reported, not thrown", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const adminId = await seedAdmin(t);
+      const previous = process.env.PAIRGATE_API_KEY;
+      delete process.env.PAIRGATE_API_KEY;
+      try {
+        const result: any = await t
+          .withIdentity({ subject: adminId })
+          .mutation(api.vtuProviderAdmin.migratePairgateFromEnv, {});
+
+        // Returned rather than thrown: Convex redacts the message of a thrown
+        // error in a production deployment, so a throw reached the admin as
+        // "Server Error / Called by client" and the explanation never left the
+        // server. The button looked broken while it was working as intended.
+        expect(result.action).toBe("no_env");
+
+        // And the refusal is inert — a missing key cannot half-create a row —
+        // but it is still audited, because an operator pressing the button is a
+        // thing that happened.
+        const { rows, audits } = await t.run(async (ctx) => ({
+          rows: await ctx.db.query("vtuProviders").collect(),
+          audits: await ctx.db.query("auditLogs").collect(),
+        }));
+        expect(rows).toHaveLength(0);
+        expect(
+          audits.some((a) => a.action === "vtu_provider_migration_skipped"),
+        ).toBe(true);
+      } finally {
+        if (previous !== undefined) process.env.PAIRGATE_API_KEY = previous;
+      }
+    });
+  });
 });
 
 // ─── Corrupt credentials ───────────────────────────────────────────
