@@ -45,12 +45,11 @@ lasts as long as the run does.
       would win if it were enabled. Leave Pairgate's row untouched — it is what
       §8 restores.
 - [ ] The AidaPay row's webhook callback URL set to
-      `https://<deployment>/api/webhooks/vtu` **with the header
-      `x-vtu-provider: aidapay`**. There is one VTU webhook route and it is not
-      per-provider; the provider is named by that header, and it defaults to
-      `pairgate` when absent. A callback posted to
-      `/api/webhooks/vtu/aidapay` returns 404, and one posted without the header
-      is verified against Pairgate's secret and fails as a 401.
+      `https://<deployment>/api/webhooks/vtu/aidapay`. The provider named by
+      the PATH wins over the `x-vtu-provider` header, which remains for the
+      legacy route and defaults to `pairgate` when absent. A callback sent to
+      the wrong one of the two is verified against the other provider's secret
+      and refused as a 401 — a failure that looks exactly like a wrong key.
 - [ ] A real test recipient number that can receive airtime and be checked.
 - [ ] Confirmed nobody else is buying airtime on this deployment for the next
       ten minutes.
@@ -108,7 +107,7 @@ points.
 1. The purchase returns and `/admin/transactions` shows the row moving
    `pending → processing → confirmed`, with `routedProvider: "aidapay"`.
 2. **Whether a webhook arrives at all**, and how long after the purchase.
-   Watch the Convex function logs for `POST /api/webhooks/vtu`.
+   Watch the Convex function logs for `POST /api/webhooks/vtu/aidapay`.
 3. The `ref` AidaPay echoes is our Convex transaction id (the adapter sends
    `ref: attemptId`).
 
@@ -147,11 +146,14 @@ that the real webhook then contradicts is itself the finding — it means the
 simulator's envelope differs from what production sends, and production is
 authoritative.
 
-**Before firing it**, confirm the simulator posts to `/api/webhooks/vtu` with
-`x-vtu-provider: aidapay`. It will very likely let us set a custom path; a
-per-provider path returns 404 and looks like a signature problem from the
-developer's side, because a 404 on the callback URL is what a retry queue
-reports as a delivery failure.
+**Before firing it**, confirm the simulator posts to
+`/api/webhooks/vtu/aidapay` — the same URL production must use, and the one to
+paste into AidaPay's callback configuration. If the simulator will not let the
+path be edited, the legacy `/api/webhooks/vtu` with `x-vtu-provider: aidapay`
+verifies identically; the path wins when both name a provider. A 404 here is a
+URL that is not a registered provider path, not a signature problem — though a
+404 on the callback URL is exactly what a retry queue reports as a delivery
+failure.
 
 ### 3a–3d: what the harness cannot prove
 
@@ -284,6 +286,13 @@ repeat this section deliberately rather than marking it passed.
    at any point, AidaPay wins and every customer purchase routes to
    production AidaPay. Check the routing page rather than assuming the seed
    value.
+
+   **To hand routing to AidaPay** — the deliberate opposite of this fence, and
+   the step that makes AidaPay the live provider — give its route a LOWER
+   priority number than Pairgate's (or switch Pairgate's row off), save, and
+   confirm the routing preview on `/admin/vtu/catalog` names AidaPay. Routing
+   fails closed: a product whose only route points at an unusable provider
+   refuses the purchase rather than falling back somewhere unchosen.
 4. If §5 was run, confirm the refund landed: exactly one `vtu_refund` row and
    the balance back where it started.
 
@@ -305,15 +314,18 @@ both:
 
 The two are named in each other deliberately so neither can drift alone.
 
-## Two defects this runbook assumes still exist
+## One defect this runbook assumes still exists
 
-Neither is fixed by this runbook, and both are things the live run will expose
+It is not fixed by this runbook, and it is something the live run will expose
 rather than cause:
 
-1. **There is no per-provider webhook path.** One route,
-   `POST /api/webhooks/vtu`, with the provider named by the `x-vtu-provider`
-   header and defaulting to `pairgate`. An AidaPay callback that omits the
-   header is verified against Pairgate's secret and refused as a 401 — a
-   confusing failure that looks exactly like a wrong key.
-2. **Test-connection ignores the response body.** A 200 with
+1. **Test-connection ignores the response body.** A 200 with
    `success: false` reports `ok`. See §1.
+
+**Fixed since this runbook was written: the per-provider webhook path now
+exists.** `POST /api/webhooks/vtu/aidapay` names its provider in the URL, so an
+aggregator that cannot attach a custom header is verified against AidaPay's
+secret. The bare `POST /api/webhooks/vtu` route is unchanged — `x-vtu-provider`,
+defaulting to `pairgate` — and a path that names a provider wins over the
+header. Each provider path is registered explicitly; an unregistered one is a
+404 rather than a wildcard.

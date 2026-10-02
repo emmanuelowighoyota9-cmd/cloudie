@@ -490,18 +490,44 @@ const paystackWebhookHandler = httpAction(async (ctx, req) => {
 http.route({ path: "/api/webhooks/paystack", method: "POST", handler: paystackWebhookHandler });
 
 // ─── VTU Webhook ───────────────────────────────────────────────────
-// POST /api/webhooks/vtu
+// POST /api/webhooks/vtu            — provider named by `x-vtu-provider`, else pairgate
+// POST /api/webhooks/vtu/<provider> — provider named by the PATH
 // Verifies the HMAC signature over the RAW body BEFORE anything is trusted,
 // then applies the provider event to its transaction.
+
+/**
+ * Provider named by the callback PATH, when the route has one.
+ *
+ * An aggregator that cannot attach a custom request header to its callbacks
+ * (AidaPay cannot) needs the provider named where it CAN be configured — the
+ * URL in its own dashboard. `/api/webhooks/vtu/aidapay` → "aidapay"; the bare
+ * route → null, and the header decides as before.
+ *
+ * This is not a trust decision. The name only selects WHICH sealed secret the
+ * callback must prove itself against; the HMAC still has to verify, and the
+ * matched transaction must have been routed to that provider. A caller who
+ * names a provider they did not come from gets a 401, not a settlement.
+ */
+function providerFromPath(pathname: string): string | null {
+  const prefix = "/api/webhooks/vtu/";
+  if (!pathname.startsWith(prefix)) return null;
+  const name = pathname.slice(prefix.length).replace(/\/+$/, "");
+  return name.length > 0 ? name : null;
+}
 
 const vtuWebhookHandler = httpAction(async (ctx, req) => {
   // Raw body, never parsed-and-restringified: re-serialization changes the
   // bytes and the HMAC would not match.
   const rawBody = await req.text();
 
-  // Provider hint from a HEADER, never from an unsigned body field — otherwise
-  // a caller could choose which secret we verify the payload against.
-  const providerHint = req.headers.get("x-vtu-provider") ?? "pairgate";
+  // Provider from the URL or a HEADER, never from an unsigned body field —
+  // otherwise a caller could choose which secret we verify the payload
+  // against. The path wins when both are present: it is the value the
+  // operator pinned on the aggregator's side and can see there.
+  const providerHint =
+    providerFromPath(new URL(req.url).pathname) ??
+    req.headers.get("x-vtu-provider") ??
+    "pairgate";
 
   const headers: Record<string, string> = {};
   req.headers.forEach((value, key) => {
@@ -557,5 +583,17 @@ const vtuWebhookHandler = httpAction(async (ctx, req) => {
 });
 
 http.route({ path: "/api/webhooks/vtu", method: "POST", handler: vtuWebhookHandler });
+
+// AidaPay's dashboard cannot attach a custom header to its callbacks, so its
+// path names it. Without this route an AidaPay callback is verified against
+// Pairgate's secret and refused as a 401 — a failure that looks exactly like
+// a wrong key. Routes are registered one provider at a time on purpose: an
+// unregistered provider path is a 404, not a wildcard that answers for a
+// provider nobody configured.
+http.route({
+  path: "/api/webhooks/vtu/aidapay",
+  method: "POST",
+  handler: vtuWebhookHandler,
+});
 
 export default http;
