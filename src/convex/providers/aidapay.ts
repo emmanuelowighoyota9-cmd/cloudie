@@ -37,6 +37,15 @@
  * `docs/vtu-verification-runbook.md`. This adapter has NOT been exercised against a
  * live AidaPay endpoint. Status and scope: see `docs/vtu-slice-5.md`, section
  * "Slice 4 status" — which this file is named in, so the two stay in sync.
+ *
+ * ── Bill purchases (slice 7) ─────────────────────────────────────────
+ * `POST /buy` serves airtime, data, cable and electricity alike: the product
+ * travels in `provider_code`, a plan in `package_code`, and an amount (for
+ * airtime and electricity) in `amount` — which is sent as a STRING because
+ * that is the type the reference documents and shows. Electricity returns the
+ * meter token that IS the delivery, so `deliveryOf` maps it onto the
+ * provider-agnostic `delivery` values the transaction stores. Scope and the
+ * operator steps: `docs/vtu-slice-7.md`.
  */
 
 import { createHmac } from "node:crypto";
@@ -50,6 +59,7 @@ import type {
   ProviderPurchaseResult,
   VtuProviderAdapter,
 } from "../vtuShared";
+import type { VtuDelivery } from "../vtuSchema/types";
 import { safeEqualHex } from "./signature";
 
 // ─── Endpoint mapping (from AidaPay's API reference) ────────────────
@@ -120,11 +130,62 @@ function str(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-/** AidaPay nests the transaction under `data` on some routes; accept both. */
+/**
+ * The object that actually carries the transaction.
+ *
+ * THREE shapes, all real, all from AidaPay's own documentation:
+ *
+ *   POST /buy          `data.transaction_data`
+ *   GET  /transaction  a flat `data`
+ *   a webhook          the body ITSELF — no envelope at all
+ *
+ * Unwrapping in one place is what keeps every reader below ignorant of which
+ * route delivered the payload. Missing this one level was how a `Completed`
+ * buy read as unrecognised.
+ */
 function dataOf(body: unknown): Record<string, unknown> {
   const b = (body ?? {}) as Record<string, unknown>;
   const nested = b.data;
-  return nested && typeof nested === "object" ? (nested as Record<string, unknown>) : b;
+  const d =
+    nested && typeof nested === "object" ? (nested as Record<string, unknown>) : b;
+  const transaction = d.transaction_data;
+  return transaction && typeof transaction === "object"
+    ? (transaction as Record<string, unknown>)
+    : d;
+}
+
+/**
+ * What the CUSTOMER needs from a delivered purchase.
+ *
+ * A prepaid meter returns a token and its units, and an internet or e-pin
+ * product returns a serial, a PIN and an expiry. Undefined when none are
+ * present — the normal case — so a caller can tell "delivered nothing of the
+ * kind" from "delivered an empty object".
+ */
+function deliveryOf(
+  ...sources: Record<string, unknown>[]
+): VtuDelivery | undefined {
+  const pick = (key: string): string | undefined => {
+    for (const source of sources) {
+      const value = str(source[key]);
+      if (value !== undefined) return value;
+    }
+    return undefined;
+  };
+
+  const delivery: VtuDelivery = {};
+  const token = pick("meter_token");
+  const units = pick("meter_unit");
+  const serial = pick("serial_no");
+  const pin = pick("pin");
+  const expires = pick("expires");
+  if (token !== undefined) delivery.token = token;
+  if (units !== undefined) delivery.units = units;
+  if (serial !== undefined) delivery.serial = serial;
+  if (pin !== undefined) delivery.pin = pin;
+  if (expires !== undefined) delivery.expires = expires;
+
+  return Object.keys(delivery).length > 0 ? delivery : undefined;
 }
 
 /**
@@ -137,9 +198,14 @@ function dataOf(body: unknown): Record<string, unknown> {
 function referenceOf(b: Record<string, unknown>, d: Record<string, unknown>): string | undefined {
   return (
     str(d.hash) ??
+    // AidaPay's authoritative id, and the name its documentation uses on both
+    // the buy response and the callback.
+    str(d.transaction_hash) ??
     str(d.reference) ??
+    // OUR reference as AidaPay echoes it back — the `ref` we sent.
     str(d.ref) ??
     str(b.hash) ??
+    str(b.transaction_hash) ??
     str(b.reference) ??
     str(b.ref)
   );
@@ -176,10 +242,12 @@ export function mapPurchaseResponse(
         raw: body,
       };
     }
+    const delivery = deliveryOf(b, d);
     return {
       status: "success",
       providerReference: providerReference ?? fallbackReference,
       costNgn,
+      ...(delivery ? { delivery } : {}),
       raw: body,
     };
   }
@@ -280,7 +348,10 @@ export const aidapayAdapter: VtuProviderAdapter = {
       ...(providerCode ? { provider_code: providerCode } : {}),
       account_pin: accountPin,
       ref: req.attemptId,
-      ...(amount !== undefined ? { amount } : {}),
+      // A STRING, because that is the type AidaPay documents and shows in its
+      // own request example. It also removes any dependence on how a PHP
+      // backend would coerce a JSON number.
+      ...(amount !== undefined ? { amount: String(amount) } : {}),
       ...(packageCode ? { package_code: packageCode } : {}),
     });
 
@@ -407,12 +478,16 @@ export const aidapayAdapter: VtuProviderAdapter = {
     // callback is then simply a no-op.
     if (verdict.kind !== "confirmed" && verdict.kind !== "failed") return null;
 
+    const delivery = deliveryOf(b, d);
     return {
       providerReference,
       outcome: verdict.kind === "confirmed" ? "confirmed" : "failed",
       costNgn: num(d.cost) ?? num(d.amount),
       code: str(d.code) ?? str(b.code),
       message: str(d.message) ?? str(b.message),
+      // The webhook is where a meter token normally arrives: the buy call has
+      // already returned `Processing` by then.
+      ...(delivery ? { delivery } : {}),
       // Preserved so a Refund or Cancelled is recorded as a cancellation
       // rather than a generic rejection, which is what selects the
       // `provider_cancelled` reversal reason.

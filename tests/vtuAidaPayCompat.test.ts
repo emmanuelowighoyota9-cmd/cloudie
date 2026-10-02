@@ -436,7 +436,9 @@ describe("attemptId is carried on the request and ignored by Pairgate", () => {
     );
     const sent = JSON.parse(aid.bodies[0]);
     expect(sent.account_pin).toBe("1234");
-    expect(sent.amount).toBe(1000);
+    // A STRING: that is the type AidaPay documents for `amount`, and the shape
+    // its own request example shows.
+    expect(sent.amount).toBe("1000");
     expect(sent.provider_code).toBe("mtn");
 
     // Pairgate must not gain either field: its code already carries the amount
@@ -523,7 +525,7 @@ describe("auth scheme composes exactly one header", () => {
 
 // ─── End to end: the physical id is the transaction id ──────────────
 
-describe("purchaseAirtime forwards the transaction id as attemptId", () => {
+describe("purchaseVtu forwards the transaction id as attemptId", () => {
   test("the adapter receives the Convex transaction id, not the client request id", async () => {
     await withMasterKey(async () => {
       const t = convexTest(schema, modules);
@@ -584,7 +586,7 @@ describe("purchaseAirtime forwards the transaction id as attemptId", () => {
         const CLIENT_REQUEST_ID = "client_req_0001";
         const result: any = await t
           .withIdentity({ subject: userId })
-          .action(api.vtuHttp.purchaseAirtime, {
+          .action(api.vtuHttp.purchaseVtu, {
             clientRequestId: CLIENT_REQUEST_ID,
             serviceCode: "airtime.mtn.1000",
             customerIdentifier: "08031234567",
@@ -649,7 +651,7 @@ describe("purchaseAirtime forwards the transaction id as attemptId", () => {
       } as VtuProviderAdapter);
 
       try {
-        await t.withIdentity({ subject: userId }).action(api.vtuHttp.purchaseAirtime, {
+        await t.withIdentity({ subject: userId }).action(api.vtuHttp.purchaseVtu, {
           clientRequestId: "client_req_pinless",
           serviceCode: "airtime.mtn.1000",
           customerIdentifier: "08031234567",
@@ -1491,6 +1493,128 @@ describe("the base URL is the bare origin, and the adapter owns the /api/v1 pref
     // that breaks purchases, not the one that breaks the probe.
     const wrongPair = `${baseUrl}/api/v1` + "/api/v1/buy";
     expect(wrongPair).toBe("https://aidapay.ng/api/v1/api/v1/buy");
+  });
+});
+
+// ─── The shapes AidaPay's own API reference documents ──────────────
+
+/**
+ * These pin the DOCUMENTED shapes, not the shapes we happened to observe.
+ *
+ * The adapter read one level of nesting, and AidaPay's reference nests two:
+ * an envelope whose `data` holds a second `success` and then `transaction_data`
+ * with the hash, the status and the charge. Without the second level a
+ * legitimate `Processing` buy classified as an unrecognised response and no
+ * provider reference was ever captured — so a webhook could not match it and
+ * the sweep had nothing to poll for.
+ */
+describe("the documented /buy and webhook shapes are read exactly as documented", () => {
+  test("POST /buy nests the transaction under data.transaction_data", async () => {
+    const { impl } = respondingFetch({
+      success: true,
+      message: "success",
+      data: {
+        success: true,
+        message: "Transaction Sent For Processing...",
+        transaction_data: {
+          transaction_hash: "TXabc123def456",
+          status: "Processing",
+          amount: 100,
+          recipient: "08012345678",
+          amount_paid: 100,
+          commission: 2.5,
+          special_message: "",
+          discount: 0,
+        },
+      },
+    });
+
+    const result = await aidapayAdapter.purchase(
+      makeRequest({ amountNgn: 100 }),
+      aidapayOptions(impl),
+    );
+
+    // `Processing` is `unknown` on purpose: the debit stands and the row waits
+    // for the webhook rather than being called delivered or failed.
+    expect(result.status).toBe("unknown");
+    expect(result.providerReference).toBe("TXabc123def456");
+  });
+
+  test("a DELIVERED buy inside transaction_data becomes a success with its charge", async () => {
+    const { impl } = respondingFetch({
+      success: true,
+      message: "success",
+      data: {
+        success: true,
+        message: "Transaction successful",
+        transaction_data: {
+          transaction_hash: "TXdone00000001",
+          status: "Completed",
+          amount: 100,
+        },
+      },
+    });
+
+    const result = await aidapayAdapter.purchase(
+      makeRequest({ amountNgn: 100 }),
+      aidapayOptions(impl),
+    );
+
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.providerReference).toBe("TXdone00000001");
+      expect(result.costNgn).toBe(100);
+    }
+  });
+
+  test("a confirmed /transaction poll returns the meter token and its units", async () => {
+    // The token IS the delivery for a prepaid meter: without it the customer
+    // has paid for electricity they cannot load.
+    const { impl } = respondingFetch({
+      success: true,
+      message: "success",
+      data: {
+        transaction_hash: "TXmeter0000001",
+        ref: "tx_physical_0001",
+        status: "Completed",
+        amount: 5000,
+        meter_token: "1234-5678-9012-3456-7890",
+        meter_unit: "12.3",
+      },
+    });
+
+    const result = await aidapayAdapter.verify("tx_physical_0001", aidapayOptions(impl));
+
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.delivery?.token).toBe("1234-5678-9012-3456-7890");
+      expect(result.delivery?.units).toBe("12.3");
+    }
+  });
+
+  test("a webhook carries the token through the signed parse", () => {
+    const SECRET = "ap_access_token_material";
+    const raw = JSON.stringify({
+      type: "transaction",
+      transaction_hash: "TXmeter0000001",
+      ref: "tx_physical_0001",
+      status: "Completed",
+      amount: 5000,
+      recipient: "45012345678",
+      meter_token: "1234-5678-9012-3456-7890",
+      meter_unit: "12.3",
+    });
+    const signature = createHmac("sha256", SECRET).update(raw).digest("hex");
+
+    const event = aidapayAdapter.verifyAndParseCallback(raw, { signature }, SECRET);
+
+    expect(event).not.toBeNull();
+    // The hash wins as the reference and our own `ref` stays the fallback —
+    // both are present on every real callback.
+    expect(event?.providerReference).toBe("TXmeter0000001");
+    expect(event?.outcome).toBe("confirmed");
+    expect(event?.delivery?.token).toBe("1234-5678-9012-3456-7890");
+    expect(event?.delivery?.units).toBe("12.3");
   });
 });
 

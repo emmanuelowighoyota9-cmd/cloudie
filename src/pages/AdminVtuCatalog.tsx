@@ -80,6 +80,9 @@ type ProductRow = {
   requiresPackageCode: boolean;
   minAmount: number | null;
   maxAmount: number | null;
+  /** The provider's fixed naira price, for products the customer does not
+   *  price (a data plan, a cable bouquet). Null for amount-priced ones. */
+  priceNgn: number | null;
   active: boolean;
   activeRouteCount: number;
 };
@@ -287,6 +290,10 @@ export default function AdminVtuCatalog() {
                         {p.displayName} · {p.customerIdentifierLabel}
                         {p.requiresAmount &&
                           ` · ₦${p.minAmount ?? 0}–₦${p.maxAmount ?? "∞"}`}
+                        {!p.requiresAmount &&
+                          (p.priceNgn === null
+                            ? " · no fixed price set"
+                            : ` · ₦${p.priceNgn.toLocaleString()} fixed`)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -602,10 +609,25 @@ function ProductDialog({
   );
   const [minAmount, setMinAmount] = useState(String(product?.minAmount ?? 100));
   const [maxAmount, setMaxAmount] = useState(String(product?.maxAmount ?? 100000));
+  const [priceNgn, setPriceNgn] = useState(
+    product?.priceNgn === null || product?.priceNgn === undefined
+      ? ""
+      : String(product.priceNgn),
+  );
   const [active, setActive] = useState(product?.active ?? true);
 
   const save = async () => {
     setBusy(true);
+    // Empty means "no fixed price", NOT zero: a zero would price the product
+    // at nothing and the purchase path refuses to charge for it anyway.
+    const trimmedPrice = priceNgn.trim();
+    const priceNgnValue =
+      trimmedPrice === "" ? undefined : Number(trimmedPrice);
+    if (priceNgnValue !== undefined && !(priceNgnValue > 0)) {
+      toast.error("A fixed price must be greater than zero, or left empty.");
+      setBusy(false);
+      return;
+    }
     try {
       if (product) {
         await update({
@@ -616,6 +638,7 @@ function ProductDialog({
           requiresPackageCode,
           minAmount: Number(minAmount),
           maxAmount: Number(maxAmount),
+          priceNgn: priceNgnValue,
           active,
         });
         toast.success("Product updated.");
@@ -629,6 +652,7 @@ function ProductDialog({
           requiresPackageCode,
           minAmount: Number(minAmount),
           maxAmount: Number(maxAmount),
+          priceNgn: priceNgnValue,
         });
         toast.success("Product created.");
       }
@@ -732,6 +756,26 @@ function ProductDialog({
                 <Label htmlFor="mx">Max ₦</Label>
                 <Input id="mx" value={maxAmount} onChange={(e) => setMaxAmount(e.target.value)} />
               </div>
+            </div>
+          )}
+
+          {!requiresAmount && (
+            // The customer has no amount to give, so the NAIRA price has to
+            // live here: it is what the ledger's rate snapshot is built from,
+            // and without it the purchase refuses rather than guessing.
+            <div className="space-y-1.5">
+              <Label htmlFor="pn">Fixed price ₦</Label>
+              <Input
+                id="pn"
+                value={priceNgn}
+                onChange={(e) => setPriceNgn(e.target.value)}
+                inputMode="numeric"
+                placeholder="1000"
+              />
+              <p className="text-xs text-muted-foreground">
+                The provider's price for one of these — set it to the figure on
+                the provider's own package list.
+              </p>
             </div>
           )}
 

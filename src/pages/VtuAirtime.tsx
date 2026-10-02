@@ -52,7 +52,7 @@ export default function VtuAirtime() {
 
   const offers = useQuery(api.vtu.getAirtimeOffers, {});
   const balance = useQuery(api.points.getBalance);
-  const purchase = useAction(api.vtuHttp.purchaseAirtime);
+  const purchase = useAction(api.vtuHttp.purchaseVtu);
 
   // SUBSCRIBE to the record. This is the source of truth for what the page
   // shows — not the action's return value, which reflects only what the record

@@ -917,7 +917,7 @@ describe("routing does not reintroduce a hard-coded provider", () => {
     try {
       const result: any = await t
         .withIdentity({ subject: userId })
-        .action(api.vtuHttp.purchaseAirtime, {
+        .action(api.vtuHttp.purchaseVtu, {
           clientRequestId: "req_second_provider",
           serviceCode: SERVICE_CODE,
           customerIdentifier: PHONE,
@@ -962,7 +962,7 @@ describe("routing does not reintroduce a hard-coded provider", () => {
     });
 
     try {
-      await t.withIdentity({ subject: userId }).action(api.vtuHttp.purchaseAirtime, {
+      await t.withIdentity({ subject: userId }).action(api.vtuHttp.purchaseVtu, {
         clientRequestId: "req_package_code",
         serviceCode: SERVICE_CODE,
         customerIdentifier: PHONE,
@@ -1097,7 +1097,7 @@ describe("the catalog row's amount bounds are enforced, not documented", () => {
 
     const result: any = await t
       .withIdentity({ subject: userId })
-      .action(api.vtuHttp.purchaseAirtime, {
+      .action(api.vtuHttp.purchaseVtu, {
         clientRequestId: "req_range_action",
         serviceCode: "airtime.mtn.1000",
         customerIdentifier: PHONE,

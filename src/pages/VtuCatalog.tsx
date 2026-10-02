@@ -143,9 +143,17 @@ function ProductCard({ product }: { product: CatalogProductView }) {
 
         <div className="mt-auto space-y-2">
           <PriceBlock product={product} />
-          {product.purchasable && product.airtimeNetwork ? (
+          {product.purchasable ? (
             <Button asChild className="min-h-11 w-full gap-1.5">
-              <Link to={`/vtu/airtime?network=${product.airtimeNetwork}`}>
+              {/* Airtime keeps its own grid (network + amount chips); every
+                  other product is bought on the bills page by product code. */}
+              <Link
+                to={
+                  product.airtimeNetwork
+                    ? `/vtu/airtime?network=${product.airtimeNetwork}`
+                    : `/vtu/bills?product=${product.productCode}`
+                }
+              >
                 Buy now
                 <ArrowRight className="h-4 w-4" />
               </Link>

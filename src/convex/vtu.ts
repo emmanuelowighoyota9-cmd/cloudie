@@ -12,6 +12,7 @@ import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { VtuDelivery } from "./vtuSchema/types";
 import { consumeRateLimit } from "./vtuInternal";
 import { readPointRate } from "./pricing";
 import {
@@ -110,11 +111,18 @@ export const previewCost = query({
     const route = await routeProduct(ctx, productCode);
     if (!route.ok) return null;
 
+    // A fixed-package product's naira price lives on its catalog row; an
+    // amount-priced one takes the customer's own number. No price at all is a
+    // configuration fault, and this returns "cannot price it" rather than a
+    // zero the purchase page would render as free.
+    const nairaPrice = parsed.amountNgn ?? route.product.priceNgn ?? null;
+    if (nairaPrice === null) return null;
+
     const cost = await resolvePointsCost(ctx, {
       productCode: route.winner.productCode,
       serviceCode: args.serviceCode,
       provider: route.winner.provider,
-      nairaPrice: parsed.amountNgn,
+      nairaPrice,
     });
 
     return {
@@ -123,7 +131,7 @@ export const previewCost = query({
       override: cost.override,
       costSource: cost.source,
       provider: route.winner.provider,
-      nairaPrice: parsed.amountNgn,
+      nairaPrice,
     };
   },
 });
@@ -149,6 +157,9 @@ export interface VtuHistoryItem {
   providerReference: string | null;
   reversalReason: string | null;
   unresolvedReason: string | null;
+  /** What the provider delivered, when the customer needs it — a meter token
+   *  and its units, a serial, a PIN. Null for everything else. */
+  delivery: VtuDelivery | null;
   resolvedAt: number | null;
   createdAt: number;
   updatedAt: number;
@@ -213,6 +224,7 @@ function toHistoryItem(
     providerReference: tx.providerReference ?? null,
     reversalReason: tx.reversalReason ?? null,
     unresolvedReason: tx.unresolvedReason ?? null,
+    delivery: tx.delivery ?? null,
     resolvedAt: tx.resolvedAt ?? null,
     createdAt: tx.createdAt,
     updatedAt: tx.updatedAt,

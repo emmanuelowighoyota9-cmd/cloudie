@@ -18,6 +18,7 @@ import {
   VTU_SERVICE_TYPES,
   VTU_TRANSACTION_STATUSES,
 } from "./schema";
+import type { VtuDelivery } from "./vtuSchema/types";
 
 export {
   VTU_AUTH_SCHEMES,
@@ -199,7 +200,18 @@ export function composeAuthHeader(opts: {
  *              and the row sits in a real `unknown` state awaiting a webhook.
  */
 export type ProviderPurchaseResult =
-  | { status: "success"; providerReference: string; costNgn: number; raw: unknown }
+  | {
+      status: "success";
+      providerReference: string;
+      costNgn: number;
+      /**
+       * What the customer needs from a DELIVERED purchase — a meter token and
+       * its units, a serial, a PIN. Absent for everything that delivers
+       * nothing of the kind, which is most purchases.
+       */
+      delivery?: VtuDelivery;
+      raw: unknown;
+    }
   | {
       status: "failed";
       code: string;
@@ -228,6 +240,10 @@ export interface ProviderCallbackEvent {
   costNgn?: number;
   code?: string;
   message?: string;
+  /** Present when the callback itself carried what the customer needs — a
+   *  meter token, for instance, which for prepaid electricity IS the
+   *  delivery. Absent on every other kind of callback. */
+  delivery?: VtuDelivery;
   /**
    * Distinguishes a provider that rejected the purchase from one that
    * cancelled it AFTER accepting it. At least one aggregator reports these

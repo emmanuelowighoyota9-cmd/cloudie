@@ -28,18 +28,19 @@ import type { MutationCtx } from "./_generated/server";
 // that owns the enums, so the mutation argument and the schema field cannot
 // drift apart.
 import {
+  vtuDeliveryValidator,
   vtuReversalReasonValidator,
   vtuUnresolvedReasonValidator,
 } from "./vtuSchema/types";
 import type { VtuReversalReason } from "./vtuSchema/types";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { sanitizeForLog } from "./vtuShared";
-import type { VtuTransactionStatus } from "./vtuShared";
+import type { VtuServiceType, VtuTransactionStatus } from "./vtuShared";
 import {
   isValidRequestId,
   maskIdentifier,
   parseServiceCode,
-  validatePhone,
+  validateCustomerIdentifier,
   vtuLedgerPurchaseKey,
   vtuPurchaseKey,
   vtuRefundKey,
@@ -180,6 +181,10 @@ export type BeginPurchaseResult =
       routedProvider: string;
       routedProviderProductCode: string;
       routedProviderPackageCode: string | null;
+      /** The CATALOG's own service type — schema-validated, and the value the
+       *  adapter is told. Read from the product rather than re-derived from
+       *  the service code, so the two can never disagree at the wire. */
+      serviceType: VtuServiceType;
     };
 
 /**
@@ -238,8 +243,11 @@ export const beginPurchase = internalMutation({
     const parsed = parseServiceCode(args.serviceCode);
     if (!parsed) throw new Error("Unsupported product");
 
-    const phone = validatePhone(args.customerIdentifier);
-    if (!phone.ok) throw new Error(phone.error);
+    // Per SERVICE TYPE, not per phone: an electricity purchase carries a meter
+    // number and a cable purchase a smartcard number, and the rules for each
+    // are different enough that one validator could not serve them all.
+    const identity = validateCustomerIdentifier(parsed.serviceType, args.customerIdentifier);
+    if (!identity.ok) throw new Error(identity.error);
 
     if (
       !(await consumeRateLimit(
@@ -290,11 +298,20 @@ export const beginPurchase = internalMutation({
     // `parseServiceCode` already enforced above, so nothing changes for
     // existing users — but a product that declares different bounds is now
     // actually held to them.
-    assertAmountInRange(route.product, parsed.amountNgn);
+    //
+    // A package product has NO amount to bound: the customer chose a plan and
+    // the plan carries the price. That direction is checked first, because a
+    // product configured to require an amount and addressed without one is a
+    // purchase we would otherwise price from nothing.
+    if (parsed.amountNgn !== null) {
+      assertAmountInRange(route.product, parsed.amountNgn);
+    } else if (route.product.requiresAmount) {
+      throw new Error("This product needs an amount. Choose one and try again.");
+    }
 
     const routedProviderProductCode = composeProviderProductCode(
       route.winner.providerProductCode,
-      parsed.amountNgn,
+      parsed.amountNgn ?? undefined,
     );
 
     // 4. Claim the key. Rolls back with everything below on throw.
@@ -306,13 +323,25 @@ export const beginPurchase = internalMutation({
       createdAt: now,
     });
 
+    // What this purchase costs in naira. For an amount-priced product it is
+    // the amount the customer chose; for a fixed package it is the catalog's
+    // own price — the provider's, synced from its package list. A product with
+    // NEITHER cannot be priced at all, and that is a configuration fault the
+    // purchase must fail on BEFORE the debit rather than guess around.
+    const nairaPrice = parsed.amountNgn ?? route.product.priceNgn;
+    if (nairaPrice === undefined || !(nairaPrice > 0)) {
+      throw new Error(
+        "This product has no price configured. An administrator needs to set one.",
+      );
+    }
+
     // The ONE cost function. Level 1 (this route's override) is only
     // consulted because a route exists; see `resolvePointsCost`.
     const { points, ngnPerPoint } = await resolvePointsCost(ctx, {
       productCode: route.winner.productCode,
       serviceCode: args.serviceCode,
       provider: route.winner.provider,
-      nairaPrice: parsed.amountNgn,
+      nairaPrice,
     });
 
     // 5. Insert the transaction FIRST, so the debit can be keyed on its id.
@@ -334,10 +363,10 @@ export const beginPurchase = internalMutation({
       routedProviderPackageCode: route.winner.providerPackageCode ?? undefined,
       provider: route.winner.provider,
       status: "pending",
-      customerIdentifier: maskIdentifier(phone.value),
+      customerIdentifier: maskIdentifier(identity.value),
       network: parsed.network,
-      amountNgn: parsed.amountNgn,
-      nairaPrice: parsed.amountNgn,
+      amountNgn: parsed.amountNgn ?? undefined,
+      nairaPrice,
       ngnPerPoint,
       pointsDebited: points,
       idempotencyKey: key,
@@ -350,14 +379,14 @@ export const beginPurchase = internalMutation({
       userId: args.userId,
       amount: points,
       type: "vtu_purchase",
-      description: `${args.serviceCode} for ${maskIdentifier(phone.value)}`,
+      description: `${args.serviceCode} for ${maskIdentifier(identity.value)}`,
       reference: route.winner.provider,
       idempotencyKey: vtuLedgerPurchaseKey(transactionId),
       metadata: {
         clientRequestId: args.clientRequestId,
         serviceCode: args.serviceCode,
-        customerIdentifier: maskIdentifier(phone.value),
-        nairaPrice: parsed.amountNgn,
+        customerIdentifier: maskIdentifier(identity.value),
+        nairaPrice,
         ngnPerPoint,
         transactionId,
       },
@@ -375,6 +404,7 @@ export const beginPurchase = internalMutation({
       routedProvider: route.winner.provider,
       routedProviderProductCode,
       routedProviderPackageCode: route.winner.providerPackageCode,
+      serviceType: route.product.serviceType,
     };
   },
 });
@@ -461,7 +491,7 @@ export type SettleResult =
  * THE single writer of every terminal transaction status.
  *
  * Before this mutation there were two writers of a terminal status — the
- * synchronous provider response in `purchaseAirtime` and the webhook handler in
+ * synchronous provider response in `purchaseVtu` and the webhook handler in
  * `applyCallback` — and slice 5 adds a third (the reconciliation sweep). Three
  * writers of one state is a race, and the race is not theoretical: a webhook
  * that lands in the same tick as a sweep's verdict would double-credit the
@@ -500,6 +530,10 @@ export const settleTransaction = internalMutation({
         status: v.literal("confirmed"),
         providerReference: v.optional(v.string()),
         costNgn: v.optional(v.number()),
+        /** What the customer needs from a delivered purchase (a meter token,
+         *  a serial, a PIN). Absent for everything that delivers nothing of
+         *  the kind. */
+        delivery: v.optional(vtuDeliveryValidator),
         raw: v.optional(v.any()),
       }),
       // Definitively rejected or cancelled. Reverses in this same mutation,
@@ -563,6 +597,13 @@ export const settleTransaction = internalMutation({
         status: "confirmed",
         providerReference: verdict.providerReference ?? tx.providerReference,
         ...(verdict.costNgn !== undefined ? { nairaPrice: verdict.costNgn } : {}),
+        // MERGED, never replaced with nothing: a webhook that confirms without
+        // repeating the token must not erase the token an earlier response
+        // already delivered. Field-wise merge, so a partial update adds its
+        // own values and leaves the rest intact.
+        ...(verdict.delivery
+          ? { delivery: { ...(tx.delivery ?? {}), ...verdict.delivery } }
+          : {}),
         source: args.source,
         failureReason: undefined,
         failureCode: undefined,
@@ -877,6 +918,10 @@ export const getTransaction = query({
       ngnPerPoint: tx.ngnPerPoint,
       pointsDebited: tx.pointsDebited,
       providerReference: tx.providerReference ?? null,
+      // For prepaid electricity the token IS the delivery, so the page that
+      // just bought it must be able to show it without a round trip to the
+      // history list.
+      delivery: tx.delivery ?? null,
       failureReason: tx.failureReason ?? null,
       createdAt: tx.createdAt,
       updatedAt: tx.updatedAt,

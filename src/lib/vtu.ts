@@ -253,18 +253,119 @@ export function airtimeServiceCode(network: string, amountNgn: number): string {
   return `airtime.${net}.${amountNgn}`;
 }
 
-/** Parse "airtime.mtn.1000" back into its parts, or null if unrecognised. */
-export function parseServiceCode(
-  serviceCode: string,
-): { serviceType: string; network: string; amountNgn: number } | null {
+/**
+ * Placeholder an amount-priced service code carries where the amount goes.
+ *
+ * `airtime.mtn.{amount}` is a TEMPLATE; `airtime.mtn.1000` is a purchase. The
+ * catalog stores the template (or composes one), the purchase page fills it,
+ * and the routing table's `providerProductCode` uses the same token for the
+ * provider's own product string.
+ */
+export const AMOUNT_TOKEN = "{amount}";
+
+/**
+ * The parts of a service code: `<serviceType>.<network>.<tail>`.
+ *
+ * Exactly one of `amountNgn` / `packageSlug` is non-null, and WHICH ONE is the
+ * shape of the product:
+ *
+ *   amount   `airtime.mtn.1000`, `electricity.ikeja-electric.5000`
+ *   package  `data.mtn.1gb-30-days`, `cable.dstv.compact`
+ *
+ * A numeric tail is an amount, anything else is a package slug. The tail is
+ * never ambiguous — a slug cannot be all digits — so the grammar stays
+ * readable without a discriminator byte.
+ */
+export type ParsedServiceCode = {
+  serviceType: string;
+  /** Airtime network, data network, cable provider, or electricity disco. */
+  network: string;
+  /** The face value the customer chose. Null for fixed-package products. */
+  amountNgn: number | null;
+  /** The plan/bouquet the customer chose. Null for amount-priced products. */
+  packageSlug: string | null;
+};
+
+/** One code segment: lowercase, hyphenated, no dots. */
+const CODE_PART = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
+/**
+ * Parse a service code back into its parts, or null if unrecognised.
+ *
+ * THE CATALOG DECIDES WHAT EXISTS. This checks the SHAPE and nothing else:
+ * whether `electricity.ikeja-electric.5000` can actually be bought is answered
+ * by looking its product up in `vtuServiceCatalog`, not here. That is what
+ * lets an operator add a disco, a biller, or a data plan with no deploy.
+ *
+ * Airtime is the one exception, and deliberately: its four networks are a
+ * closed set the platform has always enforced in code, and the airtime page
+ * offers them from this same array. Its amount bounds stay in code too,
+ * because they predate the catalog and every other product's live on its own
+ * row.
+ */
+export function parseServiceCode(serviceCode: string): ParsedServiceCode | null {
   const parts = (serviceCode ?? "").split(".");
-  if (parts.length !== 3 || parts[0] !== "airtime") return null;
-  if (!(AIRTIME_NETWORKS as readonly string[]).includes(parts[1])) return null;
-  const amountNgn = Number(parts[2]);
-  if (!Number.isInteger(amountNgn) || amountNgn < 100 || amountNgn > 100_000) {
+  if (parts.length !== 3) return null;
+  const [serviceType, network, tail] = parts;
+  if (!CODE_PART.test(serviceType) || !CODE_PART.test(network)) return null;
+  if (
+    serviceType === "airtime" &&
+    !(AIRTIME_NETWORKS as readonly string[]).includes(network)
+  ) {
     return null;
   }
-  return { serviceType: "airtime", network: parts[1], amountNgn };
+
+  if (/^\d+$/.test(tail)) {
+    const amountNgn = Number(tail);
+    if (!Number.isInteger(amountNgn)) return null;
+    if (
+      serviceType === "airtime" &&
+      (amountNgn < 100 || amountNgn > 100_000)
+    ) {
+      return null;
+    }
+    return { serviceType, network, amountNgn, packageSlug: null };
+  }
+
+  if (!CODE_PART.test(tail)) return null;
+  return { serviceType, network, amountNgn: null, packageSlug: tail };
+}
+
+/**
+ * The code a purchase of this catalog row is addressed by.
+ *
+ * The inverse of the mapping `canonicalProductCode` performs, and it lives
+ * here beside the parser so the two can only disagree in one file.
+ *
+ *   amount-priced   `electricity-ikeja-electric` → `electricity.ikeja-electric.{amount}`
+ *   package-priced  `data-mtn-1gb-30-days`        → `data.mtn.1gb-30-days`
+ *
+ * For a package product the split between network and slug is the FIRST
+ * hyphen, and that is safe for exactly one reason: the two halves are joined
+ * back with the same hyphen by `canonicalProductCode`, so the round trip is
+ * exact even when either half contains hyphens of its own. Null when the row's
+ * own code does not carry its service type, which is a configuration fault the
+ * caller must surface rather than paper over.
+ */
+export function serviceCodeForProduct(product: {
+  serviceType: string;
+  productCode: string;
+  requiresAmount: boolean;
+}): string | null {
+  const prefix = `${product.serviceType}-`;
+  if (!product.productCode.startsWith(prefix)) return null;
+  const rest = product.productCode.slice(prefix.length);
+  if (!CODE_PART.test(rest)) return null;
+
+  if (product.requiresAmount) {
+    return `${product.serviceType}.${rest}.${AMOUNT_TOKEN}`;
+  }
+
+  const [host, ...slugParts] = rest.split("-");
+  if (!host || slugParts.length === 0) return null;
+  const slug = slugParts.join("-");
+  if (!CODE_PART.test(host) || !CODE_PART.test(slug)) return null;
+  return `${product.serviceType}.${host}.${slug}`;
 }
 
 /**
@@ -297,8 +398,14 @@ export const AIRTIME_NETWORK_LABELS: Record<string, string> = {
 export function vtuServiceCodeLabel(serviceCode: string): string {
   const parsed = parseServiceCode(serviceCode);
   if (!parsed) return serviceCode;
-  const network = AIRTIME_NETWORK_LABELS[parsed.network] ?? parsed.network;
-  return `${network} airtime`;
+  const host = AIRTIME_NETWORK_LABELS[parsed.network] ?? parsed.network;
+  // The TYPE's own label, not a hard-coded "airtime": this fallback is now
+  // reached for every service type, and one that called a meter top-up
+  // airtime would be worse than showing the raw code.
+  const type = (
+    VTU_SERVICE_TYPE_COPY[parsed.serviceType]?.label ?? parsed.serviceType
+  ).toLowerCase();
+  return `${host} ${type}`;
 }
 
 /** Validate a Nigerian mobile number. Stored masked — see maskIdentifier. */

@@ -53,6 +53,27 @@ export const vtuServiceTypeValidator = v.union(
 );
 
 /**
+ * What a provider DELIVERED, when the customer needs it rather than us.
+ *
+ * Only one class of purchase has these: a prepaid meter returns a token and
+ * its units, and an internet/e-pin product returns a serial or a PIN. They are
+ * provider-agnostic names on purpose — an adapter maps its vendor's field
+ * names onto these, and nothing above the adapter learns a vendor's
+ * vocabulary.
+ *
+ * Every field is optional: most purchases deliver nothing of the kind, and a
+ * transaction with no `delivery` at all is the normal case rather than a gap.
+ */
+export const vtuDeliveryValidator = v.object({
+  token: v.optional(v.string()),
+  units: v.optional(v.string()),
+  serial: v.optional(v.string()),
+  pin: v.optional(v.string()),
+  expires: v.optional(v.string()),
+});
+export type VtuDelivery = Infer<typeof vtuDeliveryValidator>;
+
+/**
  * VTU transaction lifecycle.
  *
  * `unknown` is a REAL status, not a placeholder for `pending`. "We asked and

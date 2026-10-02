@@ -172,7 +172,7 @@ const firstTransaction = (t: Harness) =>
   t.run(async (ctx) => ctx.db.query("vtuTransactions").first());
 
 const buy = (t: Harness, userId: any, requestId: string) =>
-  t.withIdentity({ subject: userId }).action(api.vtuHttp.purchaseAirtime, {
+  t.withIdentity({ subject: userId }).action(api.vtuHttp.purchaseVtu, {
     clientRequestId: requestId,
     serviceCode: "airtime.mtn.1000",
     customerIdentifier: "08031234567",

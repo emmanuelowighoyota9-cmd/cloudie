@@ -68,6 +68,21 @@ export const vtuCatalogTables = {
     requiresPackageCode: v.boolean(),
     minAmount: v.optional(v.number()),
     maxAmount: v.optional(v.number()),
+    /**
+     * What the provider charges for ONE of these, in naira, when the price is
+     * FIXED.
+     *
+     * Only fixed-package products carry it — a data plan, a cable bouquet —
+     * because their price is the provider's and the customer never chooses it.
+     * An amount-priced product (airtime, electricity) leaves this absent: its
+     * naira price IS the amount the customer typed, so a value here would be
+     * dead weight that could drift from `minAmount`/`maxAmount`.
+     *
+     * This is the naira the ledger's rate snapshot is built from, so it is the
+     * one number that decides what the customer is charged in points. The
+     * catalog sync fills it from the provider's own package list.
+     */
+    priceNgn: v.optional(v.number()),
     active: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),

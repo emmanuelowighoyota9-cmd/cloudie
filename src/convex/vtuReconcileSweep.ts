@@ -351,6 +351,11 @@ async function sweepProvider(
               status: "confirmed",
               providerReference: outcome.providerReference,
               costNgn: outcome.costNgn,
+              // The poll is the LAST chance to capture a meter token: a
+              // webhook that never arrived cannot deliver it, and a confirmed
+              // electricity purchase without its token is a charge the
+              // customer cannot use.
+              ...(outcome.delivery ? { delivery: outcome.delivery } : {}),
               raw: outcome.raw,
             }
           : {

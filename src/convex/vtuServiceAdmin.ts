@@ -59,6 +59,7 @@ export const listProducts = query({
       requiresPackageCode: p.requiresPackageCode,
       minAmount: p.minAmount ?? null,
       maxAmount: p.maxAmount ?? null,
+      priceNgn: p.priceNgn ?? null,
       active: p.active,
       activeRouteCount: counts.get(p.productCode) ?? 0,
       createdAt: p.createdAt,
@@ -168,6 +169,10 @@ export const createProduct = mutation({
     requiresPackageCode: v.boolean(),
     minAmount: v.optional(v.number()),
     maxAmount: v.optional(v.number()),
+    /** The provider's fixed price for ONE of these, in naira. Required in
+     *  practice for a product the customer does not price — a data plan or a
+     *  cable bouquet — because the purchase has no amount to fall back on. */
+    priceNgn: v.optional(v.number()),
   },
   handler: async (ctx, args): Promise<Id<"vtuServiceCatalog">> => {
     const { adminId } = await requireAdmin(ctx);
@@ -198,6 +203,7 @@ export const createProduct = mutation({
       requiresPackageCode: args.requiresPackageCode,
       minAmount: args.minAmount,
       maxAmount: args.maxAmount,
+      priceNgn: args.priceNgn,
       active: true,
       createdAt: now,
       updatedAt: now,
@@ -222,6 +228,7 @@ export const updateProduct = mutation({
     requiresPackageCode: v.optional(v.boolean()),
     minAmount: v.optional(v.number()),
     maxAmount: v.optional(v.number()),
+    priceNgn: v.optional(v.number()),
     active: v.optional(v.boolean()),
   },
   handler: async (ctx, args): Promise<{ updated: boolean }> => {
@@ -243,6 +250,7 @@ export const updateProduct = mutation({
     }
     if (args.minAmount !== undefined) patch.minAmount = args.minAmount;
     if (args.maxAmount !== undefined) patch.maxAmount = args.maxAmount;
+    if (args.priceNgn !== undefined) patch.priceNgn = args.priceNgn;
     if (args.active !== undefined) patch.active = args.active;
 
     await ctx.db.patch(row._id, patch);

@@ -19,7 +19,7 @@
 
 import type { Doc } from "./_generated/dataModel";
 import { readPointRate } from "./pricing";
-import { parseServiceCode, resolveVtuPointsCost } from "../lib/vtu";
+import { AMOUNT_TOKEN, parseServiceCode, resolveVtuPointsCost } from "../lib/vtu";
 
 /**
  * The only database capability these functions need.
@@ -71,7 +71,12 @@ export type RoutingReader = {
 export function canonicalProductCode(serviceCode: string): string | null {
   const parsed = parseServiceCode(serviceCode);
   if (!parsed) return null;
-  return `${parsed.serviceType}-${parsed.network.trim().toLowerCase()}`;
+  const host = `${parsed.serviceType}-${parsed.network}`;
+  // A package product's canonical id carries the plan as well: every data
+  // plan and every bouquet is its OWN product, so it can be priced and routed
+  // independently. An amount-priced product (airtime, electricity) stops at
+  // the host, because its size is a purchase-time input rather than a product.
+  return parsed.packageSlug ? `${host}-${parsed.packageSlug}` : host;
 }
 
 /**
@@ -109,8 +114,12 @@ export const ROUTE_MESSAGES: Record<RouteErrorCode, string> = {
  * This is a PLATFORM convention, not a provider quirk: every aggregator wants
  * the amount, and none of them want it spelled the same way. What the provider
  * does with it stays inside the adapter.
+ *
+ * Declared in `../lib/vtu` and re-exported here, so the service-code parser,
+ * the catalog's purchase template and this routing rule spell the placeholder
+ * from ONE declaration.
  */
-export const AMOUNT_TOKEN = "{amount}";
+export { AMOUNT_TOKEN };
 
 /**
  * Fill `{amount}` into a routed provider product code.

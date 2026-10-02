@@ -95,7 +95,7 @@ async function resolveCall(
   // typed code on a path that has spent nothing yet.
   //
   // That placement is what makes the failure cheap:
-  //   purchase  -> `purchaseAirtime` has already reserved and debited, and its
+  //   purchase  -> `purchaseVtu` has already reserved and debited, and its
   //                `fail()` path settles and refunds, so the points come back
   //                in the same action instead of stranding in `pending`;
   //   reconcile -> the sweep escalates without consuming a rate-limited call;

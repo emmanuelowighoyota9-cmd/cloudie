@@ -90,6 +90,9 @@ describe("airtime service codes", () => {
       serviceType: "airtime",
       network: "mtn",
       amountNgn: 1000,
+      // Null because an amount code addresses the HOST product; a package
+      // code is the member of the pair that carries a slug instead.
+      packageSlug: null,
     });
   });
 
@@ -100,9 +103,41 @@ describe("airtime service codes", () => {
   });
 
   test("parses unknown shapes to null rather than guessing", () => {
-    expect(parseServiceCode("data.mtn.1")).toBeNull();
+    // Airtime's four networks are still a closed set enforced in code.
     expect(parseServiceCode("airtime.vodafone.1000")).toBeNull();
     expect(parseServiceCode("")).toBeNull();
+    // Wrong arity, an empty segment, and a negative amount are all shapes the
+    // grammar does not have.
+    expect(parseServiceCode("airtime.mtn")).toBeNull();
+    expect(parseServiceCode("airtime..1000")).toBeNull();
+    expect(parseServiceCode("airtime.mtn.-100")).toBeNull();
+  });
+
+  test("a non-airtime type parses by shape, and the CATALOG decides what exists", () => {
+    // Shape, not existence: `data.mtn.1` is a well-formed amount code for a
+    // product the catalog may or may not carry, and refusal happens at the
+    // product lookup rather than here. That is what lets an operator add a
+    // disco or a biller without a deploy.
+    expect(parseServiceCode("data.mtn.1")).toEqual({
+      serviceType: "data",
+      network: "mtn",
+      amountNgn: 1,
+      packageSlug: null,
+    });
+    // A non-numeric tail is a PACKAGE, which is how a data plan or a cable
+    // bouquet is addressed.
+    expect(parseServiceCode("cable.dstv.compact")).toEqual({
+      serviceType: "cable",
+      network: "dstv",
+      amountNgn: null,
+      packageSlug: "compact",
+    });
+    expect(parseServiceCode("electricity.ikeja-electric.5000")).toEqual({
+      serviceType: "electricity",
+      network: "ikeja-electric",
+      amountNgn: 5000,
+      packageSlug: null,
+    });
   });
 });
 

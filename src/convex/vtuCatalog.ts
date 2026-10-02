@@ -25,10 +25,20 @@
  */
 
 import { query } from "./_generated/server";
+import { v } from "convex/values";
 import { VTU_SERVICE_TYPES, type VtuServiceType } from "./vtuSchema/types";
-import { resolvePointsCost, routeProduct } from "./vtuServiceRouting";
+import {
+  canonicalProductCode,
+  resolvePointsCost,
+  routeProduct,
+} from "./vtuServiceRouting";
 import { readPointRate } from "./pricing";
-import { AIRTIME_NETWORKS, pointsForNaira } from "../lib/vtu";
+import {
+  AIRTIME_NETWORKS,
+  AMOUNT_TOKEN,
+  pointsForNaira,
+  serviceCodeForProduct,
+} from "../lib/vtu";
 
 /**
  * Cost ceiling on one browse subscription.
@@ -108,7 +118,25 @@ export const listCatalog = query({
             : null;
 
         const route = await routeProduct(ctx, product.productCode);
-        const purchasable = route.ok && network !== null && product.requiresAmount === true;
+
+        // Purchasable means three things, and the third is the one that keeps
+        // a card honest: a route can serve it, its shape is fully configured,
+        // AND the address a customer would use maps back to this very row.
+        // That last check catches a hand-made product whose code cannot
+        // round-trip — an airtime row on a network the parser rejects, say —
+        // and refuses it here rather than after the customer has clicked.
+        const template = serviceCodeForProduct(product);
+        const probe = template?.replace(AMOUNT_TOKEN, "100") ?? null;
+        const addressResolves =
+          probe !== null && canonicalProductCode(probe) === product.productCode;
+        const fixedPrice = typeof product.priceNgn === "number" && product.priceNgn > 0;
+        const shapeOk = product.requiresAmount
+          ? typeof product.minAmount === "number" &&
+            typeof product.maxAmount === "number" &&
+            product.minAmount > 0 &&
+            product.maxAmount >= product.minAmount
+          : fixedPrice;
+        const purchasable = route.ok && addressResolves && shapeOk;
 
         let fixedPoints: number | null = null;
         let priceResolved = false;
@@ -126,11 +154,18 @@ export const listCatalog = query({
             productCode: product.productCode,
             serviceCode: product.productCode,
             provider: route.winner.provider,
-            // Only ever read by the conversion branch, which we discard; the
-            // floor keeps `pointsForNaira` from throwing on a bound-less row.
-            nairaPrice: Math.max(product.minAmount ?? 1, 1),
+            // For an amount-priced product this is the conversion branch's
+            // floor (a bound-less row must not throw) and the number it
+            // produces is discarded. For a fixed-price product it is the real
+            // price, and the row below keeps the result.
+            nairaPrice: product.requiresAmount
+              ? Math.max(product.minAmount ?? 1, 1)
+              : product.priceNgn ?? 1,
           });
           if (cost.source === "routing_override") fixedPoints = cost.points;
+          // A fixed price converts EXACTLY: the naira number is not a customer
+          // input, so what the catalog shows is what the checkout charges.
+          else if (!product.requiresAmount && fixedPrice) fixedPoints = cost.points;
         }
 
         // The indicative range is only meaningful when the product actually
@@ -167,5 +202,94 @@ export const listCatalog = query({
     }
 
     return { ngnPerPoint: rate.ngnPerPoint, groups };
+  },
+});
+
+/** Everything a purchase page needs for ONE product. */
+export interface PurchaseDetailView {
+  productCode: string;
+  displayName: string;
+  serviceType: VtuServiceType;
+  customerIdentifierLabel: string;
+  requiresAmount: boolean;
+  minAmount: number | null;
+  maxAmount: number | null;
+  /** Points per naira, so an amount the customer types can be priced through
+   *  `api.vtu.previewCost` without a second configuration read. */
+  ngnPerPoint: number;
+  /** Exact points for a fixed-price product; null for an amount-priced one,
+   *  whose price follows whatever the customer types. */
+  fixedPoints: number | null;
+  /**
+   * The code to buy with. `{amount}` is the placeholder for the customer's own
+   * number, and its spelling is sent as `amountToken` rather than assumed by
+   * the client.
+   */
+  serviceCodeTemplate: string;
+  amountToken: string;
+  /** The provider's naira price, for fixed-price products. */
+  priceNgn: number | null;
+  /** False when no provider can serve it right now — the page refuses before
+   *  collecting a number rather than after. */
+  providerAvailable: boolean;
+}
+
+/**
+ * One product's purchase details.
+ *
+ * PUBLIC, and deliberately: a customer must be able to see what something
+ * costs before buying it. It discloses no provider — the route is read to
+ * resolve a price and a feasibility flag, and only scalars leave this
+ * function.
+ *
+ * The numbers come from the SAME resolver the purchase runs, so the page shows
+ * what the server will charge rather than a second opinion about it. Null when
+ * the product does not exist, is inactive, or cannot be addressed at all.
+ */
+export const getPurchaseDetail = query({
+  args: { productCode: v.string() },
+  handler: async (ctx, args): Promise<PurchaseDetailView | null> => {
+    const product = await ctx.db
+      .query("vtuServiceCatalog")
+      .withIndex("by_productCode", (q) => q.eq("productCode", args.productCode))
+      .unique();
+    if (!product || product.active !== true) return null;
+
+    const template = serviceCodeForProduct(product);
+    if (!template) return null;
+
+    const route = await routeProduct(ctx, product.productCode);
+    const rate = await readPointRate(ctx);
+    const fixedPrice = typeof product.priceNgn === "number" && product.priceNgn > 0;
+
+    let fixedPoints: number | null = null;
+    if (route.ok) {
+      const cost = await resolvePointsCost(ctx, {
+        productCode: product.productCode,
+        serviceCode: product.productCode,
+        provider: route.winner.provider,
+        nairaPrice: product.requiresAmount
+          ? Math.max(product.minAmount ?? 1, 1)
+          : product.priceNgn ?? 1,
+      });
+      if (cost.source === "routing_override") fixedPoints = cost.points;
+      else if (!product.requiresAmount && fixedPrice) fixedPoints = cost.points;
+    }
+
+    return {
+      productCode: product.productCode,
+      displayName: product.displayName,
+      serviceType: product.serviceType,
+      customerIdentifierLabel: product.customerIdentifierLabel,
+      requiresAmount: product.requiresAmount,
+      minAmount: typeof product.minAmount === "number" ? product.minAmount : null,
+      maxAmount: typeof product.maxAmount === "number" ? product.maxAmount : null,
+      ngnPerPoint: rate.ngnPerPoint,
+      fixedPoints,
+      serviceCodeTemplate: template,
+      amountToken: AMOUNT_TOKEN,
+      priceNgn: typeof product.priceNgn === "number" ? product.priceNgn : null,
+      providerAvailable: route.ok,
+    };
   },
 });

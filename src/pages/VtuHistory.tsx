@@ -303,6 +303,31 @@ function HistoryRow({
             />
           </dl>
 
+          {tx.delivery?.token && (
+            // The token IS the delivery for a prepaid meter: showing the
+            // status without it would report a success the customer cannot
+            // use. Rendered only when the provider actually delivered one.
+            <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                Token
+              </p>
+              <p className="break-anywhere mt-0.5 font-mono text-sm font-medium">
+                {tx.delivery.token}
+              </p>
+              {(tx.delivery.units || tx.delivery.serial || tx.delivery.pin) && (
+                <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                  {[
+                    tx.delivery.units ? `${tx.delivery.units} units` : null,
+                    tx.delivery.serial ? `Serial ${tx.delivery.serial}` : null,
+                    tx.delivery.pin ? `PIN ${tx.delivery.pin}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {reason && (
             <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
               {reason}

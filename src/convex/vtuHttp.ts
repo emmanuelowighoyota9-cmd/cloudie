@@ -17,12 +17,19 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { openForPurchase, openForVerification } from "./vtuProviderCall";
-import { isValidRequestId, parseServiceCode, validatePhone } from "../lib/vtu";
+import { vtuDeliveryValidator } from "./vtuSchema/types";
+import type { VtuDelivery } from "./vtuSchema/types";
+import {
+  isValidRequestId,
+  parseServiceCode,
+  validateCustomerIdentifier,
+} from "../lib/vtu";
 import type {
   ProviderCallOptions,
   ProviderPurchaseRequest,
   ProviderPurchaseResult,
   VtuProviderAdapter,
+  VtuServiceType,
 } from "./vtuShared";
 
 /**
@@ -81,6 +88,9 @@ export interface CallbackVerification {
     code?: string;
     message?: string;
     failureKind?: "rejected" | "cancelled";
+    /** What the customer needs from a delivered purchase — a meter token and
+     *  its units. Absent on every callback that delivers nothing of the kind. */
+    delivery?: VtuDelivery;
     eventId?: string;
   };
 }
@@ -119,14 +129,20 @@ async function callPurchase(
 }
 
 /**
- * Drive one airtime purchase: reserve, mark processing, call the provider,
- * record the outcome, and refund on a definitive failure.
+ * Drive one VTU purchase — airtime, data, cable, or electricity: reserve, mark
+ * processing, call the provider, record the outcome, and refund on a
+ * definitive failure.
+ *
+ * ONE action for every service type. What varies between them is the service
+ * code's shape and the destination-number rules, and both are decided by data
+ * (the catalog row and the per-type validator) rather than by a branch here —
+ * which is why adding a fifth service type needs no change to the money path.
  *
  * Note the return value is NOT a success signal. It reports what the record
  * says; the page renders that through a subscription, because a transport
  * timeout legitimately leaves the transaction in `unknown`.
  */
-export const purchaseAirtime = action({
+export const purchaseVtu = action({
   args: {
     clientRequestId: v.string(),
     serviceCode: v.string(),
@@ -141,8 +157,11 @@ export const purchaseAirtime = action({
 
     const parsed = parseServiceCode(args.serviceCode);
     if (!parsed) throw new Error("Unsupported product");
-    const phone = validatePhone(args.customerIdentifier);
-    if (!phone.ok) throw new Error(phone.error);
+    // Per service type: a phone for airtime/data, a smartcard for cable, a
+    // meter for electricity. Checked here so a malformed destination never
+    // reaches the reservation, and again in the mutation that owns the write.
+    const identity = validateCustomerIdentifier(parsed.serviceType, args.customerIdentifier);
+    if (!identity.ok) throw new Error(identity.error);
 
     // 1. Reserve: ROUTING, idempotency, rate limit, price, and the ledger
     //    debit, all in one mutation. A routing failure throws before the
@@ -162,13 +181,15 @@ export const purchaseAirtime = action({
           routedProvider: string;
           routedProviderProductCode: string;
           routedProviderPackageCode: string | null;
+          /** The catalog's schema-validated type, passed to the adapter. */
+          serviceType: VtuServiceType;
         };
     try {
       reserved = await ctx.runMutation(internal.vtuInternal.beginPurchase, {
         userId,
         clientRequestId: args.clientRequestId,
         serviceCode: args.serviceCode,
-        customerIdentifier: phone.value,
+        customerIdentifier: identity.value,
       });
     } catch (e) {
       // Checked STRUCTURALLY, not with `instanceof`: Convex serialises a
@@ -257,18 +278,21 @@ export const purchaseAirtime = action({
         // that needs a never-repeating upstream `ref` gets one. The logical
         // id above is what the CLIENT retries with.
         attemptId: transactionId,
-        serviceType: "airtime",
+        // The catalog's own service type, carried through the reservation.
+        // Never re-derived here: an adapter must be told the same type the
+        // routed product was configured with.
+        serviceType: reserved.serviceType,
         // The PROVIDER's product code, from the route — not our service code.
         // This is the single translation point between the two namespaces.
         productCode: reserved.routedProviderProductCode,
         // The face value, for an aggregator whose purchase endpoint takes the
         // size as its own number rather than inside the product code (AidaPay).
         // Pairgate ignores this — its code already carries `{amount}`.
-        ...(parsed.amountNgn !== undefined ? { amountNgn: parsed.amountNgn } : {}),
+        ...(parsed.amountNgn !== null ? { amountNgn: parsed.amountNgn } : {}),
         ...(reserved.routedProviderPackageCode
           ? { providerPackageCode: reserved.routedProviderPackageCode }
           : {}),
-        customerIdentifier: phone.value,
+        customerIdentifier: identity.value,
         network: parsed.network,
       },
       call.opts,
@@ -306,6 +330,10 @@ export const purchaseAirtime = action({
               status: "confirmed",
               providerReference: outcome.providerReference,
               costNgn: outcome.costNgn,
+              // A synced success can already carry the token — the buy call is
+              // where a meter token arrives when the provider answers inline
+              // rather than by webhook.
+              ...(outcome.delivery ? { delivery: outcome.delivery } : {}),
               raw: outcome.raw,
             }
           : {
@@ -426,6 +454,7 @@ export const verifyCallback = internalAction({
         code: event.code,
         message: event.message,
         failureKind: event.failureKind,
+        ...(event.delivery ? { delivery: event.delivery } : {}),
         eventId: event.eventId,
       },
     };
@@ -457,6 +486,7 @@ export const applyCallback = internalAction({
       code: v.optional(v.string()),
       message: v.optional(v.string()),
       failureKind: v.optional(v.union(v.literal("rejected"), v.literal("cancelled"))),
+      delivery: v.optional(vtuDeliveryValidator),
       eventId: v.optional(v.string()),
     }),
   },
@@ -488,6 +518,10 @@ export const applyCallback = internalAction({
               status: "confirmed",
               providerReference: args.event.providerReference,
               costNgn: args.event.costNgn,
+              // Carried straight to the row: for prepaid electricity the token
+              // IS the delivery, and dropping it here would confirm a purchase
+              // the customer cannot use.
+              ...(args.event.delivery ? { delivery: args.event.delivery } : {}),
               raw: { via: "webhook", eventId: args.event.eventId ?? null },
             }
           : {

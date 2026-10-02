@@ -14,6 +14,7 @@
 import { v } from "convex/values";
 import { defineTable } from "convex/server";
 import {
+  vtuDeliveryValidator,
   vtuReversalReasonValidator,
   vtuTransactionStatusValidator,
   vtuUnresolvedReasonValidator,
@@ -61,6 +62,15 @@ export const vtuLedgerTables = {
     customerIdentifier: v.string(),
     network: v.optional(v.string()),
     amountNgn: v.optional(v.number()),
+    /**
+     * What the provider delivered, when the CUSTOMER needs it: a prepaid meter
+     * token and its units, a serial, a PIN.
+     *
+     * Written by whichever path carries the value — the dispatch response, a
+     * webhook, or a reconciliation poll — and never overwritten with nothing,
+     * so a later status update cannot erase the token an earlier one supplied.
+     */
+    delivery: v.optional(vtuDeliveryValidator),
 
     // ── Rate snapshot, frozen at debit time ──────────────────────
     // These make a historical transaction auditable after the rate moves.
