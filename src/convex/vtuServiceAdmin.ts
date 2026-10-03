@@ -19,6 +19,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { auditLog, requireAdmin } from "./adminApi";
 import { VTU_SERVICE_TYPES } from "./schema";
 import { resolvePointsCost, routeProduct } from "./vtuServiceRouting";
+import {
+  AIRTIME_SEED_PROVIDER_CODES,
+  airtimeSeedProducts,
+  airtimeSeedRoutes,
+} from "../lib/vtuCatalogSeed";
 
 const serviceTypeValidator = v.union(
   ...VTU_SERVICE_TYPES.map((s) => v.literal(s)),
@@ -529,5 +534,118 @@ export const migrateVtuServiceCatalog = mutation({
     });
 
     return { action, productCode: SEED_PRODUCT_CODE, provider: SEED_PROVIDER };
+  },
+});
+
+/**
+ * Seed the four airtime networks, routed to whichever providers are CONFIGURED.
+ *
+ * The difference from `migrateVtuServiceCatalog` above is the whole point of
+ * this function, so it is worth stating plainly. That migration reproduces the
+ * slice-1 state exactly: ONE product, and one route to `pairgate` — and it
+ * refuses to write anything at all unless a `pairgate` provider row exists. On
+ * an AidaPay-only deployment it therefore always returned `blocked`, so the
+ * shop stayed permanently empty even with a live, tested provider behind it.
+ * It is left in place because it is what existing installations ran and its
+ * tests pin that behaviour.
+ *
+ * THIS one reads `vtuProviders` and seeds against what it actually finds.
+ * Properties, all of which matter:
+ *
+ *   - IDEMPOTENT. Only missing rows are inserted; a row an operator has edited
+ *     is never overwritten, so re-running cannot undo a re-pointed route.
+ *   - PROVIDER-AWARE. A network is routed for every configured provider this
+ *     seed knows a code convention for, so the live integration serves it and
+ *     the fallback stays available behind it.
+ *   - NO INVENTED IDS. A provider with no known convention is skipped, not
+ *     guessed at — a wrong `providerProductCode` fails only after a customer
+ *     has been charged, whereas a missing route fails closed and is already
+ *     flagged on the admin screen.
+ *   - AIRTIME ONLY. Data plans, bouquets and meter top-ups need the
+ *     provider's own package ids and prices; those stay a manual step
+ *     (`docs/vtu-slice-7.md` §6).
+ *
+ * Products are inserted even when no route could be written, because an active
+ * product with no route is a state the admin screen explains and an operator
+ * can fix, while an empty shop is a dead end with nothing pointing at the cause.
+ */
+export const seedAirtimeCatalog = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const { adminId } = await requireAdmin(ctx);
+    const now = Date.now();
+
+    const providers = await ctx.db.query("vtuProviders").take(100);
+    const providerNames = providers
+      .map((p) => p.name)
+      .filter((name) => name in AIRTIME_SEED_PROVIDER_CODES);
+
+    // Four indexed existence reads — one per network — rather than a scan of
+    // the catalog, and they are what make the seed non-destructive.
+    const products = airtimeSeedProducts();
+
+    let productsInserted = 0;
+    for (const product of products) {
+      if (await findProduct(ctx, product.productCode)) continue;
+      await ctx.db.insert("vtuServiceCatalog", {
+        serviceType: product.serviceType,
+        productCode: product.productCode,
+        displayName: product.displayName,
+        customerIdentifierLabel: product.customerIdentifierLabel,
+        requiresAmount: product.requiresAmount,
+        requiresPackageCode: product.requiresPackageCode,
+        minAmount: product.minAmount,
+        maxAmount: product.maxAmount,
+        active: product.active,
+        createdAt: now,
+        updatedAt: now,
+      });
+      productsInserted += 1;
+    }
+
+    let routesInserted = 0;
+    for (const route of airtimeSeedRoutes(providerNames)) {
+      if (await findRoute(ctx, route.productCode, route.provider)) continue;
+      await ctx.db.insert("vtuServiceRouting", {
+        productCode: route.productCode,
+        provider: route.provider,
+        providerProductCode: route.providerProductCode,
+        priority: route.priority,
+        active: route.active,
+        createdAt: now,
+        updatedAt: now,
+      });
+      routesInserted += 1;
+    }
+
+    const action = productsInserted + routesInserted === 0 ? ("noop" as const) : ("inserted" as const);
+
+    await auditLog(ctx, adminId, {
+      action: "vtu_airtime_catalog_seeded",
+      resource: "vtuServiceCatalog",
+      resourceId: "airtime-*",
+      after: {
+        productsInserted,
+        routesInserted,
+        providers: providerNames,
+      },
+      reason:
+        action === "noop"
+          ? "Airtime catalog already present; no changes made"
+          : `Seeded ${productsInserted} airtime product(s) and ${routesInserted} route(s) across ${providerNames.length} provider(s)`,
+    });
+
+    return {
+      action,
+      productsInserted,
+      routesInserted,
+      /** Providers that had a row, so the UI can name them back. */
+      routedProviders: providerNames,
+      /** Providers that have a row but no known code convention, named so the
+       *  operator is told WHICH ones need a hand-written route. */
+      unroutableProviders: providers
+        .map((p) => p.name)
+        .filter((name) => !(name in AIRTIME_SEED_PROVIDER_CODES)),
+    };
   },
 });

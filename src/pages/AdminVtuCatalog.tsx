@@ -37,6 +37,7 @@ import {
   Route as RouteIcon,
   Trash2,
   Waypoints,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -145,6 +146,8 @@ export default function AdminVtuCatalog() {
   const products = useQuery(api.vtuServiceAdmin.listProducts, {});
   const routes = useQuery(api.vtuServiceAdmin.listRoutes, {});
   const migrate = useMutation(api.vtuServiceAdmin.migrateVtuServiceCatalog);
+  const seedAirtime = useMutation(api.vtuServiceAdmin.seedAirtimeCatalog);
+  const [seeding, setSeeding] = useState(false);
 
   const [tab, setTab] = useState("products");
   const [productDialog, setProductDialog] = useState<ProductRow | "new" | null>(null);
@@ -179,6 +182,39 @@ export default function AdminVtuCatalog() {
         description="Which products can be bought, and which provider serves each one. Routing is read at purchase time and snapshotted onto the transaction."
         actions={
           <>
+            <Button
+              variant="outline"
+              disabled={seeding}
+              onClick={async () => {
+                setSeeding(true);
+                try {
+                  const res = await seedAirtime({});
+                  if (res.action === "noop") {
+                    toast.success("Airtime is already in the catalog. Nothing changed.");
+                  } else {
+                    toast.success(
+                      `Added ${res.productsInserted} product${res.productsInserted === 1 ? "" : "s"} and ${res.routesInserted} route${res.routesInserted === 1 ? "" : "s"}.`,
+                    );
+                  }
+                  // A provider with a row but no known code convention cannot be
+                  // routed automatically, and the operator has to add those by
+                  // hand — so say so here rather than leaving a product that
+                  // fails closed with no visible reason.
+                  if (res.unroutableProviders.length > 0) {
+                    toast.warning(
+                      `No route was created for ${res.unroutableProviders.join(", ")} — add its provider code by hand.`,
+                    );
+                  }
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Seeding failed");
+                } finally {
+                  setSeeding(false);
+                }
+              }}
+            >
+              {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap />}
+              Seed airtime
+            </Button>
             <Button
               variant="outline"
               disabled={migrate === undefined}
@@ -255,9 +291,30 @@ export default function AdminVtuCatalog() {
             <AdminSkeleton rows={4} />
           ) : products.length === 0 ? (
             <Card>
-              <CardContent className="p-8 text-center text-sm text-slate-500">
-                No products yet. Run the seed migration to add the MTN airtime product, or create
-                one by hand.
+              <CardContent className="space-y-4 p-8 text-center">
+                <p className="text-sm text-slate-500">
+                  No products yet, so the customer shop is empty. Seed the four airtime networks
+                  below — they are routed to whichever providers you have already configured — or
+                  create a product by hand.
+                </p>
+                <Button disabled={seeding} onClick={async () => {
+                  setSeeding(true);
+                  try {
+                    const res = await seedAirtime({});
+                    toast.success(
+                      res.action === "noop"
+                        ? "Airtime is already in the catalog. Nothing changed."
+                        : `Added ${res.productsInserted} products and ${res.routesInserted} routes.`,
+                    );
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "Seeding failed");
+                  } finally {
+                    setSeeding(false);
+                  }
+                }}>
+                  {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap />}
+                  Seed airtime
+                </Button>
               </CardContent>
             </Card>
           ) : (
