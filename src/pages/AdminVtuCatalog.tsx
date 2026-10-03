@@ -30,7 +30,6 @@ import {
   ArrowRight,
   Ban,
   CheckCircle2,
-  FlaskConical,
   Loader2,
   Pencil,
   Plus,
@@ -145,7 +144,6 @@ const SKIP_REASON: Record<string, string> = {
 export default function AdminVtuCatalog() {
   const products = useQuery(api.vtuServiceAdmin.listProducts, {});
   const routes = useQuery(api.vtuServiceAdmin.listRoutes, {});
-  const migrate = useMutation(api.vtuServiceAdmin.migrateVtuServiceCatalog);
   const seedAirtime = useMutation(api.vtuServiceAdmin.seedAirtimeCatalog);
   const [seeding, setSeeding] = useState(false);
 
@@ -214,29 +212,6 @@ export default function AdminVtuCatalog() {
             >
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap />}
               Seed airtime
-            </Button>
-            <Button
-              variant="outline"
-              disabled={migrate === undefined}
-              onClick={async () => {
-                try {
-                  const res = await migrate({});
-                  if (res.action === "blocked") {
-                    toast.error(res.reason);
-                    return;
-                  }
-                  toast.success(
-                    res.action === "noop"
-                      ? "Catalog and routing are already seeded. Nothing changed."
-                      : `Seeded ${res.productCode} → ${res.provider}.`,
-                  );
-                } catch (e) {
-                  toast.error(e instanceof Error ? e.message : "Migration failed");
-                }
-              }}
-            >
-              {migrate === undefined ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
-              Run seed migration
             </Button>
             <Button onClick={() => setProductDialog("new")}>
               <Plus className="h-4 w-4" /> New product
