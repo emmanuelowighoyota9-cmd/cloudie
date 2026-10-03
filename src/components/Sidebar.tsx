@@ -21,7 +21,6 @@ import {
   Cloud,
   Store,
   Receipt,
-  History,
   Zap,
 } from "lucide-react";
 
@@ -31,7 +30,6 @@ const mainNav = [
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
-  { label: "VTU History", icon: History, to: "/vtu/history" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
@@ -71,11 +69,16 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = user?.role === "admin";
 
   const isActive = (path: string) => {
-    // `/vtu` is the parent of `/vtu/airtime` and `/vtu/history`, so it must match
-    // exactly — otherwise every VTU child page lights up the catalog entry too.
-    if (path === "/dashboard" || path === "/vtu") {
+    // `/dashboard` must match exactly, or it would light up on every route
+    // nested beneath it.
+    if (path === "/dashboard") {
       return location.pathname === path;
     }
+    // `/vtu` is the PARENT of `/vtu/airtime` and `/vtu/bills`, so it matches by
+    // prefix — matching exactly would leave those two child pages with no
+    // highlighted entry at all. The pages themselves carry their own nav, so
+    // the sidebar needs to agree that they are still inside "Airtime & Data",
+    // not stand in for it.
     return location.pathname.startsWith(path);
   };
 

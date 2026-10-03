@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useMutation, usePaginatedQuery } from "convex/react";
-import { ArrowLeft, ChevronDown, Loader2, ReceiptText, Zap } from "lucide-react";
+import { ChevronDown, Loader2, ReceiptText, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-import { VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
+import { VtuNav, VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
 import {
   newAttemptId,
   renderDocumentArtifacts,
@@ -53,6 +53,7 @@ export default function VtuHistory() {
 
   return (
     <div className="page-gutter mx-auto w-full max-w-3xl space-y-8 py-10 sm:py-14">
+      <VtuNav />
       <Reveal>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -69,13 +70,6 @@ export default function VtuHistory() {
             A top-up that did not go through shows as refunded with your points
             already back.
           </p>
-          <Link
-            to="/vtu"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            All services
-          </Link>
         </div>
       </Reveal>
 

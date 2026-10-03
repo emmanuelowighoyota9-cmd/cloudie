@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
 // Shared with the history rows and the purchase page, so one service type has
 // one glyph everywhere it appears.
-import { VtuServiceIcon } from "@/components/vtu/shared";
+import { VtuNav, VtuServiceIcon } from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
 import { VTU_SERVICE_TYPE_COPY, vtuServiceTypeLabel } from "@/lib/vtu";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,13 @@ export default function VtuCatalog() {
   const balance = useQuery(api.points.getBalance);
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-8">
+    /* `page-gutter` + `py-10 sm:py-14` matches the other three VTU pages. Without
+       them the catalogue sat ~40px higher, so the shared nav — which is the
+       first child on every VTU page — jumped vertically on every tab click.
+       The extra inline padding here is pre-existing and shared with the other
+       three pages, so it is left alone rather than fixed piecemeal. */
+    <div className="page-gutter mx-auto w-full max-w-5xl space-y-8 py-10 sm:py-14">
+      <VtuNav />
       <Reveal>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">

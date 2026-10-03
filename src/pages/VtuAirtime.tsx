@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useSearchParams } from "react-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +19,8 @@ import {
 import { cn } from "@/lib/utils";
 // The status chrome is SHARED with /vtu/history, so the same status cannot be
 // green on one screen and amber on another.
-import { VTU_STATUS_TONE } from "@/components/vtu/shared";
-import { ArrowLeft, Loader2, Radio } from "lucide-react";
+import { VtuNav, VTU_STATUS_TONE } from "@/components/vtu/shared";
+import { Loader2, Radio } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -107,6 +107,7 @@ export default function VtuAirtime() {
 
   return (
     <div className="page-gutter mx-auto w-full max-w-5xl space-y-8 py-10 sm:py-14">
+      <VtuNav />
       <Reveal>
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-3">
@@ -122,13 +123,6 @@ export default function VtuAirtime() {
             Buy airtime for any Nigerian number using your points balance. A
             top-up that does not go through returns your points automatically.
           </p>
-          <Link
-            to="/vtu"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            All services
-          </Link>
         </div>
       </Reveal>
 

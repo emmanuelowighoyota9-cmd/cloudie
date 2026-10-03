@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal } from "@/components/motion";
-import { VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
+import { VtuNav, VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
 import {
   maskIdentifier,
@@ -17,7 +17,7 @@ import {
   vtuServiceTypeLabel,
   vtuStatusCopy,
 } from "@/lib/vtu";
-import { ArrowLeft, Coins, Loader2 } from "lucide-react";
+import { Coins, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -145,19 +145,9 @@ export default function VtuBills() {
 
   return (
     <div className="page-gutter mx-auto w-full max-w-3xl space-y-8 py-10 sm:py-14">
+      <VtuNav />
       <Reveal>
         <div className="space-y-3">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="-ml-2 gap-1.5 text-muted-foreground"
-          >
-            <Link to="/vtu">
-              <ArrowLeft className="h-4 w-4" />
-              All services
-            </Link>
-          </Button>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
               {detail?.displayName ?? "Buy a service"}

@@ -18,14 +18,17 @@ import {
   Clock,
   GraduationCap,
   HelpCircle,
+  LayoutGrid,
   Lightbulb,
   Loader2,
   Radio,
+  Receipt,
   Trophy,
   Tv,
   Wifi,
   Zap,
 } from "lucide-react";
+import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 import { vtuStatusCopy, type VtuVisibleStatus } from "@/lib/vtu";
 
@@ -124,4 +127,75 @@ export function VtuServiceIcon({
 }) {
   const Icon = VTU_SERVICE_ICONS[serviceType] ?? Zap;
   return <Icon className={className} aria-hidden />;
+}
+
+/**
+ * The destinations that make up the customer's VTU experience.
+ *
+ * One list, used both to render the nav and to decide which tab is active, so
+ * a tab can never claim to be on the page you are looking at.
+ *
+ * `/vtu/bills` covers data bundles, cable and electricity, and is also the
+ * single-product purchase screen, so its label names the category rather than
+ * the one product you happen to be buying.
+ */
+const VTU_DESTINATIONS = [
+  { to: "/vtu", label: "Browse", icon: LayoutGrid },
+  { to: "/vtu/airtime", label: "Airtime", icon: Radio },
+  { to: "/vtu/bills", label: "Data & bills", icon: Receipt },
+  { to: "/vtu/history", label: "History", icon: Clock },
+] as const;
+
+/**
+ * Navigation across the VTU pages.
+ *
+ * Before this, the four VTU pages were linked only by an ad-hoc "All services"
+ * arrow on each one — three different implementations of the same link, and no
+ * way to reach airtime or history except by going back to the catalogue first.
+ *
+ * Matching is on `pathname` alone, deliberately. `/vtu/airtime?network=MTN` and
+ * `/vtu/bills?product=data-mtn-1GB` are the SAME destinations as their bare
+ * forms, so the tab must not switch off when a query is present.
+ *
+ * `/vtu` matches exactly rather than by prefix, so opening the catalogue does
+ * not light up "Browse" while you are three screens deep on airtime.
+ */
+export function VtuNav({ className }: { className?: string }) {
+  const location = useLocation();
+
+  return (
+    <nav
+      aria-label="VTU sections"
+      className={cn(
+        // Scrolls rather than wraps on a narrow phone: four tabs plus their
+        // labels do not fit 320px, and a wrapped nav pushes the page heading
+        // down on exactly the screens where vertical space is scarcest.
+        "-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        className,
+      )}
+    >
+      {VTU_DESTINATIONS.map((item) => {
+        const active = location.pathname === item.to;
+        return (
+          <Link
+            key={item.to}
+            to={item.to}
+            // `page` is what a screen reader announces; the highlight alone
+            // would leave the current page unstated.
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex min-h-11 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-medium",
+              "transition-colors duration-200",
+              active
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <item.icon className="h-4 w-4 shrink-0" aria-hidden />
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
