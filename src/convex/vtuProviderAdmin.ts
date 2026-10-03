@@ -18,6 +18,7 @@ import type { Id } from "./_generated/dataModel";
 import { auditLog, requireAdmin } from "./adminApi";
 import { encrypt, isSecretError } from "./lib/encryption";
 import { VTU_AUTH_SCHEMES, VTU_PROVIDER_STATUSES } from "./schema";
+import { PROVIDER_PRESETS } from "../lib/vtuProviderPresets";
 
 /**
  * Seal a secret, turning a missing master key into an actionable message
@@ -376,6 +377,205 @@ export const deleteProvider = mutation({
       before: { name: row.name, baseUrl: row.baseUrl, status: row.status },
       reason: args.reason,
     });
+  },
+});
+
+// ─── Preset configuration ───────────────────────────────────────────
+
+/**
+ * Configure a provider from a known-good preset, in one step.
+ *
+ * The admin form has eight fields, six of which are constants of the provider
+ * rather than choices of the operator. Typing `https://aidapay.ng/api/v1` into
+ * a base-URL box produces a well-formed URL that resolves to
+ * `.../api/v1/api/v1/buy` on every purchase — a misconfiguration that reads
+ * as correct and only surfaces as a 404 on live traffic.
+ *
+ * This mutation is the alternative: the operator supplies the API key, the
+ * account PIN and optionally the status, and every constant comes from
+ * `PROVIDER_PRESETS` — the same module the UI renders the preview from, so
+ * what is promised and what is written cannot drift.
+ *
+ * IDEMPOTENT BY CONSTRUCTION AND UPSERT-SAFE. An existing row keeps its sealed
+ * API key and PIN unless the operator supplies new ones, which is the same
+ * "omitting leaves it alone" rule `updateProvider` follows, so re-running this
+ * to repair a wrong base URL cannot silently rotate a credential.
+ *
+ * It REPAIRS the constants unconditionally, including on a row an operator
+ * hand-edited. That is the point of running it: the constants belong to the
+ * provider, so re-asserting them cannot lose anything the operator chose.
+ * The status and priority are left alone unless passed, since those ARE
+ * choices.
+ */
+export const applyPreset = mutation({
+  args: {
+    preset: v.string(),
+    apiKey: v.optional(v.string()),
+    accountPin: v.optional(v.string()),
+    webhookSecret: v.optional(v.string()),
+    status: v.optional(statusValidator),
+    priority: v.optional(v.number()),
+    activate: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+
+    const preset = PROVIDER_PRESETS[args.preset.trim().toLowerCase()];
+    if (!preset) {
+      throw new Error(
+        `No preset named "${args.preset}". Known presets: ${Object.keys(PROVIDER_PRESETS).join(", ") || "none"}.`,
+      );
+    }
+
+    const apiKey = args.apiKey?.trim();
+    const pin = args.accountPin?.trim();
+
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("vtuProviders")
+      .withIndex("by_name", (q) => q.eq("name", preset.name))
+      .unique();
+
+    // An API key is required to CREATE a row, but repairing the constants of a
+    // row that already has one must not demand the secret be re-typed — that
+    // is the whole reason the preset form exists, and asking for the key again
+    // to fix a wrong base URL would reintroduce exactly the friction it
+    // removes. Same rule as the PIN below: a stored sealed value counts.
+    if (!apiKey && !existing?.encryptedApiKey) {
+      throw new Error("The API key is required.");
+    }
+
+    // A preset that requires a PIN cannot be configured without one: the
+    // adapter refuses to dispatch rather than sending a placeholder. On an
+    // existing row a PIN already sealed counts, so repairing the constants of a
+    // configured provider does not demand the secret be re-typed.
+    if (preset.requiresAccountPin && !pin && !existing?.encryptedAccountPin) {
+      throw new Error(
+        `${preset.displayName} requires a 4-digit account PIN on every purchase.`,
+      );
+    }
+
+    // Re-assert every constant. The operator's own choices — status,
+    // priority, and any credential they did not re-type — are preserved.
+    const constants = {
+      name: preset.name,
+      displayName: preset.displayName,
+      baseUrl: preset.baseUrl,
+      healthPath: preset.healthPath,
+      authHeader: preset.authHeader,
+      authScheme: preset.authScheme,
+      callbackSignatureHeader: preset.callbackSignatureHeader,
+      timeoutMs: preset.timeoutMs,
+    };
+
+    if (existing) {
+      const patch: Record<string, unknown> = {
+        ...constants,
+        updatedAt: now,
+        updatedBy: adminId,
+      };
+      // Omitting the key keeps the sealed value in place — a repair must not
+      // rotate a credential.
+      if (apiKey) patch.encryptedApiKey = await sealOrThrow(apiKey);
+      if (pin) patch.encryptedAccountPin = await sealOrThrow(pin);
+      if (args.webhookSecret?.trim()) {
+        patch.encryptedWebhookSecret = await sealOrThrow(args.webhookSecret.trim());
+      }
+      if (args.status !== undefined) patch.status = args.status;
+      // `activate` is honoured on an EXISTING row too, and only ever promotes.
+      // Leaving it out must not demote a live provider back to sandbox, but
+      // ticking "Go live now" while repairing a misconfigured sandbox row has
+      // to actually take effect — otherwise the checkbox silently does nothing
+      // on exactly the row the operator is looking at.
+      else if (args.activate) patch.status = "active";
+      if (args.priority !== undefined) patch.priority = args.priority;
+
+      await ctx.db.patch(existing._id, patch);
+      await auditLog(ctx, adminId, {
+        action: "vtu_provider_preset_applied",
+        resource: "vtuProvider",
+        resourceId: preset.name,
+        before: { baseUrl: existing.baseUrl, healthPath: existing.healthPath ?? null },
+        after: {
+          ...constants,
+          apiKeyReplaced: Boolean(apiKey),
+          accountPinReplaced: Boolean(pin),
+        },
+        reason: "Applied preset constants",
+      });
+      return { name: preset.name, created: false as const };
+    }
+
+    // Guaranteed non-empty on this branch: the guard above refused unless a key
+    // was supplied OR one is already stored, and an existing row returns above.
+    const sealedApiKey = await sealOrThrow(apiKey ?? existing!.encryptedApiKey!);
+
+    const id = await ctx.db.insert("vtuProviders", {
+      ...constants,
+      // Sandbox by default. A provider that has never answered a connection
+      // test does not belong in the live routing table.
+      status: args.status ?? (args.activate ? "active" : "sandbox"),
+      encryptedApiKey: sealedApiKey,
+      encryptedAccountPin: pin ? await sealOrThrow(pin) : undefined,
+      encryptedWebhookSecret: args.webhookSecret?.trim()
+        ? await sealOrThrow(args.webhookSecret.trim())
+        : undefined,
+      priority: args.priority ?? preset.priority,
+      createdAt: now,
+      updatedAt: now,
+      updatedBy: adminId,
+    });
+
+    await auditLog(ctx, adminId, {
+      action: "vtu_provider_preset_applied",
+      resource: "vtuProvider",
+      resourceId: preset.name,
+      after: {
+        ...constants,
+        status: args.status ?? (args.activate ? "active" : "sandbox"),
+        hasApiKey: true,
+        hasAccountPin: Boolean(pin),
+      },
+      reason: "Created from preset",
+    });
+
+    return { name: preset.name, created: true as const, id };
+  },
+});
+
+/**
+ * The provider's own callback URL, for the admin to paste into AidaPay's
+ * dashboard.
+ *
+ * Returned rather than composed in the client because the host is a server
+ * fact. The AidaPay dashboard cannot send custom headers, which is why this is
+ * a per-provider PATH: the path is the only place the provider identity can
+ * live.
+ */
+export const getPresetSetup = query({
+  args: { preset: v.string() },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const preset = PROVIDER_PRESETS[args.preset.trim().toLowerCase()];
+    if (!preset) return null;
+    return {
+      name: preset.name,
+      displayName: preset.displayName,
+      baseUrl: preset.baseUrl,
+      healthPath: preset.healthPath,
+      authHeader: preset.authHeader,
+      authScheme: preset.authScheme,
+      callbackSignatureHeader: preset.callbackSignatureHeader,
+      webhookPath: preset.webhookPath,
+      priority: preset.priority,
+      requiresAccountPin: preset.requiresAccountPin,
+      // `CONVEX_SITE_URL` rather than `ctx.convex.siteUrl`: that is an action
+      // context property, and this is a query. The env var is the same value,
+      // and it is already the source `auth.config.ts` trusts.
+      callbackUrl: process.env.CONVEX_SITE_URL
+        ? `${process.env.CONVEX_SITE_URL.replace(/\/+$/, "")}${preset.webhookPath}`
+        : preset.webhookPath,
+    };
   },
 });
 

@@ -17,18 +17,22 @@ import {
 import { AdminPageHeader, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { Reveal } from "@/components/motion";
 import { cn } from "@/lib/utils";
+import { AIDAPAY_PRESET } from "@/lib/vtuProviderPresets";
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  Copy,
   Eye,
   KeyRound,
   Loader2,
   Pencil,
   Plus,
   RefreshCw,
+  SlidersHorizontal,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -145,7 +149,64 @@ export default function AdminVtuProviders() {
   const setStatus = useMutation(api.vtuProviderAdmin.setProviderStatus);
   const deleteProvider = useMutation(api.vtuProviderAdmin.deleteProvider);
   const migrate = useMutation(api.vtuProviderAdmin.migratePairgateFromEnv);
+  const applyPreset = useMutation(api.vtuProviderAdmin.applyPreset);
+  const aidapaySetup = useQuery(api.vtuProviderAdmin.getPresetSetup, {
+    preset: AIDAPAY_PRESET.name,
+  });
   const testConnection = useAction(api.vtuProviderCall.testProviderConnection);
+
+  // ── Quick connect ────────────────────────────────────────────────
+  // Two fields and a button. Everything else about an AidaPay row is a
+  // constant of the provider, and typing a constant is how the base URL came
+  // to be set to `.../api/v1` — correct-looking, wrong on every purchase.
+  const [quickKey, setQuickKey] = useState("");
+  const [quickPin, setQuickPin] = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickActivate, setQuickActivate] = useState(false);
+  // The full eight-field form is collapsed by default: for a preset provider
+  // it is the more error-prone way in, not the quicker one.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  // Secrets are held only while this panel is doing work and are cleared the
+  // moment it finishes. Never read back from the server, same as the form.
+  const aidapayRow = useMemo(
+    () => (providers ?? []).find((p) => p.name === AIDAPAY_PRESET.name) ?? null,
+    [providers],
+  );
+
+  async function runQuickConnect() {
+    setQuickSaving(true);
+    try {
+      await applyPreset({
+        preset: AIDAPAY_PRESET.name,
+        apiKey: quickKey.trim(),
+        ...(quickPin.trim() ? { accountPin: quickPin.trim() } : {}),
+        activate: quickActivate,
+      });
+      setQuickKey("");
+      setQuickPin("");
+      setQuickActivate(false);
+      toast.success(
+        aidapayRow
+          ? "AidaPay reconfigured. Constants repaired, credentials kept."
+          : `AidaPay connected${quickActivate ? " and live" : " in sandbox"}.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not configure AidaPay");
+    } finally {
+      setQuickSaving(false);
+    }
+  }
+
+  async function copyCallbackUrl() {
+    const url = aidapaySetup?.callbackUrl;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Callback URL copied");
+    } catch {
+      toast.error("Could not copy — select the URL and copy it manually");
+    }
+  }
 
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -347,13 +408,159 @@ export default function AdminVtuProviders() {
         title="VTU Providers"
         description="Aggregators are runtime data. Credentials are sealed with the platform master key and never displayed after save."
         actions={
-          <Button onClick={openCreate} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add provider
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setAdvancedOpen((open) => !open)}
+              className="min-h-11 gap-2"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {advancedOpen ? "Hide advanced setup" : "Advanced setup"}
+            </Button>
+            <Button onClick={openCreate} className="gap-2">
+              <Plus className="h-4 w-4" />
+              Add provider
+            </Button>
+          </div>
         }
       />
 
+      {/* ── Quick connect: AidaPay ─────────────────────────────────
+       * Two inputs and a button. Everything else on an AidaPay row is a
+       * constant of the provider rather than a choice of the operator, and
+       * typing a constant is how the base URL came to be `.../api/v1` —
+       * a correct-looking value that 404s on every purchase. The constants
+       * come from `AIDAPAY_PRESET`, the same module the mutation reads. */}
+      <Reveal>
+        <Card className="border-primary/30">
+          <CardContent className="space-y-5 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-semibold">Connect AidaPay</h2>
+                  {aidapayRow ? (
+                    <Badge variant="outline" className={cn(STATUS_BADGE[aidapayRow.status])}>
+                      {aidapayRow.status}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="border-border text-muted-foreground">
+                      not configured
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {aidapayRow
+                    ? "Leave a field blank to keep the stored value. Paste a new key or PIN to rotate it."
+                    : "Paste the two values from your AidaPay dashboard. The endpoint, auth scheme, health check and callback path are filled in for you."}
+                </p>
+              </div>
+              {aidapayRow && (
+                <Button
+                  variant="outline"
+                  onClick={() => runTest(aidapayRow.name)}
+                  disabled={testing[aidapayRow.name] === "busy"}
+                  className="min-h-11 shrink-0 gap-2"
+                >
+                  {testing[aidapayRow.name] === "busy" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Activity className="h-4 w-4" />
+                  )}
+                  Test
+                </Button>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="q-key">API key</Label>
+                <Input
+                  id="q-key"
+                  type="password"
+                  value={quickKey}
+                  onChange={(e) => setQuickKey(e.target.value)}
+                  placeholder={aidapayRow?.hasApiKey ? "Stored — type to replace" : "From AidaPay dashboard"}
+                  autoComplete="off"
+                  className="min-h-11 font-mono"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="q-pin">Account PIN</Label>
+                <Input
+                  id="q-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={quickPin}
+                  onChange={(e) => setQuickPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder={aidapayRow?.hasAccountPin ? "Stored — type to replace" : "4 digits"}
+                  autoComplete="off"
+                  className="min-h-11 font-mono"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Sent on every purchase. AidaPay requires it, and Crestline
+                  refuses to dispatch without one.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex min-h-11 cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                checked={quickActivate}
+                onChange={(e) => setQuickActivate(e.target.checked)}
+                className="h-4 w-4 rounded border-input accent-[hsl(var(--primary))]"
+              />
+              <span className="text-sm">
+                Go live now
+                <span className="block text-xs text-muted-foreground">
+                  Off by default: AidaPay has no sandbox, so a new row starts in
+                  sandbox and only serves live traffic once you say so.
+                </span>
+              </span>
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={runQuickConnect}
+                disabled={quickSaving || (!quickKey.trim() && !aidapayRow?.hasApiKey)}
+                className="min-h-11 gap-2"
+              >
+                {quickSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                {aidapayRow ? "Update AidaPay" : "Connect AidaPay"}
+              </Button>
+            </div>
+
+            {/* The callback URL is a fact about the deployment, so it comes
+                from the server rather than being composed in the browser. */}
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground">
+                Paste this into your AidaPay dashboard as the callback URL. Each
+                provider has its own path, because AidaPay cannot send a custom
+                header to identify itself.
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded bg-background px-2 py-1.5 font-mono text-xs">
+                  {aidapaySetup?.callbackUrl ?? "Loading…"}
+                </code>
+                <Button
+                  variant="outline"
+                  onClick={copyCallbackUrl}
+                  disabled={!aidapaySetup?.callbackUrl}
+                  aria-label="Copy callback URL"
+                  className="min-h-11 shrink-0"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </Reveal>
+
+      {advancedOpen && (
+        <>
       <Reveal>
         <Card className="border-dashed">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
@@ -673,6 +880,8 @@ export default function AdminVtuProviders() {
             </CardContent>
           </Card>
         </Reveal>
+      )}
+        </>
       )}
 
       {providers === undefined ? (

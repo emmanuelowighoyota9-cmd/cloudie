@@ -4,6 +4,7 @@ import schema from "../src/convex/schema";
 import { internal, api } from "../src/convex/_generated/api";
 import { registerAdapter, getAdapter } from "../src/convex/vtuRegistry";
 import { pairgateAdapter } from "../src/convex/vtuPairgate";
+import { aidapayAdapter } from "../src/convex/providers/aidapay";
 import { encrypt } from "../src/convex/lib/encryption";
 import { assertAmountInRange } from "../src/convex/vtuInternal";
 import {
@@ -929,7 +930,12 @@ describe("routing does not reintroduce a hard-coded provider", () => {
       expect(seen[0].productCode).toBe("mtn-airtime");
       expect(getAdapter("aidapay")).not.toBeNull();
     } finally {
-      registerAdapter(pairgateAdapter);
+      // Restore the REAL AidaPay adapter. The stub is keyed "aidapay", so
+      // re-registering Pairgate would restore the wrong slot and leave the
+      // stub in the registry for every later test file in the process —
+      // which is how a webhook test ends up verifying callbacks against a
+      // stub that does not verify anything.
+      registerAdapter(aidapayAdapter);
     }
   });
 
@@ -969,7 +975,7 @@ describe("routing does not reintroduce a hard-coded provider", () => {
       });
       expect(seen[0].packageCode).toBe("1GB_30D");
     } finally {
-      registerAdapter(pairgateAdapter);
+      registerAdapter(aidapayAdapter);
     }
   });
 });
