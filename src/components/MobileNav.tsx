@@ -17,6 +17,7 @@ import {
   Store,
   Receipt,
   FileStack,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,10 @@ const navItems = [
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
+  // Mirrors the desktop sidebar, which already carried this entry. Without it
+  // the mobile drawer was the one navigation surface in the customer app with
+  // no route to airtime, data or bills at all.
+  { label: "Airtime & Data", icon: Zap, to: "/vtu" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },

@@ -22,6 +22,22 @@ const sidebar = readFileSync("src/components/Sidebar.tsx", "utf8");
 
 const QUOTE = String.fromCharCode(34);
 
+/**
+ * Every navigation surface a signed-in customer can reach the app through.
+ *
+ * The VTU feature was reachable on desktop and completely unreachable on a
+ * phone: the sidebar carried an entry, while BOTH mobile surfaces — the
+ * hamburger drawer and the fixed bottom bar — omitted it. Most bill-payment
+ * customers are on a phone, so for them the feature did not exist.
+ *
+ * This list is the regression guard for exactly that.
+ */
+const CUSTOMER_NAV_SURFACES = [
+  "src/components/Sidebar.tsx",
+  "src/components/MobileNav.tsx",
+  "src/components/BottomNav.tsx",
+];
+
 /** Every customer-facing VTU route the router serves. */
 const VTU_ROUTES = ["/vtu", "/vtu/airtime", "/vtu/bills", "/vtu/history"];
 
@@ -139,6 +155,37 @@ describe("the sidebar agrees with the nav", () => {
     expect(sidebar).not.toContain('path === ' + QUOTE + '/vtu' + QUOTE);
     expect(sidebar).toContain('if (path === ' + QUOTE + '/dashboard' + QUOTE + ')');
     expect(sidebar).toContain("location.pathname.startsWith(path)");
+  });
+});
+
+describe("every customer navigation surface offers VTU", () => {
+  for (const surface of CUSTOMER_NAV_SURFACES) {
+    test(surface + " links to the VTU catalogue", () => {
+      const source = readFileSync(surface, "utf8");
+      // Matches the nav-item shape, not a bare string, so a `/vtu` mention in
+      // a comment or an unrelated route cannot satisfy this.
+      expect(source).toMatch(/to: ['"]\/vtu['"]/);
+    });
+  }
+
+  test("the desktop sidebar exposes exactly one VTU entry", () => {
+    // Two entries for one section disagreed with the in-page nav about where
+    // the customer is; the in-page nav is the source of truth.
+    const matches = [...sidebar.matchAll(/to: ['"]\/vtu['"]/g)];
+    expect(matches.length).toBe(1);
+  });
+
+  test("the mobile surfaces prefix-match so VTU sub-pages stay highlighted", () => {
+    // Both must highlight `/vtu/airtime` and `/vtu/history`. The BottomNav
+    // already prefix-matches everything but `/dashboard`; MobileNav does the
+    // same. If either ever switched to exact matching, the entry would go dead
+    // the moment the customer left the catalogue — the same class of bug the
+    // sidebar had.
+    for (const surface of ["src/components/MobileNav.tsx", "src/components/BottomNav.tsx"]) {
+      const source = readFileSync(surface, "utf8");
+      expect(source).toContain("startsWith(path)");
+      expect(source).not.toContain('path === ' + QUOTE + '/vtu' + QUOTE);
+    }
   });
 });
 

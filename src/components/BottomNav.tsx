@@ -1,11 +1,15 @@
 import { Link, useLocation } from "react-router";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Home, CreditCard, Truck, FileText, Building2, FileStack } from "lucide-react";
+import { Home, CreditCard, Truck, FileText, Building2, FileStack, Zap } from "lucide-react";
 
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
   { label: "Points", icon: CreditCard, to: "/buy-points" },
+  // Placed third, ahead of the back-office items, because on a phone this bar
+  // is the only permanent navigation and bill payment is what people open the
+  // app for. Every VTU sub-page highlights it: `/vtu` is prefix-matched below.
+  { label: "Airtime", icon: Zap, to: "/vtu" },
   { label: "Shipments", icon: Truck, to: "/shipments" },
   { label: "Docs", icon: FileStack, to: "/documents" },
   { label: "Tickets", icon: FileText, to: "/ticketing" },
