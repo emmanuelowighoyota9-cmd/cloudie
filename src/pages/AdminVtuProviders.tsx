@@ -130,6 +130,85 @@ type Draft = {
   status: Status;
 };
 
+/** What a connection probe reports. Carries NO credential — ok, latency, code. */
+type TestResult = { ok: boolean; latencyMs?: number; error?: string };
+
+/**
+ * Turn a failure code into something an operator can act on.
+ *
+ * The action deliberately returns short codes rather than messages, because a
+ * thrown message is redacted in a production deployment. A code alone would
+ * leave the admin staring at `CREDENTIALS_REJECTED`, so the reading of each
+ * one lives here, next to the form that produced it.
+ */
+const TEST_ERROR_HINT: Record<string, string> = {
+  CREDENTIALS_REJECTED: "AidaPay rejected the API key. Check it was copied in full.",
+  CREDENTIAL_MISSING: "No API key is stored on this row.",
+  CREDENTIAL_CORRUPT: "The stored key cannot be decrypted. Re-enter it to re-seal.",
+  HEALTH_PATH_NOT_CONFIGURED: "This row has no health path to probe.",
+  PROVIDER_NOT_FOUND: "No row exists for this provider yet.",
+  ADMIN_REQUIRED: "This action needs an admin session.",
+  NETWORK_ERROR: "Could not reach AidaPay. Check connectivity and try again.",
+};
+
+/**
+ * Inline result of a connection probe.
+ *
+ * Shown where the probe was triggered rather than only as a toast, because the
+ * toast disappears and the question it answers — "is this actually wired up?"
+ * — does not. Rendered next to the button that ran it.
+ */
+function TestResultBanner({
+  result,
+  busy,
+}: {
+  result?: TestResult;
+  busy?: boolean;
+}) {
+  if (busy) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-2.5 text-xs text-muted-foreground"
+        role="status"
+      >
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <span>Probing AidaPay…</span>
+      </div>
+    );
+  }
+  if (!result) return null;
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-md border p-2.5 text-xs",
+        result.ok
+          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          : "border-destructive/25 bg-destructive/10 text-destructive",
+      )}
+      role="status"
+    >
+      {result.ok ? (
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      ) : (
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+      )}
+      <span className="min-w-0">
+        {result.ok ? (
+          <>Connected. AidaPay answered in {result.latencyMs}ms.</>
+        ) : (
+          <>
+            <span className="font-medium">{result.error ?? "Connection failed"}</span>
+            {TEST_ERROR_HINT[result.error ?? ""] && (
+              <span className="block opacity-80">{TEST_ERROR_HINT[result.error ?? ""]}</span>
+            )}
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
 const EMPTY_DRAFT: Draft = {
   name: "",
   displayName: "",
@@ -178,18 +257,28 @@ export default function AdminVtuProviders() {
     try {
       await applyPreset({
         preset: AIDAPAY_PRESET.name,
-        apiKey: quickKey.trim(),
+        // Omitted rather than sent blank when the field was left alone: the
+        // mutation treats an absent key as "keep the stored one", and sending
+        // an empty string would look like a request to replace it.
+        ...(quickKey.trim() ? { apiKey: quickKey.trim() } : {}),
         ...(quickPin.trim() ? { accountPin: quickPin.trim() } : {}),
         activate: quickActivate,
       });
+      const wasExisting = Boolean(aidapayRow);
       setQuickKey("");
       setQuickPin("");
       setQuickActivate(false);
       toast.success(
-        aidapayRow
+        wasExisting
           ? "AidaPay reconfigured. Constants repaired, credentials kept."
           : `AidaPay connected${quickActivate ? " and live" : " in sandbox"}.`,
       );
+
+      // Probe automatically. Saving a row is not evidence it WORKS, and the
+      // whole cost of this panel is a misconfiguration that reads as correct
+      // until something is actually called. The probe is a GET on the health
+      // path and never touches the purchase path.
+      await probeConnection(AIDAPAY_PRESET.name, { quiet: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not configure AidaPay");
     } finally {
@@ -214,9 +303,7 @@ export default function AdminVtuProviders() {
   const [migrating, setMigrating] = useState(false);
   // Transient per-row test result. Holds NO credential, only ok/latency/error.
   const [testing, setTesting] = useState<Record<string, "busy">>({});
-  const [testResults, setTestResults] = useState<
-    Record<string, { ok: boolean; latencyMs?: number; error?: string }>
-  >({});
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
 
   // Secrets live ONLY in these transient fields, only while the form is
   // open, and are cleared on close. They are never read back from the server.
@@ -342,18 +429,32 @@ export default function AdminVtuProviders() {
     }
   }
 
-  async function runTest(name: string) {
+  /**
+   * Probe a provider and record the result inline.
+   *
+   * `quiet` suppresses the toast for the automatic probe after a connect:
+   * the outcome is already rendered in the card, and a toast over a result
+   * banner says the same thing twice.
+   */
+  async function probeConnection(
+    name: string,
+    options: { quiet?: boolean } = {},
+  ): Promise<TestResult> {
     setTesting((prev) => ({ ...prev, [name]: "busy" }));
     try {
       const result = await testConnection({ name });
       // The result carries only a boolean, a latency and a short code.
       setTestResults((prev) => ({ ...prev, [name]: result }));
-      if (result.ok) toast.success(`${name} responded in ${result.latencyMs}ms`);
-      else toast.error(result.error ?? "Connection test failed");
+      if (!options.quiet) {
+        if (result.ok) toast.success(`${name} responded in ${result.latencyMs}ms`);
+        else toast.error(result.error ?? "Connection test failed");
+      }
+      return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Test failed";
       setTestResults((prev) => ({ ...prev, [name]: { ok: false, error: message } }));
-      toast.error(message);
+      if (!options.quiet) toast.error(message);
+      return { ok: false, error: message };
     } finally {
       setTesting((prev) => {
         const next = { ...prev };
@@ -361,6 +462,10 @@ export default function AdminVtuProviders() {
         return next;
       });
     }
+  }
+
+  async function runTest(name: string) {
+    await probeConnection(name);
   }
 
   async function runMigration() {
@@ -434,41 +539,24 @@ export default function AdminVtuProviders() {
       <Reveal>
         <Card className="border-primary/30">
           <CardContent className="space-y-5 p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-base font-semibold">Connect AidaPay</h2>
-                  {aidapayRow ? (
-                    <Badge variant="outline" className={cn(STATUS_BADGE[aidapayRow.status])}>
-                      {aidapayRow.status}
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="border-border text-muted-foreground">
-                      not configured
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {aidapayRow
-                    ? "Leave a field blank to keep the stored value. Paste a new key or PIN to rotate it."
-                    : "Paste the two values from your AidaPay dashboard. The endpoint, auth scheme, health check and callback path are filled in for you."}
-                </p>
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-semibold">Connect AidaPay</h2>
+                {aidapayRow ? (
+                  <Badge variant="outline" className={cn(STATUS_BADGE[aidapayRow.status])}>
+                    {aidapayRow.status}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="border-border text-muted-foreground">
+                    not configured
+                  </Badge>
+                )}
               </div>
-              {aidapayRow && (
-                <Button
-                  variant="outline"
-                  onClick={() => runTest(aidapayRow.name)}
-                  disabled={testing[aidapayRow.name] === "busy"}
-                  className="min-h-11 shrink-0 gap-2"
-                >
-                  {testing[aidapayRow.name] === "busy" ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Activity className="h-4 w-4" />
-                  )}
-                  Test
-                </Button>
-              )}
+              <p className="text-sm text-muted-foreground">
+                {aidapayRow
+                  ? "Leave a field blank to keep the stored value. Paste a new key or PIN to rotate it."
+                  : "Paste the two values from your AidaPay dashboard. The endpoint, auth scheme, health check and callback path are filled in for you."}
+              </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -530,7 +618,29 @@ export default function AdminVtuProviders() {
                 {quickSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
                 {aidapayRow ? "Update AidaPay" : "Connect AidaPay"}
               </Button>
+              {aidapayRow && (
+                <Button
+                  variant="outline"
+                  onClick={() => runTest(AIDAPAY_PRESET.name)}
+                  disabled={testing[AIDAPAY_PRESET.name] === "busy"}
+                  className="min-h-11 gap-2"
+                >
+                  {testing[AIDAPAY_PRESET.name] === "busy" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Activity className="h-4 w-4" />
+                  )}
+                  Test
+                </Button>
+              )}
             </div>
+
+            {/* The probe result lives here, next to the button that caused it,
+                rather than only in a toast that vanishes. */}
+            <TestResultBanner
+              result={testResults[AIDAPAY_PRESET.name]}
+              busy={testing[AIDAPAY_PRESET.name] === "busy"}
+            />
 
             {/* The callback URL is a fact about the deployment, so it comes
                 from the server rather than being composed in the browser. */}
@@ -978,28 +1088,10 @@ export default function AdminVtuProviders() {
                   </div>
 
                   {/* Test result: ok / fail and latency only. No credential. */}
-                  {result && (
-                    <div
-                      className={cn(
-                        "flex items-center gap-2 rounded-md border p-2.5 text-xs",
-                        result.ok
-                          ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                          : "border-destructive/25 bg-destructive/10 text-destructive",
-                      )}
-                      role="status"
-                    >
-                      {result.ok ? (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      ) : (
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                      )}
-                      <span>
-                        {result.ok
-                          ? `Reachable in ${result.latencyMs}ms`
-                          : (result.error ?? "Failed")}
-                      </span>
-                    </div>
-                  )}
+                  <TestResultBanner
+                    result={result}
+                    busy={testing[row.name] === "busy"}
+                  />
 
                   {/* Disable semantics, stated where the decision is made. */}
                   <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">

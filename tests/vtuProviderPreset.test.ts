@@ -33,6 +33,16 @@ const modules = {
   "src/convex/_generated/server.js": () => import("../src/convex/_generated/server.js"),
   "src/convex/schema.ts": () => import("../src/convex/schema"),
   "src/convex/vtuProviderAdmin.ts": () => import("../src/convex/vtuProviderAdmin"),
+  "src/convex/vtuProviderCall.ts": () => import("../src/convex/vtuProviderCall"),
+  "src/convex/vtuProviderConfig.ts": () => import("../src/convex/vtuProviderConfig"),
+  "src/convex/vtuRegistry.ts": () => import("../src/convex/vtuRegistry"),
+  "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
+  "src/convex/vtuServiceRouting.ts": () => import("../src/convex/vtuServiceRouting"),
+  "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
+  "src/convex/vtu.ts": () => import("../src/convex/vtu"),
+  "src/convex/points.ts": () => import("../src/convex/points"),
+  "src/convex/pricing.ts": () => import("../src/convex/pricing"),
+  "src/convex/storage.ts": () => import("../src/convex/storage"),
   "src/convex/lib/encryption.ts": () => import("../src/convex/lib/encryption"),
   "src/convex/adminApi.ts": () => import("../src/convex/adminApi"),
 };
@@ -552,6 +562,208 @@ describe("a PIN-required preset refuses to configure without one", () => {
       }
       expect(message).toContain("AidaPay");
       expect(message).toContain("PIN");
+    });
+  });
+});
+
+// ─── The probe that runs after connecting ──────────────────────────
+
+/**
+ * The inline connection test.
+ *
+ * Connecting and then probing is only useful if the row the PRESET produced
+ * is probeable. These drive the real action over a row created by the real
+ * mutation — no hand-seeded row — because the failure that matters is a
+ * mismatch between the two: a preset that writes a base URL the probe cannot
+ * compose would report a healthy-looking connect followed by a 404.
+ *
+ * The probe is GET-only and never touches the purchase path; that is asserted
+ * here rather than assumed, because a test button wired to a spending path
+ * holds a live key.
+ */
+describe("a row created from the preset probes correctly", () => {
+  /** Apply the preset, then run the real probe action with fetch captured. */
+  async function connectAndProbe(respond: () => Response) {
+    const t = convexTest(schema, modules);
+    const adminId = await seedAdmin(t);
+    const client = t.withIdentity({ subject: adminId });
+
+    await client.mutation(api.vtuProviderAdmin.applyPreset, {
+      preset: "aidapay",
+      apiKey: "ap_live_token_0001",
+      accountPin: "1234",
+    });
+
+    const calls: { url: string; init: any }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: any, init: any) => {
+      calls.push({ url: String(url), init });
+      return respond();
+    }) as unknown as typeof fetch;
+
+    try {
+      const result: any = await client.action(
+        api.vtuProviderCall.testProviderConnection,
+        { name: "aidapay" },
+      );
+      return { result, calls, row: await readAidaPayRow(t) };
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+
+  test("the probe hits the health path on the bare origin, with bearer auth", async () => {
+    await withMasterKey(async () => {
+      const { result, calls } = await connectAndProbe(
+        () =>
+          new Response("{}", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(calls).toHaveLength(1);
+      // The composition trap, asserted end to end: base + healthPath must be
+      // `https://aidapay.ng/api/v1/my_account`, never `.../api/v1/api/v1/...`.
+      expect(calls[0].url).toBe("https://aidapay.ng/api/v1/my_account");
+      // GET only, and with the row's own auth scheme.
+      expect(calls[0].init.method).toBe("GET");
+      expect(calls[0].init.headers.Authorization).toBe("Bearer ap_live_token_0001");
+    });
+  });
+
+  test("the probe is recorded on the row for the admin table", async () => {
+    await withMasterKey(async () => {
+      const { row } = await connectAndProbe(
+        () =>
+          new Response("{}", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+
+      // The provider table renders lastTestedAt/lastTestOk, so a probe that
+      // did not record would leave the card's success contradicted by the row
+      // moments later.
+      expect(row.lastTestOk).toBe(true);
+      expect(typeof row.lastTestedAt).toBe("number");
+    });
+  });
+
+  test("a rejected key reports CREDENTIALS_REJECTED, not a generic failure", async () => {
+    await withMasterKey(async () => {
+      const { result, calls } = await connectAndProbe(
+        () => new Response("nope", { status: 401 }),
+      );
+
+      // The admin's most important distinction: wrong key vs unreachable
+      // host. They have completely different fixes.
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("CREDENTIALS_REJECTED");
+      expect(calls).toHaveLength(1);
+    });
+  });
+
+  test("a 404 from a wrongly-composed base is reported as HTTP_404", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const adminId = await seedAdmin(t);
+      const client = t.withIdentity({ subject: adminId });
+
+      // The historical misconfiguration, still a real possibility on a row
+      // this feature did not create.
+      await seedAidapay(t, { status: "sandbox" });
+
+      const calls: string[] = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (url: any) => {
+        calls.push(String(url));
+        return new Response("nope", { status: 404 });
+      }) as unknown as typeof fetch;
+
+      try {
+        const result: any = await client.action(
+          api.vtuProviderCall.testProviderConnection,
+          { name: "aidapay" },
+        );
+        // Asserted precisely: this double-prefixed URL is the exact shape
+        // that produced the original live 404.
+        expect(calls[0]).toBe("https://aidapay.ng/api/v1/account");
+        expect(result.ok).toBe(false);
+        expect(result.error).toBe("HTTP_404");
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+  });
+
+  test("a repaired row probes the corrected URL", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const adminId = await seedAdmin(t);
+      const client = t.withIdentity({ subject: adminId });
+      await seedAidapay(t, { status: "sandbox" });
+
+      // Apply the preset to repair the constants...
+      await client.mutation(api.vtuProviderAdmin.applyPreset, {
+        preset: "aidapay",
+        accountPin: "1234",
+      });
+
+      // …and confirm the probe now goes to the right place. This is the
+      // repair loop the card exists to support, closed end to end.
+      const calls: string[] = [];
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async (url: any) => {
+        calls.push(String(url));
+        return new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as unknown as typeof fetch;
+
+      try {
+        const result: any = await client.action(
+          api.vtuProviderCall.testProviderConnection,
+          { name: "aidapay" },
+        );
+        expect(calls[0]).toBe("https://aidapay.ng/api/v1/my_account");
+        expect(result.ok).toBe(true);
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    });
+  });
+
+  test("a network failure is reported, not thrown", async () => {
+    await withMasterKey(async () => {
+      const t = convexTest(schema, modules);
+      const adminId = await seedAdmin(t);
+      const client = t.withIdentity({ subject: adminId });
+      await client.mutation(api.vtuProviderAdmin.applyPreset, {
+        preset: "aidapay",
+        apiKey: "ap_live_token_0001",
+        accountPin: "1234",
+      });
+
+      const realFetch = globalThis.fetch;
+      globalThis.fetch = (async () => {
+        throw new Error("getaddrinfo ENOTFOUND aidapay.ng");
+      }) as unknown as typeof fetch;
+
+      try {
+        const result: any = await client.action(
+          api.vtuProviderCall.testProviderConnection,
+          { name: "aidapay" },
+        );
+        // A returned failure, because a thrown message is redacted in
+        // production and would reach the card as "Server Error".
+        expect(result.ok).toBe(false);
+        expect(result.error).toContain("ENOTFOUND");
+      } finally {
+        globalThis.fetch = realFetch;
+      }
     });
   });
 });
