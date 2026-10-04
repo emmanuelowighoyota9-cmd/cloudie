@@ -126,6 +126,7 @@ export const createOrder = mutation({
     const unitPriceNgn = product.priceNgn ?? product.pointsPrice * rate.ngnPerPoint;
     const totalNgn = Math.round(unitPriceNgn * args.quantity * 100) / 100;
     if (!Number.isFinite(totalNgn) || totalNgn <= 0) throw new Error("INVALID_ORDER_TOTAL");
+    const now = Date.now();
 
     await debitWallet(ctx, {
       userId,
