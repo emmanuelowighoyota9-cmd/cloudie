@@ -478,18 +478,8 @@ export default function Marketplace() {
     return (
       <CatalogOrderPage
         mode={orderMode}
-        products={catalogProducts}
         balance={balance}
-        pointsWithNgn={pointsWithNgn}
-        onBuy={async (product, quantity) => {
-          await handleBuy(
-            product._id,
-            product.name,
-            product.pointsPrice,
-            product.provider,
-            quantity,
-          );
-        }}
+        ngnPerPoint={ngnPerPoint}
       />
     );
   }
