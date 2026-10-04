@@ -112,10 +112,28 @@ export const adminAdjust = mutation({
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    return await ctx.runMutation(internal.wallet.adminAdjust, {
+    const adminId = await getAuthUserId(ctx);
+    if (!adminId) throw new Error("UNAUTHORIZED");
+    const admin = await ctx.db.get(adminId);
+    if (!admin || admin.role !== "admin" || admin.isSuspended) throw new Error("FORBIDDEN");
+    if (!args.reason.trim()) throw new Error("A reason is required");
+    const target = await ctx.db.get(args.userId);
+    if (!target) throw new Error("User not found");
+    const rate = await readPointRate(ctx);
+    const before = typeof target.walletBalanceNgn === "number" ? target.walletBalanceNgn : Math.max(0, (target.pointsBalance ?? 0) * rate.ngnPerPoint);
+    const after = Math.round((before + args.amount) * 100) / 100;
+    if (after < 0) throw new Error("Adjustment would result in a negative balance");
+    await ctx.db.patch(args.userId, { walletBalanceNgn: after });
+    return await ctx.db.insert("walletLedger", {
       userId: args.userId,
       amountNgn: args.amount,
-      reason: args.reason,
+      balanceAfterNgn: after,
+      description: `Admin wallet adjustment: ${args.reason}`,
+      type: "admin_adjustment",
+      reference: "admin",
+      referenceId: adminId,
+      metadata: { reason: args.reason, adminId },
+      createdAt: Date.now(),
     });
   },
 });
