@@ -60,9 +60,9 @@ const NUMBER_TERMS = [
 ];
 
 const BOOST_TERMS = [
-  "boost", "followers", "likes", "views", "comments", "subscribers",
-  "engagement", "members", "social media", "instagram", "tiktok", "youtube",
-  "telegram", "facebook", "twitter", "x.com",
+  "boost", "boosting", "social boost", "social boosting", "followers",
+  "likes", "views", "comments", "subscribers", "engagement", "members",
+  "impressions", "watch time", "retweets", "shares", "reactions",
 ];
 
 const normalize = (value: string) => value.trim().toLowerCase();
