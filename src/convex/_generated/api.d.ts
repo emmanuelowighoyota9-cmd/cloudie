@@ -36,6 +36,7 @@ import type * as health from "../health.js";
 import type * as http from "../http.js";
 import type * as lib_encryption from "../lib/encryption.js";
 import type * as marketplace from "../marketplace.js";
+import type * as logspanel from "../logspanel.js";
 import type * as notifications from "../notifications.js";
 import type * as organization from "../organization.js";
 import type * as paymentConfig from "../paymentConfig.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/encryption": typeof lib_encryption;
   marketplace: typeof marketplace;
+  logspanel: typeof logspanel;
   notifications: typeof notifications;
   organization: typeof organization;
   paymentConfig: typeof paymentConfig;
