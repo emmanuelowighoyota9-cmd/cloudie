@@ -4,8 +4,46 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 const BASE_URL = "https://logspanel.com/api/v1";
+
+/**
+ * These return shapes are written out rather than inferred, and that is load
+ * bearing.
+ *
+ * Every handler below reaches into the public API (`api.…`) or the internal API
+ * (`internal.…`). Both are declared in `_generated/api.d.ts` as a filter over
+ * this file's own exports, so inferring a handler's return type from an
+ * `api`/`internal` call asks TypeScript to know the thing it is in the middle of
+ * computing — a circle. TypeScript reports that circle on the handler as
+ * TS7022/TS7023, and, because `skipLibCheck` is on, the same circle quietly
+ * types the generated `api` as `any`. A single `any` there erases the type of
+ * every `useQuery(api.…)` result in the app, which is exactly the cascade the
+ * production build was failing on. Annotating the return type breaks the circle
+ * at its cheapest link; the rest of the app keeps its real types.
+ */
+type CatalogSyncResult = {
+  created: number;
+  updated: number;
+  received: number;
+  seen: string[];
+};
+
+type PurchaseResult =
+  | { orderId: Id<"marketplaceOrders">; reused: true; status: string }
+  | {
+      orderId: Id<"marketplaceOrders">;
+      providerOrderId: string | null;
+      status: string;
+      items: unknown;
+    };
+
+type OrderRefreshResult = {
+  orderId: Id<"marketplaceOrders">;
+  status: string;
+  items: unknown;
+};
 
 async function requestLogspanel(path: string, init?: RequestInit) {
   const key = process.env.LOGSPANEL_API_KEY;
@@ -29,7 +67,7 @@ async function requestLogspanel(path: string, init?: RequestInit) {
 
 export const syncCatalog = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<CatalogSyncResult> => {
     const adminId = await getAuthUserId(ctx);
     if (!adminId) throw new Error("UNAUTHORIZED");
     const me = await ctx.runQuery(api.users.currentUser);
@@ -62,7 +100,7 @@ export const purchase = action({
     quantity: v.number(),
     idempotencyKey: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PurchaseResult> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
     const enabled = await ctx.runQuery(api.marketplace.isLogspanelEnabled);
@@ -133,13 +171,13 @@ export const purchase = action({
       providerOrderId: data.order_id ?? null,
       status: data.status ?? status,
       items: data.items ?? [],
-    };  },
+    };
+  },
 });
-
 
 export const refreshOrder = action({
   args: { orderId: v.id("marketplaceOrders") },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<OrderRefreshResult> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
     const order = await ctx.runQuery(api.marketplace.getMyOrder, { orderId: args.orderId });
