@@ -48,7 +48,7 @@ async function paystackFetch(path: string, secretKey: string, opts: RequestInit 
 export const initializePayment = action({
   args: {
     packageId: v.string(),
-    points: v.number(),
+    points: v.optional(v.number()),
     amountUsd: v.number(),
     amountNgn: v.optional(v.number()),
     email: v.string(),
@@ -78,9 +78,7 @@ export const initializePayment = action({
     if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
       throw new Error("Invalid payment amount");
     }
-    if (!Number.isFinite(args.points) || args.points <= 0) {
-      throw new Error("Invalid points package");
-    }
+    if (currency === "NGN" && amountMajor <= 0) throw new Error("Invalid wallet funding amount");
 
     // Generate a unique reference
     const reference = `CLD-${args.packageId}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -98,7 +96,8 @@ export const initializePayment = action({
         callback_url: `${callbackUrl}?reference=${reference}&packageId=${encodeURIComponent(args.packageId)}`,
         metadata: {
           packageId: args.packageId,
-          points: args.points,
+          points: args.points ?? 0,
+      walletAmountNgn: currency === "NGN" ? amountMajor : undefined,
           amountUsd: args.amountUsd,
           amountNgn: args.amountNgn ?? 0,
           currency,
@@ -138,7 +137,7 @@ export const initializePayment = action({
  */
 type VerifyResult =
   | { verified: false; status?: string; message: string; reference?: string }
-  | { verified: true; credited: boolean; points: number; reference: string; orderId?: string; message?: string; amountWarning?: string };
+  | { verified: true; credited: boolean; points: number; amountNgn: number; reference: string; orderId?: string; message?: string; amountWarning?: string };
 
 /**
  * Verify a Paystack transaction by reference.
@@ -182,7 +181,7 @@ export const verifyAndCredit = action({
     // even when this action runs without a session (callback before auth hydrates).
     const existing: Doc<"paymentOrders"> | null = await ctx.runQuery(internal.paystackInternal.findPaymentByRef, { reference });
     if (existing?.status === "paid") {
-      return { verified: true, credited: false, message: "Already credited", points: existing.points, reference };
+      return { verified: true, credited: false, message: "Already credited", points: existing.points, amountNgn: existing.walletAmountNgn ?? existing.amountSubunit / 100, reference };
     }
 
     // A settled amount that differs from the order is recorded, never used to
@@ -195,20 +194,19 @@ export const verifyAndCredit = action({
         : undefined;
 
     const points = existing?.points ?? Number(metadata.points ?? 0);
-    const packageId = existing?.packageId ?? String(metadata.packageId ?? "unknown");
+    const packageId = existing?.packageId ?? String(metadata.packageId ?? "wallet");
     const amountMajor = amount / 100;
     const amountUsd = currency === "USD" ? amountMajor : Number(metadata.amountUsd ?? 0);
     const amountNgn = currency === "NGN" ? amountMajor : Number(metadata.amountNgn ?? 0);
 
-    if (points <= 0) {
-      return { verified: false, message: "Invalid points in transaction metadata" };
-    }
+
 
     // Credit the user via points system (idempotent — safe to call again)
     const orderResult: string = await ctx.runMutation(internal.paystackInternal.recordPaymentAndCredit, {
       reference,
       packageId,
       points,
+      walletAmountNgn: currency === "NGN" ? amountMajor : (existing?.walletAmountNgn ?? Number(metadata.amountNgn ?? 0)),
       amountUsd,
       amountNgn,
       currency,
@@ -223,6 +221,7 @@ export const verifyAndCredit = action({
       verified: true,
       credited: !alreadyCredited,
       points,
+      amountNgn: currency === "NGN" ? amountMajor : (existing?.walletAmountNgn ?? Number(metadata.amountNgn ?? 0)),
       reference,
       orderId: alreadyCredited ? orderResult.slice(8) : orderResult,
       amountWarning,
@@ -291,6 +290,7 @@ export const recoverPendingCredits = action({
             reference,
             packageId: order.packageId,
             points: order.points,
+            walletAmountNgn: order.walletAmountNgn ?? order.amountSubunit / 100,
             amountUsd: currency === "USD" ? amountMajor : Number(meta.amountUsd ?? 0),
             amountNgn: currency === "NGN" ? amountMajor : Number(meta.amountNgn ?? 0),
             currency,
