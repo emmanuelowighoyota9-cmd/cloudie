@@ -144,7 +144,7 @@ export default function AdminCatalog() {
   // ── Upload / import state ─────────────────────────────────────────────
   const [svcImportOpen, setSvcImportOpen] = useState(false);
   const [svcImportBusy, setSvcImportBusy] = useState(false);
-  const [newProduct, setNewProduct] = useState({ name: "", category: "", pointsPrice: "", description: "", imageUrl: "" });
+  const [newProduct, setNewProduct] = useState({ name: "", category: "", priceNgn: "", description: "", imageUrl: "" });
   const [productImportOpen, setProductImportOpen] = useState(false);
   const [productImportBusy, setProductImportBusy] = useState(false);
   const [templateImportOpen, setTemplateImportOpen] = useState(false);
@@ -321,9 +321,9 @@ export default function AdminCatalog() {
     if (raw === undefined || raw === "") return;
     setBusy(row._id);
     try {
-      const res = await setProductPrice({ productId: row._id as never, pointsPrice: Number(raw) });
+      const res = await setProductPrice({ productId: row._id as never, priceNgn: Number(raw) });
       setProductEdits((p) => ({ ...p, [row._id]: "" }));
-      toast.success(`${row.name} now lists at ${res.pointsPrice} pts`);
+      toast.success(`${row.name} now lists at ${formatNgn(res.priceNgn)}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not re-price the listing");
     } finally {
@@ -384,19 +384,20 @@ export default function AdminCatalog() {
 
   const onCreateProduct = async () => {
     if (!newProduct.name.trim() || !newProduct.category.trim()) { toast.error("Name and category are required"); return; }
-    const price = Number(newProduct.pointsPrice);
-    if (!Number.isFinite(price) || price < 0) { toast.error("Points price must be a number"); return; }
+    const priceNgn = Number(newProduct.priceNgn);
+    if (!Number.isFinite(priceNgn) || priceNgn < 0) { toast.error("NGN price must be a number"); return; }
     setBusy("__newProduct");
     try {
       await adminCreateProduct({
         name: newProduct.name.trim(),
         description: newProduct.description.trim() || newProduct.name.trim(),
         category: newProduct.category.trim(),
-        pointsPrice: price,
+        pointsPrice: 0,
+        priceNgn,
         imageUrl: newProduct.imageUrl.trim() || undefined,
       });
       toast.success(`${newProduct.name} added to the marketplace`);
-      setNewProduct({ name: "", category: "", pointsPrice: "", description: "", imageUrl: "" });
+      setNewProduct({ name: "", category: "", priceNgn: "", description: "", imageUrl: "" });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not add product");
     } finally {
@@ -735,8 +736,7 @@ export default function AdminCatalog() {
                           />
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          <p className="font-medium text-foreground">{formatNgn((Number.isFinite(current) ? current : 0) * ngnPerPoint)}</p>
-                          <p>{formatUsd((Number.isFinite(current) ? current : 0) * usdPerPoint)}</p>
+                          <p className="font-medium text-foreground">{formatNgn(Number.isFinite(current) ? current : 0)}</p>
                         </div>
                         <Button
                           size="sm"
@@ -782,8 +782,8 @@ export default function AdminCatalog() {
                 <Input placeholder="Category — e.g. logistics" value={newProduct.category} onChange={(e) => setNewProduct((n) => ({ ...n, category: e.target.value }))} className="h-7 text-xs" />
               </div>
               <div className="space-y-1">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Points price</Label>
-                <Input type="number" min={0} inputMode="numeric" placeholder="e.g. 120" value={newProduct.pointsPrice} onChange={(e) => setNewProduct((n) => ({ ...n, pointsPrice: e.target.value }))} className="h-8 text-xs" />
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Price (NGN)</Label>
+                <Input type="number" min={0} inputMode="decimal" placeholder="e.g. 2500" value={newProduct.priceNgn} onChange={(e) => setNewProduct((n) => ({ ...n, priceNgn: e.target.value }))} className="h-8 text-xs" />
                 <Input placeholder="Image URL (optional)" value={newProduct.imageUrl} onChange={(e) => setNewProduct((n) => ({ ...n, imageUrl: e.target.value }))} className="h-7 text-xs" />
               </div>
               <div className="space-y-1">
@@ -822,15 +822,15 @@ export default function AdminCatalog() {
                       <div className="flex flex-wrap items-center gap-3">
                         <StatusBadge status={row.isApproved ? (row.isActive ? "active" : "paused") : "draft"} />
                         <div className="space-y-1">
-                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Points</Label>
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Price (NGN)</Label>
                           <Input
                             type="number"
                             min={0}
-                            inputMode="numeric"
-                            value={editValue ?? String(row.pointsPrice)}
+                            inputMode="decimal"
+                            value={editValue ?? String(row.priceNgn ?? row.pointsPrice * ngnPerPoint)}
                             onChange={(e) => setProductEdits((p) => ({ ...p, [row._id]: e.target.value }))}
-                            className="h-8 w-24"
-                            aria-label={`Points price for ${row.name}`}
+                            className="h-8 w-28"
+                            aria-label={`NGN price for ${row.name}`}
                           />
                         </div>
                         <div className="text-[11px] text-muted-foreground">
