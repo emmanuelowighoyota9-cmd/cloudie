@@ -24,7 +24,7 @@ export default function AdminAnalytics() {
     <div className="space-y-6">
       <AdminPageHeader
         title="Analytics"
-        description="Server-side aggregation over points, users, shipments, documents, and orders."
+        description="Server-side aggregation over NGN wallet activity, users, shipments, documents, and orders."
         actions={
           <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800" role="group" aria-label="Time range">
             {RANGES.map((r) => (
@@ -47,8 +47,8 @@ export default function AdminAnalytics() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Points minted" value={data.totals.minted} icon={BarChart3} color="green" />
-            <StatCard title="Points burned" value={data.totals.burned} icon={BarChart3} color="red" />
+            <StatCard title="Wallet credits" value={data.totals.minted} icon={BarChart3} color="green" />
+            <StatCard title="Wallet debits" value={data.totals.burned} icon={BarChart3} color="red" />
             <StatCard title="New users" value={data.totals.newUsers} icon={BarChart3} color="blue" />
             <StatCard title="Active tenants" value={data.totals.activeTenants} icon={BarChart3} color="indigo" />
             <StatCard title="Shipments" value={data.totals.shipments} icon={BarChart3} color="purple" />
@@ -66,7 +66,7 @@ export default function AdminAnalytics() {
               {buckets.length === 0 ? (
                 <p className="py-10 text-center text-sm text-slate-400">No activity in this range.</p>
               ) : (
-                <div className="flex h-48 items-end gap-[3px] overflow-x-auto" aria-label="Points minted vs burned over time" role="img">
+                <div className="flex h-48 items-end gap-[3px] overflow-x-auto" aria-label="NGN wallet credits vs debits over time" role="img">
                   {buckets.map((b, i) => (
                     <div key={i} className="group relative flex h-full min-w-[6px] flex-1 flex-col justify-end gap-[2px]">
                       <div
