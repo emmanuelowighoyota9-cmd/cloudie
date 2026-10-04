@@ -119,7 +119,7 @@ export default function Transactions() {
                     ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400"
                     : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
                 }`}>
-                  {tx.amount > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                  {tx.amountNgn > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{tx.description}</p>
@@ -129,7 +129,7 @@ export default function Transactions() {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`text-sm font-bold ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
+                  <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-green-600" : "text-red-600"}`}>
                     {tx.amount > 0 ? "+" : ""}{tx.amountNgn.toLocaleString("en-NG")}
                   </p>
                   <p className="text-[10px] text-slate-400">Bal: {tx.balanceAfterNgn.toLocaleString("en-NG")}</p>
