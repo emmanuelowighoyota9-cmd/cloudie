@@ -147,7 +147,7 @@ function GlobalSearch() {
                       className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
                     >
                       <span className="truncate">{u.label}</span>
-                      <span className="ml-2 shrink-0 text-xs text-slate-400">{u.points.toLocaleString()} pts</span>
+                      <span className="ml-2 shrink-0 text-xs text-slate-400">₦{u.walletBalanceNgn.toLocaleString("en-NG")}</span>
                     </button>
                   ))}
                 </>
