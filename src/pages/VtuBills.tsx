@@ -695,14 +695,14 @@ function BillCard({
             : "Not available to buy yet — ask support to enable it"}
         </span>
         <span className="mt-1.5 block text-sm font-semibold tabular-nums">
-          {product.fixedPoints !== null
-            ? `${product.fixedPoints.toLocaleString()} pts`
-            : product.indicativeMinPoints !== null &&
-                product.indicativeMaxPoints !== null
-              ? product.indicativeMinPoints === product.indicativeMaxPoints
-                ? `${product.indicativeMinPoints.toLocaleString()} pts`
-                : `${product.indicativeMinPoints.toLocaleString()}–${product.indicativeMaxPoints.toLocaleString()} pts`
-              : "Price shown at checkout"}
+          {product.fixedNgn !== null
+            ? formatNgn(product.fixedNgn)
+            : product.indicativeMinNgn !== null &&
+                product.indicativeMaxNgn !== null
+              ? product.indicativeMinNgn === product.indicativeMaxNgn
+                ? formatNgn(product.indicativeMinNgn)
+                : `${formatNgn(product.indicativeMinNgn)}–${formatNgn(product.indicativeMaxNgn)}`
+              : "Price shown at checkout"}t"}
         </span>
       </span>
     </VtuChoice>
