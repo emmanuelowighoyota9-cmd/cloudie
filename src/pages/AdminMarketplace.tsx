@@ -1,15 +1,23 @@
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Ban, Check, RotateCcw, X } from "lucide-react";
+import { Ban, Check, RotateCcw, X, RefreshCw, Store } from "lucide-react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
+import { useState } from "react";
 
 export default function AdminMarketplace() {
   const products = useQuery(api.marketplace.adminListAllProducts, { limit: 200 });
   const approve = useMutation(api.marketplace.adminApproveProduct);
   const toggleActive = useMutation(api.adminApi.adminToggleProductActive);
+  const provider = useQuery(api.marketplace.getLogspanelAdminStatus, {});
+  const providerProducts = useQuery(api.marketplace.getLogspanelProducts, { limit: 200 });
+  const syncCatalog = useAction(api.logspanel.syncCatalog);
+  const saveProvider = useMutation(api.marketplace.setLogspanelSettings);
+  const [syncing, setSyncing] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+  const [markup, setMarkup] = useState("0");
 
   const act = async (productId: string, doApprove: boolean) => {
     try {
