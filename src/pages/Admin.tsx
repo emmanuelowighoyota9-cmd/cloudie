@@ -25,7 +25,7 @@ import { usePricing } from "@/lib/pricing";
 export default function Admin() {
   const data = useQuery(api.adminApi.adminDashboard);
   const { ngnPerPoint } = usePricing();
-  const ngnValue = (points: number) => `₦${Math.round(points * ngnPerPoint).toLocaleString("en-NG")}`;
+  const ngnValue = (amountNgn: number) => `₦${Math.round(amountNgn).toLocaleString("en-NG")}`;
 
   if (data === undefined) {
     return (
@@ -72,8 +72,8 @@ export default function Admin() {
     {
       title: "Points Economy",
       items: [
-        { title: "Points Issued", value: data.points.minted, icon: Coins, color: "blue" as const, to: "/admin/transactions", hint: ngnValue(data.points.minted) },
-        { title: "Points Burned", value: data.points.burned, icon: Coins, color: "amber" as const, to: "/admin/transactions", hint: ngnValue(data.points.burned) },
+        { title: "Wallet Credits", value: data.points.minted, icon: Coins, color: "blue" as const, to: "/admin/transactions", hint: ngnValue(data.points.minted) },
+        { title: "Wallet Debits", value: data.points.burned, icon: Coins, color: "amber" as const, to: "/admin/transactions", hint: ngnValue(data.points.burned) },
         { title: "Velocity (24h)", value: data.points.velocity24h, icon: Zap, color: "purple" as const, to: "/admin/transactions" },
       ],
     },
