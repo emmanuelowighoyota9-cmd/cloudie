@@ -83,6 +83,7 @@ import type * as vtuServiceAdmin from "../vtuServiceAdmin.js";
 import type * as vtuServiceRouting from "../vtuServiceRouting.js";
 import type * as vtuShared from "../vtuShared.js";
 import type * as vtuUnresolvedAdmin from "../vtuUnresolvedAdmin.js";
+import type * as wallet from "../wallet.js";
 
 import type {
   ApiFromModules,
@@ -166,6 +167,7 @@ declare const fullApi: ApiFromModules<{
   vtuServiceRouting: typeof vtuServiceRouting;
   vtuShared: typeof vtuShared;
   vtuUnresolvedAdmin: typeof vtuUnresolvedAdmin;
+  wallet: typeof wallet;
 }>;
 
 /**
