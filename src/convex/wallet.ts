@@ -258,7 +258,7 @@ export const debit = internalMutation({
 export const adminAdjust = mutation({
   args: { userId: v.id("users"), amountNgn: v.number(), reason: v.string() },
   handler: async (ctx, args) => {
-    const { adminId, user: admin } = await requireAdmin(ctx);
+    const { adminId } = await requireAdmin(ctx);
     if (!args.reason.trim()) throw new Error("A reason is required");
     const before = await ensureWallet(ctx, args.userId);
     const after = Math.round((before + args.amountNgn) * 100) / 100;
