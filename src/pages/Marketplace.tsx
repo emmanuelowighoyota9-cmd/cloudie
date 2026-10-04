@@ -92,47 +92,78 @@ type MarketplaceImageProduct = {
 
 const PRODUCT_IMAGE_FALLBACKS = [
   {
-    terms: ["proxy", "vpn", "server", "hosting", "ip:"],
-    url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=85",
+    terms: ["instagram", "ig"],
+    platform: "Instagram",
+    icon: "◎",
+    className: "from-fuchsia-500 via-rose-500 to-orange-400",
   },
   {
-    terms: ["number", "numbers", "phone", "sms", "otp", "voip"],
-    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=85",
+    terms: ["tiktok", "tik tok"],
+    platform: "TikTok",
+    icon: "♪",
+    className: "from-slate-950 via-slate-900 to-cyan-500",
   },
   {
-    terms: ["instagram", "tiktok", "facebook", "twitter", "reddit", "social", "followers", "likes", "views", "engagement"],
-    url: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=1200&q=85",
+    terms: ["facebook", "fb"],
+    platform: "Facebook",
+    icon: "f",
+    className: "from-blue-700 to-blue-500",
   },
   {
-    terms: ["email", "outlook", "mail", "gmail"],
-    url: "https://images.unsplash.com/photo-1557200134-90327ee9fafa?auto=format&fit=crop&w=1200&q=85",
+    terms: ["twitter", "x account", "twitter account"],
+    platform: "X",
+    icon: "𝕏",
+    className: "from-black to-slate-700",
   },
   {
-    terms: ["netflix", "streaming", "movie", "entertainment", "spotify", "music"],
-    url: "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&w=1200&q=85",
+    terms: ["snapchat"],
+    platform: "Snapchat",
+    icon: "👻",
+    className: "from-yellow-400 to-yellow-300",
   },
   {
-    terms: ["apple", "iphone", "mac", "ipad", "device", "electronics"],
-    url: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=85",
+    terms: ["reddit"],
+    platform: "Reddit",
+    icon: "●",
+    className: "from-orange-600 to-orange-400",
   },
   {
-    terms: ["parcel", "package", "logistics", "delivery", "store", "shopping"],
-    url: "https://images.unsplash.com/photo-1586528116493-da8b8f5e3f2a?auto=format&fit=crop&w=1200&q=85",
+    terms: ["discord"],
+    platform: "Discord",
+    icon: "◉",
+    className: "from-indigo-700 to-indigo-500",
+  },
+  {
+    terms: ["pinterest"],
+    platform: "Pinterest",
+    icon: "P",
+    className: "from-red-700 to-red-500",
+  },
+  {
+    terms: ["telegram"],
+    platform: "Telegram",
+    icon: "➤",
+    className: "from-sky-600 to-sky-400",
+  },
+  {
+    terms: ["youtube"],
+    platform: "YouTube",
+    icon: "▶",
+    className: "from-red-700 to-red-500",
   },
 ] as const;
 
-const DEFAULT_PRODUCT_IMAGE =
-  "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=85";
+const DEFAULT_PRODUCT_IMAGE = "";
 
-function getProductImage(product: MarketplaceImageProduct) {
-  if (product.imageUrl?.trim()) return product.imageUrl.trim();
-
+function getProductPlatform(product: MarketplaceImageProduct) {
   const haystack = normalize(`${product.category} ${product.name}`);
-  const match = PRODUCT_IMAGE_FALLBACKS.find(({ terms }) =>
+  return PRODUCT_IMAGE_FALLBACKS.find(({ terms }) =>
     terms.some((term) => haystack.includes(term)),
   );
+}
 
-  return match?.url ?? DEFAULT_PRODUCT_IMAGE;
+function getProductImage(product: MarketplaceImageProduct) {
+  return product.imageUrl?.trim() || "";
 }
 
 type CatalogOrderPageProps = {
@@ -691,19 +722,30 @@ export default function Marketplace() {
                       aria-label={`View ${product.name}`}
                     >
                       {(() => {
-                        const fallbackImage = getProductImage(product);
+                        const image = getProductImage(product);
+                        const platform = getProductPlatform(product);
+                        if (image) {
+                          return (
+                            <img
+                              src={image}
+                              alt={product.name}
+                              loading="lazy"
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                            />
+                          );
+                        }
                         return (
-                          <img
-                            src={fallbackImage}
-                            alt={product.name}
-                            loading="lazy"
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                            onError={(event) => {
-                              if (event.currentTarget.dataset.fallbackApplied === "true") return;
-                              event.currentTarget.dataset.fallbackApplied = "true";
-                              event.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
-                            }}
-                          />
+                          <div className={`relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br ${platform?.className ?? "from-slate-700 to-slate-500"} text-white transition duration-300 group-hover:scale-[1.03]`}>
+                            <div className="absolute inset-0 bg-black/10" />
+                            <div className="relative flex flex-col items-center gap-2 text-center">
+                              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-4xl font-black shadow-lg ring-1 ring-white/25 backdrop-blur-sm">
+                                {platform?.icon ?? "🛍️"}
+                              </span>
+                              <span className="text-sm font-bold tracking-wide drop-shadow-sm">
+                                {platform?.platform ?? product.category}
+                              </span>
+                            </div>
+                          </div>
                         );
                       })()}
                       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
