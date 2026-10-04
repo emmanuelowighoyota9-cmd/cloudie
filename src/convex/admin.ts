@@ -300,7 +300,7 @@ export const getUserTransactions = query({
     const admin = await ctx.db.get(adminId);
     if (admin?.role !== "admin") return [];
     return await ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(args.limit ?? 50);
@@ -608,7 +608,7 @@ export const exportData = query({
       case "users":
         return await ctx.db.query("users").order("desc").take(cap);
       case "transactions":
-        return await ctx.db.query("pointLedger").order("desc").take(cap);
+        return await ctx.db.query("walletLedger").order("desc").take(cap);
       case "orders":
         return await ctx.db.query("marketplaceOrders").order("desc").take(cap);
       case "shipments":
@@ -637,15 +637,15 @@ export const getAnalytics = query({
     const allTenants = await ctx.db.query("tenantSites").collect();
     const allOrders = await ctx.db.query("marketplaceOrders").collect();
     const allProducts = await ctx.db.query("marketplaceProducts").collect();
-    const allLedger = await ctx.db.query("pointLedger").collect();
+    const allLedger = await ctx.db.query("walletLedger").collect();
     const allCampaigns = await ctx.db.query("emailCampaigns").collect();
 
     const totalMinted = allLedger
-      .filter((l) => l.amount > 0)
-      .reduce((s, l) => s + l.amount, 0);
+      .filter((l) => l.amountNgn > 0)
+      .reduce((s, l) => s + l.amountNgn, 0);
     const totalBurned = allLedger
-      .filter((l) => l.amount < 0)
-      .reduce((s, l) => s + Math.abs(l.amount), 0);
+      .filter((l) => l.amountNgn < 0)
+      .reduce((s, l) => s + Math.abs(l.amountNgn), 0);
 
     const now = Date.now();
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -662,6 +662,10 @@ export const getAnalytics = query({
       totalOrders: allOrders.length,
       totalProducts: allProducts.length,
       totalCampaigns: allCampaigns.length,
+      walletCreditedNgn: totalMinted,
+      walletDebitedNgn: totalBurned,
+      walletNetNgn: totalMinted - totalBurned,
+      // Compatibility keys for older admin widgets; values are now NGN.
       pointsMinted: totalMinted,
       pointsBurned: totalBurned,
       pointsInCirculation: totalMinted - totalBurned,
