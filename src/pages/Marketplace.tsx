@@ -519,7 +519,6 @@ export default function Marketplace() {
       {view === "orders" ? (
         <OrdersView
           orders={orders}
-          pointsWithNgn={pointsWithNgn}
           refreshLogspanelOrder={refreshLogspanelOrder}
         />
       ) : (
@@ -806,11 +805,9 @@ function ProductDetails({
 
 function OrdersView({
   orders,
-  pointsWithNgn,
   refreshLogspanelOrder,
 }: {
   orders: any[] | undefined;
-  pointsWithNgn: (points: number) => string;
   refreshLogspanelOrder: (args: { orderId: Id<"marketplaceOrders"> }) => Promise<{ status: string }>;
 }) {
   if (orders === undefined) {
