@@ -322,9 +322,7 @@ export default function Marketplace() {
                         <Badge variant="secondary" className="max-w-[70%] truncate border-white/20 bg-black/45 text-white backdrop-blur-sm">
                           {product.category}
                         </Badge>
-                        {product.provider === "logspanel" && (
-                          <Badge className="shrink-0 bg-primary/95 text-primary-foreground shadow-sm">Logspanel</Badge>
-                        )}
+
                       </div>
                       {outOfStock && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/55">
