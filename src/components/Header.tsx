@@ -78,7 +78,7 @@ export function Header() {
             >
             <Box className="h-3.5 w-3.5" />
             {walletBalance != null ? formatNgn(walletBalance) : "—"}
-            {pointsBalance != null && (
+            {walletBalance != null && (
               <span className="hidden text-[11px] font-normal opacity-90 sm:inline">
                 · NGN
               </span>
