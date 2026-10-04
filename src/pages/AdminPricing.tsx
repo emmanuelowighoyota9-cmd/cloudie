@@ -429,7 +429,6 @@ export default function AdminPricing() {
                       </div>
                     </Field>
                     <div className="flex items-center gap-2">
-n>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -449,7 +448,7 @@ n>
         </CardContent>
         <CardContent className="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Shown on the customer wallet funding page. Default: {formatNgn(15000)} = 1,000 pts.
+            Shown on the customer wallet funding page. Default funding preset: {formatNgn(15000)}.
           </p>
           <Button onClick={saveAllPackages} disabled={saving === "__packages" || !billing}>
             {saving === "__packages" ? "Saving…" : "Save packages"}
