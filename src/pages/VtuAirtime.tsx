@@ -1,38 +1,49 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-import { formatNgn } from "@/lib/pricing";
 import {
-  maskIdentifier,
-  validatePhone,
-  vtuStatusCopy,
-  vtuStatusReasonCopy,
-} from "@/lib/vtu";
-import { cn } from "@/lib/utils";
-// The status chrome is SHARED with /vtu/history, so the same status cannot be
-// green on one screen and amber on another.
-import { VtuNav, VTU_STATUS_TONE } from "@/components/vtu/shared";
-import { Loader2, Radio } from "lucide-react";
+  VTU_NETWORKS,
+  VtuBand,
+  VtuChoice,
+  VtuConfirmPanel,
+  VtuNav,
+  VtuNetworkMark,
+  VtuReceipt,
+  VtuRow,
+  VtuSection,
+  VtuShell,
+  VtuSteps,
+} from "@/components/vtu/shared";
+import { formatNgn } from "@/lib/pricing";
+import { maskIdentifier, validatePhone } from "@/lib/vtu";
+import { ArrowLeft, Coins, Loader2, Lock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
-/** Display names for the four Nigerian networks. */
-const NETWORKS = [
-  { key: "mtn", label: "MTN" },
-  { key: "airtel", label: "Airtel" },
-  { key: "glo", label: "Glo" },
-  { key: "9mobile", label: "9mobile" },
-] as const;
+/**
+ * Airtime top-up — the screen the whole shop is shaped around.
+ *
+ * Three choices and a number: which network, how much, who for. They are on
+ * one screen on purpose, because a customer buying ₦200 of airtime is not
+ * filling in a form — they are repeating something they do weekly, and every
+ * extra tap is a reason to use the other app.
+ *
+ * The purchase itself is NEVER confirmed by this page's own optimism. The page
+ * SUBSCRIBES to the transaction record and shows what the record says, so a
+ * top-up that is still processing cannot be shown with a tick.
+ */
 
 const AMOUNTS = [100, 200, 500, 1000, 2000, 5000] as const;
+
+/** Airtime's amount and its number are chosen on ONE screen, so the rail says
+ *  "Choose" rather than pretending they are two stops. */
+const STEP_LABELS = ["Choose", "Confirm", "Done"] as const;
 
 export default function VtuAirtime() {
   // The catalog deep-links here with the network it selected. Validated against
@@ -41,10 +52,11 @@ export default function VtuAirtime() {
   const [searchParams] = useSearchParams();
   const requestedNetwork = searchParams.get("network");
   const [network, setNetwork] = useState<string>(
-    NETWORKS.some((n) => n.key === requestedNetwork) ? requestedNetwork! : "mtn",
+    VTU_NETWORKS.some((n) => n.key === requestedNetwork) ? requestedNetwork! : "mtn",
   );
   const [amount, setAmount] = useState<number>(1000);
   const [phone, setPhone] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
   const [transactionId, setTransactionId] = useState<Id<"vtuTransactions"> | null>(
     null,
   );
@@ -71,9 +83,25 @@ export default function VtuAirtime() {
   const phoneCheck = useMemo(() => validatePhone(phone), [phone]);
   const affordable = (balance ?? 0) >= (selected?.points ?? 0);
   const inFlight = tx ? tx.status === "pending" || tx.status === "processing" : false;
+  const locked = submitting || inFlight;
+  const networkLabel = VTU_NETWORKS.find((n) => n.key === network)?.label ?? network;
+
+  const step: "details" | "confirm" | "receipt" = tx
+    ? "receipt"
+    : confirmed
+      ? "confirm"
+      : "details";
+
+  // Warm the points cost only when we are about to need it: this is a preview
+  // read, and a grid of six amounts does not require six of them.
+  const preview = useQuery(
+    api.vtu.previewCost,
+    confirmed && selected ? { serviceCode } : "skip",
+  );
+  const pointsToPay = preview?.points ?? selected?.points ?? 0;
 
   async function handleSubmit() {
-    if (submitting || !selected) return;
+    if (locked || !selected) return;
     const check = validatePhone(phone);
     if (!check.ok) {
       toast.error(check.error);
@@ -105,110 +133,125 @@ export default function VtuAirtime() {
     }
   }
 
+  function reset() {
+    setTransactionId(null);
+    setConfirmed(false);
+    setPhone("");
+  }
+
   return (
-    <div className="page-gutter mx-auto w-full max-w-5xl space-y-8 py-10 sm:py-14">
+    <VtuShell>
       <VtuNav />
-      <Reveal>
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              Airtime top-up
+
+      <VtuBand>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] opacity-70">
+              Airtime
+            </p>
+            <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
+              Top up any network
             </h1>
-            <Badge variant="secondary" className="gap-1.5">
-              <Radio className="h-3 w-3" />
-              Instant top-up
-            </Badge>
+            <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
+              Delivered straight to the number. A top-up that does not go
+              through returns your points automatically.
+            </p>
           </div>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Buy airtime for any Nigerian number using your points balance. A
-            top-up that does not go through returns your points automatically.
-          </p>
+          <div className="text-left sm:text-right">
+            <p className="text-[11px] uppercase tracking-[0.14em] opacity-70">
+              Available
+            </p>
+            <p className="font-display text-lg font-bold tabular-nums">
+              {(balance ?? 0).toLocaleString()} pts
+            </p>
+            <Button
+              asChild
+              variant="vtu"
+              size="sm"
+              className="mt-1.5 border border-vtu-band-fg/25 bg-vtu-band-fg/10 hover:bg-vtu-band-fg/20"
+            >
+              <Link to="/buy-points">
+                <Plus className="h-3.5 w-3.5" />
+                Buy points
+              </Link>
+            </Button>
+          </div>
         </div>
-      </Reveal>
+      </VtuBand>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <div className="space-y-6">
+      {step !== "receipt" && (
+        <VtuSteps steps={STEP_LABELS} current={step === "confirm" ? 1 : 0} className="px-1" />
+      )}
+
+      {step === "details" && (
+        <>
           <Reveal>
-            <div className="space-y-3">
-              <Label>Network</Label>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {NETWORKS.map((n) => (
-                  <button
-                    key={n.key}
-                    type="button"
-                    onClick={() => setNetwork(n.key)}
-                    aria-pressed={network === n.key}
-                    className={cn(
-                      "interactive-card min-h-11 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                      network === n.key
-                        ? "border-primary bg-primary/5 text-foreground ring-1 ring-primary"
-                        : "border-border bg-card hover:bg-muted/50",
-                    )}
-                  >
-                    {n.label}
-                  </button>
-                ))}
-              </div>
+            <div className="vtu-panel space-y-5 px-5 py-5">
+              <VtuSection title="Network" hint="The network the number is on.">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {VTU_NETWORKS.map((n) => (
+                    <VtuChoice
+                      key={n.key}
+                      selected={network === n.key}
+                      onClick={() => setNetwork(n.key)}
+                      className="flex items-center gap-2"
+                    >
+                      <VtuNetworkMark network={n.key} className="h-8 w-8" />
+                      <span className="text-sm font-medium">{n.label}</span>
+                    </VtuChoice>
+                  ))}
+                </div>
+              </VtuSection>
             </div>
           </Reveal>
 
-          <Reveal delay={0.05}>
-            <div className="space-y-3">
-              <Label>Amount</Label>
-              <StaggerGroup className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {AMOUNTS.map((n) => {
-                  const offer = offers?.offers.find(
-                    (o) => o.serviceCode === `airtime.${network}.${n}`,
-                  );
-                  const active = amount === n;
-                  return (
-                    <StaggerItem key={n}>
-                      <button
-                        type="button"
-                        onClick={() => setAmount(n)}
-                        aria-pressed={active}
-                        className={cn(
-                          "interactive-card min-h-16 w-full rounded-lg border p-3 text-left transition-colors",
-                          active
-                            ? "border-primary bg-primary/5 ring-1 ring-primary"
-                            : "border-border bg-card hover:bg-muted/50",
-                        )}
-                      >
-                        <p className="text-sm font-semibold tabular-nums">
-                          {formatNgn(n)}
-                        </p>
-                        <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                          {offer ? `${offer.points} pts` : "…"}
-                        </p>
-                      </button>
-                    </StaggerItem>
-                  );
-                })}
-              </StaggerGroup>
-              {selected?.override && (
-                <p className="text-xs text-muted-foreground">
-                  This amount has an admin-set price override.
-                </p>
-              )}
-            </div>
-          </Reveal>
-        </div>
-
-        <Reveal delay={0.1}>
-          <Card className="lg:sticky lg:top-24">
-            <CardContent className="space-y-5 p-6">
-              <div className="space-y-1">
-                <h2 className="text-base font-semibold">Purchase</h2>
-                <p className="text-sm text-muted-foreground">
-                  Balance{" "}
-                  <span className="font-medium text-foreground tabular-nums">
-                    {(balance ?? 0).toLocaleString()} pts
-                  </span>
-                </p>
-              </div>
+          <Reveal delay={0.04}>
+            <div className="vtu-panel space-y-5 px-5 py-5">
+              <VtuSection
+                title="Amount"
+                hint="Prices in points update the moment you pick one."
+              >
+                <StaggerGroup className="grid grid-cols-3 gap-2">
+                  {AMOUNTS.map((n) => {
+                    const offer = offers?.offers.find(
+                      (o) => o.serviceCode === `airtime.${network}.${n}`,
+                    );
+                    const active = amount === n;
+                    return (
+                      <StaggerItem key={n}>
+                        <VtuChoice
+                          selected={active}
+                          onClick={() => setAmount(n)}
+                          className="w-full text-center"
+                        >
+                          <span className="block text-sm font-semibold tabular-nums">
+                            {formatNgn(n)}
+                          </span>
+                          <span
+                            className={
+                              active
+                                ? "mt-0.5 block text-[11px] font-medium text-vtu-accent-ink/80 tabular-nums"
+                                : "mt-0.5 block text-[11px] text-vtu-muted tabular-nums"
+                            }
+                          >
+                            {offer ? `${offer.points} pts` : "…"}
+                          </span>
+                        </VtuChoice>
+                      </StaggerItem>
+                    );
+                  })}
+                </StaggerGroup>
+                {selected?.override && (
+                  <p className="text-[11px] text-vtu-muted">
+                    This amount has an admin-set price override.
+                  </p>
+                )}
+              </VtuSection>
 
               <div className="space-y-2">
-                <Label htmlFor="vtu-phone">Phone number</Label>
+                <Label htmlFor="vtu-phone" className="text-xs text-vtu-muted">
+                  Phone number
+                </Label>
                 <Input
                   id="vtu-phone"
                   value={phone}
@@ -216,149 +259,180 @@ export default function VtuAirtime() {
                   placeholder="0803 123 4567"
                   inputMode="tel"
                   autoComplete="off"
-                  disabled={inFlight}
-                  className="min-h-11"
+                  disabled={locked}
+                  className="min-h-11 border-vtu-line bg-vtu-card text-vtu-text placeholder:text-vtu-muted"
                   aria-invalid={phone.length > 0 && !phoneCheck.ok}
                 />
                 {phone.length > 0 && !phoneCheck.ok ? (
                   <p className="text-xs text-destructive">{phoneCheck.error}</p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[11px] text-vtu-muted">
                     The airtime is sent to this number.
                   </p>
                 )}
               </div>
 
-              <div className="rounded-lg border border-border bg-muted/40 p-4">
-                {selected ? (
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Product</span>
-                      <span className="text-right font-medium">
-                        {NETWORKS.find((n) => n.key === network)?.label} airtime
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-muted-foreground">Pays</span>
-                      <span className="text-right font-medium">
-                        {formatNgn(selected.amountNgn)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-4 border-t border-border pt-2">
-                      <span className="font-medium">Cost</span>
-                      <span className="text-right text-base font-semibold tabular-nums">
-                        {selected.points.toLocaleString()} pts
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <Skeleton className="h-20" />
-                )}
+              <div className="flex items-center justify-between rounded-xl bg-vtu-chip px-4 py-3">
+                <span className="flex items-center gap-1.5 text-xs text-vtu-muted">
+                  <Coins className="h-3.5 w-3.5" />
+                  {networkLabel} {formatNgn(amount)}
+                </span>
+                <span className="text-base font-semibold tabular-nums">
+                  {selected ? `${selected.points.toLocaleString()} pts` : "Loading…"}
+                </span>
               </div>
 
-              <Button
-                onClick={handleSubmit}
-                disabled={submitting || inFlight || !selected || !phoneCheck.ok || !affordable}
-                className="min-h-11 w-full"
-                size="lg"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Submitting…
-                  </>
-                ) : selected ? (
-                  `Pay ${selected.points.toLocaleString()} pts`
-                ) : (
-                  "Loading…"
-                )}
-              </Button>
-
               {selected && !affordable && (
-                <p className="text-xs text-destructive">
-                  You need {(selected.points - (balance ?? 0)).toLocaleString()}{" "}
-                  more points.
+                <p className="rounded-xl border border-vtu-line bg-vtu-chip px-3 py-2 text-xs text-vtu-muted">
+                  You need{" "}
+                  {(selected.points - (balance ?? 0)).toLocaleString()} more
+                  points.
                 </p>
               )}
-            </CardContent>
-          </Card>
-        </Reveal>
-      </div>
 
-      {tx && (
+              <Button
+                variant="vtu"
+                size="lg"
+                onClick={() => {
+                  if (!phoneCheck.ok) {
+                    toast.error(phoneCheck.error);
+                    return;
+                  }
+                  setConfirmed(true);
+                }}
+                disabled={locked || !selected || !phoneCheck.ok || !affordable}
+                className="w-full"
+              >
+                Pay {selected ? `${selected.points.toLocaleString()} pts` : "…"}
+              </Button>
+            </div>
+          </Reveal>
+        </>
+      )}
+
+      {step === "confirm" && selected && (
         <Reveal>
-          <Card>
-            <CardContent className="p-6">
-              {(() => {
-                // No fallback: a status we have no wording for (including the
-                // non-observable `failed`) renders the details and no banner,
-                // rather than borrowing another status's wording.
-                const copy = vtuStatusCopy(tx.status);
-                if (!copy) return null;
-                const view = VTU_STATUS_TONE[copy.status];
-                const Icon = view.icon;
-                const reason = vtuStatusReasonCopy(tx);
-                return (
-                  <div className="space-y-3">
-                    <div
-                      className={cn("flex items-start gap-3 rounded-lg border p-4", view.tone)}
-                      role="status"
-                      aria-live="polite"
-                    >
-                      <Icon
-                        className={cn("mt-0.5 h-4 w-4 shrink-0", view.spin && "animate-spin")}
-                      />
-                      <div className="min-w-0 space-y-1">
-                        <p className="text-sm font-medium">{copy.label}</p>
-                        <p className="text-sm opacity-90">{copy.detail}</p>
-                        {reason && (
-                          <p className="text-xs opacity-80">{reason}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Product</dt>
-                        <dd className="font-medium">{tx.serviceCode}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Number</dt>
-                        <dd className="font-medium tabular-nums">
-                          {maskIdentifier(tx.customerIdentifier)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Points</dt>
-                        <dd className="font-medium tabular-nums">
-                          {tx.pointsDebited.toLocaleString()}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Rate used</dt>
-                        <dd className="font-medium tabular-nums">
-                          {tx.ngnPerPoint} naira/pt
-                        </dd>
-                      </div>
-                    </dl>
-
-                    {tx.providerReference && (
-                      <p className="break-anywhere text-xs text-muted-foreground">
-                        Reference: <span className="font-mono">{tx.providerReference}</span>
-                      </p>
-                    )}
-                    {tx.failureReason && (
-                      <p className="break-anywhere text-xs text-muted-foreground">
-                        {tx.failureReason}
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
+          <VtuConfirmPanel
+            amount={`${pointsToPay.toLocaleString()} pts`}
+            amountHint={`for ${formatNgn(selected.amountNgn)} of ${networkLabel} airtime`}
+            rows={
+              <>
+                <VtuRow label="Product" value={`${networkLabel} airtime top-up`} />
+                <VtuRow label="You receive" value={formatNgn(selected.amountNgn)} />
+                <VtuRow
+                  label="Mobile number"
+                  value={maskIdentifier(phoneCheck.ok ? phoneCheck.value : phone)}
+                  mono
+                />
+                <VtuRow label="Rate" value={`₦${(offers?.ngnPerPoint ?? 0)}/pt`} />
+                <VtuRow
+                  label="Balance after"
+                  value={`${Math.max(0, (balance ?? 0) - pointsToPay).toLocaleString()} pts`}
+                  strong
+                />
+              </>
+            }
+          >
+            <Button
+              variant="vtu"
+              size="lg"
+              onClick={handleSubmit}
+              disabled={locked || !affordable}
+              className="w-full"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Placing…
+                </>
+              ) : inFlight ? (
+                "In progress…"
+              ) : (
+                <>
+                  <Lock className="h-4 w-4" />
+                  Confirm payment
+                </>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmed(false)}
+              disabled={locked}
+              className="w-full text-vtu-muted hover:bg-vtu-chip hover:text-vtu-text"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to the amount
+            </Button>
+            <p className="text-center text-[11px] text-vtu-muted">
+              Charged once. A top-up that does not go through refunds your points
+              automatically.
+            </p>
+          </VtuConfirmPanel>
         </Reveal>
       )}
-    </div>
+
+      {step === "receipt" && tx && (
+        <VtuReceipt
+          status={tx.status}
+          rows={
+            <>
+              {tx.network && <VtuRow label="Network" value={tx.network.toUpperCase()} />}
+              <VtuRow
+                label="Mobile number"
+                value={maskIdentifier(tx.customerIdentifier)}
+                mono
+              />
+              <VtuRow label="Value" value={formatNgn(tx.nairaPrice)} />
+              <VtuRow
+                label="Points debited"
+                value={`${tx.pointsDebited.toLocaleString()} pts`}
+                strong
+              />
+              <VtuRow label="Rate" value={`₦${tx.ngnPerPoint}/pt`} />
+              <VtuRow label="Requested" value={fmtWhen(tx.createdAt)} />
+              {tx.providerReference && (
+                <VtuRow label="Reference" value={tx.providerReference} mono />
+              )}
+            </>
+          }
+        >
+          {tx.failureReason && (
+            <p className="rounded-xl border border-vtu-line bg-vtu-chip px-3 py-2 text-xs text-vtu-muted">
+              {tx.failureReason}
+            </p>
+          )}
+          <Button variant="vtu" size="lg" onClick={reset} className="w-full">
+            Buy another
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className="w-full border-vtu-line bg-vtu-card text-vtu-text hover:bg-vtu-chip"
+          >
+            <Link to="/vtu/history">View receipt in history</Link>
+          </Button>
+        </VtuReceipt>
+      )}
+
+      {offers === undefined && step === "details" && (
+        <Skeleton className="h-16 w-full" />
+      )}
+    </VtuShell>
+  );
+}
+
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
+function fmtWhen(ts: number): string {
+  const date = new Date(ts);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleString(
+    "en-NG",
+    sameYear ? DATE_FORMAT : { ...DATE_FORMAT, year: "numeric" },
   );
 }

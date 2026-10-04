@@ -43,6 +43,21 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  /* VTU: the customer's airtime & bills surface, themed separately. */
+  --color-vtu-canvas: var(--vtu-canvas);
+  --color-vtu-card: var(--vtu-card);
+  --color-vtu-text: var(--vtu-text);
+  --color-vtu-muted: var(--vtu-muted);
+  --color-vtu-line: var(--vtu-line);
+  --color-vtu-chip: var(--vtu-chip);
+  --color-vtu-band: var(--vtu-band);
+  --color-vtu-band-fg: var(--vtu-band-fg);
+  --color-vtu-accent: var(--vtu-accent);
+  --color-vtu-accent-ink: var(--vtu-accent-ink);
+  --color-vtu-brand-mtn: var(--vtu-brand-mtn);
+  --color-vtu-brand-airtel: var(--vtu-brand-airtel);
+  --color-vtu-brand-glo: var(--vtu-brand-glo);
+  --color-vtu-brand-9mobile: var(--vtu-brand-9mobile);
 
   /* Motion: one place to tune every transition in the product. */
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
@@ -93,6 +108,29 @@
   --surface: #ffffff;
   --surface-2: #f8fbfe;
   --shadow-color: 220 45% 30%;
+
+  /* ── VTU SUB-BRAND ──
+     Airtime and bills is its own surface, and it reads the way a top-up app
+     reads: a warm cream canvas, deep plum ink, and a signal-yellow selection.
+     Kept as separate tokens rather than folded into `--primary` so the
+     customer's shop can be restyled without moving the rest of Crestline off
+     its ocean-teal identity. */
+  --vtu-canvas: #f7f4ed;
+  --vtu-card: #ffffff;
+  --vtu-text: #241338;
+  --vtu-muted: #6f6584;
+  --vtu-line: #e7dfd2;
+  --vtu-chip: #f2ede3;
+  --vtu-band: #241338;
+  --vtu-band-fg: #fbf8f2;
+  --vtu-accent: #f5d24b;
+  --vtu-accent-ink: #3f2f05;
+  /* Network brands. Content, not chrome — but tokens all the same, so a
+     rebrand is one edit and no component carries a hex. */
+  --vtu-brand-mtn: #e8c31c;
+  --vtu-brand-airtel: #d62828;
+  --vtu-brand-glo: #2f8b40;
+  --vtu-brand-9mobile: #0e7c66;
 }
 
 .dark {
@@ -134,6 +172,23 @@
   --surface: #14294a;
   --surface-2: #0d1f38;
   --shadow-color: 215 60% 3%;
+
+  /* VTU in the dark: the cream becomes plum-black, and the band LIFTS instead
+     of sinking, because a header darker than its own page has nowhere to go. */
+  --vtu-canvas: #120e1c;
+  --vtu-card: #1d1730;
+  --vtu-text: #efe9fb;
+  --vtu-muted: #a89ec6;
+  --vtu-line: #302847;
+  --vtu-chip: #201a33;
+  --vtu-band: #2a2142;
+  --vtu-band-fg: #f6f2ff;
+  --vtu-accent: #f5d24b;
+  --vtu-accent-ink: #2b2200;
+  --vtu-brand-mtn: #e8c31c;
+  --vtu-brand-airtel: #e14b4b;
+  --vtu-brand-glo: #43a556;
+  --vtu-brand-9mobile: #1aa387;
 }
 
 @layer base {
@@ -352,5 +407,76 @@
   .break-anywhere {
     overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  /* ── VTU PRIMITIVES ──
+     The three shapes the customer's shop repeats: a raised panel, a tappable
+     choice, and the ink band the balance sits on. Written once here because
+     they appear on four pages, and a chip that is yellow on airtime and teal
+     on bills is the same defect as two status colours for one status. */
+
+  /* The surface a section sits on. Softer and warmer than `Card`, which stays
+     tuned to the app's cool blue. */
+  .vtu-panel {
+    background-color: var(--vtu-card);
+    border: 1px solid var(--vtu-line);
+    border-radius: calc(var(--radius) + 6px);
+    box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.04),
+      0 10px 24px -18px hsl(var(--shadow-color) / 0.28);
+  }
+
+  /* The ink band: the balance, and the screen you land on. Two faint blooms
+     keep it from reading as a flat rectangle at phone size. Decorative only,
+     and it never carries body copy. */
+  .vtu-band {
+    background-color: var(--vtu-band);
+    color: var(--vtu-band-fg);
+    background-image:
+      radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--vtu-band-fg) 9%, transparent), transparent 42%),
+      radial-gradient(circle at 92% 100%, color-mix(in srgb, var(--vtu-accent) 14%, transparent), transparent 46%);
+  }
+
+  /* A tappable choice — network, amount, plan, category.
+
+     Selection lives on `[aria-pressed="true"]` rather than a utility class so
+     the highlight cannot drift from what a screen reader is told: one
+     attribute, one state, both audiences. */
+  .vtu-chip {
+    background-color: var(--vtu-card);
+    border: 1px solid var(--vtu-line);
+    color: var(--vtu-text);
+    transition: transform var(--duration-fast) var(--ease-out-quint),
+      background-color var(--duration-fast) var(--ease-out-quint),
+      border-color var(--duration-fast) var(--ease-out-quint),
+      box-shadow var(--duration-fast) var(--ease-out-quint);
+  }
+
+  .vtu-chip:hover {
+    border-color: color-mix(in srgb, var(--vtu-band) 30%, var(--vtu-line));
+  }
+
+  .vtu-chip:active {
+    transform: translateY(1px);
+  }
+
+  .vtu-chip[aria-pressed="true"] {
+    background-color: color-mix(in srgb, var(--vtu-accent) 26%, var(--vtu-card));
+    border-color: var(--vtu-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vtu-accent) 45%, transparent);
+  }
+
+  /* Rows in a receipt or a confirmation: label left, value right, hairline
+     between. Used instead of a `<table>` because it wraps on a phone. */
+  .vtu-receipt-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: 0.6rem;
+    border-top: 1px solid var(--vtu-line);
+  }
+
+  .vtu-receipt-row:first-child {
+    border-top: 0;
   }
 }

@@ -6,12 +6,16 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { VtuHistoryItem } from "@/convex/vtu";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-import { VtuNav, VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
+import {
+  VtuBand,
+  VtuNav,
+  VtuServiceIcon,
+  VtuShell,
+  VtuStatusPill,
+} from "@/components/vtu/shared";
 import {
   newAttemptId,
   renderDocumentArtifacts,
@@ -52,26 +56,26 @@ export default function VtuHistory() {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <div className="page-gutter mx-auto w-full max-w-3xl space-y-8 py-10 sm:py-14">
+    <VtuShell>
       <VtuNav />
-      <Reveal>
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              VTU history
-            </h1>
-            <Badge variant="secondary" className="gap-1.5">
-              <Zap className="h-3 w-3" />
+      <VtuBand>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] opacity-70">
               Airtime &amp; bills
-            </Badge>
+            </p>
+            <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
+              Your history
+            </h1>
+            <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
+              Every top-up and bill you have paid for with points, newest first.
+              A top-up that did not go through shows as refunded with your points
+              already back.
+            </p>
           </div>
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Every top-up and bill you have paid for with points, newest first.
-            A top-up that did not go through shows as refunded with your points
-            already back.
-          </p>
+          <Zap className="hidden h-8 w-8 shrink-0 opacity-60 sm:block" aria-hidden />
         </div>
-      </Reveal>
+      </VtuBand>
 
       {status === "LoadingFirstPage" ? (
         <div className="space-y-3">
@@ -81,19 +85,17 @@ export default function VtuHistory() {
         </div>
       ) : results.length === 0 ? (
         <Reveal>
-          <Card>
-            <CardContent className="space-y-3 p-8 text-center">
-              <p className="text-sm font-medium">Nothing here yet</p>
-              <p className="mx-auto max-w-sm text-sm text-muted-foreground">
-                Once you buy airtime, data or anything else on the services
-                page, it appears here — newest first, with the rate you were
-                charged frozen at the moment you bought.
-              </p>
-              <Button asChild size="sm" className="mt-1 gap-1.5">
-                <Link to="/vtu">Browse services</Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="vtu-panel p-8 text-center">
+            <p className="text-sm font-semibold">Nothing here yet</p>
+            <p className="mx-auto mt-1 max-w-sm text-sm text-vtu-muted">
+              Once you buy airtime, data or anything else on the services page,
+              it appears here — newest first, with the rate you were charged
+              frozen at the moment you bought.
+            </p>
+            <Button asChild variant="vtu" className="mt-4">
+              <Link to="/vtu">Browse services</Link>
+            </Button>
+          </div>
         </Reveal>
       ) : (
         <>
@@ -113,22 +115,24 @@ export default function VtuHistory() {
 
           <div className="flex flex-col items-center gap-2">
             {status === "CanLoadMore" && (
-              <Button variant="outline" onClick={() => loadMore(PAGE_SIZE)}>
+              <Button
+                variant="outline"
+                onClick={() => loadMore(PAGE_SIZE)}
+                className="border-vtu-line bg-vtu-card text-vtu-text hover:bg-vtu-chip"
+              >
                 Load older
               </Button>
             )}
             {status === "LoadingMore" && (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <Loader2 className="h-4 w-4 animate-spin text-vtu-muted" />
             )}
             {status === "Exhausted" && (
-              <p className="text-xs text-muted-foreground">
-                That is the whole history.
-              </p>
+              <p className="text-xs text-vtu-muted">That is the whole history.</p>
             )}
           </div>
         </>
       )}
-    </div>
+    </VtuShell>
   );
 }
 
@@ -242,29 +246,29 @@ function HistoryRow({
     // `py-0 gap-0` cancels `Card`'s own padding and gap, which the row supplies
     // itself — otherwise the button's p-4 stacks on top of them and the row is
     // twice as tall as its content, on every breakpoint.
-    <Card className="gap-0 overflow-hidden py-0 transition-colors hover:border-primary/30 sm:gap-0 sm:py-0">
+    <div className="vtu-panel overflow-hidden">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex w-full items-center gap-3 p-4 text-left"
+        className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-vtu-chip/50"
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
           <VtuServiceIcon serviceType={tx.serviceType} className="h-4 w-4" />
         </span>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{tx.serviceLabel}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground tabular-nums">
+          <p className="truncate text-sm font-semibold">{tx.serviceLabel}</p>
+          <p className="mt-0.5 truncate text-xs text-vtu-muted tabular-nums">
             {destination} · {fmtWhen(tx.createdAt)}
           </p>
         </div>
 
-        <div className="hidden shrink-0 text-right sm:block">
-          <p className="text-sm font-medium tabular-nums">
+        <div className="shrink-0 text-right">
+          <p className="text-sm font-semibold tabular-nums">
             {formatNgn(tx.nairaPrice)}
           </p>
-          <p className="text-xs text-muted-foreground tabular-nums">
+          <p className="text-[11px] text-vtu-muted tabular-nums">
             {tx.pointsDebited.toLocaleString()} pts
           </p>
         </div>
@@ -273,7 +277,7 @@ function HistoryRow({
 
         <ChevronDown
           className={cn(
-            "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+            "h-4 w-4 shrink-0 text-vtu-muted transition-transform duration-200",
             open && "rotate-180",
           )}
           aria-hidden
@@ -281,7 +285,7 @@ function HistoryRow({
       </button>
 
       {open && (
-        <div className="space-y-4 border-t border-border bg-muted/20 p-4">
+        <div className="space-y-4 border-t border-vtu-line bg-vtu-chip/50 p-4">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
             <Detail label="Value delivered" value={formatNgn(tx.nairaPrice)} />
             <Detail
@@ -301,15 +305,15 @@ function HistoryRow({
             // The token IS the delivery for a prepaid meter: showing the
             // status without it would report a success the customer cannot
             // use. Rendered only when the provider actually delivered one.
-            <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="rounded-xl border border-vtu-accent bg-vtu-accent/20 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-vtu-accent-ink/80">
                 Token
               </p>
-              <p className="break-anywhere mt-0.5 font-mono text-sm font-medium">
+              <p className="break-anywhere mt-0.5 font-mono text-sm font-bold text-vtu-accent-ink">
                 {tx.delivery.token}
               </p>
               {(tx.delivery.units || tx.delivery.serial || tx.delivery.pin) && (
-                <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+                <p className="mt-0.5 text-[11px] text-vtu-accent-ink/80 tabular-nums">
                   {[
                     tx.delivery.units ? `${tx.delivery.units} units` : null,
                     tx.delivery.serial ? `Serial ${tx.delivery.serial}` : null,
@@ -323,13 +327,13 @@ function HistoryRow({
           )}
 
           {reason && (
-            <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+            <p className="rounded-xl border border-vtu-line bg-vtu-card px-3 py-2 text-xs text-vtu-muted">
               {reason}
             </p>
           )}
 
-          <div className="space-y-1.5 border-t border-border pt-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="space-y-1.5 border-t border-vtu-line pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-vtu-muted">
               Provider record
             </p>
             <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-2">
@@ -356,14 +360,14 @@ function HistoryRow({
           </div>
 
           {copy && (
-            <p className="text-[11px] text-muted-foreground">{copy.detail}</p>
+            <p className="text-[11px] text-vtu-muted">{copy.detail}</p>
           )}
 
-          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-vtu-line pt-3">
             <Button
               variant="outline"
               size="sm"
-              className="min-h-11 gap-1.5"
+              className="min-h-11 gap-1.5 border-vtu-line bg-vtu-card text-vtu-text hover:bg-vtu-chip"
               onClick={() => openReceipt(tx._id)}
               disabled={busyId !== null}
             >
@@ -379,14 +383,14 @@ function HistoryRow({
                 </>
               )}
             </Button>
-            <p className="min-w-0 flex-1 text-[11px] text-muted-foreground">
+            <p className="min-w-0 flex-1 text-[11px] text-vtu-muted">
               The receipt is created the first time you open it and never
               changes after that.
             </p>
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -405,8 +409,8 @@ function Detail({
     <div className="min-w-0">
       <dt
         className={cn(
-          "text-muted-foreground",
-          compact ? "text-[10px] uppercase tracking-wider" : "text-xs",
+          "text-vtu-muted",
+          compact ? "text-[10px] uppercase tracking-[0.14em]" : "text-xs",
         )}
       >
         {label}

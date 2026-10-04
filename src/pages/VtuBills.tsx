@@ -2,46 +2,75 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Reveal } from "@/components/motion";
-import { VtuNav, VtuServiceIcon, VtuStatusPill } from "@/components/vtu/shared";
+import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
+import {
+  VtuBand,
+  VtuChoice,
+  VtuConfirmPanel,
+  VtuNav,
+  VtuReceipt,
+  VtuRow,
+  VtuSection,
+  VtuServiceIcon,
+  VtuShell,
+  VtuSteps,
+} from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
 import {
   maskIdentifier,
   validateCustomerIdentifier,
   vtuServiceTypeLabel,
-  vtuStatusCopy,
 } from "@/lib/vtu";
-import { Coins, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ArrowLeft, Coins, Loader2, Lock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
+import type { CatalogProductView } from "@/convex/vtuCatalog";
 
 /**
- * Buy a data bundle, a cable subscription, or an electricity top-up.
+ * Bills: data bundles, cable subscriptions, electricity tokens and exam PINs.
  *
- * ONE page for three service types, because they differ only in what they ask
- * for: a number to deliver to, and — for electricity — an amount. The catalog
- * decides which of those, per product.
+ * The flow is CHOOSE → DETAILS → CONFIRM → receipt, and it is a flow rather
+ * than one long form for a reason that only shows up on a phone: the customer
+ * needs to see, on their own screen, exactly what is about to be bought before
+ * anything is spent. Everything else — the plan list, the amount presets, the
+ * summary — is arranged so that the confirm step is reached without scrolling
+ * back up to check a field.
  *
  * The service code this page buys with is composed from the SERVER's template,
  * so the client never learns the code grammar and cannot invent an address the
  * backend would refuse. The price is resolved by the server too, on exactly
- * that code, so the number shown and the number charged come from one
- * resolver rather than two opinions.
+ * that code, so the number shown and the number charged come from one resolver
+ * rather than two opinions.
  *
  * The record is the source of truth for what happened: the page SUBSCRIBES to
  * the transaction it just created instead of trusting the action's return
  * value, which only says what the row looked like at that instant.
+ *
+ * Airtime is NOT here. It has its own grid (network + amount) and its own page,
+ * and the two share the confirmation and receipt panels rather than a single
+ * form that has to hide half of itself for each.
  */
+
+/** The service types this page sells. Airtime and betting have their own
+ *  shapes, and a bills list that quietly included them would be a list with
+ *  rows that behave differently from every other row. */
+const BILL_SERVICE_TYPES = ["data", "cable", "electricity", "exam"] as const;
+
+/** Amount presets, filtered to whatever the product actually accepts. */
+const AMOUNT_PRESETS = [500, 1000, 2000, 5000, 10000, 20000] as const;
+
+const STEP_LABELS = ["Choose", "Details", "Confirm"] as const;
+
 export default function VtuBills() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const productCode = searchParams.get("product") ?? "";
 
+  const catalog = useQuery(api.vtuCatalog.listCatalog, {});
   const detail = useQuery(
     api.vtuCatalog.getPurchaseDetail,
     productCode ? { productCode } : "skip",
@@ -49,8 +78,14 @@ export default function VtuBills() {
   const balance = useQuery(api.points.getBalance);
   const purchase = useAction(api.vtuHttp.purchaseVtu);
 
+  // The catalogue's quick links land here with a category already chosen, so
+  // "Electricity" opens on electricity rather than on a list to scroll.
+  const [category, setCategory] = useState<string | null>(
+    searchParams.get("category"),
+  );
   const [identifier, setIdentifier] = useState("");
   const [amount, setAmount] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
   const [transactionId, setTransactionId] = useState<Id<"vtuTransactions"> | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -59,9 +94,20 @@ export default function VtuBills() {
     transactionId ? { transactionId } : "skip",
   );
 
+  /** The groups this page sells, in the order `VTU_SERVICE_TYPES` declares. */
+  const groups = useMemo(
+    () =>
+      (catalog?.groups ?? []).filter((group) =>
+        (BILL_SERVICE_TYPES as readonly string[]).includes(group.serviceType),
+      ),
+    [catalog],
+  );
+
+  const activeGroup =
+    groups.find((group) => group.serviceType === category) ?? groups[0] ?? null;
+
   const amountNgn = detail?.requiresAmount ? Number(amount) : null;
-  const amountValid =
-    amountNgn !== null && Number.isFinite(amountNgn) && amountNgn > 0;
+  const amountValid = amountNgn !== null && Number.isFinite(amountNgn) && amountNgn > 0;
 
   const serviceCode = useMemo(() => {
     if (!detail) return null;
@@ -73,27 +119,57 @@ export default function VtuBills() {
       : null;
   }, [detail, amountValid, amountNgn]);
 
-  const preview = useQuery(
-    api.vtu.previewCost,
-    serviceCode ? { serviceCode } : "skip",
-  );
+  const preview = useQuery(api.vtu.previewCost, serviceCode ? { serviceCode } : "skip");
 
   const points = preview?.points ?? detail?.fixedPoints ?? null;
   const affordable = points === null ? true : (balance ?? 0) >= points;
   const inFlight = tx ? tx.status === "pending" || tx.status === "processing" : false;
-  const blocker = !detail
+  const locked = submitting || inFlight;
+
+  const reasonNotBuyable = !detail
     ? null
     : !detail.providerAvailable
       ? "No provider is serving this product right now. Nothing has been charged."
-      : detail.requiresAmount && !amountValid
-        ? null
-        : !affordable
-          ? "Not enough points for this purchase."
-          : null;
+      : !affordable
+        ? `You need ${((points ?? 0) - (balance ?? 0)).toLocaleString()} more points.`
+        : null;
 
-  async function handleSubmit() {
-    if (submitting || !detail || !serviceCode) return;
+  // ── Steps ─────────────────────────────────────────────────────────
+  // The receipt is not a step a customer walks to; it is where the flow ends
+  // up, so it is derived from the transaction rather than from a counter.
+  const step: "choose" | "details" | "confirm" | "receipt" = tx
+    ? "receipt"
+    : !productCode
+      ? "choose"
+      : confirmed
+        ? "confirm"
+        : "details";
+  const stepIndex = step === "confirm" ? 2 : step === "choose" ? 0 : 1;
 
+  const presets = useMemo(() => {
+    if (!detail?.requiresAmount) return [];
+    const min = detail.minAmount ?? 0;
+    const max = detail.maxAmount ?? Number.POSITIVE_INFINITY;
+    return AMOUNT_PRESETS.filter((value) => value >= min && value <= max);
+  }, [detail]);
+
+  function choose(productCode: string) {
+    setIdentifier("");
+    setAmount("");
+    setConfirmed(false);
+    setSearchParams({ product: productCode }, { replace: false });
+  }
+
+  function reset() {
+    setTransactionId(null);
+    setConfirmed(false);
+    setIdentifier("");
+    setAmount("");
+    setSearchParams({}, { replace: true });
+  }
+
+  function continueToConfirm() {
+    if (!detail) return;
     const check = validateCustomerIdentifier(detail.serviceType, identifier);
     if (!check.ok) {
       toast.error(check.error);
@@ -113,8 +189,22 @@ export default function VtuBills() {
         return;
       }
     }
+    if (!serviceCode) {
+      toast.error("This product cannot be priced right now");
+      return;
+    }
     if (!affordable) {
       toast.error("Not enough points for this purchase");
+      return;
+    }
+    setConfirmed(true);
+  }
+
+  async function handleSubmit() {
+    if (locked || !detail || !serviceCode) return;
+    const check = validateCustomerIdentifier(detail.serviceType, identifier);
+    if (!check.ok) {
+      toast.error(check.error);
       return;
     }
 
@@ -133,7 +223,7 @@ export default function VtuBills() {
       });
       setTransactionId(result.transactionId ?? null);
       if (result.reused) toast.info("Resuming your earlier attempt…");
-      else toast.success("Purchase submitted");
+      else toast.success("Payment submitted");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Something went wrong");
     } finally {
@@ -141,210 +231,497 @@ export default function VtuBills() {
     }
   }
 
-  const copy = tx ? vtuStatusCopy(tx.status) : null;
-
   return (
-    <div className="page-gutter mx-auto w-full max-w-3xl space-y-8 py-10 sm:py-14">
+    <VtuShell>
       <VtuNav />
-      <Reveal>
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              {detail?.displayName ?? "Buy a service"}
+
+      <VtuBand>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] opacity-70">
+              Bills &amp; bundles
+            </p>
+            <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
+              Data, cable, meter &amp; exam
             </h1>
-            {detail && (
-              <Badge variant="secondary" className="gap-1.5">
-                <VtuServiceIcon serviceType={detail.serviceType} className="h-3 w-3" />
-                {vtuServiceTypeLabel(detail.serviceType)}
-              </Badge>
-            )}
-            <Badge variant="secondary" className="ml-auto gap-1.5 tabular-nums">
-              <Coins className="h-3 w-3" />
-              {(balance ?? 0).toLocaleString()} pts available
-            </Badge>
+            <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
+              Paid from your points. A payment that does not go through returns
+              them automatically.
+            </p>
+          </div>
+          <div className="text-left sm:text-right">
+            <p className="text-[11px] uppercase tracking-[0.14em] opacity-70">
+              Available
+            </p>
+            <p className="font-display text-lg font-bold tabular-nums">
+              {(balance ?? 0).toLocaleString()} pts
+            </p>
+            <Button
+              asChild
+              variant="vtu"
+              size="sm"
+              className="mt-1.5 border border-vtu-band-fg/25 bg-vtu-band-fg/10 hover:bg-vtu-band-fg/20"
+            >
+              <Link to="/buy-points">
+                <Plus className="h-3.5 w-3.5" />
+                Buy points
+              </Link>
+            </Button>
           </div>
         </div>
-      </Reveal>
+      </VtuBand>
 
-      {!productCode && (
-        <Reveal delay={0.05}>
-          <Card>
-            <CardContent className="space-y-3 p-8 text-center">
-              <p className="text-sm font-medium">Choose a service first</p>
-              <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                Pick a data bundle, a cable subscription, or an electricity
-                top-up from the catalogue.
-              </p>
-              <Button asChild className="min-h-11">
-                <Link to="/vtu">Browse services</Link>
-              </Button>
-            </CardContent>
-          </Card>
+      {step !== "receipt" && (
+        <VtuSteps steps={STEP_LABELS} current={stepIndex} className="px-1" />
+      )}
+
+      {catalog === undefined ? (
+        <div className="space-y-3">
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+        </div>
+      ) : groups.length === 0 ? (
+        <Reveal>
+          <div className="vtu-panel p-8 text-center">
+            <p className="text-sm font-semibold">Nothing is on sale yet</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-vtu-muted">
+              No bill products are switched on right now. If that is unexpected,
+              an administrator can add them under VTU Catalog &amp; Routing —
+              this page updates the moment they do.
+            </p>
+            <Button asChild variant="vtu" className="mt-4">
+              <Link to="/vtu/airtime">Buy airtime instead</Link>
+            </Button>
+          </div>
         </Reveal>
-      )}
+      ) : (
+        <>
+          {step === "choose" && (
+            <>
+              <Reveal>
+                <VtuSection
+                  title="What are you paying for?"
+                  hint="Pick a category, then the exact product."
+                >
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {groups.map((group) => {
+                      const selected = activeGroup?.serviceType === group.serviceType;
+                      return (
+                        <VtuChoice
+                          key={group.serviceType}
+                          selected={selected}
+                          onClick={() => setCategory(group.serviceType)}
+                          className="flex flex-col items-start gap-2"
+                        >
+                          <span
+                            className={cn(
+                              "flex h-9 w-9 items-center justify-center rounded-full",
+                              selected
+                                ? "bg-vtu-accent text-vtu-accent-ink"
+                                : "bg-vtu-chip text-vtu-muted",
+                            )}
+                          >
+                            <VtuServiceIcon
+                              serviceType={group.serviceType}
+                              className="h-4 w-4"
+                            />
+                          </span>
+                          <span className="text-sm font-semibold">
+                            {vtuServiceTypeLabel(group.serviceType)}
+                          </span>
+                          <span className="text-[11px] text-vtu-muted">
+                            {group.products.length} option
+                            {group.products.length === 1 ? "" : "s"}
+                          </span>
+                        </VtuChoice>
+                      );
+                    })}
+                  </div>
+                </VtuSection>
+              </Reveal>
 
-      {productCode && detail === undefined && (
-        <Skeleton className="h-64 w-full" />
-      )}
-
-      {productCode && detail === null && (
-        <Reveal delay={0.05}>
-          <Card>
-            <CardContent className="space-y-3 p-8 text-center">
-              <p className="text-sm font-medium">This product is not available</p>
-              <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                It may not be switched on yet. Nothing has been charged.
-              </p>
-              <Button asChild variant="outline" className="min-h-11">
-                <Link to="/vtu">Back to the catalogue</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </Reveal>
-      )}
-
-      {detail && (
-        <Reveal delay={0.05}>
-          <Card>
-            <CardContent className="space-y-5 p-6">
-              <div className="space-y-2">
-                <Label htmlFor="bill-target">{detail.customerIdentifierLabel}</Label>
-                <Input
-                  id="bill-target"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  inputMode="numeric"
-                  placeholder={detail.customerIdentifierLabel}
-                  className="min-h-11"
-                />
-              </div>
-
-              {detail.requiresAmount && (
-                <div className="space-y-2">
-                  <Label htmlFor="bill-amount">Amount (₦)</Label>
-                  <Input
-                    id="bill-amount"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
-                    inputMode="numeric"
-                    placeholder={detail.minAmount !== null ? String(detail.minAmount) : "1000"}
-                    className="min-h-11 tabular-nums"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {detail.minAmount !== null && detail.maxAmount !== null
-                      ? `Between ${formatNgn(detail.minAmount)} and ${formatNgn(detail.maxAmount)}.`
-                      : "Enter the amount you want to pay."}
-                  </p>
-                </div>
+              {activeGroup && (
+                <Reveal delay={0.04}>
+                  <VtuSection
+                    title={`${vtuServiceTypeLabel(activeGroup.serviceType)} products`}
+                    hint="Prices are what your points will be charged."
+                  >
+                    <StaggerGroup className="grid gap-2 sm:grid-cols-2">
+                      {activeGroup.products.map((product) => (
+                        <StaggerItem key={product.productCode}>
+                          <BillCard
+                            product={product}
+                            serviceType={activeGroup.serviceType}
+                            onChoose={() => choose(product.productCode)}
+                          />
+                        </StaggerItem>
+                      ))}
+                    </StaggerGroup>
+                  </VtuSection>
+                </Reveal>
               )}
+            </>
+          )}
 
-              <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-4 py-3">
-                <span className="text-sm text-muted-foreground">You pay</span>
-                <span className="text-base font-semibold tabular-nums">
-                  {points === null
-                    ? "Shown before you confirm"
-                    : `${points.toLocaleString()} pts`}
-                </span>
-              </div>
+          {step === "details" && productCode && detail === undefined && (
+            <Skeleton className="h-72 w-full" />
+          )}
 
-              {blocker && (
-                <p className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-                  {blocker}
+          {step === "details" && productCode && detail === null && (
+            <Reveal>
+              <div className="vtu-panel p-8 text-center">
+                <p className="text-sm font-semibold">This product is not available</p>
+                <p className="mx-auto mt-1 max-w-md text-sm text-vtu-muted">
+                  It may not be switched on yet. Nothing has been charged.
                 </p>
-              )}
-
-              <Button
-                onClick={handleSubmit}
-                disabled={
-                  submitting ||
-                  inFlight ||
-                  !detail.providerAvailable ||
-                  !serviceCode ||
-                  !affordable ||
-                  !identifier.trim()
-                }
-                className="min-h-11 w-full gap-2"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Placing…
-                  </>
-                ) : inFlight ? (
-                  "In progress…"
-                ) : (
-                  "Confirm purchase"
-                )}
-              </Button>
-              <p className="text-center text-[11px] text-muted-foreground">
-                A purchase that does not go through refunds your points
-                automatically.
-              </p>
-            </CardContent>
-          </Card>
-        </Reveal>
-      )}
-
-      {tx && (
-        <Reveal delay={0.05}>
-          <Card>
-            <CardContent className="space-y-4 p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-medium">
-                  {copy ? copy.label : "This purchase"}
-                </p>
-                <VtuStatusPill status={tx.status} />
+                <Button variant="vtu" className="mt-4" onClick={reset}>
+                  Back to the list
+                </Button>
               </div>
-              {copy && (
-                <p className="text-sm text-muted-foreground">{copy.detail}</p>
-              )}
+            </Reveal>
+          )}
 
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Destination</dt>
-                  <dd className="break-anywhere font-mono">
-                    {maskIdentifier(tx.customerIdentifier)}
-                  </dd>
+          {step === "details" && detail && (
+            <Reveal>
+              <div className="vtu-panel overflow-hidden">
+                <div className="flex items-center gap-3 border-b border-vtu-line px-5 py-4">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={reset}
+                    aria-label="Back to the product list"
+                    className="text-vtu-muted hover:bg-vtu-chip hover:text-vtu-text"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
+                    <VtuServiceIcon
+                      serviceType={detail.serviceType}
+                      className="h-4 w-4"
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">
+                      {detail.displayName}
+                    </p>
+                    <p className="text-[11px] text-vtu-muted">
+                      {vtuServiceTypeLabel(detail.serviceType)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-vtu-chip px-3 py-1 text-xs font-semibold tabular-nums">
+                    {detail.fixedPoints !== null
+                      ? `${detail.fixedPoints.toLocaleString()} pts`
+                      : "Metered"}
+                  </span>
                 </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Points debited</dt>
-                  <dd className="tabular-nums">
-                    {tx.pointsDebited.toLocaleString()} pts
-                  </dd>
-                </div>
-              </dl>
 
-              {tx.delivery?.token && (
-                // The token IS the delivery for a prepaid meter: a confirmed
-                // status without it would report a success the customer cannot
-                // use.
-                <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Token
-                  </p>
-                  <p className="break-anywhere mt-0.5 font-mono text-sm font-medium">
-                    {tx.delivery.token}
-                  </p>
-                  {(tx.delivery.units || tx.delivery.serial) && (
-                    <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                      {[
-                        tx.delivery.units ? `${tx.delivery.units} units` : null,
-                        tx.delivery.serial ? `Serial ${tx.delivery.serial}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
+                <div className="space-y-5 px-5 py-5">
+                  <div className="space-y-2">
+                    <Label htmlFor="bill-target" className="text-xs text-vtu-muted">
+                      {detail.customerIdentifierLabel}
+                    </Label>
+                    <Input
+                      id="bill-target"
+                      value={identifier}
+                      onChange={(e) => setIdentifier(e.target.value)}
+                      inputMode={detail.serviceType === "cable" ? "text" : "numeric"}
+                      placeholder={detail.customerIdentifierLabel}
+                      autoComplete="off"
+                      disabled={locked}
+                      className="min-h-11 border-vtu-line bg-vtu-card text-vtu-text placeholder:text-vtu-muted"
+                    />
+                    <p className="text-[11px] text-vtu-muted">
+                      We send the {vtuServiceTypeLabel(detail.serviceType).toLowerCase()}{" "}
+                      to this {detail.customerIdentifierLabel.toLowerCase()}.
+                    </p>
+                  </div>
+
+                  {detail.requiresAmount && (
+                    <div className="space-y-3">
+                      <Label className="text-xs text-vtu-muted">Amount</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {presets.map((preset) => (
+                          <VtuChoice
+                            key={preset}
+                            selected={amount === String(preset)}
+                            onClick={() => setAmount(String(preset))}
+                            className="text-center"
+                          >
+                            <span className="block text-sm font-semibold tabular-nums">
+                              {formatNgn(preset)}
+                            </span>
+                          </VtuChoice>
+                        ))}
+                      </div>
+                      <Input
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
+                        inputMode="numeric"
+                        placeholder="Or type an amount"
+                        disabled={locked}
+                        className="min-h-11 border-vtu-line bg-vtu-card text-vtu-text placeholder:text-vtu-muted tabular-nums"
+                      />
+                      <p className="text-[11px] text-vtu-muted">
+                        {detail.minAmount !== null && detail.maxAmount !== null
+                          ? `Between ${formatNgn(detail.minAmount)} and ${formatNgn(
+                              detail.maxAmount,
+                            )}.`
+                          : "Enter the amount you want to pay."}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between rounded-xl bg-vtu-chip px-4 py-3">
+                    <span className="flex items-center gap-1.5 text-xs text-vtu-muted">
+                      <Coins className="h-3.5 w-3.5" />
+                      You pay
+                    </span>
+                    <span className="text-base font-semibold tabular-nums">
+                      {points === null
+                        ? detail.requiresAmount
+                          ? "Shown as you type"
+                          : "Shown before you confirm"
+                        : `${points.toLocaleString()} pts`}
+                    </span>
+                  </div>
+
+                  {reasonNotBuyable && (
+                    <p className="rounded-xl border border-vtu-line bg-vtu-chip px-3 py-2 text-xs text-vtu-muted">
+                      {reasonNotBuyable}
                     </p>
                   )}
-                </div>
-              )}
 
-              <Button asChild variant="outline" size="sm" className="min-h-11">
-                <Link to="/vtu/history">View in history</Link>
+                  <Button
+                    variant="vtu"
+                    size="lg"
+                    onClick={continueToConfirm}
+                    disabled={
+                      locked ||
+                      !detail.providerAvailable ||
+                      !serviceCode ||
+                      !affordable ||
+                      !identifier.trim()
+                    }
+                    className="w-full"
+                  >
+                    Continue
+                  </Button>
+                </div>
+              </div>
+            </Reveal>
+          )}
+
+          {step === "confirm" && detail && (
+            <Reveal>
+              <VtuConfirmPanel
+                amount={`${points === null ? "—" : points.toLocaleString()} pts`}
+                amountHint={
+                  amountNgn !== null && Number.isFinite(amountNgn)
+                    ? `for ${formatNgn(amountNgn)} of ${vtuServiceTypeLabel(
+                        detail.serviceType,
+                      ).toLowerCase()}`
+                    : undefined
+                }
+                rows={
+                  <>
+                    <VtuRow label="Product" value={detail.displayName} />
+                    <VtuRow
+                      label="Category"
+                      value={vtuServiceTypeLabel(detail.serviceType)}
+                    />
+                    {amountNgn !== null && Number.isFinite(amountNgn) && (
+                      <VtuRow label="You receive" value={formatNgn(amountNgn)} />
+                    )}
+                    <VtuRow
+                      label={detail.customerIdentifierLabel}
+                      value={maskIdentifier(identifier)}
+                      mono
+                    />
+                    <VtuRow label="Rate" value={`₦${detail.ngnPerPoint}/pt`} />
+                    <VtuRow
+                      label="Balance after"
+                      value={`${Math.max(
+                        0,
+                        (balance ?? 0) - (points ?? 0),
+                      ).toLocaleString()} pts`}
+                      strong
+                    />
+                  </>
+                }
+              >
+                <Button
+                  variant="vtu"
+                  size="lg"
+                  onClick={handleSubmit}
+                  disabled={locked || !affordable}
+                  className="w-full"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Placing…
+                    </>
+                  ) : inFlight ? (
+                    "In progress…"
+                  ) : (
+                    <>
+                      <Lock className="h-4 w-4" />
+                      Confirm payment
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setConfirmed(false)}
+                  disabled={locked}
+                  className="w-full text-vtu-muted hover:bg-vtu-chip hover:text-vtu-text"
+                >
+                  Back
+                </Button>
+                <p className="text-center text-[11px] text-vtu-muted">
+                  Charged once. A payment that does not go through refunds your
+                  points automatically.
+                </p>
+              </VtuConfirmPanel>
+            </Reveal>
+          )}
+
+          {step === "receipt" && tx && (
+            <VtuReceipt
+              status={tx.status}
+              rows={
+                <>
+                  <VtuRow label="Product" value={detail?.displayName ?? tx.serviceCode} />
+                  <VtuRow
+                    label={detail?.customerIdentifierLabel ?? "Destination"}
+                    value={maskIdentifier(tx.customerIdentifier)}
+                    mono
+                  />
+                  <VtuRow label="Value" value={formatNgn(tx.nairaPrice)} />
+                  <VtuRow
+                    label="Points debited"
+                    value={`${tx.pointsDebited.toLocaleString()} pts`}
+                    strong
+                  />
+                  <VtuRow label="Rate" value={`₦${tx.ngnPerPoint}/pt`} />
+                  <VtuRow label="Requested" value={fmtWhen(tx.createdAt)} />
+                  {tx.providerReference && (
+                    <VtuRow label="Reference" value={tx.providerReference} mono />
+                  )}
+                </>
+              }
+              token={
+                tx.delivery?.token ? (
+                  <div className="mt-3 rounded-xl border border-vtu-accent bg-vtu-accent/20 px-3 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-vtu-accent-ink/80">
+                      Token
+                    </p>
+                    <p className="break-anywhere mt-0.5 font-mono text-base font-bold text-vtu-accent-ink">
+                      {tx.delivery.token}
+                    </p>
+                    {(tx.delivery.units || tx.delivery.serial || tx.delivery.pin) && (
+                      <p className="mt-0.5 text-[11px] text-vtu-accent-ink/80 tabular-nums">
+                        {[
+                          tx.delivery.units ? `${tx.delivery.units} units` : null,
+                          tx.delivery.serial ? `Serial ${tx.delivery.serial}` : null,
+                          tx.delivery.pin ? `PIN ${tx.delivery.pin}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
+                ) : null
+              }
+            >
+              {tx.failureReason && (
+                <p className="rounded-xl border border-vtu-line bg-vtu-chip px-3 py-2 text-xs text-vtu-muted">
+                  {tx.failureReason}
+                </p>
+              )}
+              <Button variant="vtu" size="lg" onClick={reset} className="w-full">
+                Buy another
               </Button>
-            </CardContent>
-          </Card>
-        </Reveal>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full border-vtu-line bg-vtu-card text-vtu-text hover:bg-vtu-chip"
+              >
+                <Link to="/vtu/history">View receipt in history</Link>
+              </Button>
+            </VtuReceipt>
+          )}
+        </>
       )}
-    </div>
+    </VtuShell>
+  );
+}
+
+/**
+ * One buyable product in the list.
+ *
+ * The price line distinguishes the three honest cases rather than printing a
+ * dash for two of them: an exact price, an estimated range for anything whose
+ * cost follows the amount, and "at checkout" when the server priced nothing.
+ */
+function BillCard({
+  product,
+  serviceType,
+  onChoose,
+}: {
+  product: CatalogProductView;
+  /** Carried by the GROUP, not by the product: `CatalogProductView` is a view
+   *  of one product and deliberately does not re-state its category. */
+  serviceType: string;
+  onChoose: () => void;
+}) {
+  return (
+    <VtuChoice
+      selected={false}
+      onClick={onChoose}
+      disabled={!product.purchasable}
+      className="flex h-full w-full items-start gap-3"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
+        <VtuServiceIcon serviceType={serviceType} className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold">
+          {product.displayName}
+        </span>
+        <span className="mt-0.5 block text-[11px] text-vtu-muted">
+          {product.purchasable
+            ? `We'll ask for: ${product.customerIdentifierLabel}`
+            : "Not available to buy yet — ask support to enable it"}
+        </span>
+        <span className="mt-1.5 block text-sm font-semibold tabular-nums">
+          {product.fixedPoints !== null
+            ? `${product.fixedPoints.toLocaleString()} pts`
+            : product.indicativeMinPoints !== null &&
+                product.indicativeMaxPoints !== null
+              ? product.indicativeMinPoints === product.indicativeMaxPoints
+                ? `${product.indicativeMinPoints.toLocaleString()} pts`
+                : `${product.indicativeMinPoints.toLocaleString()}–${product.indicativeMaxPoints.toLocaleString()} pts`
+              : "Price shown at checkout"}
+        </span>
+      </span>
+    </VtuChoice>
+  );
+}
+
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
+/** "12 Mar, 14:05" — the year only once it stops being obvious. */
+function fmtWhen(ts: number): string {
+  const date = new Date(ts);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleString(
+    "en-NG",
+    sameYear ? DATE_FORMAT : { ...DATE_FORMAT, year: "numeric" },
   );
 }

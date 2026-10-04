@@ -20,6 +20,11 @@ const buttonVariants = cva(
         ghost:
           "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // The VTU shop's own call to action. It runs on the VTU tokens so the
+        // customer's shop keeps its plum-and-cream identity, while the rest of
+        // the product stays on `primary`.
+        vtu:
+          "bg-vtu-band text-vtu-band-fg shadow-sm hover:bg-vtu-band/90 hover:shadow-md active:shadow-sm focus-visible:ring-vtu-accent/60",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

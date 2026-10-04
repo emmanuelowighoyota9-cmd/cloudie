@@ -107,32 +107,54 @@ describe("every VTU page renders the nav", () => {
 
 describe("the nav sits in the same place on every page", () => {
   /**
-   * The nav is the first child of every VTU page, so its vertical position IS
-   * the page's top padding. A page that opted out of the shared container
-   * renders the same tab row ~40px higher, and clicking a tab then appears to
-   * shift the page under you — which reads as the nav being broken.
+   * The nav is the first thing inside the shared shell, so its vertical
+   * position IS the shell's top padding.
    *
-   * Read off the CONTAINER element rather than searched for as free text: a
-   * prose comment mentioning the padding would otherwise satisfy the assertion
-   * on its own, which is exactly the kind of test that passes while the page is
-   * wrong. Stripping comments first also keeps this honest.
+   * The container used to be a class string COPIED into all four pages, and
+   * this block compared the copies. It is now one component — `VtuShell` — so
+   * the assertion follows the property rather than the copy: every VTU page
+   * renders inside the shell, and the shell is the single place the padding is
+   * declared. Pages cannot drift apart any more, because there is nothing left
+   * to drift.
+   *
+   * Still read off real elements rather than searched for as free text: a prose
+   * comment mentioning the padding would otherwise satisfy the assertion on its
+   * own. Stripping comments first keeps that honest.
    */
-  function containerClass(page: string): string {
-    const source = readFileSync(page, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const match = source.match(/className="([^"]*mx-auto w-full max-w-[^"]*)"/);
-    if (!match) throw new Error("no page container found in " + page);
-    return match[1];
-  }
+  const shellSource = readFileSync("src/components/vtu/shared.tsx", "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
 
-  test("all four VTU pages share the same vertical padding", () => {
-    const paddings = new Set<string>();
+  test("all four VTU pages render inside the shared shell", () => {
     for (const page of VTU_PAGES) {
-      const classes = containerClass(page);
-      expect(classes).toContain("py-10");
-      paddings.add(classes.match(/py-10[^"]*/)?.[0] ?? "none");
+      const source = readFileSync(page, "utf8");
+      expect(source).toContain("<VtuShell>");
+      // The usage alone is not enough: a missing import fails the build rather
+      // than the page silently rendering outside the shell.
+      expect(source).toContain("VtuShell,");
+      // And the nav is INSIDE it, which is what makes its position the same on
+      // every page rather than merely similar.
+      expect(source.indexOf("<VtuNav")).toBeGreaterThan(
+        source.indexOf("<VtuShell>"),
+      );
     }
-    // One distinct value across four pages, so they cannot drift apart.
-    expect(paddings.size).toBe(1);
+  });
+
+  test("the shell declares the page padding once, for everyone", () => {
+    const containers = shellSource.match(/className="[^"]*mx-auto w-full max-w-[^"]*"/g) ?? [];
+    expect(containers).toHaveLength(1);
+
+    // The vertical rhythm the four pages used to repeat, now in one place.
+    expect(containers[0]).toContain("py-6");
+    expect(containers[0]).toContain("sm:py-8");
+    expect(containers[0]).toContain("lg:py-10");
+
+    // Full-bleed: the shell cancels the app shell's gutter at every breakpoint
+    // it sets, or the shop would be a cream rectangle floating in a blue page.
+    for (const bleed of ["-mx-3", "sm:-mx-5", "lg:-mx-8", "-my-4", "sm:-my-6", "lg:-my-8"]) {
+      expect(shellSource).toContain(bleed);
+    }
   });
 });
 

@@ -1,16 +1,29 @@
 import { Link } from "react-router";
 import { useQuery } from "convex/react";
-import { ArrowRight, Coins, Info } from "lucide-react";
+import {
+  ArrowRight,
+  Coins,
+  Info,
+  LayoutGrid,
+  Lightbulb,
+  Plus,
+  Radio,
+  Wifi,
+} from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { CatalogProductView } from "@/convex/vtuCatalog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
-// Shared with the history rows and the purchase page, so one service type has
+// Shared with the history rows and the purchase pages, so one service type has
 // one glyph everywhere it appears.
-import { VtuNav, VtuServiceIcon } from "@/components/vtu/shared";
+import {
+  VtuBand,
+  VtuNav,
+  VtuSection,
+  VtuServiceIcon,
+  VtuShell,
+} from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
 import { VTU_SERVICE_TYPE_COPY, vtuServiceTypeLabel } from "@/lib/vtu";
 import { cn } from "@/lib/utils";
@@ -30,34 +43,76 @@ import { cn } from "@/lib/utils";
  * will refuse.
  */
 
+/**
+ * The four tiles under the balance.
+ *
+ * Quick links, not a menu: each one lands on the screen where that purchase
+ * actually happens, with the category already chosen. "All bills" is the
+ * fourth because a customer who does not recognise their own bill type needs
+ * somewhere to look, and sending them back to this page would be a loop.
+ */
+const QUICK_LINKS = [
+  { to: "/vtu/airtime", label: "Airtime", icon: Radio },
+  { to: "/vtu/bills?category=data", label: "Data", icon: Wifi },
+  { to: "/vtu/bills?category=electricity", label: "Electricity", icon: Lightbulb },
+  { to: "/vtu/bills", label: "All bills", icon: LayoutGrid },
+] as const;
+
 export default function VtuCatalog() {
   const catalog = useQuery(api.vtuCatalog.listCatalog, {});
   const balance = useQuery(api.points.getBalance);
 
   return (
-    /* `page-gutter` + `py-10 sm:py-14` matches the other three VTU pages. Without
-       them the catalogue sat ~40px higher, so the shared nav — which is the
-       first child on every VTU page — jumped vertically on every tab click.
-       The extra inline padding here is pre-existing and shared with the other
-       three pages, so it is left alone rather than fixed piecemeal. */
-    <div className="page-gutter mx-auto w-full max-w-5xl space-y-8 py-10 sm:py-14">
+    <VtuShell>
       <VtuNav />
-      <Reveal>
+
+      <VtuBand>
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] opacity-70">
               Airtime, data &amp; bills
-            </h1>
-            <p className="max-w-2xl text-sm text-muted-foreground">
+            </p>
+            <p className="mt-1 font-display text-2xl font-bold tabular-nums">
+              {(balance ?? 0).toLocaleString()}
+              <span className="ml-1 text-sm font-medium opacity-70">pts</span>
+            </p>
+            <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
               Pay with your points. Prices are set by us, and a top-up that does
               not go through returns your points automatically.
             </p>
           </div>
-          <Badge variant="secondary" className="gap-1.5 tabular-nums">
-            <Coins className="h-3 w-3" />
-            {(balance ?? 0).toLocaleString()} pts available
-          </Badge>
+          <Button
+            asChild
+            variant="vtu"
+            className="border border-vtu-band-fg/25 bg-vtu-band-fg/10 hover:bg-vtu-band-fg/20"
+          >
+            <Link to="/buy-points">
+              <Plus className="h-4 w-4" />
+              Buy points
+            </Link>
+          </Button>
         </div>
+      </VtuBand>
+
+      <Reveal>
+        <VtuSection title="Quick links" hint="Straight to the thing you came for.">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {QUICK_LINKS.map((link) => (
+              <Link
+                key={link.label}
+                to={link.to}
+                className="vtu-chip flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-3"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
+                  <link.icon className="h-4 w-4" aria-hidden />
+                </span>
+                <span className="min-w-0 truncate text-sm font-medium">
+                  {link.label}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </VtuSection>
       </Reveal>
 
       {catalog === undefined ? (
@@ -67,115 +122,121 @@ export default function VtuCatalog() {
         </div>
       ) : catalog.groups.length === 0 ? (
         <Reveal>
-          <Card>
-            <CardContent className="space-y-2 p-8 text-center">
-              <p className="text-sm font-medium">Nothing is on sale yet</p>
-              <p className="mx-auto max-w-md text-sm text-muted-foreground">
-                No services are enabled right now. If that is unexpected, an
-                administrator can add them under VTU Catalog &amp; Routing — this
-                page updates the moment they do.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="vtu-panel p-8 text-center">
+            <p className="text-sm font-semibold">Nothing is on sale yet</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-vtu-muted">
+              No services are enabled right now. If that is unexpected, an
+              administrator can add them under VTU Catalog &amp; Routing — this
+              page updates the moment they do.
+            </p>
+          </div>
         </Reveal>
       ) : (
         catalog.groups.map((group, groupIndex) => {
           const copy = VTU_SERVICE_TYPE_COPY[group.serviceType];
           return (
             <Reveal key={group.serviceType} delay={groupIndex * 0.04}>
-              <section className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <VtuServiceIcon
-                      serviceType={group.serviceType}
-                      className="h-4 w-4"
-                    />
+              <VtuSection
+                title={vtuServiceTypeLabel(group.serviceType)}
+                hint={copy?.blurb}
+                action={
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
+                    <VtuServiceIcon serviceType={group.serviceType} className="h-4 w-4" />
                   </span>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold uppercase tracking-wider">
-                      {vtuServiceTypeLabel(group.serviceType)}
-                    </h2>
-                    {copy && (
-                      <p className="text-xs text-muted-foreground">{copy.blurb}</p>
-                    )}
-                  </div>
-                </div>
-
-                <StaggerGroup className="grid gap-3 sm:grid-cols-2">
+                }
+              >
+                <StaggerGroup className="grid gap-2 sm:grid-cols-2">
                   {group.products.map((product) => (
                     <StaggerItem key={product.productCode}>
-                      <ProductCard product={product} />
+                      <ProductCard
+                        product={product}
+                        serviceType={group.serviceType}
+                      />
                     </StaggerItem>
                   ))}
                 </StaggerGroup>
-              </section>
+              </VtuSection>
             </Reveal>
           );
         })
       )}
 
       <Reveal>
-        <p className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p className="flex items-start gap-2 px-1 text-[11px] text-vtu-muted">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           Estimated prices are shown for products whose cost depends on the
-          amount you choose. The exact figure appears on the purchase form
-          before you confirm.
+          amount you choose. The exact figure appears on the confirmation before
+          you pay.
         </p>
       </Reveal>
-    </div>
+    </VtuShell>
   );
 }
 
-function ProductCard({ product }: { product: CatalogProductView }) {
+function ProductCard({
+  product,
+  serviceType,
+}: {
+  product: CatalogProductView;
+  /** Carried by the GROUP; `CatalogProductView` does not re-state its own
+   *  category, so the glyph is passed down rather than re-derived. */
+  serviceType: string;
+}) {
   const shape = describeShape(product);
 
   return (
-    <Card className="h-full transition-colors hover:border-primary/40">
-      <CardContent className="flex h-full flex-col gap-4 p-5">
-        <div className="min-w-0 space-y-1">
+    <div className="vtu-panel flex h-full flex-col gap-3 p-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
+          <VtuServiceIcon serviceType={serviceType} className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 space-y-0.5">
           <p className="truncate text-sm font-semibold">{product.displayName}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-[11px] text-vtu-muted">
             We&rsquo;ll ask for: {product.customerIdentifierLabel}
           </p>
         </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {shape.map((chip) => (
-            <Badge key={chip} variant="outline" className="font-normal">
-              {chip}
-            </Badge>
-          ))}
-        </div>
-
-        <div className="mt-auto space-y-2">
+        <span className="ml-auto shrink-0 text-right text-sm font-semibold tabular-nums">
           <PriceBlock product={product} />
-          {product.purchasable ? (
-            <Button asChild className="min-h-11 w-full gap-1.5">
-              {/* Airtime keeps its own grid (network + amount chips); every
-                  other product is bought on the bills page by product code. */}
-              <Link
-                to={
-                  product.airtimeNetwork
-                    ? `/vtu/airtime?network=${product.airtimeNetwork}`
-                    : `/vtu/bills?product=${product.productCode}`
-                }
-              >
-                Buy now
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
-          ) : (
-            <div
-              className={cn(
-                "rounded-lg border border-dashed border-border px-3 py-2.5 text-center text-xs text-muted-foreground",
-              )}
-            >
-              Not available to buy yet — ask support to enable it
-            </div>
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {shape.map((chip) => (
+          <span
+            key={chip}
+            className="rounded-full bg-vtu-chip px-2.5 py-1 text-[11px] text-vtu-muted"
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
+
+      {product.purchasable ? (
+        <Button asChild variant="vtu" className="mt-auto w-full">
+          {/* Airtime keeps its own grid (network + amount chips); every other
+              product is bought on the bills page by product code. */}
+          <Link
+            to={
+              product.airtimeNetwork
+                ? `/vtu/airtime?network=${product.airtimeNetwork}`
+                : `/vtu/bills?product=${product.productCode}`
+            }
+          >
+            Buy now
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </Button>
+      ) : (
+        <div
+          className={cn(
+            "mt-auto rounded-xl border border-dashed border-vtu-line px-3 py-2.5 text-center text-[11px] text-vtu-muted",
           )}
+        >
+          Not available to buy yet — ask support to enable it
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
@@ -190,30 +251,34 @@ function ProductCard({ product }: { product: CatalogProductView }) {
 function PriceBlock({ product }: { product: CatalogProductView }) {
   if (product.fixedPoints !== null) {
     return (
-      <p className="text-base font-semibold tabular-nums">
+      <span className="inline-flex items-center gap-1 text-vtu-text">
+        <Coins className="h-3.5 w-3.5 text-vtu-muted" aria-hidden />
         {product.fixedPoints.toLocaleString()} pts
-      </p>
+      </span>
     );
   }
 
   const { indicativeMinPoints: lo, indicativeMaxPoints: hi } = product;
   if (lo !== null && hi !== null) {
     return (
-      <div className="space-y-0.5">
-        <p className="text-base font-semibold tabular-nums">
+      <span className="block space-y-0.5">
+        <span className="block">
           {lo === hi
             ? `${lo.toLocaleString()} pts`
             : `${lo.toLocaleString()}–${hi.toLocaleString()} pts`}
-        </p>
-        <p className="text-[11px] text-muted-foreground tabular-nums">
-          estimated for {formatNgn(product.minAmount ?? 0)}–
-          {formatNgn(product.maxAmount ?? 0)}
-        </p>
-      </div>
+        </span>
+        <span className="block text-[10px] font-normal text-vtu-muted tabular-nums">
+          est. {formatNgn(product.minAmount ?? 0)}–{formatNgn(product.maxAmount ?? 0)}
+        </span>
+      </span>
     );
   }
 
-  return <p className="text-sm font-medium text-muted-foreground">Price shown at checkout</p>;
+  return (
+    <span className="text-xs font-medium text-vtu-muted">
+      Price shown at checkout
+    </span>
+  );
 }
 
 /** What the customer has to choose, in words rather than enum values. */
