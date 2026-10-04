@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "convex/react";
+import { formatNgn } from "@/lib/pricing";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ export default function AdminOrders() {
     if (!filtered?.length) return;
     downloadCsv(`cloudie-orders-${new Date().toISOString().split("T")[0]}.csv`, [
       ["Order ID", "Product", "Quantity", "Points", "Status", "Created"],
-      ...filtered.map((o) => [o._id, productMap.get(o.productId)?.name ?? "—", o.quantity, o.totalPoints, o.status, fmtDate(o.createdAt)]),
+      ...filtered.map((o) => [o._id, productMap.get(o.productId)?.name ?? "—", o.quantity, o.totalNgn ?? o.totalPoints * 15, o.status, fmtDate(o.createdAt)]),
     ]);
   };
 
@@ -108,7 +109,7 @@ export default function AdminOrders() {
                   </p>
                   <p className="truncate font-mono text-[11px] text-slate-400">{o._id} · {fmtDate(o.createdAt)}</p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold text-blue-600">{o.totalPoints.toLocaleString()} pts</span>
+                <span className="shrink-0 text-sm font-semibold text-blue-600">{formatNgn(o.totalNgn ?? o.totalPoints * 15)}</span>
                 <StatusBadge status={o.status} />
                 {(o.status === "pending" || o.status === "escrow") && (
                   <div className="flex shrink-0 gap-1">
@@ -134,8 +135,8 @@ export default function AdminOrders() {
           title={action.kind === "release" ? "Release escrow" : "Refund order"}
           description={
             action.kind === "release"
-              ? "Moves held points from the buyer's purchase to the vendor and marks the order completed. Idempotent."
-              : "Refunds the buyer's points from the vendor's balance and marks the order refunded. Idempotent."
+              ? "Moves the buyer's NGN payment to the vendor and marks the order completed. Idempotent."
+              : "Refunds the buyer's NGN payment and marks the order refunded. Idempotent."
           }
           resource={action.orderId}
           actionLabel={action.kind === "release" ? "Release" : "Refund"}
