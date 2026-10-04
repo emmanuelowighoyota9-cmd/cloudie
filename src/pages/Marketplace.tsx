@@ -16,6 +16,7 @@ import {
   Boxes,
   Store,
   ChevronRight,
+  ImageOff,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -293,49 +294,93 @@ export default function Marketplace() {
                 const stock = stockFor(product);
                 const outOfStock = stock !== undefined && stock <= 0;
                 return (
-                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-xl border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700">
-                    <CardContent className="min-w-0 p-4 sm:p-5">
-                      <div className="flex items-start justify-between gap-3">
-                        <Badge variant="outline" className="text-[10px]">{product.category}</Badge>
-                        {product.provider === "logspanel" && <Badge className="text-[10px]">Logspanel</Badge>}
+                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-2xl border-slate-200 bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProduct(product._id)}
+                      className="relative block aspect-[16/9] w-full overflow-hidden bg-muted text-left"
+                      aria-label={`View ${product.name}`}
+                    >
+                      {product.imageUrl ? (
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          loading="lazy"
+                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white/80">
+                            <ImageOff className="h-7 w-7" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
+                        <Badge variant="secondary" className="max-w-[70%] truncate border-white/20 bg-black/45 text-white backdrop-blur-sm">
+                          {product.category}
+                        </Badge>
+                        {product.provider === "logspanel" && (
+                          <Badge className="shrink-0 bg-primary/95 text-primary-foreground shadow-sm">Logspanel</Badge>
+                        )}
                       </div>
+                      {outOfStock && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/55">
+                          <Badge variant="destructive">Out of stock</Badge>
+                        </div>
+                      )}
+                    </button>
+
+                    <CardContent className="min-w-0 p-4 sm:p-5">
                       <button
                         type="button"
                         onClick={() => setSelectedProduct(product._id)}
-                        className="mt-3 block w-full text-left"
+                        className="block w-full min-w-0 text-left"
                       >
-                        <h3 className="break-words text-base font-semibold text-slate-900 dark:text-white">{product.name}</h3>
-                        <p className="mt-1 line-clamp-3 break-words text-sm leading-5 text-muted-foreground">{product.description}</p>
+                        <h3 className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900 dark:text-white">
+                          {product.name}
+                        </h3>
+                        <p className="mt-1.5 line-clamp-2 break-words text-sm leading-5 text-muted-foreground">
+                          {product.description}
+                        </p>
                       </button>
 
-                      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs sm:mt-4">
-                        <div className="rounded-lg bg-muted/50 p-2.5">
-                          <span className="block text-muted-foreground">Price</span>
-                          <span className="mt-0.5 flex items-center font-semibold text-primary">
-                            <Coins className="mr-1 h-3.5 w-3.5" />
-                            {product.pointsPrice} pts
+                      <div className="mt-4 flex items-end justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Price</span>
+                          <span className="mt-0.5 flex items-center gap-1 text-lg font-bold text-primary">
+                            <Coins className="h-4 w-4 shrink-0" />
+                            {product.pointsPrice.toLocaleString()} pts
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                            {pointsWithNgn(product.pointsPrice)}
                           </span>
                         </div>
-                        <div className="rounded-lg bg-muted/50 p-2.5">
-                          <span className="block text-muted-foreground">Stock</span>
-                          <span className={`mt-0.5 block font-semibold ${
-                            outOfStock ? "text-destructive" : "text-foreground"
-                          }`}>
+                        <div className="shrink-0 text-right">
+                          <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Stock</span>
+                          <span className={`mt-0.5 block text-sm font-semibold ${outOfStock ? "text-destructive" : "text-foreground"}`}>
                             {stock === undefined ? "Available" : stock.toLocaleString()}
                           </span>
+                          {product.totalSold > 0 && (
+                            <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                              {product.totalSold.toLocaleString()} sold
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:flex">
-                        <Button variant="outline" className="min-w-0 sm:flex-1" onClick={() => setSelectedProduct(product._id)}>
-                          View details
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <Button variant="outline" className="min-w-0" onClick={() => setSelectedProduct(product._id)}>
+                          Details
                         </Button>
                         <Button
-                          className="flex-1"
+                          className="min-w-0"
                           disabled={outOfStock || buying === product._id || (balance ?? 0) < product.pointsPrice}
                           onClick={() => handleBuy(product._id, product.name, product.pointsPrice, product.provider)}
                         >
-                          {buying === product._id ? "Processing..." : "Buy now"}
+                          {buying === product._id ? "Processing..." : outOfStock ? "Unavailable" : "Buy now"}
                         </Button>
                       </div>
                     </CardContent>
