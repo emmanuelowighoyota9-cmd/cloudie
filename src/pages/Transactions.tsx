@@ -24,14 +24,14 @@ const typeLabels: Record<string, string> = {
 };
 
 export default function Transactions() {
-  const ledger = useQuery(api.points.getLedger, { limit: 200 });
+  const ledger = useQuery(api.wallet.getLedger, { limit: 200 });
   const [filter, setFilter] = useState("all");
 
   const filtered = useMemo(() => {
     if (!ledger) return [];
     if (filter === "all") return ledger;
-    if (filter === "credits") return ledger.filter((l) => l.amount > 0);
-    if (filter === "debits") return ledger.filter((l) => l.amount < 0);
+    if (filter === "credits") return ledger.filter((l) => l.amountNgn > 0);
+    if (filter === "debits") return ledger.filter((l) => l.amountNgn < 0);
     return ledger.filter((l) => l.type === filter);
   }, [ledger, filter]);
 
@@ -42,8 +42,8 @@ export default function Transactions() {
       new Date(tx.createdAt).toISOString(),
       tx.description,
       typeLabels[tx.type] ?? tx.type,
-      tx.amount,
-      tx.balanceAfter,
+      tx.amountNgn,
+      tx.balanceAfterNgn,
       tx.reference ?? "",
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -61,7 +61,7 @@ export default function Transactions() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Transactions</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your complete point ledger history.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your complete NGN wallet transaction history.</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!filtered.length} className="gap-2">
           <Download className="h-4 w-4" /> Export CSV
@@ -105,7 +105,7 @@ export default function Transactions() {
           <EmptyHeader>
             <EmptyTitle>No transactions found</EmptyTitle>
             <EmptyDescription>
-              {filter !== "all" ? "Try a different filter." : "Your point transactions will appear here."}
+              {filter !== "all" ? "Try a different filter." : "Your NGN wallet transactions will appear here."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -115,7 +115,7 @@ export default function Transactions() {
             {filtered.map((tx) => (
               <div key={tx._id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
                 <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                  tx.amount > 0
+                  tx.amountNgn > 0
                     ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400"
                     : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
                 }`}>
@@ -130,9 +130,9 @@ export default function Transactions() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className={`text-sm font-bold ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
-                    {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
+                    {tx.amount > 0 ? "+" : ""}{tx.amountNgn.toLocaleString("en-NG")}
                   </p>
-                  <p className="text-[10px] text-slate-400">Bal: {tx.balanceAfter.toLocaleString()}</p>
+                  <p className="text-[10px] text-slate-400">Bal: {tx.balanceAfterNgn.toLocaleString("en-NG")}</p>
                 </div>
               </div>
             ))}
