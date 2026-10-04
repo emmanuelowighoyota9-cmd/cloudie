@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { creditWallet } from "./wallet";
 
 /**
  * Find an existing payment order by Paystack reference (idempotency check).
@@ -94,7 +95,7 @@ export const recordPendingOrder = internalMutation({
     return await ctx.db.insert("paymentOrders", {
       orderNumber,
       buyerId: args.userId,
-      kind: "points_package",
+      kind: "wallet_funding",
       packageId: args.packageId,
       points: args.points,
       walletAmountNgn: args.walletAmountNgn ?? args.amountSubunit / 100,
@@ -208,7 +209,7 @@ export const recordPaymentAndCredit = internalMutation({
       orderId = await ctx.db.insert("paymentOrders", {
         orderNumber: `ORD-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
         buyerId: userId,
-        kind: "points_package",
+        kind: "wallet_funding",
         packageId,
         points,
         walletAmountNgn,
@@ -228,7 +229,7 @@ export const recordPaymentAndCredit = internalMutation({
 
     // Credit the authoritative NGN wallet. This is idempotent and server-side;
     // a successful Paystack charge is the only path that can mint wallet funds.
-    const walletLedgerId: string = await ctx.runMutation(internal.wallet.credit, {
+    const walletLedgerId: string = await creditWallet(ctx, {
       userId,
       amountNgn: walletAmountNgn,
       description: `Wallet funding via Paystack (${chargeLabel})`,
