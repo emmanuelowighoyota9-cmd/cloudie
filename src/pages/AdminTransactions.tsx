@@ -80,7 +80,7 @@ export default function AdminTransactions() {
           l._id,
           l.userId,
           userMap.get(l.userId)?.email ?? "",
-          l.amount,
+          l.amountNgn,
           l.balanceAfterNgn,
           l.type,
           l.description,
@@ -150,7 +150,7 @@ export default function AdminTransactions() {
         <div className="space-y-3">
           {paged!.map((l) => {
             const u = userMap.get(l.userId);
-            const isCredit = l.amount > 0;
+            const isCredit = l.amountNgn > 0;
             return (
               <Card key={l._id} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
                 <CardContent className="p-4">
@@ -162,9 +162,9 @@ export default function AdminTransactions() {
                       </span>
                       <div>
                         <p className={`text-sm font-bold leading-none ${isCredit ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                          {isCredit ? "+" : ""}{l.amount.toLocaleString()} pts
+                          {isCredit ? "+" : ""}₦{l.amountNgn.toLocaleString("en-NG")}
                         </p>
-                        <p className="mt-0.5 text-[11px] font-medium text-slate-500">{formatNgn(l.amount * ngnPerPoint)}</p>
+                        
                       </div>
                     </div>
                     <StatusBadge status={l.type} />
@@ -187,8 +187,8 @@ export default function AdminTransactions() {
                   {/* Bottom: balance + date */}
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
                     <div className="text-[11px]">
-                      <p className="font-medium text-slate-700 dark:text-slate-300">Balance {l.balanceAfter.toLocaleString()} pts</p>
-                      <p className="text-slate-400">{formatNgn(l.balanceAfter * ngnPerPoint)}</p>
+                      <p className="font-medium text-slate-700 dark:text-slate-300">Balance ₦{l.balanceAfterNgn.toLocaleString("en-NG")}</p>
+                      
                     </div>
                     <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                       {fmtDate(l.createdAt)}
