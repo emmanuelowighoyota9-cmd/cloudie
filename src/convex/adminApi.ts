@@ -1276,8 +1276,8 @@ export const getAnalyticsRange = query({
         campaigns: campaigns.filter((c) => c.createdAt >= start).length,
         notifications: notifications.filter((n) => n.createdAt >= start).length,
         activeTenants: tenants.filter((t) => t.isActive).length,
-        minted: ledger.filter((l) => l.amountNgn > 0 && l.createdAt >= start).reduce((s, l) => s + l.amount, 0),
-        burned: ledger.filter((l) => l.amountNgn < 0 && l.createdAt >= start).reduce((s, l) => s + Math.abs(l.amount), 0),
+        minted: ledger.filter((l) => l.amountNgn > 0 && l.createdAt >= start).reduce((s, l) => s + l.amountNgn, 0),
+        burned: ledger.filter((l) => l.amountNgn < 0 && l.createdAt >= start).reduce((s, l) => s + Math.abs(l.amountNgn), 0),
       },
     };
   },
