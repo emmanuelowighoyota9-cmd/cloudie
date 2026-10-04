@@ -723,7 +723,6 @@ export const syncLogspanelProducts = internalMutation({
       if (!Number.isFinite(providerPrice) || providerPrice < 0) continue;
 
       seen.add(ref);
-      const customerPrice = Math.max(1, Math.ceil((providerPrice * (1 + args.markupPercent / 100)) / args.ngnPerPoint));
       const existing = await ctx.db
         .query("marketplaceProducts")
         .withIndex("by_provider_ref", (q) => q.eq("provider", "logspanel").eq("providerProductRef", ref))
