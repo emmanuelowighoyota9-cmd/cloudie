@@ -542,7 +542,7 @@ export const prepareLogspanelOrder = internalMutation({
     const totalNgn = Math.round((product.priceNgn ?? product.pointsPrice * rate.ngnPerPoint) * args.quantity * 100) / 100;
     if (!Number.isFinite(totalNgn) || totalNgn <= 0) throw new Error("INVALID_ORDER_TOTAL");
 
-    await ctx.runMutation(internal.wallet.debit, {
+    await debitWallet(ctx, {
       userId: args.userId,
       amountNgn: totalNgn,
       description: `Marketplace purchase: ${product.name}`,
