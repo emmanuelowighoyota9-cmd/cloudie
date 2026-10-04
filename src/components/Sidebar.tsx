@@ -27,6 +27,8 @@ import {
 const mainNav = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
+  { label: "Numbers", icon: Phone, to: "/marketplace/numbers" },
+  { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
