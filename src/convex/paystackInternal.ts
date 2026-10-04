@@ -1,6 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { creditWallet } from "./wallet";
 
 /**
  * Find an existing payment order by Paystack reference (idempotency check).
@@ -228,7 +229,7 @@ export const recordPaymentAndCredit = internalMutation({
 
     // Credit the authoritative NGN wallet. This is idempotent and server-side;
     // a successful Paystack charge is the only path that can mint wallet funds.
-    const walletLedgerId: string = await ctx.runMutation(internal.wallet.credit, {
+    const walletLedgerId: string = await creditWallet(ctx, {
       userId,
       amountNgn: walletAmountNgn,
       description: `Wallet funding via Paystack (${chargeLabel})`,
