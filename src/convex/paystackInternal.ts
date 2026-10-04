@@ -151,7 +151,7 @@ export const recordPaymentAndCredit = internalMutation({
       if (existing) {
         await ctx.db.patch(existing._id, {
           status: "paid",
-          creditedLedgerId: priorLedger._id,
+          creditedWalletLedgerId: priorLedger._id,
           updatedAt: Date.now(),
         });
         return `already:${existing._id}`;
