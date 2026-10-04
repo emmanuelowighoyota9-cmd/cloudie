@@ -75,7 +75,7 @@ export default function VtuBills() {
     api.vtuCatalog.getPurchaseDetail,
     productCode ? { productCode } : "skip",
   );
-  const balance = useQuery(api.points.getBalance);
+  const balance = useQuery(api.wallet.getBalance);
   const purchase = useAction(api.vtuHttp.purchaseVtu);
 
   // The catalogue's quick links land here with a category already chosen, so
@@ -121,8 +121,8 @@ export default function VtuBills() {
 
   const preview = useQuery(api.vtu.previewCost, serviceCode ? { serviceCode } : "skip");
 
-  const points = preview?.points ?? detail?.fixedPoints ?? null;
-  const affordable = points === null ? true : (balance ?? 0) >= points;
+  const priceNgn = preview?.nairaPrice ?? detail?.priceNgn ?? null;
+  const affordable = priceNgn === null ? true : (balance ?? 0) >= priceNgn;
   const inFlight = tx ? tx.status === "pending" || tx.status === "processing" : false;
   const locked = submitting || inFlight;
 
@@ -131,7 +131,7 @@ export default function VtuBills() {
     : !detail.providerAvailable
       ? "No provider is serving this product right now. Nothing has been charged."
       : !affordable
-        ? `You need ${((points ?? 0) - (balance ?? 0)).toLocaleString()} more points.`
+        ? `You need ${formatNgn(Math.max(0, (priceNgn ?? 0) - (balance ?? 0)))} more in your wallet.`
         : null;
 
   // ── Steps ─────────────────────────────────────────────────────────
@@ -194,7 +194,7 @@ export default function VtuBills() {
       return;
     }
     if (!affordable) {
-      toast.error("Not enough points for this purchase");
+      toast.error("Insufficient NGN wallet balance");
       return;
     }
     setConfirmed(true);
@@ -245,7 +245,7 @@ export default function VtuBills() {
               Data, cable, meter &amp; exam
             </h1>
             <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
-              Paid from your points. A payment that does not go through returns
+              Paid from your NGN wallet. A payment that does not go through returns
               them automatically.
             </p>
           </div>
@@ -264,7 +264,7 @@ export default function VtuBills() {
             >
               <Link to="/buy-points">
                 <Plus className="h-3.5 w-3.5" />
-                Buy points
+                Fund wallet
               </Link>
             </Button>
           </div>
@@ -344,7 +344,7 @@ export default function VtuBills() {
                 <Reveal delay={0.04}>
                   <VtuSection
                     title={`${vtuServiceTypeLabel(activeGroup.serviceType)} products`}
-                    hint="Prices are what your points will be charged."
+                    hint="Prices are charged directly from your NGN wallet."
                   >
                     <StaggerGroup className="grid gap-2 sm:grid-cols-2">
                       {activeGroup.products.map((product) => (
@@ -514,7 +514,7 @@ export default function VtuBills() {
           {step === "confirm" && detail && (
             <Reveal>
               <VtuConfirmPanel
-                amount={`${points === null ? "—" : points.toLocaleString()} pts`}
+                amount={priceNgn === null ? "—" : formatNgn(priceNgn)}
                 amountHint={
                   amountNgn !== null && Number.isFinite(amountNgn)
                     ? `for ${formatNgn(amountNgn)} of ${vtuServiceTypeLabel(
@@ -537,12 +537,12 @@ export default function VtuBills() {
                       value={maskIdentifier(identifier)}
                       mono
                     />
-                    <VtuRow label="Rate" value={`₦${detail.ngnPerPoint}/pt`} />
+                    <VtuRow label="Wallet charge" value={priceNgn === null ? "—" : formatNgn(priceNgn)} />
                     <VtuRow
                       label="Balance after"
                       value={`${Math.max(
                         0,
-                        (balance ?? 0) - (points ?? 0),
+                        (balance ?? 0) - (priceNgn ?? 0),
                       ).toLocaleString()} pts`}
                       strong
                     />
