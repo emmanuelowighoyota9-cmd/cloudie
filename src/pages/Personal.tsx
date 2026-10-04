@@ -12,12 +12,12 @@ import {
 } from "lucide-react";
 import { Plus, Receipt, Store } from "lucide-react";
 import { Link } from "react-router";
-import { usePricing } from "@/lib/pricing";
+import { formatNgn } from "@/lib/pricing";
 
 export default function Personal() {
-  const { ngnLabel } = usePricing();
-  const balance = useQuery(api.points.getBalance);
-  const ledger = useQuery(api.points.getLedger, { limit: 50 });
+
+  const balance = useQuery(api.wallet.getBalance);
+  const ledger = useQuery(api.wallet.getLedger, { limit: 50 });
 
   const totalEarned = (ledger ?? []).filter((l) => l.amountNgn > 0).reduce((s, l) => s + l.amountNgn, 0);
   const totalSpent = (ledger ?? []).filter((l) => l.amountNgn < 0).reduce((s, l) => s + Math.abs(l.amountNgn), 0);
@@ -61,7 +61,7 @@ export default function Personal() {
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total Earned</p>
                 <p className="text-2xl font-bold text-green-600">+{totalEarned.toLocaleString()}</p>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{ngnLabel(totalEarned)}</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{formatNgn(totalEarned)}</p>
               </div>
             </div>
           </CardContent>
@@ -75,7 +75,7 @@ export default function Personal() {
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total Spent</p>
                 <p className="text-2xl font-bold text-amber-600">-{totalSpent.toLocaleString()}</p>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{ngnLabel(totalSpent)}</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{formatNgn(totalSpent)}</p>
               </div>
             </div>
           </CardContent>
@@ -119,7 +119,7 @@ export default function Personal() {
                 >
                   <div
                     className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                      tx.amount > 0
+                      tx.amountNgn > 0
                         ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400"
                         : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
                     }`}
@@ -142,7 +142,7 @@ export default function Personal() {
                         tx.amount > 0 ? "text-green-600" : "text-red-600"
                       }`}
                     >
-                      {tx.amount > 0 ? "+" : ""}
+                      {tx.amountNgn > 0 ? "+" : ""}
                       ₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
