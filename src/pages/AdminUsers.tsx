@@ -9,7 +9,7 @@ import { Download, Search, Shield, UserCheck, UserX } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, downloadCsv, fmtDate } from "@/components/admin/shared";
-import { usePricing, formatNgn } from "@/lib/pricing";
+import { usePricing } from "@/lib/pricing";
 
 type SortKey = "newest" | "oldest" | "points-desc" | "points-asc" | "name";
 
