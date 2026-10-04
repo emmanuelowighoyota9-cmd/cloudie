@@ -171,7 +171,9 @@ const schema = defineSchema(
       emailVerificationTime: v.optional(v.number()),
       isAnonymous: v.optional(v.boolean()),
       role: v.optional(roleValidator),
-      // Authoritative customer wallet balance in NGN. Legacy pointsBalance remains temporarily for migration/backward compatibility.\n      walletBalanceNgn: v.optional(v.number()),\n      pointsBalance: v.optional(v.number()),
+      // Authoritative customer wallet balance in NGN. Legacy pointsBalance remains temporarily for migration/backward compatibility.
+      walletBalanceNgn: v.optional(v.number()),
+      pointsBalance: v.optional(v.number()),
       referralCode: v.optional(v.string()),
       referredBy: v.optional(v.string()),
       isSuspended: v.optional(v.boolean()),
