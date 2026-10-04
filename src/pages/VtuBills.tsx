@@ -596,7 +596,7 @@ export default function VtuBills() {
                   />
                   <VtuRow label="Value" value={formatNgn(tx.nairaPrice)} />
                   <VtuRow
-                    label="Points debited"
+                    label="Wallet charged"
                     value={formatNgn(tx.walletDebitedNgn ?? tx.nairaPrice)}
                     strong
                   />
