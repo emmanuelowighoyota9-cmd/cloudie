@@ -609,6 +609,8 @@ const schema = defineSchema(
       name: v.string(),
       description: v.string(),
       pointsPrice: v.number(),
+      /** Authoritative customer selling price in NGN. */
+      priceNgn: v.optional(v.number()),
       category: v.string(),
       imageUrl: v.optional(v.string()),
       isActive: v.boolean(),
@@ -632,6 +634,8 @@ const schema = defineSchema(
       vendorId: v.id("vendors"),
       quantity: v.number(),
       totalPoints: v.number(),
+      /** Authoritative order total in NGN. */
+      totalNgn: v.optional(v.number()),
       status: v.union(
         ...literals(ORDER_STATUSES),
       ),
@@ -1227,6 +1231,7 @@ const schema = defineSchema(
       kind: v.union(v.literal("points_package")),
       packageId: v.string(),
       points: v.number(),
+      walletAmountNgn: v.optional(v.number()),
       amountSubunit: v.number(), // authoritative server-side amount (cents/kobo)
       currency: v.string(),
       status: v.union(
@@ -1248,6 +1253,7 @@ const schema = defineSchema(
       amountVariance: v.optional(v.number()),
       failureReason: v.optional(v.string()),
       creditedLedgerId: v.optional(v.id("pointLedger")),
+      creditedWalletLedgerId: v.optional(v.id("walletLedger")),
       createdAt: v.number(),
       updatedAt: v.number(),
     })
