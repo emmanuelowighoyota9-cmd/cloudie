@@ -254,7 +254,7 @@ export default function VtuBills() {
               Available
             </p>
             <p className="font-display text-lg font-bold tabular-nums">
-              {(balance ?? 0).toLocaleString()} pts
+              {formatNgn(balance ?? 0)}
             </p>
             <Button
               asChild
@@ -409,8 +409,8 @@ export default function VtuBills() {
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-vtu-chip px-3 py-1 text-xs font-semibold tabular-nums">
-                    {detail.fixedPoints !== null
-                      ? `${detail.fixedPoints.toLocaleString()} pts`
+                    {detail.fixedNgn !== null
+                      ? formatNgn(detail.fixedNgn)
                       : "Metered"}
                   </span>
                 </div>
@@ -477,11 +477,11 @@ export default function VtuBills() {
                       You pay
                     </span>
                     <span className="text-base font-semibold tabular-nums">
-                      {points === null
+                      {priceNgn === null
                         ? detail.requiresAmount
                           ? "Shown as you type"
                           : "Shown before you confirm"
-                        : `${points.toLocaleString()} pts`}
+                        : formatNgn(priceNgn)}
                     </span>
                   </div>
 
@@ -580,7 +580,7 @@ export default function VtuBills() {
                 </Button>
                 <p className="text-center text-[11px] text-vtu-muted">
                   Charged once. A payment that does not go through refunds your
-                  points automatically.
+                  your wallet automatically.
                 </p>
               </VtuConfirmPanel>
             </Reveal>
@@ -600,10 +600,10 @@ export default function VtuBills() {
                   <VtuRow label="Value" value={formatNgn(tx.nairaPrice)} />
                   <VtuRow
                     label="Points debited"
-                    value={`${tx.pointsDebited.toLocaleString()} pts`}
+                    value={formatNgn(tx.walletDebitedNgn ?? tx.nairaPrice)}
                     strong
                   />
-                  <VtuRow label="Rate" value={`₦${tx.ngnPerPoint}/pt`} />
+                  
                   <VtuRow label="Requested" value={fmtWhen(tx.createdAt)} />
                   {tx.providerReference && (
                     <VtuRow label="Reference" value={tx.providerReference} mono />
