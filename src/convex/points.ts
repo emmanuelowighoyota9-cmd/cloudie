@@ -1,9 +1,9 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { pointTxTypeValidator } from "./schema";
 import { v } from "convex/values";
 import { readPointRate } from "./pricing";
+import { creditWallet, debitWallet } from "./wallet";
 
 /**
  * Legacy compatibility surface.
@@ -67,7 +67,7 @@ export const credit = internalMutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    return await ctx.runMutation(internal.wallet.credit, {
+    return await creditWallet(ctx, {
       userId: args.userId,
       amountNgn: args.amount,
       description: args.description,
@@ -92,7 +92,7 @@ export const debit = internalMutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    return await ctx.runMutation(internal.wallet.debit, {
+    return await debitWallet(ctx, {
       userId: args.userId,
       amountNgn: args.amount,
       description: args.description,
