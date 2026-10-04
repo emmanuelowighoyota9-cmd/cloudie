@@ -711,6 +711,26 @@ export default function Marketplace() {
                           {product.category}
                         </Badge>
 
+                        <span
+                          aria-hidden="true"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-black/45 text-white shadow-sm backdrop-blur-sm"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="20"
+                            height="20"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M6 8h12l1 12H5L6 8Z" />
+                            <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+                            <path d="M9 12h6" />
+                          </svg>
+                        </span>
                       </div>
                       {outOfStock && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/55">
