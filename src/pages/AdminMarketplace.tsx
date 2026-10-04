@@ -133,7 +133,7 @@ export default function AdminMarketplace() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" disabled={!provider?.configured || syncing} onClick={syncCatalog ? sync : undefined}>
+              <Button variant="outline" disabled={!provider?.configured || syncing} onClick={sync}>
                 <RefreshCw className={syncing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
                 {syncing ? "Syncing..." : "Sync catalog"}
               </Button>
