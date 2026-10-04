@@ -1257,8 +1257,8 @@ export const getAnalyticsRange = query({
           args.days === 1
             ? `${String(date.getHours()).padStart(2, "0")}:00`
             : `${date.getMonth() + 1}/${date.getDate()}`,
-        minted: ledger.filter((l) => l.amountNgn > 0 && inBucket(l.createdAt)).reduce((s, l) => s + l.amount, 0),
-        burned: ledger.filter((l) => l.amountNgn < 0 && inBucket(l.createdAt)).reduce((s, l) => s + Math.abs(l.amount), 0),
+        minted: ledger.filter((l) => l.amountNgn > 0 && inBucket(l.createdAt)).reduce((s, l) => s + l.amountNgn, 0),
+        burned: ledger.filter((l) => l.amountNgn < 0 && inBucket(l.createdAt)).reduce((s, l) => s + Math.abs(l.amountNgn), 0),
         users: users.filter((u) => (u.createdAt ?? 0) >= from && (u.createdAt ?? 0) < to).length,
         shipments: shipments.filter((s) => s.createdAt >= from && s.createdAt < to).length,
         documents: docs.filter((d) => d.createdAt >= from && d.createdAt < to).length,
@@ -1276,8 +1276,8 @@ export const getAnalyticsRange = query({
         campaigns: campaigns.filter((c) => c.createdAt >= start).length,
         notifications: notifications.filter((n) => n.createdAt >= start).length,
         activeTenants: tenants.filter((t) => t.isActive).length,
-        minted: ledger.filter((l) => l.amount > 0 && l.createdAt >= start).reduce((s, l) => s + l.amount, 0),
-        burned: ledger.filter((l) => l.amount < 0 && l.createdAt >= start).reduce((s, l) => s + Math.abs(l.amount), 0),
+        minted: ledger.filter((l) => l.amountNgn > 0 && l.createdAt >= start).reduce((s, l) => s + l.amount, 0),
+        burned: ledger.filter((l) => l.amountNgn < 0 && l.createdAt >= start).reduce((s, l) => s + Math.abs(l.amount), 0),
       },
     };
   },
