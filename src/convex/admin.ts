@@ -2,6 +2,8 @@ import { getAuthUserId, modifyAccountCredentials } from "@convex-dev/auth/server
 import { query, mutation, internalMutation, action } from "./_generated/server";
 import { v } from "convex/values";
 import { internal, api } from "./_generated/api";
+import { creditWallet } from "./wallet";
+import { readPointRate } from "./pricing";
 
 // ─── Payment Provider Key Management ───
 
@@ -467,11 +469,8 @@ export const auditAdminPasswordReset = internalMutation({
 const WELCOME_BONUS_POINTS = 100;
 
 /**
- * Called from the auth page after every successful sign-in/sign-up:
- * - records a login event + last-activity timestamp (security trail)
- * - one-time profile setup on first sign-in: role, createdAt, referral code
- *   and a 100-point welcome bonus backed by an immutable ledger entry.
- * Safe to call repeatedly; the setup block only runs once.
+ * Called after first successful sign-in. The legacy bonus is converted to a
+ * fixed NGN wallet credit using the configured migration rate.
  */
 export const initializeUser = mutation({
   args: {},
@@ -493,26 +492,25 @@ export const initializeUser = mutation({
 
     if (user.createdAt !== undefined) return { created: false };
 
-    const balance = user.pointsBalance ?? 0;
-    const newBalance = balance + WELCOME_BONUS_POINTS;
+    const rate = await readPointRate(ctx);
+    const welcomeAmountNgn = WELCOME_BONUS_POINTS * rate.ngnPerPoint;
     await ctx.db.patch(userId, {
       role: user.role ?? "user",
       createdAt: now,
       referralCode: user.referralCode ?? generateReferralCode(),
-      pointsBalance: newBalance,
     });
-    await ctx.db.insert("pointLedger", {
+    await creditWallet(ctx, {
       userId,
-      amount: WELCOME_BONUS_POINTS,
-      balanceAfter: newBalance,
-      description: "Welcome bonus",
-      type: "deposit",
-      createdAt: now,
+      amountNgn: welcomeAmountNgn,
+      description: "Welcome wallet bonus",
+      type: "welcome_bonus",
+      idempotencyKey: `welcome-${userId}`,
+      metadata: { legacyBonusPoints: WELCOME_BONUS_POINTS, ngnPerPoint: rate.ngnPerPoint },
     });
     await ctx.db.insert("notifications", {
       userId,
       title: "Welcome to Cloudie!",
-      message: `Your workspace is ready. ${WELCOME_BONUS_POINTS} welcome points were added to your wallet.`,
+      message: `Your workspace is ready. ₦${welcomeAmountNgn.toLocaleString("en-NG")} was added to your wallet.`,
       type: "system",
       isRead: false,
       link: "/wallet",
