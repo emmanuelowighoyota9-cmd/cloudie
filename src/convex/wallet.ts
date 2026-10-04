@@ -81,7 +81,7 @@ export const getLedger = query({
 export const getAdminLedger = query({
   args: { userId: v.optional(v.id("users")), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
-    const { adminId } = await requireAdmin(ctx);
+    await requireAdmin(ctx);
     if (args.userId) {
       return await ctx.db.query("walletLedger")
         .withIndex("by_user", (q) => q.eq("userId", args.userId!))
