@@ -72,10 +72,13 @@ export interface CatalogProductView {
    * product, and is therefore never surfaced here as "the price".
    */
   fixedPoints: number | null;
+  fixedNgn: number | null;
   /** Indicative, not authoritative: derived from the catalog's amount bounds
    *  and the platform rate. The purchase panel shows the real figure. */
   indicativeMinPoints: number | null;
   indicativeMaxPoints: number | null;
+  indicativeMinNgn: number | null;
+  indicativeMaxNgn: number | null;
   /** False when the backend cannot yet take a purchase for this shape. */
   purchasable: boolean;
   /** The network to preselect for an airtime product, else null. Derived here
@@ -139,6 +142,7 @@ export const listCatalog = query({
         const purchasable = route.ok && addressResolves && shapeOk;
 
         let fixedPoints: number | null = null;
+        const fixedNgn = fixedPrice ? product.priceNgn! : null;
         let priceResolved = false;
 
         if (route.ok && priced < MAX_PRICED_PER_TYPE) {
@@ -180,6 +184,8 @@ export const listCatalog = query({
           max >= min;
         const indicativeMinPoints = canRange ? pointsForNaira(min, rate.ngnPerPoint) : null;
         const indicativeMaxPoints = canRange ? pointsForNaira(max, rate.ngnPerPoint) : null;
+        const indicativeMinNgn = canRange ? min : null;
+        const indicativeMaxNgn = canRange ? max : null;
 
         products.push({
           productCode: product.productCode,
@@ -190,8 +196,11 @@ export const listCatalog = query({
           minAmount: typeof min === "number" ? min : null,
           maxAmount: typeof max === "number" ? max : null,
           fixedPoints,
+          fixedNgn,
           indicativeMinPoints,
           indicativeMaxPoints,
+          indicativeMinNgn,
+          indicativeMaxNgn,
           purchasable,
           airtimeNetwork: network,
           priceResolved,
