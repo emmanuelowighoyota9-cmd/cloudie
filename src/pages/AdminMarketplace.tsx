@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Ban, Check, RotateCcw, X, RefreshCw, Store, Boxes, PackageCheck } from "lucide-react";
+import { Ban, Check, RotateCcw, X, RefreshCw, Store, Boxes, PackageCheck, type LucideIcon } from "lucide-react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { useEffect, useMemo, useState } from "react";
 
@@ -90,6 +90,14 @@ export default function AdminMarketplace() {
     }
   };
 
+  const summaryCards: Array<{ label: string; value: string | number; Icon: LucideIcon }> = [
+    { label: "Products", value: summary.total, Icon: Boxes },
+    { label: "Marketplace I", value: summary.marketplaceI, Icon: Store },
+    { label: "Marketplace II", value: summary.marketplaceII, Icon: Store },
+    { label: "Provider stock", value: summary.providerStock.toLocaleString(), Icon: PackageCheck },
+    { label: "Low stock", value: summary.lowStock, Icon: PackageCheck },
+  ];
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -98,14 +106,8 @@ export default function AdminMarketplace() {
       />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {[
-          ["Products", summary.total, Boxes],
-          ["Marketplace I", summary.marketplaceI, Store],
-          ["Marketplace II", summary.marketplaceII, Store],
-          ["Provider stock", summary.providerStock.toLocaleString(), PackageCheck],
-          ["Low stock", summary.lowStock, PackageCheck],
-        ].map(([label, value, Icon]) => (
-          <Card key={String(label)} className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+        {summaryCards.map(({ label, value, Icon }) => (
+          <Card key={label} className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
             <CardContent className="p-4">
               <Icon className="h-4 w-4 text-muted-foreground" />
               <p className="mt-3 text-xs text-muted-foreground">{label}</p>
@@ -131,7 +133,7 @@ export default function AdminMarketplace() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" disabled={!provider?.configured || syncing} onClick={sync}>
+              <Button variant="outline" disabled={!provider?.configured || syncing} onClick={syncCatalog ? sync : undefined}>
                 <RefreshCw className={syncing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
                 {syncing ? "Syncing..." : "Sync catalog"}
               </Button>
