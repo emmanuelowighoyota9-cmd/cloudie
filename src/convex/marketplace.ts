@@ -1,6 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
-import { internal } from "./_generated/api";
 import { readPointRate } from "./pricing";
 import { debitWallet, creditWallet } from "./wallet";
 import { v } from "convex/values";
@@ -593,7 +592,7 @@ export const finalizeLogspanelOrder = internalMutation({
     const now = Date.now();
     if (args.status === "cancelled") {
       if (!(order.totalNgn && order.totalNgn > 0)) throw new Error("ORDER_MISSING_NGN_TOTAL");
-      await ctx.runMutation(internal.wallet.credit, {
+      await creditWallet(ctx, {
         userId: order.buyerId,
         amountNgn: order.totalNgn,
         description: "Refund: marketplace provider failure",
