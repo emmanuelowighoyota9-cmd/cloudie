@@ -32,7 +32,7 @@ const mainNav = [
   { label: "Numbers", icon: Phone, to: "/marketplace/numbers" },
   { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
-  { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
+  { label: "Fund Wallet", icon: CreditCard, to: "/buy-points" },
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
