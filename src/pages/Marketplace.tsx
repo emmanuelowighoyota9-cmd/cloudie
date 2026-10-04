@@ -18,7 +18,7 @@ import {
   ChevronRight,
   ImageOff,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
 
