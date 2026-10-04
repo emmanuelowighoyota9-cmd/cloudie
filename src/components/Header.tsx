@@ -29,14 +29,14 @@ import {
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { MobileNav } from "./MobileNav";
-import { usePricing } from "@/lib/pricing";
+import { formatNgn } from "@/lib/pricing";
 
 export function Header() {
   const { user, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
-  const pointsBalance = useQuery(api.points.getBalance);
-  const { ngnLabel } = usePricing();
+  const walletBalance = useQuery(api.wallet.getBalance);
+  
   const unreadCount = useQuery(api.notifications.unreadCount);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -71,16 +71,16 @@ export function Header() {
       </div>
 
       <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        {/* Points Balance */}          <Link to="/buy-points" className="shrink-0 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {/* Wallet Balance */}          <Link to="/buy-points" className="shrink-0 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Badge
               variant="default"
               className="min-h-11 gap-1.5 rounded-full border-0 px-2.5 py-2 text-xs font-semibold shadow-sm transition-shadow duration-200 hover:shadow-md sm:min-h-8 sm:px-3 sm:text-sm"
             >
             <Box className="h-3.5 w-3.5" />
-            {pointsBalance != null ? `${pointsBalance.toLocaleString()} pts` : "—"}
+            {walletBalance != null ? formatNgn(walletBalance) : "—"}
             {pointsBalance != null && (
               <span className="hidden text-[11px] font-normal opacity-90 sm:inline">
-                · {ngnLabel(pointsBalance)}
+                · NGN
               </span>
             )}
           </Badge>
