@@ -699,7 +699,7 @@ function BillCard({
               ? product.indicativeMinNgn === product.indicativeMaxNgn
                 ? formatNgn(product.indicativeMinNgn)
                 : `${formatNgn(product.indicativeMinNgn)}–${formatNgn(product.indicativeMaxNgn)}`
-              : "Price shown at checkout"}t"}
+              : "Price shown at checkout"}
         </span>
       </span>
     </VtuChoice>
