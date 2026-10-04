@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "test": "bun test",
     "format": "prettier --write .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:freebuff": "npx convex deploy --cmd \"npm run build\" --cmd-url-env-var-name VITE_CONVEX_URL",
+    "deploy:convex": "npx convex deploy"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.90",
