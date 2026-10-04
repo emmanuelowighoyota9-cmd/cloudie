@@ -41,10 +41,10 @@ export default function AdminUsers() {
         list.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
         break;
       case "points-desc":
-        list.sort((a, b) => (b.pointsBalance ?? 0) - (a.pointsBalance ?? 0));
+        list.sort((a, b) => (b.walletBalanceNgn ?? (b.pointsBalance ?? 0) * ngnPerPoint) - (a.walletBalanceNgn ?? (a.pointsBalance ?? 0) * ngnPerPoint));
         break;
       case "points-asc":
-        list.sort((a, b) => (a.pointsBalance ?? 0) - (b.pointsBalance ?? 0));
+        list.sort((a, b) => (a.walletBalanceNgn ?? (a.pointsBalance ?? 0) * ngnPerPoint) - (b.walletBalanceNgn ?? (b.pointsBalance ?? 0) * ngnPerPoint));
         break;
       case "name":
         list.sort((a, b) => (a.name ?? a.email ?? "").localeCompare(b.name ?? b.email ?? ""));
@@ -58,13 +58,13 @@ export default function AdminUsers() {
     downloadCsv(
       `cloudie-users-${new Date().toISOString().split("T")[0]}.csv`,
       [
-        ["Name", "Email", "Role", "Status", "Points", "Created"],
+        ["Name", "Email", "Role", "Status", "Wallet (NGN)", "Created"],
         ...filtered.map((u) => [
           u.name ?? "",
           u.email ?? "",
           u.role ?? "user",
           u.isSuspended ? "suspended" : "active",
-          u.pointsBalance ?? 0,
+          u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * ngnPerPoint,
           fmtDate(u.createdAt),
         ]),
       ],
@@ -115,8 +115,8 @@ export default function AdminUsers() {
           <SelectContent>
             <SelectItem value="newest">Newest first</SelectItem>
             <SelectItem value="oldest">Oldest first</SelectItem>
-            <SelectItem value="points-desc">Most points</SelectItem>
-            <SelectItem value="points-asc">Least points</SelectItem>
+            <SelectItem value="points-desc">Highest wallet balance</SelectItem>
+            <SelectItem value="points-asc">Lowest wallet balance</SelectItem>
             <SelectItem value="name">Name A–Z</SelectItem>
           </SelectContent>
         </Select>
@@ -146,10 +146,10 @@ export default function AdminUsers() {
                 </div>
                 <div className="w-28 shrink-0 text-right">
                   <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                    {(u.pointsBalance ?? 0).toLocaleString()} pts
+                    ₦{(u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * ngnPerPoint).toLocaleString("en-NG")}
                   </p>
                   <p className="text-[11px] text-slate-400">
-                    {formatNgn((u.pointsBalance ?? 0) * ngnPerPoint)}
+                    NGN wallet
                   </p>
                 </div>
                 <p className="hidden w-28 shrink-0 text-xs text-slate-400 md:block">{fmtDate(u.createdAt)}</p>
