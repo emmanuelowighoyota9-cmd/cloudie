@@ -51,6 +51,69 @@ async function ensureWallet(ctx: any, userId: any): Promise<number> {
   return balance;
 }
 
+export type WalletMutationArgs = {
+  userId: any;
+  amountNgn: number;
+  description: string;
+  type: string;
+  reference?: string;
+  referenceId?: string;
+  idempotencyKey?: string;
+  metadata?: unknown;
+};
+
+/** Use these helpers when another mutation needs wallet movement in the SAME transaction. */
+export async function creditWallet(ctx: any, args: WalletMutationArgs) {
+  if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Credit amount must be positive");
+  if (args.idempotencyKey) {
+    const existing = await ctx.db.query("walletLedger")
+      .withIndex("by_idempotency", (q: any) => q.eq("idempotencyKey", args.idempotencyKey!))
+      .first();
+    if (existing) return existing._id;
+  }
+  const balance = await ensureWallet(ctx, args.userId);
+  const newBalance = Math.round((balance + args.amountNgn) * 100) / 100;
+  await ctx.db.patch(args.userId, { walletBalanceNgn: newBalance });
+  return await ctx.db.insert("walletLedger", {
+    userId: args.userId,
+    amountNgn: args.amountNgn,
+    balanceAfterNgn: newBalance,
+    description: args.description,
+    type: args.type,
+    reference: args.reference,
+    referenceId: args.referenceId,
+    idempotencyKey: args.idempotencyKey,
+    metadata: args.metadata,
+    createdAt: Date.now(),
+  });
+}
+
+export async function debitWallet(ctx: any, args: WalletMutationArgs) {
+  if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Debit amount must be positive");
+  if (args.idempotencyKey) {
+    const existing = await ctx.db.query("walletLedger")
+      .withIndex("by_idempotency", (q: any) => q.eq("idempotencyKey", args.idempotencyKey!))
+      .first();
+    if (existing) return existing._id;
+  }
+  const balance = await ensureWallet(ctx, args.userId);
+  if (balance + 1e-9 < args.amountNgn) throw new Error("Insufficient NGN wallet balance");
+  const newBalance = Math.round((balance - args.amountNgn) * 100) / 100;
+  await ctx.db.patch(args.userId, { walletBalanceNgn: newBalance });
+  return await ctx.db.insert("walletLedger", {
+    userId: args.userId,
+    amountNgn: -args.amountNgn,
+    balanceAfterNgn: newBalance,
+    description: args.description,
+    type: args.type,
+    reference: args.reference,
+    referenceId: args.referenceId,
+    idempotencyKey: args.idempotencyKey,
+    metadata: args.metadata,
+    createdAt: Date.now(),
+  });
+}
+
 export const getBalance = query({
   args: {},
   handler: async (ctx) => {
