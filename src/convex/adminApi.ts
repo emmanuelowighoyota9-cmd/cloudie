@@ -1022,7 +1022,7 @@ export const adminUserDetail = query({
     if (!user) return null;
 
     const ledger = await ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(50);
@@ -1081,11 +1081,11 @@ export const adminUserDetail = query({
       .take(20);
 
     const allLedger = await ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
-    const totalCredited = allLedger.filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0);
-    const totalDebited = allLedger.filter((l) => l.amount < 0).reduce((s, l) => s + Math.abs(l.amount), 0);
+    const totalCredited = allLedger.filter((l) => l.amountNgn > 0).reduce((s, l) => s + l.amountNgn, 0);
+    const totalDebited = allLedger.filter((l) => l.amountNgn < 0).reduce((s, l) => s + Math.abs(l.amountNgn), 0);
 
     return {
       user,
@@ -1153,7 +1153,7 @@ export const adminDashboard = query({
     const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
 
     const users = await ctx.db.query("users").take(1000);
-    const ledger = await ctx.db.query("pointLedger").withIndex("by_createdAt").take(1000);
+    const ledger = await ctx.db.query("walletLedger").withIndex("by_createdAt").take(1000);
     const shipments = await ctx.db.query("shipments").withIndex("by_status").take(1000);
     const docs = await ctx.db.query("documents").take(1000);
     const vendors = await ctx.db.query("vendors").withIndex("by_status").take(1000);
@@ -1163,8 +1163,8 @@ export const adminDashboard = query({
     const kyc = await ctx.db.query("kycRecords").take(1000);
     const flags = await ctx.db.query("moderationFlags").withIndex("by_status").take(1000);
 
-    const minted = ledger.filter((l) => l.amount > 0);
-    const burned = ledger.filter((l) => l.amount < 0);
+    const minted = ledger.filter((l) => l.amountNgn > 0);
+    const burned = ledger.filter((l) => l.amountNgn < 0);
 
     return {
       users: {
@@ -1175,8 +1175,8 @@ export const adminDashboard = query({
         admins: users.filter((u) => u.role === "admin").length,
       },
       points: {
-        minted: minted.reduce((s, l) => s + l.amount, 0),
-        burned: burned.reduce((s, l) => s + Math.abs(l.amount), 0),
+        minted: minted.reduce((s, l) => s + l.amountNgn, 0),
+        burned: burned.reduce((s, l) => s + Math.abs(l.amountNgn), 0),
         velocity24h:
           minted.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + l.amount, 0) -
           burned.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + Math.abs(l.amount), 0),
