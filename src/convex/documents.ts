@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { debitWallet } from "./wallet";
 import { v } from "convex/values";
 import { effectiveNgnCost, readPointRate } from "./pricing";
 
@@ -46,7 +46,7 @@ export const generate = mutation({
       legacyCost * rate.ngnPerPoint,
     );
 
-    await ctx.runMutation(internal.wallet.debit, {
+    await debitWallet(ctx, {
       userId,
       amountNgn: costNgn,
       description: `${args.type} document generation`,
