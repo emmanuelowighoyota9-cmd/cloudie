@@ -295,38 +295,38 @@ export const adminApproveProduct = mutation({
   },
 });
 
-// Admin: re-price a marketplace listing from the catalog (points only).
+// Admin: re-price a marketplace listing in NGN.
 export const adminSetProductPrice = mutation({
   args: {
     productId: v.id("marketplaceProducts"),
-    pointsPrice: v.number(),
+    priceNgn: v.optional(v.number()),
+    pointsPrice: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { adminId } = await requireAdmin(ctx);
     const product = await ctx.db.get(args.productId);
     if (!product) throw new Error("PRODUCT_NOT_FOUND");
-    if (!Number.isFinite(args.pointsPrice) || args.pointsPrice < 0) {
-      throw new Error("INVALID_PRICE");
-    }
+    const priceNgn = args.priceNgn ?? (args.pointsPrice !== undefined ? args.pointsPrice * 15 : undefined);
+    if (!Number.isFinite(priceNgn) || (priceNgn as number) < 0) throw new Error("INVALID_PRICE");
 
-    const pointsPrice = Math.round(args.pointsPrice);
-    const before = { pointsPrice: product.pointsPrice };
-    await ctx.db.patch(args.productId, { pointsPrice });
+    const normalized = Math.round((priceNgn as number) * 100) / 100;
+    const before = { priceNgn: product.priceNgn ?? product.pointsPrice * 15 };
+    await ctx.db.patch(args.productId, { priceNgn: normalized });
 
     await auditLog(ctx, adminId, {
       action: "PRODUCT_PRICE_CHANGED",
       resource: "marketplaceProduct",
       resourceId: args.productId,
       before,
-      after: { pointsPrice },
-      reason: `Re-priced ${product.name} to ${pointsPrice} points`,
+      after: { priceNgn: normalized },
+      reason: `Re-priced ${product.name} to ₦${normalized}`,
     });
 
-    return { pointsPrice };
+    return { priceNgn: normalized };
   },
 });
 
-// Admin: manage vendors
+// // Admin: manage vendors
 export const adminListVendors = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
