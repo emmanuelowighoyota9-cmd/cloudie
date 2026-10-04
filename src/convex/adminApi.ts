@@ -957,7 +957,7 @@ export const globalSearch = query({
     const users = (await ctx.db.query("users").take(500))
       .filter((u) => u.email?.toLowerCase().includes(q) || u.name?.toLowerCase().includes(q))
       .slice(0, 5)
-      .map((u) => ({ id: u._id, label: u.name || u.email || u._id, sub: u.email ?? "", points: u.pointsBalance ?? 0 }));
+      .map((u) => ({ id: u._id, label: u.name || u.email || u._id, sub: u.email ?? "", walletBalanceNgn: u.walletBalanceNgn ?? 0 }));
 
     const shipments = (await ctx.db.query("shipments").withIndex("by_tracking").collect())
       .filter((s) => s.trackingNumber.toLowerCase().includes(q))
@@ -1149,8 +1149,8 @@ export const adminDashboard = query({
         minted: minted.reduce((s, l) => s + l.amountNgn, 0),
         burned: burned.reduce((s, l) => s + Math.abs(l.amountNgn), 0),
         velocity24h:
-          minted.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + l.amount, 0) -
-          burned.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + Math.abs(l.amount), 0),
+          minted.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + l.amountNgn, 0) -
+          burned.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + Math.abs(l.amountNgn), 0),
         mintedCount24h: minted.filter((l) => l.createdAt > dayAgo).length,
       },
       vendors: {
@@ -1227,7 +1227,7 @@ export const getAnalyticsRange = query({
     const now = Date.now();
     const start = now - args.days * 24 * 60 * 60 * 1000;
 
-    const ledger = await ctx.db.query("pointLedger").withIndex("by_createdAt").collect();
+    const ledger = await ctx.db.query("walletLedger").withIndex("by_createdAt").collect();
     const users = await ctx.db.query("users").collect();
     const shipments = await ctx.db.query("shipments").withIndex("by_createdAt").collect();
     const docs = await ctx.db.query("documents").collect();
@@ -1257,8 +1257,8 @@ export const getAnalyticsRange = query({
           args.days === 1
             ? `${String(date.getHours()).padStart(2, "0")}:00`
             : `${date.getMonth() + 1}/${date.getDate()}`,
-        minted: ledger.filter((l) => l.amount > 0 && inBucket(l.createdAt)).reduce((s, l) => s + l.amount, 0),
-        burned: ledger.filter((l) => l.amount < 0 && inBucket(l.createdAt)).reduce((s, l) => s + Math.abs(l.amount), 0),
+        minted: ledger.filter((l) => l.amountNgn > 0 && inBucket(l.createdAt)).reduce((s, l) => s + l.amount, 0),
+        burned: ledger.filter((l) => l.amountNgn < 0 && inBucket(l.createdAt)).reduce((s, l) => s + Math.abs(l.amount), 0),
         users: users.filter((u) => (u.createdAt ?? 0) >= from && (u.createdAt ?? 0) < to).length,
         shipments: shipments.filter((s) => s.createdAt >= from && s.createdAt < to).length,
         documents: docs.filter((d) => d.createdAt >= from && d.createdAt < to).length,
