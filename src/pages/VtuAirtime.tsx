@@ -63,7 +63,7 @@ export default function VtuAirtime() {
   const [submitting, setSubmitting] = useState(false);
 
   const offers = useQuery(api.vtu.getAirtimeOffers, {});
-  const balance = useQuery(api.points.getBalance);
+  const balance = useQuery(api.wallet.getBalance);
   const purchase = useAction(api.vtuHttp.purchaseVtu);
 
   // SUBSCRIBE to the record. This is the source of truth for what the page
@@ -81,7 +81,8 @@ export default function VtuAirtime() {
   );
 
   const phoneCheck = useMemo(() => validatePhone(phone), [phone]);
-  const affordable = (balance ?? 0) >= (selected?.points ?? 0);
+  const priceToPay = preview?.nairaPrice ?? selected?.amountNgn ?? 0;
+  const affordable = (balance ?? 0) >= priceToPay;
   const inFlight = tx ? tx.status === "pending" || tx.status === "processing" : false;
   const locked = submitting || inFlight;
   const networkLabel = VTU_NETWORKS.find((n) => n.key === network)?.label ?? network;
@@ -98,7 +99,7 @@ export default function VtuAirtime() {
     api.vtu.previewCost,
     confirmed && selected ? { serviceCode } : "skip",
   );
-  const pointsToPay = preview?.points ?? selected?.points ?? 0;
+  const pointsToPay = preview?.nairaPrice ?? selected?.amountNgn ?? 0;
 
   async function handleSubmit() {
     if (locked || !selected) return;
@@ -154,7 +155,7 @@ export default function VtuAirtime() {
             </h1>
             <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
               Delivered straight to the number. A top-up that does not go
-              through returns your points automatically.
+              through refunds your wallet automatically.
             </p>
           </div>
           <div className="text-left sm:text-right">
@@ -162,7 +163,7 @@ export default function VtuAirtime() {
               Available
             </p>
             <p className="font-display text-lg font-bold tabular-nums">
-              {(balance ?? 0).toLocaleString()} pts
+              {formatNgn(balance ?? 0)}
             </p>
             <Button
               asChild
@@ -172,7 +173,7 @@ export default function VtuAirtime() {
             >
               <Link to="/buy-points">
                 <Plus className="h-3.5 w-3.5" />
-                Buy points
+                Fund wallet
               </Link>
             </Button>
           </div>
@@ -209,7 +210,7 @@ export default function VtuAirtime() {
             <div className="vtu-panel space-y-5 px-5 py-5">
               <VtuSection
                 title="Amount"
-                hint="Prices in points update the moment you pick one."
+                hint="Prices are shown directly in Nigerian naira."
               >
                 <StaggerGroup className="grid grid-cols-3 gap-2">
                   {AMOUNTS.map((n) => {
@@ -234,7 +235,7 @@ export default function VtuAirtime() {
                                 : "mt-0.5 block text-[11px] text-vtu-muted tabular-nums"
                             }
                           >
-                            {offer ? `${offer.points} pts` : "…"}
+                            {offer ? formatNgn(offer.amountNgn) : "…"}
                           </span>
                         </VtuChoice>
                       </StaggerItem>
@@ -278,15 +279,13 @@ export default function VtuAirtime() {
                   {networkLabel} {formatNgn(amount)}
                 </span>
                 <span className="text-base font-semibold tabular-nums">
-                  {selected ? `${selected.points.toLocaleString()} pts` : "Loading…"}
+                  {selected ? formatNgn(selected.amountNgn) : "Loading…"}
                 </span>
               </div>
 
               {selected && !affordable && (
                 <p className="rounded-xl border border-vtu-line bg-vtu-chip px-3 py-2 text-xs text-vtu-muted">
-                  You need{" "}
-                  {(selected.points - (balance ?? 0)).toLocaleString()} more
-                  points.
+                  You need {formatNgn(Math.max(0, priceToPay - (balance ?? 0)))} more in your wallet.
                 </p>
               )}
 
@@ -303,7 +302,7 @@ export default function VtuAirtime() {
                 disabled={locked || !selected || !phoneCheck.ok || !affordable}
                 className="w-full"
               >
-                Pay {selected ? `${selected.points.toLocaleString()} pts` : "…"}
+                Pay {selected ? formatNgn(priceToPay) : "…"}
               </Button>
             </div>
           </Reveal>
@@ -313,7 +312,7 @@ export default function VtuAirtime() {
       {step === "confirm" && selected && (
         <Reveal>
           <VtuConfirmPanel
-            amount={`${pointsToPay.toLocaleString()} pts`}
+            amount={formatNgn(pointsToPay)}
             amountHint={`for ${formatNgn(selected.amountNgn)} of ${networkLabel} airtime`}
             rows={
               <>
@@ -324,10 +323,10 @@ export default function VtuAirtime() {
                   value={maskIdentifier(phoneCheck.ok ? phoneCheck.value : phone)}
                   mono
                 />
-                <VtuRow label="Rate" value={`₦${(offers?.ngnPerPoint ?? 0)}/pt`} />
+                <VtuRow label="Wallet charge" value={formatNgn(pointsToPay)} />
                 <VtuRow
                   label="Balance after"
-                  value={`${Math.max(0, (balance ?? 0) - pointsToPay).toLocaleString()} pts`}
+                  value={formatNgn(Math.max(0, (balance ?? 0) - pointsToPay))}
                   strong
                 />
               </>
@@ -364,7 +363,7 @@ export default function VtuAirtime() {
               Back to the amount
             </Button>
             <p className="text-center text-[11px] text-vtu-muted">
-              Charged once. A top-up that does not go through refunds your points
+              Charged once. A top-up that does not go through refunds your wallet
               automatically.
             </p>
           </VtuConfirmPanel>
@@ -383,12 +382,7 @@ export default function VtuAirtime() {
                 mono
               />
               <VtuRow label="Value" value={formatNgn(tx.nairaPrice)} />
-              <VtuRow
-                label="Points debited"
-                value={`${tx.pointsDebited.toLocaleString()} pts`}
-                strong
-              />
-              <VtuRow label="Rate" value={`₦${tx.ngnPerPoint}/pt`} />
+              <VtuRow label="Wallet charged" value={formatNgn(tx.walletDebitedNgn ?? tx.nairaPrice)} strong />
               <VtuRow label="Requested" value={fmtWhen(tx.createdAt)} />
               {tx.providerReference && (
                 <VtuRow label="Reference" value={tx.providerReference} mono />
