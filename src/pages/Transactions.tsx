@@ -130,7 +130,7 @@ export default function Transactions() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-green-600" : "text-red-600"}`}>
-                    {tx.amount > 0 ? "+" : ""}{tx.amountNgn.toLocaleString("en-NG")}
+                    {tx.amountNgn > 0 ? "+" : ""}₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
                   </p>
                   <p className="text-[10px] text-slate-400">Bal: {tx.balanceAfterNgn.toLocaleString("en-NG")}</p>
                 </div>
