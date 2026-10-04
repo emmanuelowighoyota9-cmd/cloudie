@@ -18,6 +18,7 @@
 
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { creditWallet, debitWallet } from "./wallet";
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
@@ -379,7 +380,7 @@ export const beginPurchase = internalMutation({
     });
 
     // 6. Debit, keyed on this attempt.
-    const debitId = await ctx.runMutation(internal.wallet.debit, {
+    const debitId = await debitWallet(ctx, {
       userId: args.userId,
       amountNgn: nairaPrice,
       type: "vtu_purchase",
@@ -812,7 +813,7 @@ async function reverseAndRelease(
   if (tx.reversalLedgerId) return { reversed: false, reason: "already_reversed" };
 
   const refundAmountNgn = tx.walletDebitedNgn ?? tx.nairaPrice;
-  const creditId = await ctx.runMutation(internal.wallet.credit, {
+  const creditId = await creditWallet(ctx, {
     userId: tx.userId,
     amountNgn: refundAmountNgn,
     type: "vtu_refund",

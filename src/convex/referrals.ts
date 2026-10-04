@@ -1,6 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { creditWallet } from "./wallet";
 import { readPointRate } from "./pricing";
 import { v } from "convex/values";
 
@@ -90,7 +90,7 @@ export const applyReferral = mutation({
       createdAt: now,
     });
 
-    await ctx.runMutation(internal.wallet.credit, {
+    await creditWallet(ctx, {
       userId: referrer._id,
       amountNgn: referrerRewardNgn,
       description: "Referral reward",
