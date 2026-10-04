@@ -192,7 +192,7 @@ export default function AdminUserDetail() {
             <div className="divide-y rounded-xl border border-slate-200 dark:border-slate-700">
               {ledger.map((l) => (
                 <div key={l._id} className="flex items-center gap-3 p-3">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${l.amount > 0 ? "bg-green-100 text-green-600 dark:bg-green-900/50" : "bg-red-100 text-red-600 dark:bg-red-900/50"}`}>
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full ${l.amountNgn > 0 ? "bg-green-100 text-green-600 dark:bg-green-900/50" : "bg-red-100 text-red-600 dark:bg-red-900/50"}`}>
                     {l.amount > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -200,7 +200,7 @@ export default function AdminUserDetail() {
                     <p className="text-[11px] text-slate-400">{fmtDate(l.createdAt)} · {l.type}</p>
                   </div>
                   <span className={`shrink-0 text-sm font-bold ${l.amount > 0 ? "text-green-600" : "text-red-600"}`}>
-                    {l.amount > 0 ? "+" : ""}{l.amount.toLocaleString()}
+                    {l.amount > 0 ? "+" : ""}{l.amountNgn.toLocaleString("en-NG")}
                   </span>
                 </div>
               ))}
