@@ -1,7 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAdmin, auditLog } from "./adminApi";
 import { readPointRate } from "./pricing";
 
 const walletTxType = v.string();
@@ -258,7 +257,10 @@ export const debit = internalMutation({
 export const adminAdjust = mutation({
   args: { userId: v.id("users"), amountNgn: v.number(), reason: v.string() },
   handler: async (ctx, args) => {
-    const { adminId } = await requireAdmin(ctx);
+    const adminId = await getAuthUserId(ctx);
+    if (!adminId) throw new Error("UNAUTHORIZED");
+    const admin = await ctx.db.get(adminId);
+    if (!admin || admin.role !== "admin" || admin.isSuspended) throw new Error("FORBIDDEN");
     if (!args.reason.trim()) throw new Error("A reason is required");
     const before = await ensureWallet(ctx, args.userId);
     const after = Math.round((before + args.amountNgn) * 100) / 100;
@@ -276,13 +278,16 @@ export const adminAdjust = mutation({
       metadata: { reason: args.reason, adminId },
       createdAt: Date.now(),
     });
-    await auditLog(ctx, adminId, {
+    await ctx.db.insert("auditLogs", {
+      actorId: adminId,
+      actorEmail: admin.email,
       action: "WALLET_ADJUSTMENT",
       resource: "user",
       resourceId: args.userId,
       before: { walletBalanceNgn: before },
       after: { walletBalanceNgn: after, adjustmentNgn: args.amountNgn },
       reason: args.reason,
+      createdAt: Date.now(),
     });
     return ledgerId;
   },
