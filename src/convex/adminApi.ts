@@ -2,6 +2,8 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { QueryCtx, MutationCtx, query, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import { debitWallet, creditWallet } from "./wallet";
+import { readPointRate } from "./pricing";
 
 /**
  * Centralized admin authorization guard.
@@ -505,48 +507,33 @@ export const resolveDispute = mutation({
       const vendorDoc = await ctx.db.get(order.vendorId);
       if (!vendorDoc) throw new Error("VENDOR_NOT_FOUND");
 
-      const refundAmount = order.totalPoints;
+      const rate = await readPointRate(ctx);
+      const refundAmountNgn = order.totalNgn ?? order.totalPoints * rate.ngnPerPoint;
+      if (!(refundAmountNgn > 0)) throw new Error("ORDER_MISSING_NGN_TOTAL");
       const idemKey = `dispute-refund-${args.disputeId}`;
-      const dupe = await ctx.db
-        .query("pointLedger")
-        .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idemKey))
-        .first();
-      if (!dupe) {
-        // Vendor → buyer refund (atomic: same mutation = same transaction)
-        const vendorUser = await ctx.db.get(vendorDoc.userId);
-        if (!vendorUser) throw new Error("VENDOR_NOT_FOUND");
-        if ((vendorUser.pointsBalance ?? 0) < refundAmount) {
-          throw new Error("INSUFFICIENT_POINTS: vendor balance cannot cover refund");
-        }
-        const vendorNewBal = (vendorUser.pointsBalance ?? 0) - refundAmount;
-        await ctx.db.patch(vendorUser._id, { pointsBalance: vendorNewBal });
-        await ctx.db.insert("pointLedger", {
-          userId: vendorUser._id,
-          amount: -refundAmount,
-          balanceAfter: vendorNewBal,
-          description: `Dispute refund: ${product?.name ?? "order"}`,
-          type: "refund",
-          referenceId: args.disputeId,
-          idempotencyKey: idemKey,
-          createdAt: now,
-        });
-        const buyer = await ctx.db.get(order.buyerId);
-        if (!buyer) throw new Error("USER_NOT_FOUND");
-        const buyerNewBal = (buyer.pointsBalance ?? 0) + refundAmount;
-        await ctx.db.patch(buyer._id, { pointsBalance: buyerNewBal });
-        await ctx.db.insert("pointLedger", {
-          userId: buyer._id,
-          amount: refundAmount,
-          balanceAfter: buyerNewBal,
-          description: `Dispute refund: ${product?.name ?? "order"}`,
-          type: "refund",
-          referenceId: args.disputeId,
-          idempotencyKey: `${idemKey}-buyer`,
-          createdAt: now,
-        });
-      }
+
+      const vendorUser = await ctx.db.get(vendorDoc.userId);
+      if (!vendorUser) throw new Error("VENDOR_NOT_FOUND");
+      await debitWallet(ctx, {
+        userId: vendorUser._id,
+        amountNgn: refundAmountNgn,
+        description: `Dispute refund: ${product?.name ?? "order"}`,
+        type: "refund",
+        referenceId: args.disputeId,
+        idempotencyKey: idemKey,
+      });
+
+      await creditWallet(ctx, {
+        userId: order.buyerId,
+        amountNgn: refundAmountNgn,
+        description: `Dispute refund: ${product?.name ?? "order"}`,
+        type: "refund",
+        referenceId: args.disputeId,
+        idempotencyKey: `${idemKey}-buyer`,
+      });
+
       await ctx.db.patch(order._id, { status: "refunded" });
-    } else {
+ else {
       await ctx.db.patch(order._id, { status: "completed" });
     }
 
@@ -594,24 +581,23 @@ export const releaseEscrow = mutation({
     if (!vendorUser) throw new Error("VENDOR_NOT_FOUND");
     const product = await ctx.db.get(order.productId);
 
-    const amount = order.totalPoints;
+    const rate = await readPointRate(ctx);
+    const amountNgn = order.totalNgn ?? order.totalPoints * rate.ngnPerPoint;
+    if (!(amountNgn > 0)) throw new Error("ORDER_MISSING_NGN_TOTAL");
     const now = Date.now();
 
-    const vendorNewBal = (vendorUser.pointsBalance ?? 0) + amount;
-    await ctx.db.patch(vendorUser._id, { pointsBalance: vendorNewBal });
-    await ctx.db.insert("pointLedger", {
+    await creditWallet(ctx, {
       userId: vendorUser._id,
-      amount,
-      balanceAfter: vendorNewBal,
+      amountNgn,
       description: `Escrow release: ${product?.name ?? "order"}`,
       type: "vendor_transaction",
       referenceId: order._id,
-      createdAt: now,
+      idempotencyKey: `escrow-release-${order._id}`,
     });
 
     await ctx.db.patch(order._id, { status: "completed" });
     await ctx.db.patch(vendorDoc._id, {
-      earnings: vendorDoc.earnings + amount,
+      earnings: vendorDoc.earnings + amountNgn,
       totalSales: vendorDoc.totalSales + order.quantity,
     });
 
