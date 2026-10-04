@@ -63,6 +63,9 @@ export const purchase = action({
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
+    const settings = await ctx.runQuery(api.marketplace.getLogspanelAdminStatus);
+    if (!settings.configured) throw new Error("LOGSPANEL_NOT_CONFIGURED");
+    if (!settings.enabled) throw new Error("LOGSPANEL_DISABLED");
     if (args.quantity < 1 || args.quantity > 100 || !Number.isInteger(args.quantity)) {
       throw new Error("INVALID_QUANTITY");
     }
