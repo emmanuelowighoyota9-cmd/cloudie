@@ -46,8 +46,8 @@ export default function Dashboard() {
   const shipmentPrice = price("shipment_create", 100);
   const invoicePrice = price("commercial_invoice", 80);
   const { user } = useAuth();
-  const balance = useQuery(api.points.getBalance);
-  const ledger = useQuery(api.points.getLedger, { limit: 100 });
+  const balance = useQuery(api.wallet.getBalance);
+  const ledger = useQuery(api.wallet.getLedger, { limit: 100 });
   const shipments = useQuery(api.trackingUser.myShipments, {});
   const referrals = useQuery(api.referrals.getMyReferrals);
   const orders = useQuery(api.marketplace.getMyOrders);
@@ -103,15 +103,15 @@ export default function Dashboard() {
                 <Coins className="h-7 w-7 text-white" />
               </div>
               <div>
-                <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">Points Balance</p>
-                <p className="text-3xl font-bold text-foreground">{balance?.toLocaleString() ?? 0}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Crestline Express Points</p>
+                <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">NGN Wallet Balance</p>
+                <p className="text-3xl font-bold text-foreground">₦{(balance ?? 0).toLocaleString("en-NG")}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Nigerian Naira wallet</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
               <Link to="/buy-points">
                 <Button className="gap-2 bg-primary hover:from-blue-700 hover:to-indigo-700 px-6">
-                  <ShoppingBag className="h-4 w-4" /> Buy Points
+                  <ShoppingBag className="h-4 w-4" /> Fund Wallet
                 </Button>
               </Link>
               <Link to="/settings">
@@ -306,7 +306,7 @@ export default function Dashboard() {
                       <p className="text-xs text-slate-400">{new Date(o.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-blue-600">{o.totalPoints.toLocaleString()} pts</p>
+                      <p className="text-sm font-bold text-blue-600">₦{(o.totalNgn ?? o.totalPoints * 15).toLocaleString("en-NG")}</p>
                       <Badge className={`mt-1 ${statusColor(o.status)} border-0 text-[10px] capitalize`}>{o.status}</Badge>
                     </div>
                   </div>
