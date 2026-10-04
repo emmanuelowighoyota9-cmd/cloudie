@@ -76,6 +76,7 @@ export const recordPendingOrder = internalMutation({
     userId: v.id("users"),
     packageId: v.string(),
     points: v.number(),
+    walletAmountNgn: v.optional(v.number()),
     amountSubunit: v.number(),
     currency: v.string(),
     accessCode: v.optional(v.string()),
@@ -96,6 +97,7 @@ export const recordPendingOrder = internalMutation({
       kind: "points_package",
       packageId: args.packageId,
       points: args.points,
+      walletAmountNgn: args.walletAmountNgn ?? args.amountSubunit / 100,
       amountSubunit: args.amountSubunit,
       currency: args.currency,
       status: "initialized",
@@ -139,10 +141,10 @@ export const recordPaymentAndCredit = internalMutation({
       .first();
     if (existing?.status === "paid") return `already:${existing._id}`;
 
-    // Double-credit guard on the ledger itself (covers racing webhook + callback).
-    const idempotencyKey = `paystack-${args.reference}`;
+    // Double-credit guard on the authoritative wallet ledger itself.
+    const idempotencyKey = `paystack-wallet-${args.reference}`;
     const priorLedger = await ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idempotencyKey))
       .first();
     if (priorLedger) {
@@ -161,6 +163,7 @@ export const recordPaymentAndCredit = internalMutation({
     const points = existing?.points ?? args.points;
     const packageId = existing?.packageId ?? args.packageId;
     const amountSubunit = existing?.amountSubunit ?? args.amountKobo;
+    const walletAmountNgn = existing?.walletAmountNgn ?? args.walletAmountNgn ?? amountSubunit / 100;
 
     // What Paystack actually settled. A variance is recorded (never used to
     // withhold points) so genuine pricing/currency drift is visible in admin.
@@ -180,7 +183,7 @@ export const recordPaymentAndCredit = internalMutation({
 
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
-    if (points <= 0) throw new Error("Invalid points for this payment");
+    if (!(walletAmountNgn > 0)) throw new Error("Invalid wallet funding amount");
 
     const now = Date.now();
     const currency = (args.currency ?? "USD").toUpperCase();
@@ -208,6 +211,7 @@ export const recordPaymentAndCredit = internalMutation({
         kind: "points_package",
         packageId,
         points,
+        walletAmountNgn,
         amountSubunit,
         currency,
         status: "paid",
@@ -222,44 +226,36 @@ export const recordPaymentAndCredit = internalMutation({
       });
     }
 
-    // Credit points to user
-    const currentBalance = user.pointsBalance ?? 0;
-    const newBalance = currentBalance + points;
-
-    await ctx.db.patch(userId, { pointsBalance: newBalance });
-
-    // Create ledger entry
-    const ledgerId = await ctx.db.insert("pointLedger", {
+    // Credit the authoritative NGN wallet. This is idempotent and server-side;
+    // a successful Paystack charge is the only path that can mint wallet funds.
+    const walletLedgerId: string = await ctx.runMutation(internal.wallet.credit, {
       userId,
-      amount: points,
-      balanceAfter: newBalance,
-      description: `Points purchase: ${points.toLocaleString()} pts (${chargeLabel}) via Paystack`,
-      type: "purchase",
+      amountNgn: walletAmountNgn,
+      description: `Wallet funding via Paystack (${chargeLabel})`,
+      type: "deposit",
       reference: "paystack",
       referenceId: args.reference,
       idempotencyKey,
       metadata: {
         packageId,
         amountUsd: args.amountUsd,
-        amountNgn: args.amountNgn,
+        amountNgn: walletAmountNgn,
         currency,
         paystackReference: args.reference,
         paidSubunit,
         paidCurrency,
         amountVariance,
       },
-      createdAt: now,
     });
 
-    // Update payment order with ledger reference
-    await ctx.db.patch(orderId, { creditedLedgerId: ledgerId });
+    await ctx.db.patch(orderId, { creditedWalletLedgerId: walletLedgerId as any });
 
     // Notify user
     await ctx.db.insert("notifications", {
       userId,
       title: "Points purchased",
-      message: `+${points.toLocaleString()} pts — ${chargeLabel} via Paystack`,
-      type: "points_credited",
+      message: `+₦${walletAmountNgn.toLocaleString("en-NG")} added to your wallet via Paystack`,
+      type: "wallet_credited",
       isRead: false,
       createdAt: now,
     });
