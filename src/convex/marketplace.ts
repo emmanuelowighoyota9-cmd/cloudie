@@ -1,5 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { readPointRate } from "./pricing";
 import { v } from "convex/values";
 import { requireAdmin, auditLog } from "./adminApi";
 
@@ -52,7 +54,8 @@ export const createProduct = mutation({
   args: {
     name: v.string(),
     description: v.string(),
-    pointsPrice: v.number(),
+    pointsPrice: v.optional(v.number()),
+    priceNgn: v.optional(v.number()),
     category: v.string(),
     imageUrl: v.optional(v.string()),
   },
@@ -72,7 +75,8 @@ export const createProduct = mutation({
       vendorId: vendor._id,
       name: args.name,
       description: args.description,
-      pointsPrice: args.pointsPrice,
+      pointsPrice: Math.max(0, args.pointsPrice ?? 0),
+      priceNgn: args.priceNgn,
       category: args.category,
       imageUrl: args.imageUrl,
       isActive: false,
@@ -118,50 +122,38 @@ export const createOrder = mutation({
       throw new Error("Product not available");
     }
 
-    const totalPoints = product.pointsPrice * args.quantity;
+    const rate = await readPointRate(ctx);
+    const unitPriceNgn = product.priceNgn ?? product.pointsPrice * rate.ngnPerPoint;
+    const totalNgn = Math.round(unitPriceNgn * args.quantity * 100) / 100;
+    if (!Number.isFinite(totalNgn) || totalNgn <= 0) throw new Error("INVALID_ORDER_TOTAL");
 
-    const user = await ctx.db.get(userId);
-    const balance = user?.pointsBalance ?? 0;
-    if (balance < totalPoints) {
-      throw new Error("Insufficient points");
-    }
-
-    // Debit buyer
-    const newBalance = balance - totalPoints;
-    await ctx.db.patch(userId, { pointsBalance: newBalance });
-    await ctx.db.insert("pointLedger", {
+    await ctx.runMutation(internal.wallet.debit, {
       userId,
-      amount: -totalPoints,
-      balanceAfter: newBalance,
+      amountNgn: totalNgn,
       description: `Marketplace purchase: ${product.name}`,
       type: "marketplace_purchase",
       referenceId: args.productId,
-      createdAt: Date.now(),
+      idempotencyKey: `marketplace-${userId}-${args.productId}-${Date.now()}`,
     });
-
     // Credit vendor
     const vendor = await ctx.db.get(product.vendorId);
     if (vendor) {
       const vendorUser = await ctx.db.get(vendor.userId);
       if (vendorUser) {
-        const vendorBalance = vendorUser.pointsBalance ?? 0;
-        await ctx.db.patch(vendor.userId, { pointsBalance: vendorBalance + totalPoints });
-        await ctx.db.insert("pointLedger", {
+        await ctx.runMutation(internal.wallet.credit, {
           userId: vendor.userId,
-          amount: totalPoints,
-          balanceAfter: vendorBalance + totalPoints,
+          amountNgn: totalNgn,
           description: `Sale: ${product.name}`,
           type: "vendor_transaction",
           referenceId: args.productId,
-          createdAt: Date.now(),
+          idempotencyKey: `vendor-sale-${userId}-${args.productId}-${Date.now()}`,
         });
         await ctx.db.patch(vendor._id, {
-          earnings: vendor.earnings + totalPoints,
+          earnings: vendor.earnings + totalNgn,
           totalSales: vendor.totalSales + args.quantity,
         });
       }
     }
-
     // Update product sales
     await ctx.db.patch(args.productId, {
       totalSold: product.totalSold + args.quantity,
@@ -172,7 +164,8 @@ export const createOrder = mutation({
       productId: args.productId,
       vendorId: product.vendorId,
       quantity: args.quantity,
-      totalPoints,
+      totalPoints: 0,
+      totalNgn,
       status: "completed",
       createdAt: Date.now(),
     });
@@ -181,7 +174,7 @@ export const createOrder = mutation({
     await ctx.db.insert("notifications", {
       userId,
       title: "Order placed",
-      message: `Order for ${product.name} — ${totalPoints} points`,
+      message: `Order for ${product.name} — ₦${totalNgn.toLocaleString("en-NG")}`,
       type: "marketplace_order",
       isRead: false,
       link: "/marketplace/orders",
@@ -545,32 +538,26 @@ export const prepareLogspanelOrder = internalMutation({
     const user = await ctx.db.get(args.userId);
     if (!user) throw new Error("USER_NOT_FOUND");
 
-    const totalPoints = Math.round(product.pointsPrice * args.quantity);
-    if (!Number.isFinite(totalPoints) || totalPoints <= 0) throw new Error("INVALID_ORDER_TOTAL");
-    const balance = user.pointsBalance ?? 0;
-    if (balance < totalPoints) throw new Error("Insufficient points");
+    const rate = await readPointRate(ctx);
+    const totalNgn = Math.round((product.priceNgn ?? product.pointsPrice * rate.ngnPerPoint) * args.quantity * 100) / 100;
+    if (!Number.isFinite(totalNgn) || totalNgn <= 0) throw new Error("INVALID_ORDER_TOTAL");
 
-    const now = Date.now();
-    const newBalance = balance - totalPoints;
-    await ctx.db.patch(args.userId, { pointsBalance: newBalance });
-    await ctx.db.insert("pointLedger", {
+    await ctx.runMutation(internal.wallet.debit, {
       userId: args.userId,
-      amount: -totalPoints,
-      balanceAfter: newBalance,
+      amountNgn: totalNgn,
       description: `Marketplace purchase: ${product.name}`,
       type: "marketplace_purchase",
       referenceId: args.productId,
       idempotencyKey: args.idempotencyKey,
       metadata: { provider: "logspanel", providerProductRef: product.providerProductRef },
-      createdAt: now,
     });
-
     const orderId = await ctx.db.insert("marketplaceOrders", {
       buyerId: args.userId,
       productId: args.productId,
       vendorId: product.vendorId,
       quantity: args.quantity,
-      totalPoints,
+      totalPoints: 0,
+      totalNgn,
       status: "pending",
       createdAt: now,
       provider: "logspanel",
@@ -580,7 +567,7 @@ export const prepareLogspanelOrder = internalMutation({
       updatedAt: now,
     });
 
-    return { orderId, reused: false, productRef: product.providerProductRef, totalPoints };
+    return { orderId, reused: false, productRef: product.providerProductRef, totalNgn };
   },
 });
 
@@ -604,24 +591,17 @@ export const finalizeLogspanelOrder = internalMutation({
 
     const now = Date.now();
     if (args.status === "cancelled") {
-      const user = await ctx.db.get(order.buyerId);
-      if (!user) throw new Error("USER_NOT_FOUND");
-      const balance = user.pointsBalance ?? 0;
-      const refundBalance = balance + order.totalPoints;
-      await ctx.db.patch(order.buyerId, { pointsBalance: refundBalance });
-      await ctx.db.insert("pointLedger", {
+      if (!(order.totalNgn && order.totalNgn > 0)) throw new Error("ORDER_MISSING_NGN_TOTAL");
+      await ctx.runMutation(internal.wallet.credit, {
         userId: order.buyerId,
-        amount: order.totalPoints,
-        balanceAfter: refundBalance,
-        description: `Refund: marketplace provider failure`,
+        amountNgn: order.totalNgn,
+        description: "Refund: marketplace provider failure",
         type: "refund",
         referenceId: order._id,
         idempotencyKey: `logspanel-refund-${order._id}`,
         metadata: { provider: "logspanel", providerOrderId: args.providerOrderId },
-        createdAt: now,
       });
     }
-
     await ctx.db.patch(order._id, {
       status: args.status,
       providerOrderId: args.providerOrderId,
@@ -752,7 +732,8 @@ export const syncLogspanelProducts = internalMutation({
       const patch = {
         name: name.slice(0, 120),
         description: description.slice(0, 800),
-        pointsPrice: customerPrice,
+        pointsPrice: 0,
+        priceNgn: Math.round(providerPrice * (1 + args.markupPercent / 100) * 100) / 100,
         category: "Logs",
         isActive: purchasable && (!Number.isFinite(available) || available > 0),
         isApproved: true,
