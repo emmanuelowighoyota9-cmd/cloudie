@@ -373,7 +373,7 @@ export default function AdminUserDetail() {
               : "Debits NGN from this user's wallet via an immutable ledger entry. Fails if it would make the balance negative."
           }
           resource={`${user.name || user.email} — current balance ${formatNgn(user.walletBalanceNgn ?? (user.pointsBalance ?? 0) * ngnPerPoint)}`}
-          actionLabel={action.kind === "credit" ? "Credit points" : "Deduct points"}
+          actionLabel={action.kind === "credit" ? "Credit wallet" : "Deduct wallet"}
           destructive={action.kind === "debit"}
           extraField={{
             label: "Amount (NGN)",
