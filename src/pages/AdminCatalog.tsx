@@ -78,6 +78,7 @@ type ProductRow = {
   name: string;
   category: string;
   pointsPrice: number;
+  priceNgn?: number;
   totalSold: number;
   isApproved: boolean;
   isActive: boolean;
@@ -834,7 +835,7 @@ export default function AdminCatalog() {
                           />
                         </div>
                         <div className="text-[11px] text-muted-foreground">
-                          <p className="font-medium text-foreground">{formatNgn((Number.isFinite(current) ? current : 0) * ngnPerPoint)}</p>
+                          <p className="font-medium text-foreground">{formatNgn(Number.isFinite(current) ? current : 0)}</p>
                           <p>{formatUsd((Number.isFinite(current) ? current : 0) * usdPerPoint)}</p>
                         </div>
                         <Button
