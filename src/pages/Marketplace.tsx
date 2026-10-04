@@ -155,21 +155,21 @@ export default function Marketplace() {
   };
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-24 sm:space-y-6 sm:pb-8">
+      <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
             <Store className="h-3.5 w-3.5" />
             Cloudie Marketplace
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="break-words text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
             Digital marketplace
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
             Browse provider-supplied digital inventory by marketplace, category, price and live stock.
           </p>
         </div>
-        <div className="flex rounded-lg border bg-background p-1 shadow-sm">
+        <div className="grid w-full grid-cols-2 rounded-lg border bg-background p-1 shadow-sm sm:flex sm:w-auto">
           <Button
             size="sm"
             variant={view === "products" ? "default" : "ghost"}
@@ -197,7 +197,7 @@ export default function Marketplace() {
         />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             {([
               ["marketplace-i", "Marketplace I", "Core digital inventory catalog"],
               ["marketplace-ii", "Marketplace II", "Extended country and account catalog"],
@@ -206,7 +206,7 @@ export default function Marketplace() {
                 key={id}
                 type="button"
                 onClick={() => handleCatalogChange(id)}
-                className={`rounded-xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                className={`min-w-0 overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm sm:p-4 ${
                   catalog === id
                     ? "border-primary bg-primary/5 ring-1 ring-primary/20"
                     : "bg-card"
@@ -214,7 +214,7 @@ export default function Marketplace() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{label}</p>
+                    <p className="break-words font-semibold">{label}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{description}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -225,7 +225,7 @@ export default function Marketplace() {
 
           <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
             <CardContent className="p-4">
-              <div className="flex flex-col gap-3 lg:flex-row">
+              <div className="flex min-w-0 flex-col gap-3 lg:flex-row">
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <input
@@ -233,7 +233,7 @@ export default function Marketplace() {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search products, categories, price or stock..."
-                    className="h-10 w-full rounded-lg border bg-background pl-9 pr-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-primary"
+                    className="h-11 w-full min-w-0 rounded-lg border bg-background pl-9 pr-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-primary"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -242,7 +242,7 @@ export default function Marketplace() {
                     aria-label="Filter by category"
                     value={category}
                     onChange={(event) => setCategory(event.target.value)}
-                    className="h-10 min-w-44 rounded-lg border bg-background px-3 text-sm"
+                    className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm sm:min-w-44 sm:flex-none"
                   >
                     {categories.map((item) => (
                       <option key={item} value={item}>{item}</option>
@@ -288,13 +288,13 @@ export default function Marketplace() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid min-w-0 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {filteredProducts.map((product) => {
                 const stock = stockFor(product);
                 const outOfStock = stock !== undefined && stock <= 0;
                 return (
-                  <Card key={product._id} className="group rounded-xl border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700">
-                    <CardContent className="p-5">
+                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-xl border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-700">
+                    <CardContent className="min-w-0 p-4 sm:p-5">
                       <div className="flex items-start justify-between gap-3">
                         <Badge variant="outline" className="text-[10px]">{product.category}</Badge>
                         {product.provider === "logspanel" && <Badge className="text-[10px]">Logspanel</Badge>}
@@ -304,11 +304,11 @@ export default function Marketplace() {
                         onClick={() => setSelectedProduct(product._id)}
                         className="mt-3 block w-full text-left"
                       >
-                        <h3 className="font-semibold text-slate-900 dark:text-white">{product.name}</h3>
-                        <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{product.description}</p>
+                        <h3 className="break-words text-base font-semibold text-slate-900 dark:text-white">{product.name}</h3>
+                        <p className="mt-1 line-clamp-3 break-words text-sm leading-5 text-muted-foreground">{product.description}</p>
                       </button>
 
-                      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                      <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs sm:mt-4">
                         <div className="rounded-lg bg-muted/50 p-2.5">
                           <span className="block text-muted-foreground">Price</span>
                           <span className="mt-0.5 flex items-center font-semibold text-primary">
@@ -326,8 +326,8 @@ export default function Marketplace() {
                         </div>
                       </div>
 
-                      <div className="mt-4 flex gap-2">
-                        <Button variant="outline" className="flex-1" onClick={() => setSelectedProduct(product._id)}>
+                      <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:flex">
+                        <Button variant="outline" className="min-w-0 sm:flex-1" onClick={() => setSelectedProduct(product._id)}>
                           View details
                         </Button>
                         <Button
@@ -378,17 +378,17 @@ function ProductDetails({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true">
-      <Card className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-t-2xl sm:rounded-2xl">
+      <Card className="max-h-[92vh] w-full max-w-2xl min-w-0 overflow-auto rounded-t-2xl sm:rounded-2xl">
         <CardContent className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
               <Badge variant="outline">{product.category}</Badge>
-              <h2 className="mt-3 text-xl font-bold">{product.name}</h2>
+              <h2 className="mt-3 break-words text-xl font-bold">{product.name}</h2>
             </div>
             <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
           </div>
 
-          <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{product.description}</p>
+          <p className="mt-4 break-words whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{product.description}</p>
 
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border p-3">
