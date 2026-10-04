@@ -3,6 +3,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { pointTxTypeValidator } from "./schema";
 import { v } from "convex/values";
+import { readPointRate } from "./pricing";
 
 /**
  * Legacy compatibility surface.
@@ -19,7 +20,8 @@ export const getBalance = query({
     const user = await ctx.db.get(userId);
     if (!user) return 0;
     if (typeof user.walletBalanceNgn === "number") return user.walletBalanceNgn;
-    return (user.pointsBalance ?? 0) * 15;
+    const rate = await readPointRate(ctx);
+    return (user.pointsBalance ?? 0) * rate.ngnPerPoint;
   },
 });
 
@@ -151,6 +153,7 @@ export const getStats = query({
     const user = await ctx.db.get(userId);
     if (user?.role !== "admin") return null;
 
+    const rate = await readPointRate(ctx);
     const allUsers = await ctx.db.query("users").collect();
     const allShipments = await ctx.db.query("shipments").collect();
     const allDocuments = await ctx.db.query("documents").collect();
@@ -159,7 +162,7 @@ export const getStats = query({
     const allVendors = await ctx.db.query("vendors").collect();
 
     const totalWalletNgn = allUsers.reduce(
-      (sum, u) => sum + (u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * 15),
+      (sum, u) => sum + (u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * rate.ngnPerPoint),
       0,
     );
 
