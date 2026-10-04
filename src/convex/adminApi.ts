@@ -606,7 +606,7 @@ export const releaseEscrow = mutation({
       resource: "marketplaceOrder",
       resourceId: order._id,
       before: { status: order.status },
-      after: { status: "completed", amount },
+      after: { status: "completed", amountNgn },
       reason: args.reason,
     });
 
@@ -640,43 +640,28 @@ export const refundOrder = mutation({
     const buyer = await ctx.db.get(order.buyerId);
     if (!vendorUser || !buyer) throw new Error("USER_NOT_FOUND");
 
-    const amount = order.totalPoints;
+    const rate = await readPointRate(ctx);
+    const amountNgn = order.totalNgn ?? order.totalPoints * rate.ngnPerPoint;
+    if (!(amountNgn > 0)) throw new Error("ORDER_MISSING_NGN_TOTAL");
     const now = Date.now();
     const idemKey = `order-refund-${order._id}`;
 
-    const dupe = await ctx.db
-      .query("pointLedger")
-      .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idemKey))
-      .first();
-    if (!dupe) {
-      if ((vendorUser.pointsBalance ?? 0) < amount) {
-        throw new Error("INSUFFICIENT_POINTS: vendor balance cannot cover refund");
-      }
-      const vendorNewBal = (vendorUser.pointsBalance ?? 0) - amount;
-      await ctx.db.patch(vendorUser._id, { pointsBalance: vendorNewBal });
-      await ctx.db.insert("pointLedger", {
-        userId: vendorUser._id,
-        amount: -amount,
-        balanceAfter: vendorNewBal,
-        description: `Order refund: ${order.productId}`,
-        type: "refund",
-        referenceId: order._id,
-        idempotencyKey: idemKey,
-        createdAt: now,
-      });
-      const buyerNewBal = (buyer.pointsBalance ?? 0) + amount;
-      await ctx.db.patch(buyer._id, { pointsBalance: buyerNewBal });
-      await ctx.db.insert("pointLedger", {
-        userId: buyer._id,
-        amount,
-        balanceAfter: buyerNewBal,
-        description: `Order refund`,
-        type: "refund",
-        referenceId: order._id,
-        idempotencyKey: `${idemKey}-buyer`,
-        createdAt: now,
-      });
-    }
+    await debitWallet(ctx, {
+      userId: vendorUser._id,
+      amountNgn,
+      description: `Order refund: ${order.productId}`,
+      type: "refund",
+      referenceId: order._id,
+      idempotencyKey: idemKey,
+    });
+    await creditWallet(ctx, {
+      userId: buyer._id,
+      amountNgn,
+      description: "Order refund",
+      type: "refund",
+      referenceId: order._id,
+      idempotencyKey: `${idemKey}-buyer`,
+    });
 
     await ctx.db.patch(order._id, { status: "refunded" });
     await auditLog(ctx, adminId, {
@@ -684,7 +669,7 @@ export const refundOrder = mutation({
       resource: "marketplaceOrder",
       resourceId: order._id,
       before: { status: order.status },
-      after: { status: "refunded", amount },
+      after: { status: "refunded", amountNgn },
       reason: args.reason,
     });
     return { success: true };
