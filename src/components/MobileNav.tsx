@@ -28,7 +28,7 @@ const navItems = [
   { label: "Numbers", icon: Phone, to: "/marketplace/numbers" },
   { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
-  { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
+  { label: "Fund Wallet", icon: CreditCard, to: "/buy-points" },
   // Mirrors the desktop sidebar, which already carried this entry. Without it
   // the mobile drawer was the one navigation surface in the customer app with
   // no route to airtime, data or bills at all.
