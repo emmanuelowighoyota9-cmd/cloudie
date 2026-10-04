@@ -37,7 +37,6 @@ const TYPE_FILTERS = [
 const PAGE_SIZE = 25;
 
 export default function AdminTransactions() {
-  const { ngnPerPoint } = usePricing();
   const ledger = useQuery(api.wallet.getAdminLedger, { limit: 1000 }) as LedgerEntry[] | undefined;
   const users = useQuery(api.admin.listUsers, { limit: 1000 });
 
@@ -52,7 +51,7 @@ export default function AdminTransactions() {
     if (!ledger) return undefined;
     let list = [...ledger];
     if (typeFilter === "credit") list = list.filter((l) => l.amountNgn > 0);
-    else if (typeFilter === "debit") list = list.filter((l) => l.amount < 0);
+    else if (typeFilter === "debit") list = list.filter((l) => l.amountNgn < 0);
     else if (typeFilter !== "all") list = list.filter((l) => l.type === typeFilter);
     if (userFilter !== "all") list = list.filter((l) => l.userId === userFilter);
     if (search.trim()) {
