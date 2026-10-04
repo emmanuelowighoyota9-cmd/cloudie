@@ -29,7 +29,7 @@ export default function AdminUserDetail() {
   const suspendUser = useMutation(api.admin.suspendUser);
   const terminateUser = useMutation(api.adminApi.terminateUser);
   const changeRole = useMutation(api.adminApi.changeUserRole);
-  const adminAdjust = useMutation(api.points.adminAdjust);
+  const adminAdjust = useMutation(api.wallet.adminAdjust);
 
   const [action, setAction] = useState<null | { kind: "suspend" | "reactivate" | "terminate" | "role" | "credit" | "debit"; label: string }>(null);
   const [amount, setAmount] = useState("");
@@ -67,14 +67,14 @@ export default function AdminUserDetail() {
       } else if (action.kind === "credit") {
         const n = Number(amount);
         if (!Number.isFinite(n) || n <= 0) throw new Error("Enter a positive amount");
-        await adminAdjust({ userId: user._id, amount: n, reason });
-        toast.success(`Credited ${n.toLocaleString()} points`);
+        await adminAdjust({ userId: user._id, amountNgn: n, reason });
+        toast.success(`Credited ${formatNgn(n)}`);
         setAmount("");
       } else if (action.kind === "debit") {
         const n = Number(amount);
         if (!Number.isFinite(n) || n <= 0) throw new Error("Enter a positive amount");
-        await adminAdjust({ userId: user._id, amount: -n, reason });
-        toast.success(`Deducted ${n.toLocaleString()} points`);
+        await adminAdjust({ userId: user._id, amountNgn: -n, reason });
+        toast.success(`Deducted ${formatNgn(n)}`);
         setAmount("");
       }
     } catch (e) {
@@ -103,27 +103,26 @@ export default function AdminUserDetail() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="rounded-xl">
           <CardContent className="p-4">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400">Points balance</p>
-            <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{(user.pointsBalance ?? 0).toLocaleString()}</p>
-            <p className="text-[11px] text-slate-400">≈ {formatNgn((user.pointsBalance ?? 0) * ngnPerPoint)}</p>
+            <p className="text-[11px] uppercase tracking-wider text-slate-400">NGN wallet balance</p>
+            <p className="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{formatNgn(user.walletBalanceNgn ?? (user.pointsBalance ?? 0) * ngnPerPoint)}</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
           <CardContent className="p-4">
             <p className="text-[11px] uppercase tracking-wider text-slate-400">Total credited</p>
             <p className="mt-1 flex items-center gap-1 text-2xl font-bold text-green-600">
-              <ArrowUpRight className="h-4 w-4" />{wallet.totalCredited.toLocaleString()}
+              <ArrowUpRight className="h-4 w-4" />{formatNgn(wallet.totalCredited)}
             </p>
-            <p className="text-[11px] text-slate-400">{formatNgn(wallet.totalCredited * ngnPerPoint)}</p>
+            <p className="text-[11px] text-slate-400">NGN</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
           <CardContent className="p-4">
             <p className="text-[11px] uppercase tracking-wider text-slate-400">Total debited</p>
             <p className="mt-1 flex items-center gap-1 text-2xl font-bold text-red-600">
-              <ArrowDownRight className="h-4 w-4" />{wallet.totalDebited.toLocaleString()}
+              <ArrowDownRight className="h-4 w-4" />{formatNgn(wallet.totalDebited)}
             </p>
-            <p className="text-[11px] text-slate-400">{formatNgn(wallet.totalDebited * ngnPerPoint)}</p>
+            <p className="text-[11px] text-slate-400">NGN</p>
           </CardContent>
         </Card>
         <Card className="rounded-xl">
@@ -164,10 +163,10 @@ export default function AdminUserDetail() {
           >
             Change role to {user.role === "vendor" ? "user" : "vendor"}
           </Button>
-          <Button variant="outline" className="text-green-700" onClick={() => setAction({ kind: "credit", label: "Credit points" })}>
+          <Button variant="outline" className="text-green-700" onClick={() => setAction({ kind: "credit", label: "Credit wallet" })}>
             <Coins className="mr-1 h-4 w-4" /> Credit
           </Button>
-          <Button variant="outline" className="text-red-700" onClick={() => setAction({ kind: "debit", label: "Deduct points" })}>
+          <Button variant="outline" className="text-red-700" onClick={() => setAction({ kind: "debit", label: "Deduct wallet" })}>
             <Coins className="mr-1 h-4 w-4" /> Deduct
           </Button>
         </CardContent>
@@ -232,7 +231,7 @@ export default function AdminUserDetail() {
                 <div key={d._id} className="flex items-center gap-3 p-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{d.title}</p>
-                    <p className="text-[11px] capitalize text-slate-400">{d.type} · {d.pointsCost} pts · {formatNgn(d.pointsCost * ngnPerPoint)}</p>
+                    <p className="text-[11px] capitalize text-slate-400">{d.type} · {formatNgn(d.priceNgn ?? d.pointsCost * ngnPerPoint)}</p>
                   </div>
                   <span className="text-xs text-slate-400">{fmtDate(d.createdAt)}</span>
                 </div>
@@ -249,7 +248,7 @@ export default function AdminUserDetail() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-mono text-xs text-slate-500">{o._id}</p>
                     <p className="text-[11px] text-slate-400">{fmtDate(o.createdAt)}</p>
-                  </div>                      <span className="text-sm font-semibold">{o.totalPoints.toLocaleString()} pts · {formatNgn(o.totalPoints * ngnPerPoint)}</span>
+                  </div>                      <span className="text-sm font-semibold">{formatNgn(o.totalNgn ?? o.totalPoints * ngnPerPoint)}</span>
                   <StatusBadge status={o.status} />
                 </div>
               ))}
@@ -316,7 +315,7 @@ export default function AdminUserDetail() {
                       <Link to={`/admin/users/${r.referredUserId}`} className="min-w-0 flex-1 truncate font-mono text-xs text-blue-600 hover:underline">
                         {r.referredUserId}
                       </Link>
-                      <span className="shrink-0 text-xs font-semibold text-green-600">+{r.rewardPoints} pts</span>
+                      <span className="shrink-0 text-xs font-semibold text-green-600">+{formatNgn(r.rewardNgn ?? r.rewardPoints * ngnPerPoint)}</span>
                       <StatusBadge status={r.status} />
                     </div>
                   ))}
@@ -334,7 +333,7 @@ export default function AdminUserDetail() {
                       <Link to={`/admin/users/${r.referrerId}`} className="min-w-0 flex-1 truncate font-mono text-xs text-blue-600 hover:underline">
                         {r.referrerId}
                       </Link>
-                      <span className="shrink-0 text-xs font-semibold text-green-600">+25 pts bonus</span>
+                      <span className="shrink-0 text-xs font-semibold text-green-600">Welcome bonus</span>
                       <StatusBadge status={r.status} />
                     </div>
                   ))}
@@ -370,14 +369,14 @@ export default function AdminUserDetail() {
           title={action.label}
           description={
             action.kind === "credit"
-              ? "Credits points to this user's wallet via an immutable ledger entry."
-              : "Deducts points from this user's wallet via an immutable ledger entry. Fails if it would make the balance negative."
+              ? "Credits NGN to this user's wallet via an immutable ledger entry."
+              : "Debits NGN from this user's wallet via an immutable ledger entry. Fails if it would make the balance negative."
           }
-          resource={`${user.name || user.email} — current balance ${(user.pointsBalance ?? 0).toLocaleString()} pts`}
+          resource={`${user.name || user.email} — current balance ${formatNgn(user.walletBalanceNgn ?? (user.pointsBalance ?? 0) * ngnPerPoint)}`}
           actionLabel={action.kind === "credit" ? "Credit points" : "Deduct points"}
           destructive={action.kind === "debit"}
           extraField={{
-            label: "Amount (points)",
+            label: "Amount (NGN)",
             value: amount,
             onChange: setAmount,
             type: "number",
