@@ -99,7 +99,7 @@ export const applyReferral = mutation({
       idempotencyKey: `referral-referrer-${referralId}`,
     });
 
-    await ctx.runMutation(internal.wallet.credit, {
+    await creditWallet(ctx, {
       userId,
       amountNgn: welcomeRewardNgn,
       description: "Welcome referral bonus",
