@@ -89,6 +89,8 @@ export const vtuLedgerTables = {
     idempotencyKey: v.string(),
     debitLedgerId: v.optional(v.id("pointLedger")),
     reversalLedgerId: v.optional(v.id("pointLedger")),
+    debitWalletLedgerId: v.optional(v.id("walletLedger")),
+    reversalWalletLedgerId: v.optional(v.id("walletLedger")),
     failureCode: v.optional(v.string()),
     failureReason: v.optional(v.string()),
     /**
