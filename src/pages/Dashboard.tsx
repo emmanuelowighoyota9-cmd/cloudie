@@ -109,7 +109,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link to="/wallet">
+              <Link to="/personal/wallet">
                 <Button className="gap-2 bg-primary hover:from-blue-700 hover:to-indigo-700 px-6">
                   <ShoppingBag className="h-4 w-4" /> Fund Wallet
                 </Button>
