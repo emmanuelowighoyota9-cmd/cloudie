@@ -65,11 +65,11 @@ export function usePricing() {
       points,
       ngn,
       usd,
-      pointsLabel: `${points.toLocaleString()} pts`,
+      pointsLabel: formatNgn(ngn),
       ngnLabel: formatNgn(ngn),
       usdLabel: formatUsd(usd),
       /** "150 pts · ₦2,250" — the standard pricing suffix used across the app. */
-      label: `${points.toLocaleString()} pts · ${formatNgn(ngn)}`,
+      label: formatNgn(ngn),
     };
   };
 
@@ -83,7 +83,6 @@ export function usePricing() {
     usdFor: (points: number) => points * usdPerPoint,
     ngnLabel: (points: number) => formatNgn(points * ngnPerPoint),
     usdLabel: (points: number) => formatUsd(points * usdPerPoint),
-    pointsWithNgn: (points: number) =>
-      `${points.toLocaleString()} pts · ${formatNgn(points * ngnPerPoint)}`,
+    pointsWithNgn: (points: number) => formatNgn(points * ngnPerPoint),
   };
 }
