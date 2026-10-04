@@ -1,5 +1,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { readPointRate } from "./pricing";
 import { v } from "convex/values";
 
 function generateReferralCode(): string {
@@ -75,44 +77,41 @@ export const applyReferral = mutation({
     if (existing) throw new Error("Referral already applied");
 
     const now = Date.now();
-    await ctx.db.patch(userId, { referredBy: referrer._id });
+    const rate = await readPointRate(ctx);
+    const referrerRewardNgn = 50 * rate.ngnPerPoint;
+    const welcomeRewardNgn = 25 * rate.ngnPerPoint;
 
     const referralId = await ctx.db.insert("referrals", {
       referrerId: referrer._id,
       referredUserId: userId,
       status: "completed",
-      rewardPoints: 50,
+      rewardPoints: 0,
+      rewardNgn: referrerRewardNgn,
       createdAt: now,
     });
 
-    const referrerBalance = referrer.pointsBalance ?? 0;
-    await ctx.db.patch(referrer._id, { pointsBalance: referrerBalance + 50 });
-    await ctx.db.insert("pointLedger", {
+    await ctx.runMutation(internal.wallet.credit, {
       userId: referrer._id,
-      amount: 50,
-      balanceAfter: referrerBalance + 50,
+      amountNgn: referrerRewardNgn,
       description: "Referral reward",
       type: "referral_reward",
       referenceId: referralId,
-      createdAt: now,
+      idempotencyKey: `referral-referrer-${referralId}`,
     });
 
-    const userBalance = user.pointsBalance ?? 0;
-    await ctx.db.patch(userId, { pointsBalance: userBalance + 25 });
-    await ctx.db.insert("pointLedger", {
+    await ctx.runMutation(internal.wallet.credit, {
       userId,
-      amount: 25,
-      balanceAfter: userBalance + 25,
+      amountNgn: welcomeRewardNgn,
       description: "Welcome referral bonus",
       type: "referral_reward",
       referenceId: referralId,
-      createdAt: now,
+      idempotencyKey: `referral-welcome-${referralId}`,
     });
 
     await ctx.db.insert("notifications", {
       userId: referrer._id,
       title: "Referral reward!",
-      message: "+50 points for referring a friend",
+      message: `+₦${referrerRewardNgn.toLocaleString("en-NG")} for referring a friend`,
       type: "referral_reward",
       isRead: false,
       createdAt: now,
@@ -120,7 +119,7 @@ export const applyReferral = mutation({
     await ctx.db.insert("notifications", {
       userId,
       title: "Welcome bonus!",
-      message: "+25 points referral welcome bonus",
+      message: `+₦${welcomeRewardNgn.toLocaleString("en-NG")} welcome referral bonus`,
       type: "referral_reward",
       isRead: false,
       createdAt: now,
@@ -151,7 +150,7 @@ export const getMyRewards = query({
     if (!userId) return [];
 
     const all = await ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .collect();
