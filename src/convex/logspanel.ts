@@ -38,7 +38,7 @@ export const syncCatalog = action({
     const settings = await ctx.runQuery(api.marketplace.getLogspanelAdminStatus);
     if (!settings.configured) throw new Error("LOGSPANEL_NOT_CONFIGURED");
 
-    const products: unknown[] = [];
+    const products: any[] = [];
     for (let page = 1; page <= 50; page++) {
       const body = await requestLogspanel(`/logs/products?per_page=100&page=${page}`);
       const rows = Array.isArray(body?.data) ? body.data : [];
