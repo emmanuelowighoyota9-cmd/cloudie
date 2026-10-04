@@ -19,9 +19,10 @@ import {
   ImageOff,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
 
-type Catalog = "marketplace-i" | "marketplace-ii";
+type Catalog = "marketplace-i" | "marketplace-ii" | "numbers" | "boost";
 type View = "products" | "orders";
 
 const MARKETPLACE_I = [
@@ -53,11 +54,29 @@ const MARKETPLACE_II = [
   "TikTok Account",
 ];
 
+const NUMBER_TERMS = [
+  "number", "numbers", "virtual number", "texting number", "phone number",
+  "sms", "otp", "voip", "whatsapp number", "telegram number",
+];
+
+const BOOST_TERMS = [
+  "boost", "followers", "likes", "views", "comments", "subscribers",
+  "engagement", "members", "social media", "instagram", "tiktok", "youtube",
+  "telegram", "facebook", "twitter", "x.com",
+];
+
 const normalize = (value: string) => value.trim().toLowerCase();
 
 function belongsToCatalog(product: { category: string; name: string }, catalog: Catalog) {
   const haystack = normalize(`${product.category} ${product.name}`);
-  const terms = catalog === "marketplace-i" ? MARKETPLACE_I : MARKETPLACE_II;
+  const terms =
+    catalog === "marketplace-i"
+      ? MARKETPLACE_I
+      : catalog === "marketplace-ii"
+        ? MARKETPLACE_II
+        : catalog === "numbers"
+          ? NUMBER_TERMS
+          : BOOST_TERMS;
   return terms.some((term) => haystack.includes(normalize(term)));
 }
 
@@ -68,6 +87,7 @@ function stockFor(product: { provider?: string; providerAvailableQuantity?: numb
 
 export default function Marketplace() {
   const { pointsWithNgn } = usePricing();
+  const location = useLocation();
   const products = useQuery(api.marketplace.listProducts, {});
   const orders = useQuery(api.marketplace.getMyOrders);
   const balance = useQuery(api.points.getBalance);
@@ -75,17 +95,20 @@ export default function Marketplace() {
   const purchaseLogspanel = useAction(api.logspanel.purchase);
   const refreshLogspanelOrder = useAction(api.logspanel.refreshOrder);
 
-  const [catalog, setCatalog] = useState<Catalog>("marketplace-i");
+  const routeCatalog: Catalog = location.pathname === "/marketplace/numbers" ? "numbers" : location.pathname === "/marketplace/boost" ? "boost" : "marketplace-i";
+  const [catalog, setCatalog] = useState<Catalog>(routeCatalog);
   const [view, setView] = useState<View>("products");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [selectedProduct, setSelectedProduct] = useState<Id<"marketplaceProducts"> | null>(null);
   const [buying, setBuying] = useState<string | null>(null);
 
+  const effectiveCatalog = location.pathname === "/marketplace/numbers" || location.pathname === "/marketplace/boost" ? routeCatalog : catalog;
+
   const catalogProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter((product) => belongsToCatalog(product, catalog));
-  }, [products, catalog]);
+    return products.filter((product) => belongsToCatalog(product, effectiveCatalog));
+  }, [products, effectiveCatalog]);
 
   const categories = useMemo(() => {
     const values = new Set(catalogProducts.map((product) => product.category).filter(Boolean));
@@ -167,7 +190,7 @@ export default function Marketplace() {
             Digital marketplace
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-            Browse provider-supplied digital inventory by marketplace, category, price and live stock.
+            Browse real digital products by category, price and live stock.
           </p>
         </div>
         <div className="grid w-full grid-cols-2 rounded-lg border bg-background p-1 shadow-sm sm:flex sm:w-auto">
@@ -198,31 +221,45 @@ export default function Marketplace() {
         />
       ) : (
         <>
-          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-            {([
-              ["marketplace-i", "Marketplace I", "Core digital inventory catalog"],
-              ["marketplace-ii", "Marketplace II", "Extended country and account catalog"],
-            ] as const).map(([id, label, description]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => handleCatalogChange(id)}
-                className={`min-w-0 overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm sm:p-4 ${
-                  catalog === id
-                    ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                    : "bg-card"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="break-words font-semibold">{label}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+          {location.pathname === "/marketplace" ? (
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              {([
+                ["marketplace-i", "Marketplace I", "Core digital inventory catalog"],
+                ["marketplace-ii", "Marketplace II", "Extended country and account catalog"],
+              ] as const).map(([id, label, description]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => handleCatalogChange(id)}
+                  className={`min-w-0 overflow-hidden rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm sm:p-4 ${
+                    catalog === id ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "bg-card"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="break-words font-semibold">{label}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+              <CardContent className="flex items-center justify-between gap-3 p-3 sm:p-4">
+                <div>
+                  <p className="text-sm font-semibold">{effectiveCatalog === "numbers" ? "Numbers" : "Social Boost"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {effectiveCatalog === "numbers"
+                      ? "Browse available virtual, texting and verification numbers."
+                      : "Browse social growth products such as followers, likes, views and engagement."}
+                  </p>
                 </div>
-              </button>
-            ))}
-          </div>
+                <Badge variant="outline">{catalogProducts.length} products</Badge>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
             <CardContent className="p-4">
@@ -259,7 +296,7 @@ export default function Marketplace() {
                 </Badge>
                 {category !== "All" && <Badge variant="secondary">{category}</Badge>}
                 <span className="text-xs text-muted-foreground">
-                  {catalog === "marketplace-i" ? "Marketplace I" : "Marketplace II"}
+                  {effectiveCatalog === "marketplace-i" ? "Marketplace I" : effectiveCatalog === "marketplace-ii" ? "Marketplace II" : effectiveCatalog === "numbers" ? "Numbers" : "Social Boost"}
                 </span>
               </div>
             </CardContent>
