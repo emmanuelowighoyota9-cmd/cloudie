@@ -28,7 +28,7 @@ export default function Personal() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Personal Workspace</h1>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <Link to="/wallet" className="flex-1 sm:flex-none"><Button size="sm" className="w-full gap-1.5"><Plus className="h-4 w-4" /> Fund Wallet</Button></Link>
+            <Link to="/personal/wallet" className="flex-1 sm:flex-none"><Button size="sm" className="w-full gap-1.5"><Plus className="h-4 w-4" /> Fund Wallet</Button></Link>
             <Link to="/orders" className="flex-1 sm:flex-none"><Button size="sm" variant="outline" className="w-full gap-1.5"><Receipt className="h-4 w-4" /> Orders</Button></Link>
             <Link to="/vendor" className="flex-1 sm:flex-none"><Button size="sm" variant="outline" className="w-full gap-1.5"><Store className="h-4 w-4" /> Vendor</Button></Link>
           </div>
