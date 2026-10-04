@@ -370,6 +370,28 @@ export default function Marketplace() {
     }
   };
 
+  if (location.pathname === "/marketplace/numbers" || location.pathname === "/marketplace/boost") {
+    const orderMode: "numbers" | "boost" =
+      location.pathname === "/marketplace/numbers" ? "numbers" : "boost";
+    return (
+      <CatalogOrderPage
+        mode={orderMode}
+        products={catalogProducts}
+        balance={balance}
+        pointsWithNgn={pointsWithNgn}
+        onBuy={async (product, quantity) => {
+          await handleBuy(
+            product._id,
+            product.name,
+            product.pointsPrice,
+            product.provider,
+            quantity,
+          );
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden pb-24 sm:space-y-6 sm:pb-8">
       <div className="flex min-w-0 flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between">
