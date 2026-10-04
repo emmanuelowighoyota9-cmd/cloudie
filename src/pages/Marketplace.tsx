@@ -85,6 +85,195 @@ function stockFor(product: { provider?: string; providerAvailableQuantity?: numb
   return undefined;
 }
 
+type CatalogOrderPageProps = {
+  mode: "numbers" | "boost";
+  products: Array<{
+    _id: Id<"marketplaceProducts">;
+    name: string;
+    description: string;
+    category: string;
+    pointsPrice: number;
+    imageUrl?: string;
+    provider?: string;
+    providerAvailableQuantity?: number;
+  }>;
+  balance: number | undefined;
+  pointsWithNgn: (points: number) => string;
+  onBuy: (product: CatalogOrderPageProps["products"][number], quantity: number) => Promise<void>;
+};
+
+function CatalogOrderPage({ mode, products, balance, pointsWithNgn, onBuy }: CatalogOrderPageProps) {
+  const [selectedId, setSelectedId] = useState<Id<"marketplaceProducts"> | "">("");
+  const [quantity, setQuantity] = useState(1);
+  const [query, setQuery] = useState("");
+  const [country, setCountry] = useState("All");
+  const selected = products.find((product) => product._id === selectedId) ?? null;
+
+  const countries = useMemo(() => {
+    const values = new Set<string>();
+    products.forEach((product) => {
+      const text = `${product.name} ${product.category}`;
+      const match = text.match(/\\b(US|USA|UK|United Kingdom|Canada|Germany|France|Australia|Nigeria|Vietnam|India|Spain|Italy|Netherlands|Brazil|Mexico|Turkey|Indonesia|Philippines)\\b/i);
+      if (match) values.add(match[1]);
+    });
+    return ["All", ...Array.from(values).sort()];
+  }, [products]);
+
+  const filtered = useMemo(() => {
+    const needle = normalize(query);
+    return products.filter((product) => {
+      const haystack = normalize(`${product.name} ${product.category} ${product.description}`);
+      const matchesCountry = country === "All" || haystack.includes(normalize(country));
+      return matchesCountry && (!needle || haystack.includes(needle));
+    });
+  }, [products, query, country]);
+
+  const charge = selected ? selected.pointsPrice * Math.max(1, quantity) : 0;
+  const canBuy = Boolean(selected) && (balance ?? 0) >= charge &&
+    quantity >= 1 && quantity <= Math.min(100, selected?.providerAvailableQuantity ?? 100);
+
+  return (
+    <div className="min-w-0 max-w-full overflow-x-hidden pb-24">
+      <div className="mb-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+          {mode === "numbers" ? "Numbers" : "Social boost"}
+        </div>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">
+          {mode === "numbers" ? "Buy Number" : "Boost Socials"}
+        </h1>
+        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+          {mode === "numbers"
+            ? "Choose a real number product, review availability and purchase securely with your points."
+            : "Choose a real growth service, select quantity and place the order from your points balance."}
+        </p>
+      </div>
+
+      <Card className="overflow-hidden rounded-2xl border-primary/15 shadow-sm">
+        <CardContent className="p-4 sm:p-6">
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
+            <div>
+              <p className="text-xs text-muted-foreground">Available balance</p>
+              <p className="text-lg font-bold">{(balance ?? 0).toLocaleString()} pts</p>
+            </div>
+            <Badge variant="outline">{filtered.length} available products</Badge>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                {mode === "numbers" ? "Select Country" : "Category"}
+              </label>
+              <select
+                value={country}
+                onChange={(event) => setCountry(event.target.value)}
+                className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {countries.map((item) => <option key={item}>{item}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">
+                {mode === "numbers" ? "Select Service" : "Service"}
+              </label>
+              <select
+                value={selectedId}
+                onChange={(event) => setSelectedId(event.target.value as Id<"marketplaceProducts">)}
+                className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <option value="">Choose a {mode === "numbers" ? "number service" : "boost service"}</option>
+                {filtered.map((product) => (
+                  <option key={product._id} value={product._id}>
+                    {product.name} — {product.pointsPrice.toLocaleString()} pts
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {mode === "numbers" && (
+              <div>
+                <label className="mb-2 block text-sm font-semibold">Select Pool</label>
+                <div className="flex min-h-12 items-center rounded-xl border bg-muted/40 px-4 text-sm text-muted-foreground">
+                  {selected ? "Provider pool selected from the product catalog" : "Choose a service first"}
+                </div>
+              </div>
+            )}
+
+            {mode === "boost" && (
+              <div>
+                <label className="mb-2 block text-sm font-semibold">Product search</label>
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search followers, likes, views, comments..."
+                  className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Target links are not collected here because the connected provider purchase API currently does not accept a target URL.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold">Quantity</label>
+              <input
+                type="number"
+                min={1}
+                max={Math.min(100, selected?.providerAvailableQuantity ?? 100)}
+                value={quantity}
+                onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
+                className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Min: 1 · Max: {Math.min(100, selected?.providerAvailableQuantity ?? 100)}
+              </p>
+            </div>
+
+            {selected && (
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex gap-3">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                    {selected.imageUrl ? (
+                      <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center"><Package className="h-5 w-5 text-muted-foreground" /></div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-semibold">{selected.name}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{selected.description}</p>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-between border-t pt-3">
+                  <span className="text-sm font-medium">Charge</span>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary">{charge.toLocaleString()} pts</p>
+                    <p className="text-xs text-muted-foreground">{pointsWithNgn(charge)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Button
+              className="h-12 w-full rounded-xl text-base font-semibold"
+              disabled={!canBuy}
+              onClick={() => selected && onBuy(selected, quantity)}
+            >
+              {selected ? `Place ${mode === "numbers" ? "number order" : "boost order"}` : "Choose a service first"}
+            </Button>
+
+            {selected && (balance ?? 0) < charge && (
+              <p className="text-center text-xs font-medium text-destructive">
+                Insufficient points for this order.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Marketplace() {
   const { pointsWithNgn } = usePricing();
   const location = useLocation();
@@ -144,6 +333,7 @@ export default function Marketplace() {
     name: string,
     price: number,
     provider?: string,
+    quantity = 1,
   ) => {
     if ((balance ?? 0) < price) {
       toast.error("Insufficient points. Add funds before purchasing.");
@@ -158,7 +348,7 @@ export default function Marketplace() {
         const idempotencyKey = `cloudie-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
         const result = await purchaseLogspanel({
           productId,
-          quantity: 1,
+          quantity,
           idempotencyKey,
         });
         toast.success(
@@ -167,7 +357,7 @@ export default function Marketplace() {
             : "Order placed and fulfilled.",
         );
       } else {
-        await createOrder({ productId, quantity: 1 });
+        await createOrder({ productId, quantity });
         toast.success("Order placed successfully.");
       }
       setView("orders");
