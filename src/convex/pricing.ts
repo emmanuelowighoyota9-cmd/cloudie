@@ -143,6 +143,20 @@ export async function effectivePointsCost(
  * Active per-service price list. Drives costing on every customer surface so
  * an admin-set price is what customers actually see.
  */
+/** Authoritative customer-facing service price in NGN. Legacy point cost is only a fallback. */
+export async function effectiveNgnCost(
+  ctx: QueryCtx | MutationCtx,
+  service: string,
+  fallbackNgn: number,
+): Promise<number> {
+  const row = await ctx.db
+    .query("pointPricing")
+    .withIndex("by_service", (q) => q.eq("service", service))
+    .first();
+  if (row && row.isActive && typeof row.priceNgn === "number" && row.priceNgn > 0) return row.priceNgn;
+  return fallbackNgn;
+}
+
 export const getServicePrices = query({
   args: {},
   handler: async (ctx) => {
