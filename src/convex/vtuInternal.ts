@@ -404,6 +404,7 @@ export const beginPurchase = internalMutation({
       transactionId,
       status: "pending",
       pointsDebited: points,
+      walletDebitedNgn: nairaPrice,
       ngnPerPoint,
       routedProvider: route.winner.provider,
       routedProviderProductCode,
@@ -810,7 +811,7 @@ async function reverseAndRelease(
   if (!allowedFrom.includes(tx.status)) {
     return { reversed: false, reason: "illegal_transition" };
   }
-  if (tx.reversalLedgerId) return { reversed: false, reason: "already_reversed" };
+  if (tx.reversalWalletLedgerId) return { reversed: false, reason: "already_reversed" };
 
   const refundAmountNgn = tx.walletDebitedNgn ?? tx.nairaPrice;
   const creditId = await creditWallet(ctx, {
