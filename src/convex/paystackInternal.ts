@@ -127,6 +127,7 @@ export const recordPaymentAndCredit = internalMutation({
     points: v.number(),
     amountUsd: v.number(),
     amountNgn: v.optional(v.number()),
+    walletAmountNgn: v.optional(v.number()),
     currency: v.optional(v.string()),
     amountKobo: v.number(),
     paystackStatus: v.string(),
@@ -170,7 +171,8 @@ export const recordPaymentAndCredit = internalMutation({
     const paidSubunit = args.paidSubunit ?? args.amountKobo;
     const paidCurrency = (args.paidCurrency ?? args.currency ?? "USD").toUpperCase();
     const amountVariance = paidSubunit - amountSubunit;
-    const walletAmountNgn = existing?.walletAmountNgn ?? (paidCurrency === "NGN" ? paidSubunit / 100 : 0);
+    const walletAmountNgn =
+      existing?.walletAmountNgn ?? args.walletAmountNgn ?? (paidCurrency === "NGN" ? paidSubunit / 100 : 0);
 
     // Resolve the buyer: pending order first (webhook path), session second.
     let userId = existing?.buyerId;

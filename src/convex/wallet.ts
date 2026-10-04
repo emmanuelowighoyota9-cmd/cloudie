@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { readPointRate } from "./pricing";
+import { requireAdmin, auditLog } from "./adminApi";
 
 const walletTxType = v.string();
 

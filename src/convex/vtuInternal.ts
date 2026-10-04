@@ -484,7 +484,7 @@ export type SettleResult =
       settled: true;
       status: "confirmed" | "reversed" | "unresolved";
       /** Present only on the `reversed` verdicts — the refund ledger row. */
-      creditId?: Id<"pointLedger">;
+      creditId?: Id<"walletLedger">;
     }
   | {
       settled: false;

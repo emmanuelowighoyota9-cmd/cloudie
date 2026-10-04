@@ -46,7 +46,7 @@ export default function Personal() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Balance</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">{₦{(balance ?? 0).toLocaleString("en-NG")}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">₦{(balance ?? 0).toLocaleString("en-NG")}</p>
                 <p className="text-xs font-medium text-slate-500 dark:text-slate-400">NGN wallet</p>
               </div>
             </div>
