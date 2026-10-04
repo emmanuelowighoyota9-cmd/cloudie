@@ -42,7 +42,7 @@ async function paystackFetch(path: string, secretKey: string, opts: RequestInit 
 }
 
 /**
- * Initialize a Paystack transaction for a points purchase.
+ * Initialize a Paystack transaction for NGN wallet funding.
  * Returns the authorization_url the user should be redirected to.
  */
 export const initializePayment = action({
@@ -61,7 +61,7 @@ export const initializePayment = action({
     // The buyer must be known up-front: webhooks/callbacks arrive unauthenticated,
     // so the pending order (created below) is what later resolves who to credit.
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Please sign in again to purchase points.");
+    if (!userId) throw new Error("Please sign in again to fund your wallet.");
 
     // Absolute callback URL — actions run server-side where `window` never exists.
     const base = (args.callbackUrl ?? "").trim().replace(/\/+$/, "");
@@ -116,7 +116,8 @@ export const initializePayment = action({
       reference,
       userId,
       packageId: args.packageId,
-      points: args.points,
+      points: args.points ?? 0,
+      walletAmountNgn: currency === "NGN" ? amountMajor : undefined,
       amountSubunit: amountKobo,
       currency,
       accessCode,
@@ -141,7 +142,7 @@ type VerifyResult =
 
 /**
  * Verify a Paystack transaction by reference.
- * If verified, credits the user's points balance.
+ * If verified, credits the user's NGN wallet.
  */
 export const verifyAndCredit = action({
   args: {
