@@ -16,7 +16,6 @@ import {
   Boxes,
   Store,
   ChevronRight,
-  ImageOff,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
@@ -83,6 +82,57 @@ function belongsToCatalog(product: { category: string; name: string }, catalog: 
 function stockFor(product: { provider?: string; providerAvailableQuantity?: number }) {
   if (product.providerAvailableQuantity !== undefined) return product.providerAvailableQuantity;
   return undefined;
+}
+
+type MarketplaceImageProduct = {
+  name: string;
+  category: string;
+  imageUrl?: string;
+};
+
+const PRODUCT_IMAGE_FALLBACKS = [
+  {
+    terms: ["proxy", "vpn", "server", "hosting", "ip:"],
+    url: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=85",
+  },
+  {
+    terms: ["number", "numbers", "phone", "sms", "otp", "voip"],
+    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=85",
+  },
+  {
+    terms: ["instagram", "tiktok", "facebook", "twitter", "reddit", "social", "followers", "likes", "views", "engagement"],
+    url: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=1200&q=85",
+  },
+  {
+    terms: ["email", "outlook", "mail", "gmail"],
+    url: "https://images.unsplash.com/photo-1557200134-90327ee9fafa?auto=format&fit=crop&w=1200&q=85",
+  },
+  {
+    terms: ["netflix", "streaming", "movie", "entertainment", "spotify", "music"],
+    url: "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&w=1200&q=85",
+  },
+  {
+    terms: ["apple", "iphone", "mac", "ipad", "device", "electronics"],
+    url: "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=85",
+  },
+  {
+    terms: ["parcel", "package", "logistics", "delivery", "store", "shopping"],
+    url: "https://images.unsplash.com/photo-1586528116493-da8b8f5e3f2a?auto=format&fit=crop&w=1200&q=85",
+  },
+] as const;
+
+const DEFAULT_PRODUCT_IMAGE =
+  "https://images.unsplash.com/photo-1556761175-b413da4baf72?auto=format&fit=crop&w=1200&q=85";
+
+function getProductImage(product: MarketplaceImageProduct) {
+  if (product.imageUrl?.trim()) return product.imageUrl.trim();
+
+  const haystack = normalize(`${product.category} ${product.name}`);
+  const match = PRODUCT_IMAGE_FALLBACKS.find(({ terms }) =>
+    terms.some((term) => haystack.includes(term)),
+  );
+
+  return match?.url ?? DEFAULT_PRODUCT_IMAGE;
 }
 
 type CatalogOrderPageProps = {
@@ -640,23 +690,22 @@ export default function Marketplace() {
                       className="relative block aspect-[5/2] w-full overflow-hidden bg-muted text-left"
                       aria-label={`View ${product.name}`}
                     >
-                      {product.imageUrl ? (
-                        <img
-                          src={product.imageUrl}
-                          alt={product.name}
-                          loading="lazy"
-                          className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                          onError={(event) => {
-                            event.currentTarget.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white/80">
-                            <ImageOff className="h-5 w-5" />
-                          </div>
-                        </div>
-                      )}
+                      {(() => {
+                        const fallbackImage = getProductImage(product);
+                        return (
+                          <img
+                            src={fallbackImage}
+                            alt={product.name}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                            onError={(event) => {
+                              if (event.currentTarget.dataset.fallbackApplied === "true") return;
+                              event.currentTarget.dataset.fallbackApplied = "true";
+                              event.currentTarget.src = DEFAULT_PRODUCT_IMAGE;
+                            }}
+                          />
+                        );
+                      })()}
                       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
                         <Badge variant="secondary" className="max-w-[70%] truncate border-white/20 bg-black/45 text-white backdrop-blur-sm">
                           {product.category}
