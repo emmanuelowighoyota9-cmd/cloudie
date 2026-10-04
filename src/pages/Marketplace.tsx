@@ -689,7 +689,7 @@ export default function Marketplace() {
                           <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Price</span>
                           <span className="mt-0.5 flex items-center gap-1 text-base font-bold text-primary">
                             <Coins className="h-4 w-4 shrink-0" />
-                            {formatNgn(product.priceNgn ?? product.pointsPrice * ngnPerPoint)}
+                            {formatNgn(product.priceNgn ?? product.pointsPrice * 15)}
                           </span>
                           <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                             NGN wallet price
@@ -834,7 +834,7 @@ function OrdersView({
             <div className="min-w-0">
               <p className="font-medium">Order {order._id.slice(-8)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {formatNgn(order.totalNgn ?? order.totalPoints * ngnPerPoint)} • {new Date(order.createdAt).toLocaleString()}
+                {formatNgn(order.totalNgn ?? order.totalPoints * 15)} • {new Date(order.createdAt).toLocaleString()}
               </p>
               {order.providerStatus && (
                 <p className="mt-1 text-xs text-muted-foreground">Provider status: {order.providerStatus}</p>
