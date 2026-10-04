@@ -93,7 +93,7 @@ export default function AdminPricing() {
   const [priceEdits, setPriceEdits] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<string | null>(null);
 
-  // Point conversion rate (₦ per point / $ per point)
+  // Legacy conversion rate used only for migrating old point-priced records
   const [rateDraft, setRateDraft] = useState<{ ngn: string; usd: string } | null>(null);
   const ngnRate = Number(rateDraft?.ngn ?? billing?.ngnPerPoint ?? 0);
   const usdRate = Number(rateDraft?.usd ?? billing?.usdPerPoint ?? 0);
@@ -101,7 +101,7 @@ export default function AdminPricing() {
   const usdInput = rateDraft?.usd ?? (billing ? String(billing.usdPerPoint) : "");
   const usdNgnRate = usdRate > 0 ? ngnRate / usdRate : 0;
 
-  // Point packages sold to customers
+  // Wallet funding presets sold to customers
   const [pkgDraft, setPkgDraft] = useState<PackageDraft[] | null>(null);
   const packages = pkgDraft ?? toDrafts((billing?.packages ?? []) as PointPackage[]);
   const patchPkg = (index: number, patch: Partial<PackageDraft>) => {
@@ -156,14 +156,15 @@ export default function AdminPricing() {
     const payload = packages.map((p) => ({
       id: p.id.trim().toLowerCase().replace(/\s+/g, "-"),
       name: p.name.trim(),
-      points: Number(p.points),
+      // Legacy field retained only for backwards-compatible schema storage.
+      points: Math.max(1, Math.round(Number(p.priceNgn) / Math.max(ngnRate, 1))),
       priceNgn: Number(p.priceNgn),
       priceUsd: Number(p.priceUsd),
       popular: p.popular,
     }));
     for (const p of payload) {
-      if (!p.id || !p.name || !Number.isFinite(p.points) || p.points <= 0) {
-        toast.error("Every package needs a key, name and positive points amount");
+      if (!p.id || !p.name || !Number.isFinite(p.priceNgn) || p.priceNgn <= 0) {
+        toast.error("Every wallet preset needs a key, name and positive NGN amount");
         return;
       }
       if (!Number.isFinite(p.priceNgn) || p.priceNgn < 0 || !Number.isFinite(p.priceUsd) || p.priceUsd < 0) {
@@ -371,7 +372,7 @@ export default function AdminPricing() {
               {packages.map((pkg, index) => (
                 <div
                   key={`${pkg.id}-${index}`}
-                  className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[9rem_minmax(0,1.2fr)_6.5rem_7.5rem_6.5rem_auto] lg:items-end lg:gap-2"
+                  className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[9rem_minmax(0,1.2fr)_7.5rem_6.5rem_auto] lg:items-end lg:gap-2"
                 >
                   <Field label="Key">
                     <Input
@@ -389,18 +390,6 @@ export default function AdminPricing() {
                       value={pkg.name}
                       placeholder="Starter"
                       onChange={(e) => patchPkg(index, { name: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Points">
-                    <Input
-                      type="number"
-                      min={1}
-                      inputMode="numeric"
-                      className="h-11 w-full sm:h-9"
-                      aria-label={`Package points ${index + 1}`}
-                      value={pkg.points}
-                      placeholder="1000"
-                      onChange={(e) => patchPkg(index, { points: e.target.value })}
                     />
                   </Field>
                   <Field label="Price ₦">
@@ -440,20 +429,7 @@ export default function AdminPricing() {
                       </div>
                     </Field>
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-11 text-xs sm:h-9"
-                        disabled={!pkg.points}
-                        onClick={() =>
-                          patchPkg(index, {
-                            priceNgn: String(Math.round(Number(pkg.points) * ngnRate)),
-                            priceUsd: String(Math.round(Number(pkg.points) * usdRate * 100) / 100),
-                          })
-                        }
-                      >
-                        Use rate
-                      </Button>
+n>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -473,7 +449,7 @@ export default function AdminPricing() {
         </CardContent>
         <CardContent className="flex items-center justify-between border-t border-slate-100 pt-4 dark:border-slate-800">
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Shown on the customer Buy Points page. Default: {formatNgn(15000)} = 1,000 pts.
+            Shown on the customer wallet funding page. Default: {formatNgn(15000)} = 1,000 pts.
           </p>
           <Button onClick={saveAllPackages} disabled={saving === "__packages" || !billing}>
             {saving === "__packages" ? "Saving…" : "Save packages"}
