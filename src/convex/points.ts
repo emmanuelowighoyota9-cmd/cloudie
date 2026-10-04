@@ -3,6 +3,7 @@ import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { pointTxTypeValidator } from "./schema";
 import { v } from "convex/values";
+import { readPointRate } from "./pricing";
 
 /**
  * Legacy compatibility surface.
@@ -19,7 +20,8 @@ export const getBalance = query({
     const user = await ctx.db.get(userId);
     if (!user) return 0;
     if (typeof user.walletBalanceNgn === "number") return user.walletBalanceNgn;
-    return (user.pointsBalance ?? 0) * 15;
+    const rate = await readPointRate(ctx);
+    return (user.pointsBalance ?? 0) * rate.ngnPerPoint;
   },
 });
 
