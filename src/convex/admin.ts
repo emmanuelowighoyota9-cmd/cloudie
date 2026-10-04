@@ -686,7 +686,7 @@ export const getInfrastructure = query({
     const user = await ctx.db.get(userId);
     if (user?.role !== "admin") return null;
 
-    const allLedger = await ctx.db.query("pointLedger").collect();
+    const allLedger = await ctx.db.query("walletLedger").collect();
     const allNotifications = await ctx.db.query("notifications").collect();
     const allAssets = await ctx.db.query("assets").collect();
 
