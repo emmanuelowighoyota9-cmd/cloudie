@@ -5,6 +5,8 @@ import {
   parsePackageResponse,
   parseServiceResponse,
   slugify,
+  syncErrorForStatus,
+  versionedApiBase,
   type SyncProvider,
 } from "../src/lib/vtuCatalogSync";
 // The REAL grammar, not a copy. Importing it is the whole point: if a
@@ -44,6 +46,82 @@ const SAMPLE_PACKAGES = {
     ],
   },
 };
+
+// ─── The URL the sync actually calls ────────────────────────────────
+//
+// The regression this pins: the sync sent its paths straight onto the row's
+// `baseUrl`, which is a BARE ORIGIN ("https://aidapay.ng"). Every request went
+// out as /service/… instead of /api/v1/service/… and all four service types
+// answered 404 — reported live by an operator as an apparent provider outage.
+// A path bug, tested without a network.
+
+describe("versionedApiBase", () => {
+  const FALLBACK = "https://aidapay.ng/api/v1";
+
+  test("a bare origin gains the /api/v1 segment", () => {
+    expect(versionedApiBase("https://aidapay.ng", FALLBACK)).toBe("https://aidapay.ng/api/v1");
+  });
+
+  test("a trailing slash does not become a double slash", () => {
+    expect(versionedApiBase("https://aidapay.ng/", FALLBACK)).toBe("https://aidapay.ng/api/v1");
+  });
+
+  test("a base that already carries the segment is not double-prefixed", () => {
+    // The documented historical misconfiguration: `baseUrl` set to the fully
+    // versioned URL. Re-prefixing it is a second 404, so it must pass through.
+    expect(versionedApiBase("https://aidapay.ng/api/v1", FALLBACK)).toBe("https://aidapay.ng/api/v1");
+    expect(versionedApiBase("https://aidapay.ng/api/v2", FALLBACK)).toBe("https://aidapay.ng/api/v2");
+  });
+
+  test("an absent or blank baseUrl falls back to the versioned default", () => {
+    for (const empty of [undefined, null, "", "   "]) {
+      expect(versionedApiBase(empty, FALLBACK)).toBe(FALLBACK);
+    }
+  });
+
+  test("every service the sync reads is addressed under /api/v1", () => {
+    // AidaPay's paths are `/service/{slug}` and `/packages/{provider_code}`
+    // relative to the VERSIONED base — never to the origin.
+    const base = versionedApiBase("https://aidapay.ng", FALLBACK);
+    for (const service of SYNCABLE_SERVICES) {
+      expect(`${base}/service/${service.slug}`).toBe(
+        `https://aidapay.ng/api/v1/service/${service.slug}`,
+      );
+    }
+    expect(`${base}/packages/${encodeURIComponent("mtn-data")}`).toBe(
+      "https://aidapay.ng/api/v1/packages/mtn-data",
+    );
+  });
+});
+
+// ─── What a status means ────────────────────────────────────────────
+
+describe("syncErrorForStatus", () => {
+  test("a 2xx is the only status whose body is read", () => {
+    expect(syncErrorForStatus(200)).toBeNull();
+    expect(syncErrorForStatus(204)).toBeNull();
+  });
+
+  test("a refused credential is named, whichever way it is spelled", () => {
+    expect(syncErrorForStatus(401)).toBe("CREDENTIALS_REJECTED");
+    expect(syncErrorForStatus(403)).toBe("CREDENTIALS_REJECTED");
+  });
+
+  test("AidaPay's 302-to-sign-in is not mistaken for a network failure", () => {
+    // Verified against the live API: an unauthenticated look-up is answered
+    // 302 to the account page, not 401. Following it lands on HTML, which
+    // reads as NETWORK_ERROR — the misleading report this pins away.
+    expect(syncErrorForStatus(302)).toBe("AUTH_REDIRECT");
+    expect(syncErrorForStatus(301)).toBe("AUTH_REDIRECT");
+  });
+
+  test("a path problem keeps its own status, so the fix is obvious", () => {
+    // The regression that prompted this: all four services 404 at once.
+    expect(syncErrorForStatus(404)).toBe("HTTP_404");
+    expect(syncErrorForStatus(429)).toBe("HTTP_429");
+    expect(syncErrorForStatus(500)).toBe("HTTP_500");
+  });
+});
 
 // ─── Slug generation ────────────────────────────────────────────────
 

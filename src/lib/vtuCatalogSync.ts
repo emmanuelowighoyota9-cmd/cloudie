@@ -56,6 +56,59 @@ export const SYNCABLE_SERVICES = [
 
 export type SyncableServiceType = (typeof SYNCABLE_SERVICES)[number]["serviceType"];
 
+/**
+ * Compose the versioned API base that every AidaPay endpoint hangs off.
+ *
+ * A provider row's `baseUrl` is the BARE ORIGIN — `https://aidapay.ng` — for
+ * the reason `vtuProviderPresets.ts` spells out: the adapters compose their own
+ * paths and those paths already carry `/api/v1`, so the version segment belongs
+ * to the caller, not to the stored origin.
+ *
+ * The first version of the sync concatenated its paths straight onto the row's
+ * origin and asked for `https://aidapay.ng/service/data-bundle-sme`. That is a
+ * 404 on all four service types, and it read like a provider outage when it was
+ * a missing path segment — which is why the prefix is composed here, as a pure
+ * function, instead of at the call site.
+ *
+ * A base that ALREADY ends in a version segment is passed through untouched.
+ * Rows written before this rule exist (`baseUrl` set to the fully-versioned
+ * URL is the documented historical misconfiguration, and it is visible in
+ * `vtuProviderPresets.ts`), and double-prefixing them would 404 again.
+ */
+export function versionedApiBase(
+  baseUrl: string | null | undefined,
+  fallbackBase: string,
+): string {
+  const raw = (baseUrl ?? "").trim();
+  const base = (raw === "" ? fallbackBase : raw).replace(/\/+$/, "");
+  return /\/api\/v\d+$/.test(base) ? base : `${base}/api/v1`;
+}
+
+/**
+ * The error code a response status means, or `null` when the body is worth
+ * reading.
+ *
+ * Two of these cases are AidaPay's own behaviour and neither is obvious:
+ *
+ * — A REFUSED CREDENTIAL ARRIVES AS A 302, not a 401. Verified against the
+ *   live API: an unauthenticated `GET /api/v1/service/{slug}` answers
+ *   `302 → https://aidapay.ng/account`. Following that redirect lands on HTML,
+ *   so a naive caller reports the refused look-up as `NETWORK_ERROR` —
+ *   "could not reach AidaPay" about a request that reached it and was turned
+ *   away. Naming the redirect keeps that legible.
+ *
+ * — A BAD PATH IS A 404 ON THE ORIGIN, which is how the sync's missing
+ *   `/api/v1` segment surfaced: `HTTP_404` on all four service types at once.
+ *   The raw status is preserved rather than folded into a generic code, because
+ *   "all four 404" and "all four 500" have entirely different fixes.
+ */
+export function syncErrorForStatus(status: number): string | null {
+  if (status === 401 || status === 403) return "CREDENTIALS_REJECTED";
+  if (status >= 300 && status < 400) return "AUTH_REDIRECT";
+  if (status < 200 || status >= 300) return `HTTP_${status}`;
+  return null;
+}
+
 /** A plan read off the wire, already reduced to the fields we use. */
 export interface SyncPackage {
   /** AidaPay's own id — `package_api_code`. Goes on the ROUTE, never on the

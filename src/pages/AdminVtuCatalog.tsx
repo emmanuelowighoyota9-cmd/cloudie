@@ -74,6 +74,22 @@ const SYNC_ERROR_HINT: Record<string, string> = {
   NETWORK_ERROR: "Could not reach AidaPay. Check the connection and try again.",
 };
 
+/**
+ * Plain English for the per-service failure codes, appended to the code rather
+ * than replacing it: the code is what gets quoted back, and the phrase is what
+ * makes it actionable without a lookup.
+ */
+const SYNC_SERVICE_HINT: Record<string, string> = {
+  HTTP_404: "AidaPay does not serve that endpoint — check the provider's base URL",
+  HTTP_429: "AidaPay rate-limited the look-up — wait a moment and try again",
+  HTTP_500: "AidaPay had a server error on that service",
+  HTTP_502: "AidaPay was unreachable behind its gateway",
+  HTTP_503: "AidaPay was temporarily unavailable",
+  AUTH_REDIRECT: "AidaPay sent the look-up to its sign-in page instead of answering — the saved API key was not accepted",
+  UNREADABLE_RESPONSE: "AidaPay answered with something that is not JSON",
+  NETWORK_ERROR: "the request timed out or did not connect",
+};
+
 const SERVICE_TYPES = [
   "airtime",
   "data",
@@ -254,7 +270,11 @@ export default function AdminVtuCatalog() {
                   const failed = Object.entries(res.serviceErrors);
                   if (failed.length > 0) {
                     toast.warning(
-                      `Could not read ${failed.map(([k, v]) => `${k} (${v})`).join(", ")}. Those services were left unchanged.`,
+                      `Could not read ${failed
+                        .map(([k, v]) =>
+                          SYNC_SERVICE_HINT[v] ? `${k} (${v} — ${SYNC_SERVICE_HINT[v]})` : `${k} (${v})`,
+                        )
+                        .join(", ")}. Those services were left unchanged.`,
                     );
                   }
                   if (res.skipped.length > 0) {

@@ -42,6 +42,8 @@ import {
   buildDrafts,
   parsePackageResponse,
   parseServiceResponse,
+  syncErrorForStatus,
+  versionedApiBase,
   type CatalogDraft,
   type SkippedPlan,
 } from "../lib/vtuCatalogSync";
@@ -51,8 +53,10 @@ const DEFAULT_TIMEOUT_MS = 20_000;
 /** The provider this action knows how to enumerate. */
 const PROVIDER = "aidapay";
 
-/** AidaPay's API base. Its own `baseUrl` row is used when set — the preset
- *  value is only a fallback for a row that predates the preset. */
+/** AidaPay's VERSIONED API base — every endpoint in this file is `/service/…`
+ *  or `/packages/…` relative to it. Used only for a row that has no `baseUrl`
+ *  of its own; the row wins when set, and `versionedApiBase` re-attaches the
+ *  `/api/v1` segment if the row stores a bare origin. */
 const AIDAPAY_API_BASE = "https://aidapay.ng/api/v1";
 
 export type SyncOutcome = {
@@ -114,7 +118,13 @@ export const syncAidaPayCatalog = action({
       apiKey: opened.value,
     });
 
-    const base = `${String(row.baseUrl || AIDAPAY_API_BASE).replace(/\/+$/, "")}`;
+    // The row's `baseUrl` is a BARE ORIGIN by contract, so the version segment
+    // is composed here rather than at each fetch below. Without it the paths
+    // went out as `https://aidapay.ng/service/…` and every service type
+    // answered 404 — a missing `/api/v1`, wearing the costume of a provider
+    // outage. `versionedApiBase` also tolerates a row that already carries the
+    // segment, so the historical misconfiguration cannot double-prefix.
+    const base = versionedApiBase(row.baseUrl, AIDAPAY_API_BASE);
 
     const getJson = async (path: string): Promise<{ ok: true; body: unknown } | { ok: false; code: string }> => {
       const controller = new AbortController();
@@ -123,11 +133,26 @@ export const syncAidaPayCatalog = action({
         const response = await fetch(`${base}${path}`, {
           method: "GET",
           headers: { accept: "application/json", ...authHeaders },
+          // `redirect: "manual"` on purpose. AidaPay answers an unauthenticated
+          // request with a 302 to its account page rather than a 401, and a
+          // FOLLOWED redirect lands on HTML — which `response.json()` reports
+          // as NETWORK_ERROR, telling the operator "we could not reach AidaPay"
+          // about a request that reached it and was refused. Manual redirects
+          // keep the refusal legible.
+          redirect: "manual",
           signal: controller.signal,
         });
-        if (response.status === 401 || response.status === 403) return { ok: false, code: "CREDENTIALS_REJECTED" };
-        if (!response.ok) return { ok: false, code: `HTTP_${response.status}` };
-        return { ok: true, body: await response.json() };
+        // Status → code lives in the lib, tested without a network. See
+        // `syncErrorForStatus` for why a refused credential is a 302 here.
+        const failure = syncErrorForStatus(response.status);
+        if (failure) return { ok: false, code: failure };
+        // The parse is separated from the fetch so that the catch below means
+        // exactly one thing — the network — and never "the reply was not JSON".
+        try {
+          return { ok: true, body: await response.json() };
+        } catch {
+          return { ok: false, code: "UNREADABLE_RESPONSE" };
+        }
       } catch {
         // A timeout or a DNS failure is reported as its own code rather than
         // being folded into a generic error, because they have different fixes.
