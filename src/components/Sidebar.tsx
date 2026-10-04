@@ -76,6 +76,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     if (path === "/dashboard") {
       return location.pathname === path;
     }
+    if (path === "/marketplace") {
+      return location.pathname === path;
+    }
     // `/vtu` is the PARENT of `/vtu/airtime` and `/vtu/bills`, so it matches by
     // prefix — matching exactly would leave those two child pages with no
     // highlighted entry at all. The pages themselves carry their own nav, so
