@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { pointTxTypeValidator } from "./schema";
 import { v } from "convex/values";
@@ -53,7 +53,7 @@ export const getAdminLedger = query({
   },
 });
 
-export const credit = mutation({
+export const credit = internalMutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
@@ -78,7 +78,7 @@ export const credit = mutation({
   },
 });
 
-export const debit = mutation({
+export const debit = internalMutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
