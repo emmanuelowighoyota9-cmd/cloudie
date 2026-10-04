@@ -169,12 +169,14 @@ export type BeginPurchaseResult =
       transactionId: Id<"vtuTransactions">;
       status: VtuTransactionStatus;
       pointsDebited: number;
+      walletDebitedNgn?: number;
     }
   | {
       reused: false;
       transactionId: Id<"vtuTransactions">;
       status: "pending";
       pointsDebited: number;
+      walletDebitedNgn: number;
       ngnPerPoint: number;
       /** The route, snapshotted onto the row. The action dispatches through
        *  exactly this and never re-routes. */
@@ -275,6 +277,7 @@ export const beginPurchase = internalMutation({
           transactionId: tx._id,
           status: tx.status,
           pointsDebited: tx.pointsDebited,
+          walletDebitedNgn: tx.walletDebitedNgn ?? tx.nairaPrice,
         };
       }
     }
@@ -369,15 +372,16 @@ export const beginPurchase = internalMutation({
       nairaPrice,
       ngnPerPoint,
       pointsDebited: points,
+      walletDebitedNgn: nairaPrice,
       idempotencyKey: key,
       createdAt: now,
       updatedAt: now,
     });
 
     // 6. Debit, keyed on this attempt.
-    const debitId = await ctx.runMutation(internal.points.debit, {
+    const debitId = await ctx.runMutation(internal.wallet.debit, {
       userId: args.userId,
-      amount: points,
+      amountNgn: nairaPrice,
       type: "vtu_purchase",
       description: `${args.serviceCode} for ${maskIdentifier(identity.value)}`,
       reference: route.winner.provider,
@@ -387,12 +391,11 @@ export const beginPurchase = internalMutation({
         serviceCode: args.serviceCode,
         customerIdentifier: maskIdentifier(identity.value),
         nairaPrice,
-        ngnPerPoint,
         transactionId,
       },
     });
 
-    await ctx.db.patch(transactionId, { debitLedgerId: debitId });
+    await ctx.db.patch(transactionId, { debitWalletLedgerId: debitId });
     await ctx.db.patch(claimId, { transactionId });
 
     return {
@@ -739,7 +742,7 @@ export const markProcessing = internalMutation({
 });
 
 export type RefundResult =
-  | { reversed: true; creditId: Id<"pointLedger">; releasedKey: string }
+  | { reversed: true; creditId: Id<"walletLedger">; releasedKey: string }
   | { reversed: false; reason: "not_found" | "illegal_transition" | "already_reversed" };
 
 /**
@@ -808,9 +811,10 @@ async function reverseAndRelease(
   }
   if (tx.reversalLedgerId) return { reversed: false, reason: "already_reversed" };
 
-  const creditId = await ctx.runMutation(internal.points.credit, {
+  const refundAmountNgn = tx.walletDebitedNgn ?? tx.nairaPrice;
+  const creditId = await ctx.runMutation(internal.wallet.credit, {
     userId: tx.userId,
-    amount: tx.pointsDebited,
+    amountNgn: refundAmountNgn,
     type: "vtu_refund",
     description: `VTU refund: ${tx.serviceCode} (${tx.customerIdentifier})`,
     reference: tx.provider,
@@ -820,8 +824,7 @@ async function reverseAndRelease(
       serviceCode: tx.serviceCode,
       reason: args.reason,
       reversalReason: args.reversalReason,
-      pointsDebited: tx.pointsDebited,
-      ngnPerPoint: tx.ngnPerPoint,
+      walletDebitedNgn: refundAmountNgn,
     },
   });
 
@@ -840,7 +843,7 @@ async function reverseAndRelease(
     // state in which the row is reversed without a reason.
     reversalReason: args.reversalReason,
     source: args.source,
-    reversalLedgerId: creditId,
+    reversalWalletLedgerId: creditId,
     reversedAt: now,
     resolvedAt: now,
     failureReason: args.reason,
