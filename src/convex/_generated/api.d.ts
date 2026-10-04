@@ -61,6 +61,7 @@ import type * as uploadedDocuments from "../uploadedDocuments.js";
 import type * as users from "../users.js";
 import type * as vtu from "../vtu.js";
 import type * as vtuCatalog from "../vtuCatalog.js";
+import type * as vtuCatalogSync from "../vtuCatalogSync.js";
 import type * as vtuHttp from "../vtuHttp.js";
 import type * as vtuInternal from "../vtuInternal.js";
 import type * as vtuPairgate from "../vtuPairgate.js";
@@ -142,6 +143,7 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
   vtu: typeof vtu;
   vtuCatalog: typeof vtuCatalog;
+  vtuCatalogSync: typeof vtuCatalogSync;
   vtuHttp: typeof vtuHttp;
   vtuInternal: typeof vtuInternal;
   vtuPairgate: typeof vtuPairgate;

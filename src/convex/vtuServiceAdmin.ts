@@ -13,7 +13,7 @@
  * change and would be worse than no preview at all.
  */
 
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { auditLog, requireAdmin } from "./adminApi";
@@ -646,6 +646,151 @@ export const seedAirtimeCatalog = mutation({
       unroutableProviders: providers
         .map((p) => p.name)
         .filter((name) => !(name in AIRTIME_SEED_PROVIDER_CODES)),
+    };
+  },
+});
+
+/**
+ * Write a synced catalog: one product + one route per draft.
+ *
+ * Called by `vtuCatalogSync.syncAidaPayCatalog` (a "use node" action, which
+ * cannot touch the database itself), and internal rather than public so the
+ * only way in is that action — an unauthenticated caller must not be able to
+ * write catalog rows.
+ *
+ * The update rules are the whole design, and each one is a decision about what
+ * a SYNC may change:
+ *
+ *   - PRICE AND NAME are updated. They are the provider's, they move without
+ *     notice, and a catalog that shows last month's price is worse than no
+ *     catalog. Everything a human decided is not overwritten.
+ *   - `active` is NOT re-enabled. An operator who switched a product off has
+ *     said so, and a re-sync must not quietly put it back on sale.
+ *   - The route's wire ids ARE updated, because they are the provider's too and
+ *     a renamed plan would otherwise keep pointing at a code the provider has
+ *     retired.
+ *   - A product the sync no longer offers is left alone rather than deleted.
+ *     It may have sales history, and `vtuServiceCatalog` rows are referenced by
+ *     past transactions; deleting one is an operator decision made in the UI.
+ *
+ * BATCHED AND BOUNDED. A full AidaPay catalog is a few hundred plans, and a
+ * mutation that writes them all is one transaction against the write budget.
+ * The cap is enforced here rather than at the call site so that no caller can
+ * exceed it by accident, and truncation is REPORTED rather than silent.
+ */
+export const applyCatalogSync = internalMutation({
+  args: {
+    drafts: v.array(
+      v.object({
+        serviceType: v.union(
+          v.literal("data"),
+          v.literal("cable"),
+          v.literal("electricity"),
+          v.literal("exam"),
+        ),
+        productCode: v.string(),
+        displayName: v.string(),
+        customerIdentifierLabel: v.string(),
+        requiresAmount: v.boolean(),
+        requiresPackageCode: v.boolean(),
+        priceNgn: v.number(),
+        provider: v.string(),
+        providerProductCode: v.string(),
+        providerPackageCode: v.string(),
+      }),
+    ),
+    provider: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const now = Date.now();
+
+    // Convex allows a few thousand writes per transaction; this leaves ample
+    // headroom for the route writes while bounding the blast radius of a
+    // pathological provider response.
+    const MAX_DRAFTS = 600;
+    const drafts = args.drafts.slice(0, MAX_DRAFTS);
+
+    let productsCreated = 0;
+    let productsUpdated = 0;
+    let routesCreated = 0;
+    let routesUpdated = 0;
+
+    for (const draft of drafts) {
+      const existing = await findProduct(ctx, draft.productCode);
+
+      if (!existing) {
+        await ctx.db.insert("vtuServiceCatalog", {
+          serviceType: draft.serviceType as Doc<"vtuServiceCatalog">["serviceType"],
+          productCode: draft.productCode,
+          displayName: draft.displayName,
+          customerIdentifierLabel: draft.customerIdentifierLabel,
+          requiresAmount: draft.requiresAmount,
+          requiresPackageCode: draft.requiresPackageCode,
+          priceNgn: draft.priceNgn,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        productsCreated += 1;
+      } else {
+        // Provider-owned fields only. `active` is deliberately absent.
+        await ctx.db.patch(existing._id, {
+          displayName: draft.displayName,
+          priceNgn: draft.priceNgn,
+          updatedAt: now,
+        });
+        productsUpdated += 1;
+      }
+
+      const existingRoute = await findRoute(ctx, draft.productCode, draft.provider);
+      if (!existingRoute) {
+        await ctx.db.insert("vtuServiceRouting", {
+          productCode: draft.productCode,
+          provider: draft.provider,
+          providerProductCode: draft.providerProductCode,
+          providerPackageCode: draft.providerPackageCode,
+          // Above the Pairgate fallback and alongside nothing else, so a synced
+          // AidaPay route wins for every product it has one for.
+          priority: 10,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        });
+        routesCreated += 1;
+      } else {
+        // The wire ids are the provider's and move; `active` and `priority` are
+        // the operator's and do not.
+        await ctx.db.patch(existingRoute._id, {
+          providerProductCode: draft.providerProductCode,
+          providerPackageCode: draft.providerPackageCode,
+          updatedAt: now,
+        });
+        routesUpdated += 1;
+      }
+    }
+
+    await auditLog(ctx, adminId, {
+      action: "vtu_catalog_synced",
+      resource: "vtuServiceCatalog",
+      resourceId: args.provider,
+      after: {
+        productsCreated,
+        productsUpdated,
+        routesCreated,
+        routesUpdated,
+        received: args.drafts.length,
+      },
+      reason: `Synced ${drafts.length} of ${args.drafts.length} plan(s) from ${args.provider}`,
+    });
+
+    return {
+      productsCreated,
+      productsUpdated,
+      routesCreated,
+      routesUpdated,
+      /** Non-zero when the provider returned more plans than we will write. */
+      truncated: Math.max(0, args.drafts.length - drafts.length),
     };
   },
 });

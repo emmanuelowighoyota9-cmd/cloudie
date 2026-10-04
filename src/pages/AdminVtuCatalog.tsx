@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Route as RouteIcon,
   Trash2,
   Waypoints,
@@ -60,6 +61,18 @@ import { toast } from "sonner";
  * a product with no active route, and a route pointing at a provider that can
  * never be chosen.
  */
+
+/** Sync failure codes, in the operator's language rather than the transport's.
+ *  Each is a different problem with a different fix, so they are never
+ *  collapsed into one generic message. */
+const SYNC_ERROR_HINT: Record<string, string> = {
+  ADMIN_REQUIRED: "Only an administrator can sync the catalog.",
+  PROVIDER_NOT_CONFIGURED: "AidaPay is not set up yet. Connect it on the VTU Providers page first.",
+  CREDENTIAL_MISSING: "AidaPay has no API key saved. Reconnect it on the VTU Providers page.",
+  CREDENTIAL_CORRUPT: "The saved AidaPay API key could not be read. Re-enter it on the VTU Providers page.",
+  CREDENTIALS_REJECTED: "AidaPay rejected the API key. Check it on the VTU Providers page.",
+  NETWORK_ERROR: "Could not reach AidaPay. Check the connection and try again.",
+};
 
 const SERVICE_TYPES = [
   "airtime",
@@ -146,6 +159,8 @@ export default function AdminVtuCatalog() {
   const routes = useQuery(api.vtuServiceAdmin.listRoutes, {});
   const seedAirtime = useMutation(api.vtuServiceAdmin.seedAirtimeCatalog);
   const [seeding, setSeeding] = useState(false);
+  const syncCatalog = useAction(api.vtuCatalogSync.syncAidaPayCatalog);
+  const [syncing, setSyncing] = useState(false);
 
   const [tab, setTab] = useState("products");
   const [productDialog, setProductDialog] = useState<ProductRow | "new" | null>(null);
@@ -212,6 +227,55 @@ export default function AdminVtuCatalog() {
             >
               {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap />}
               Seed airtime
+            </Button>
+            <Button
+              variant="outline"
+              disabled={syncing}
+              onClick={async () => {
+                setSyncing(true);
+                try {
+                  const res = await syncCatalog({ dryRun: false });
+                  if (!res.ok) {
+                    toast.error(SYNC_ERROR_HINT[res.error ?? ""] ?? "The sync did not complete.");
+                    return;
+                  }
+                  const parts: string[] = [];
+                  if (res.productsCreated > 0) parts.push(`${res.productsCreated} new products`);
+                  if (res.productsUpdated > 0) parts.push(`${res.productsUpdated} prices refreshed`);
+                  if (res.routesCreated > 0) parts.push(`${res.routesCreated} new routes`);
+                  toast.success(
+                    parts.length > 0
+                      ? `AidaPay catalog synced — ${parts.join(", ")}.`
+                      : "AidaPay catalog is already up to date.",
+                  );
+                  // A service type that could not be read is a SILENT hole in
+                  // the shop: those bill types simply will not appear for
+                  // customers, so it is named rather than swallowed.
+                  const failed = Object.entries(res.serviceErrors);
+                  if (failed.length > 0) {
+                    toast.warning(
+                      `Could not read ${failed.map(([k, v]) => `${k} (${v})`).join(", ")}. Those services were left unchanged.`,
+                    );
+                  }
+                  if (res.skipped.length > 0) {
+                    toast.warning(
+                      `${res.skipped.length} plan(s) were skipped because they could not be made purchasable.`,
+                    );
+                  }
+                  if (res.truncated > 0) {
+                    toast.warning(
+                      `${res.truncated} plan(s) exceeded the write limit and were not saved.`,
+                    );
+                  }
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "The sync failed");
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+            >
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw />}
+              Sync from AidaPay
             </Button>
             <Button onClick={() => setProductDialog("new")}>
               <Plus className="h-4 w-4" /> New product

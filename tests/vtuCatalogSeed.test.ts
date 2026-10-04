@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { convexTest } from "convex-test";
 import schema from "../src/convex/schema";
-import { api } from "../src/convex/_generated/api";
+import { api, internal } from "../src/convex/_generated/api";
 import { encrypt } from "../src/convex/lib/encryption";
 import { routeProduct } from "../src/convex/vtuServiceRouting";
 import {
@@ -45,6 +45,7 @@ const modules = {
   "src/convex/vtuInternal.ts": () => import("../src/convex/vtuInternal"),
   "src/convex/vtu.ts": () => import("../src/convex/vtu"),
   "src/convex/vtuCatalog.ts": () => import("../src/convex/vtuCatalog"),
+  "src/convex/lib/crypto.ts": () => import("../src/convex/lib/crypto"),
   "src/convex/vtuShared.ts": () => import("../src/convex/vtuShared"),
   "src/convex/lib/encryption.ts": () => import("../src/convex/lib/encryption"),
   "src/convex/points.ts": () => import("../src/convex/points"),
@@ -291,5 +292,173 @@ describe("seeding the airtime catalog", () => {
     await expect(
       client.mutation(api.vtuServiceAdmin.seedAirtimeCatalog, {}),
     ).rejects.toThrow();
+  });
+});
+
+// ─── The sync's write path ──────────────────────────────────────────
+//
+// The upsert rules decide what a re-sync may change, and each is a judgement
+// about ownership: PRICE AND NAME are the provider's and move, `active` and
+// `priority` are the operator's and do not. These pin that split, because
+// getting it wrong either re-sells something an operator switched off, or
+// shows a customer last month's price.
+
+describe("applying a synced catalog", () => {
+  const DRAFT = {
+    serviceType: "data" as const,
+    productCode: "data-mtn-data-1gb-30-days",
+    displayName: "1GB - 30 Days",
+    customerIdentifierLabel: "Phone number",
+    requiresAmount: false,
+    requiresPackageCode: true,
+    priceNgn: 300,
+    provider: "aidapay",
+    providerProductCode: "mtn-data",
+    providerPackageCode: "DATA-01",
+  };
+
+  /**
+   * Apply a draft AS the admin, which is what `requireAdmin` demands.
+   *
+   * The identity has to be attached to the accessor that runs the function —
+   * a bare `t.run` executes as an anonymous caller, which is why these first
+   * failed with UNAUTHORIZED rather than a missing-argument error.
+   *
+   * The admin is created once per harness: several tests apply twice, and
+   * inserting a second user with the same address would collide.
+   */
+  async function applyDraft(t: Harness, draft: Record<string, unknown> = {}) {
+    const existing: any = await t.run(async (ctx) =>
+      ctx.db
+        .query("users")
+        .withIndex("by_email", (q: any) => q.eq("email", "root@example.com"))
+        .unique()
+        .catch(() => null),
+    );
+    const adminId =
+      existing?._id ??
+      (await t.run(async (ctx) =>
+        ctx.db.insert("users", {
+          name: "Root",
+          email: "root@example.com",
+          role: "admin",
+          pointsBalance: 0,
+          createdAt: Date.now(),
+        }),
+      ));
+
+    return t
+      .withIdentity({ subject: adminId })
+      .run(async (ctx) =>
+        ctx.runMutation(internal.vtuServiceAdmin.applyCatalogSync, {
+          drafts: [{ ...DRAFT, ...draft }],
+          provider: "aidapay",
+        }),
+      );
+  }
+
+  test("a first sync creates the product and its route", async () => {
+    const t = convexTest(schema, modules);
+    const res: any = await applyDraft(t);
+    expect(res.productsCreated).toBe(1);
+    expect(res.routesCreated).toBe(1);
+
+    const product: any = await t.run(async (ctx) =>
+      ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q: any) => q.eq("productCode", DRAFT.productCode))
+        .unique(),
+    );
+    expect(product.priceNgn).toBe(300);
+    expect(product.active).toBe(true);
+    expect(product.requiresPackageCode).toBe(true);
+
+    // The created route must actually resolve — a route that cannot is a
+    // product the customer is refused at purchase time.
+    const decided: any = await t.run(async (ctx) =>
+      ctx.runQuery(api.vtuCatalog.getPurchaseDetail, { productCode: DRAFT.productCode }),
+    );
+    expect(decided).not.toBeNull();
+    // The remainder splits at the FIRST hyphen, so the network is `mtn` and the
+    // rest — including the `-data` carried over from AidaPay's own
+    // `mtn-data` provider id — is the plan slug.
+    expect(decided.serviceCodeTemplate).toBe("data.mtn.data-1gb-30-days");
+    expect(decided.priceNgn).toBe(300);
+    expect(decided.requiresAmount).toBe(false);
+  });
+
+  test("a re-sync refreshes the provider's price and name", async () => {
+    const t = convexTest(schema, modules);
+    await applyDraft(t);
+    const res: any = await applyDraft(t, { priceNgn: 350, displayName: "1GB - 30 Days (revised)" });
+    // UPDATE, not a duplicate — a create here would double the catalog on
+    // every sync.
+    expect(res.productsCreated).toBe(0);
+    expect(res.productsUpdated).toBe(1);
+    expect(res.routesUpdated).toBe(1);
+
+    const product: any = await t.run(async (ctx) =>
+      ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q: any) => q.eq("productCode", DRAFT.productCode))
+        .unique(),
+    );
+    expect(product.priceNgn).toBe(350);
+    expect(product.displayName).toBe("1GB - 30 Days (revised)");
+  });
+
+  test("a re-sync never re-enables a product an operator switched off", async () => {
+    const t = convexTest(schema, modules);
+    await applyDraft(t);
+    await t.run(async (ctx) => {
+      const row: any = await ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q: any) => q.eq("productCode", DRAFT.productCode))
+        .unique();
+      await ctx.db.patch(row._id, { active: false });
+    });
+
+    await applyDraft(t, { priceNgn: 400 });
+
+    const product: any = await t.run(async (ctx) =>
+      ctx.db
+        .query("vtuServiceCatalog")
+        .withIndex("by_productCode", (q: any) => q.eq("productCode", DRAFT.productCode))
+        .unique(),
+    );
+    // The price still refreshed — it is the provider's — but the product stays
+    // off sale, because "off" was a decision a human made.
+    expect(product.priceNgn).toBe(400);
+    expect(product.active).toBe(false);
+  });
+
+  test("a re-sync never changes an operator's route priority", async () => {
+    const t = convexTest(schema, modules);
+    await applyDraft(t);
+    await t.run(async (ctx) => {
+      const row: any = await ctx.db
+        .query("vtuServiceRouting")
+        .withIndex("by_productCode_provider", (q: any) =>
+          q.eq("productCode", DRAFT.productCode).eq("provider", "aidapay"),
+        )
+        .unique();
+      await ctx.db.patch(row._id, { priority: 99 });
+    });
+
+    await applyDraft(t, { providerPackageCode: "DATA-01-RENAMED" });
+
+    const route: any = await t.run(async (ctx) =>
+      ctx.db
+        .query("vtuServiceRouting")
+        .withIndex("by_productCode_provider", (q: any) =>
+          q.eq("productCode", DRAFT.productCode).eq("provider", "aidapay"),
+        )
+        .unique(),
+    );
+    // The wire id moved, so the route must follow it or a purchase would be
+    // sent a code the provider has retired.
+    expect(route.providerPackageCode).toBe("DATA-01-RENAMED");
+    // The priority is the operator's ordering choice, not the sync's.
+    expect(route.priority).toBe(99);
   });
 });
