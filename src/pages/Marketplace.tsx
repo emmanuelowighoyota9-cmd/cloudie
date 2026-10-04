@@ -16,6 +16,7 @@ import {
   Boxes,
   Store,
   ChevronRight,
+  ImageOff,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -384,6 +385,7 @@ export default function Marketplace() {
                       </div>
                     </CardContent>
                   </Card>
+                );
               })}
             </div>
           )}
