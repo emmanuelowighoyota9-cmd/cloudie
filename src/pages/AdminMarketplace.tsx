@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Ban, Check, RotateCcw, X, RefreshCw, Store, Boxes, PackageCheck, type LucideIcon } from "lucide-react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { useEffect, useMemo, useState } from "react";
+import { formatNgn } from "@/lib/pricing";
 
 const MARKETPLACE_I = [
   "Discord", "Texting Numbers", "Outlook", "Apple", "Emails", "VPN", "Snapchat",
@@ -187,7 +188,7 @@ export default function AdminMarketplace() {
                       {product.provider && <Badge variant="secondary" className="text-[10px]">{product.provider}</Badge>}
                     </div>
                     <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-                      {product.pointsPrice} pts · {product.totalSold} sold · {stock === undefined ? "stock provider-managed" : `${stock.toLocaleString()} in stock`} · {fmtDate(product.createdAt)}
+                      {formatNgn(product.priceNgn ?? product.pointsPrice * 15)} · {product.totalSold} sold · {stock === undefined ? "stock provider-managed" : `${stock.toLocaleString()} in stock`} · {fmtDate(product.createdAt)}
                     </p>
                   </div>
                   <StatusBadge status={product.isApproved ? (product.isActive ? "active" : "paused") : "draft"} />
