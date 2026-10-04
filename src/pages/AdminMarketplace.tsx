@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Ban, Check, RotateCcw, X, RefreshCw, Store } from "lucide-react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function AdminMarketplace() {
   const products = useQuery(api.marketplace.adminListAllProducts, { limit: 200 });
@@ -18,6 +18,34 @@ export default function AdminMarketplace() {
   const [syncing, setSyncing] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [markup, setMarkup] = useState("0");
+
+  useEffect(() => {
+    if (provider) {
+      setEnabled(provider.enabled);
+      setMarkup(String(provider.markupPercent));
+    }
+  }, [provider?.enabled, provider?.markupPercent]);
+
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      const result = await syncCatalog({});
+      toast.success("Logspanel synced: " + result.created + " created, " + result.updated + " updated.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Catalog sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const saveProviderSettings = async () => {
+    try {
+      await saveProvider({ enabled, markupPercent: Number(markup) });
+      toast.success("Logspanel settings saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save settings");
+    }
+  };
 
   const act = async (productId: string, doApprove: boolean) => {
     try {
@@ -41,7 +69,7 @@ export default function AdminMarketplace() {
     <div className="space-y-6">
       <AdminPageHeader title="Marketplace Administration" description="Approve products and control marketplace visibility." />
 
-      {products === undefined ? (
+      <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">\n        <CardContent className="p-5">\n          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">\n            <div className="flex items-start gap-3"><Store className="mt-1 h-5 w-5" /><div><h2 className="font-semibold">Logspanel Provider</h2><p className="text-sm text-muted-foreground">External logs supplier with server-side fulfillment.</p><p className="mt-1 text-xs text-muted-foreground">{provider?.configured ? "API key configured" : "Set LOGSPANEL_API_KEY in Convex"} · {provider?.syncedProducts ?? 0} products synced</p></div></div>\n            <div className="flex gap-2"><Button variant="outline" disabled={!provider?.configured || syncing} onClick={sync}><RefreshCw className={syncing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />{syncing ? "Syncing..." : "Sync catalog"}</Button><Button onClick={saveProviderSettings}>Save</Button></div>\n          </div>\n          <div className="mt-4 grid gap-3 sm:grid-cols-2">\n            <label className="text-sm"><span className="mb-1 block text-muted-foreground">Provider enabled</span><select className="h-10 w-full rounded-md border bg-background px-3" value={enabled ? "true" : "false"} onChange={(e) => setEnabled(e.target.value === "true")}><option value="false">Disabled</option><option value="true">Enabled</option></select></label>\n            <label className="text-sm"><span className="mb-1 block text-muted-foreground">Markup %</span><input className="h-10 w-full rounded-md border bg-background px-3" type="number" min="0" max="100" step="0.1" value={markup} onChange={(e) => setMarkup(e.target.value)} /></label>\n          </div>\n        </CardContent>\n      </Card>\n\n      {products === undefined ? (
         <AdminSkeleton rows={5} />
       ) : products.length === 0 ? (
         <AdminEmpty message="No marketplace products yet." />
