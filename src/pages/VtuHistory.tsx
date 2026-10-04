@@ -68,9 +68,8 @@ export default function VtuHistory() {
               Your history
             </h1>
             <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
-              Every top-up and bill you have paid for with points, newest first.
-              A top-up that did not go through shows as refunded with your points
-              already back.
+              Every top-up and bill you have paid for with NGN wallet charges, newest first.
+              A top-up that did not go through shows as refunded with your wallet already refunded.
             </p>
           </div>
           <Zap className="hidden h-8 w-8 shrink-0 opacity-60 sm:block" aria-hidden />
@@ -269,7 +268,7 @@ function HistoryRow({
             {formatNgn(tx.nairaPrice)}
           </p>
           <p className="text-[11px] text-vtu-muted tabular-nums">
-            {tx.pointsDebited.toLocaleString()} pts
+            {formatNgn(tx.walletDebitedNgn ?? tx.nairaPrice)}
           </p>
         </div>
 
@@ -289,10 +288,10 @@ function HistoryRow({
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3">
             <Detail label="Value delivered" value={formatNgn(tx.nairaPrice)} />
             <Detail
-              label="Points debited"
-              value={`${tx.pointsDebited.toLocaleString()} pts`}
+              label="Wallet charged"
+              value={formatNgn(tx.walletDebitedNgn ?? tx.nairaPrice)}
             />
-            <Detail label="Rate at purchase" value={`₦${tx.ngnPerPoint}/pt`} />
+            
             <Detail label="Destination" value={destination} mono />
             <Detail label="Requested" value={fmtWhen(tx.createdAt)} />
             <Detail
