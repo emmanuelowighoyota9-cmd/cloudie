@@ -81,8 +81,6 @@ export default function VtuAirtime() {
   );
 
   const phoneCheck = useMemo(() => validatePhone(phone), [phone]);
-  const priceToPay = preview?.nairaPrice ?? selected?.amountNgn ?? 0;
-  const affordable = (balance ?? 0) >= priceToPay;
   const inFlight = tx ? tx.status === "pending" || tx.status === "processing" : false;
   const locked = submitting || inFlight;
   const networkLabel = VTU_NETWORKS.find((n) => n.key === network)?.label ?? network;
@@ -99,7 +97,9 @@ export default function VtuAirtime() {
     api.vtu.previewCost,
     confirmed && selected ? { serviceCode } : "skip",
   );
-  const pointsToPay = preview?.nairaPrice ?? selected?.amountNgn ?? 0;
+  const priceToPay = preview?.nairaPrice ?? selected?.amountNgn ?? 0;
+  const affordable = (balance ?? 0) >= priceToPay;
+  const pointsToPay = priceToPay;
 
   async function handleSubmit() {
     if (locked || !selected) return;
