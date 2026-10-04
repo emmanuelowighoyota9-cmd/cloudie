@@ -46,9 +46,11 @@ export const syncCatalog = action({
       if (!body?.links?.next || rows.length === 0) break;
     }
 
+    const billing = await ctx.runQuery(api.pricing.getBillingConfig);
     return await ctx.runMutation(internal.marketplace.syncLogspanelProducts, {
       products,
       markupPercent: settings.markupPercent,
+      ngnPerPoint: billing.ngnPerPoint,
       adminId,
     });
   },
