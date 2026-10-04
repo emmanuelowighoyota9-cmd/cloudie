@@ -747,7 +747,7 @@ export const syncLogspanelProducts = internalMutation({
         provider: "logspanel",
         providerProductRef: ref,
         providerCostNgn: providerPrice,
-        providerAvailableQuantity: Number.isFinite(available) ? available : undefined,
+        providerAvailableQuantity: Number.isFinite(available) ? available : 0,
         providerStatus: purchasable ? "available" : "unavailable",
         providerSyncedAt: Date.now(),
         providerMetadata: {
