@@ -1,7 +1,8 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { effectivePointsCost } from "./pricing";
+import { effectiveNgnCost, readPointRate } from "./pricing";
 
 /** Platform defaults, used when the admin has not set a per-service price. */
 const DOCUMENT_COSTS: Record<string, number> = {
@@ -37,25 +38,20 @@ export const generate = mutation({
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("User not found");
 
-    const cost = await effectivePointsCost(
+    const rate = await readPointRate(ctx);
+    const legacyCost = DOCUMENT_COSTS[args.type];
+    const costNgn = await effectiveNgnCost(
       ctx,
       DOCUMENT_SERVICES[args.type],
-      DOCUMENT_COSTS[args.type],
+      legacyCost * rate.ngnPerPoint,
     );
-    const balance = user.pointsBalance ?? 0;
-    if (balance < cost) {
-      throw new Error(`Insufficient points. Document generation costs ${cost} points.`);
-    }
 
-    const newBalance = balance - cost;
-    await ctx.db.patch(userId, { pointsBalance: newBalance });
-    await ctx.db.insert("pointLedger", {
+    await ctx.runMutation(internal.wallet.debit, {
       userId,
-      amount: -cost,
-      balanceAfter: newBalance,
+      amountNgn: costNgn,
       description: `${args.type} document generation`,
       type: "document_generation",
-      createdAt: Date.now(),
+      reference: DOCUMENT_SERVICES[args.type],
     });
 
     const docId = await ctx.db.insert("documents", {
@@ -63,7 +59,8 @@ export const generate = mutation({
       type: args.type,
       title: args.title,
       data: args.data,
-      pointsCost: cost,
+      pointsCost: legacyCost,
+      priceNgn: costNgn,
       createdAt: Date.now(),
     });
 
