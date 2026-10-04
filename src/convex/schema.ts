@@ -672,6 +672,7 @@ const schema = defineSchema(
       referredUserId: v.id("users"),
       status: v.union(v.literal("pending"), v.literal("completed"), v.literal("rewarded")),
       rewardPoints: v.number(),
+      rewardNgn: v.optional(v.number()),
       createdAt: v.number(),
     }).index("by_referrer", ["referrerId"]).index("by_referred", ["referredUserId"]),
 
