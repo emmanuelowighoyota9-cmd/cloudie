@@ -4,41 +4,29 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Coins, ArrowUpRight, ArrowDownRight, Plus } from "lucide-react";
+import { Wallet as WalletIcon, ArrowUpRight, ArrowDownRight, Plus } from "lucide-react";
 import { Link } from "react-router";
-import { usePricing, formatNgn } from "@/lib/pricing";
+import { formatNgn } from "@/lib/pricing";
 
 function typeLabel(type: string): string {
   const labels: Record<string, string> = {
-    deposit: "Deposit", purchase: "Purchase", service_charge: "Service",
-    refund: "Refund", admin_adjustment: "Admin", referral_reward: "Referral",
+    deposit: "Wallet funding", purchase: "Purchase", service_charge: "Service",
+    refund: "Refund", admin_adjustment: "Admin adjustment", referral_reward: "Referral",
     vendor_transaction: "Vendor", marketplace_purchase: "Marketplace",
     shipment_creation: "Shipment", document_generation: "Document",
-    email_dispatch: "Email", image_rendering: "Render",
+    email_dispatch: "Email", image_rendering: "Render", vtu_purchase: "VTU",
+    vtu_refund: "VTU refund", migration: "Wallet migration",
   };
   return labels[type] ?? type;
 }
 
 export default function Wallet() {
-  const balance = useQuery(api.points.getBalance);
-  const ledger = useQuery(api.points.getLedger, { limit: 100 });
-  const { ngnPerPoint, ngnLabel } = usePricing();
+  const balance = useQuery(api.wallet.getBalance);
+  const ledger = useQuery(api.wallet.getLedger, { limit: 100 });
   const recoverPendingCredits = useAction(api.paystack.recoverPendingCredits);
 
-  // Self-heal: if a Paystack payment succeeded but its callback/webhook never
-  // arrived, credit it here. Balance + ledger update reactively.
   useEffect(() => {
-    recoverPendingCredits({})
-      .then((r) => {
-        if (r.recovered > 0) {
-          toast.success(
-            `${r.points.toLocaleString()} points from an earlier payment were added to your wallet!`,
-          );
-        }
-      })
-      .catch(() => {
-        // best-effort — callback/webhook paths still cover crediting
-      });
+    recoverPendingCredits({}).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -46,75 +34,52 @@ export default function Wallet() {
     <div className="space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Wallet</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your points balance and transaction history.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">NGN Wallet</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your real naira balance and transaction history.</p>
         </div>
         <Link to="/buy-points" className="w-full sm:w-auto">
           <Button size="sm" className="w-full gap-1.5 sm:w-auto">
-            <Plus className="h-4 w-4" /> Buy Points
+            <Plus className="h-4 w-4" /> Fund Wallet
           </Button>
         </Link>
       </div>
 
-      {/* Balance */}
-      <Card className="notebook-card bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/50 dark:to-blue-900/50 border-blue-200 dark:border-blue-800">
+      <Card className="notebook-card border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 dark:border-blue-800 dark:from-blue-950/50 dark:to-blue-900/50">
         <CardContent className="p-6">
-          <p className="text-sm font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider">Points Balance</p>
-          <p className="mt-2 text-4xl font-bold text-blue-900 dark:text-blue-100">
-            {(balance ?? 0).toLocaleString()}
-          </p>
-          <p className="mt-1 text-sm font-semibold text-blue-700 dark:text-blue-300">
-            ≈ {ngnLabel(balance ?? 0)}
-          </p>
+          <p className="text-sm font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">Available balance</p>
+          <p className="mt-2 text-4xl font-bold text-blue-900 dark:text-blue-100">{formatNgn(balance ?? 0)}</p>
+          <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">Nigerian Naira · NGN</p>
         </CardContent>
       </Card>
 
-      {/* Transactions */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Recent Activity
-          </CardTitle>
+          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent Activity</CardTitle>
         </CardHeader>
         <CardContent>
           {!ledger ? (
             <p className="py-8 text-center text-sm text-muted-foreground animate-pulse">Loading transactions...</p>
           ) : ledger.length === 0 ? (
             <div className="py-12 text-center">
-              <Coins className="mx-auto h-10 w-10 text-muted-foreground/50" />
-              <p className="mt-3 text-sm text-muted-foreground">No transactions yet.</p>
+              <WalletIcon className="mx-auto h-10 w-10 text-muted-foreground/50" />
+              <p className="mt-3 text-sm text-muted-foreground">No wallet transactions yet.</p>
             </div>
           ) : (
             <div className="space-y-1">
               {ledger.map((tx) => (
-                <div
-                  key={tx._id}
-                  className="flex items-center gap-3 rounded-lg p-3 hover:bg-[var(--nb-ink)]/5 transition-colors"
-                >
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-                      tx.amount > 0
-                        ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400"
-                        : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
-                    }`}
-                  >
-                    {tx.amount > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                <div key={tx._id} className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-[var(--nb-ink)]/5">
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tx.amountNgn > 0 ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400" : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"}`}>
+                    {tx.amountNgn > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-[var(--nb-ink)]">{tx.description}</p>
-                  <p className="text-xs text-slate-400">
-                    {typeLabel(tx.type)} • {new Date(tx.createdAt).toLocaleDateString()}
-                  </p>
+                    <p className="text-xs text-slate-400">{typeLabel(tx.type)} • {new Date(tx.createdAt).toLocaleDateString()}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p
-                      className={`text-sm font-bold ${
-                        tx.amount > 0 ? "text-green-600" : "text-red-600"
-                      }`}
-                    >
-                      {tx.amount > 0 ? "+" : ""}{tx.amount.toLocaleString()}
+                    <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-green-600" : "text-red-600"}`}>
+                      {tx.amountNgn > 0 ? "+" : ""}{formatNgn(tx.amountNgn)}
                     </p>
-                    <p className="text-[11px] text-slate-400">{formatNgn(tx.amount * ngnPerPoint)}</p>
+                    <p className="text-[11px] text-slate-400">Balance {formatNgn(tx.balanceAfterNgn)}</p>
                   </div>
                 </div>
               ))}
