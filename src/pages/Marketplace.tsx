@@ -113,11 +113,13 @@ function CatalogOrderPage({ mode, products, balance, pointsWithNgn, onBuy }: Cat
     const values = new Set<string>();
     products.forEach((product) => {
       const text = `${product.name} ${product.category}`;
-      const match = text.match(/\\b(US|USA|UK|United Kingdom|Canada|Germany|France|Australia|Nigeria|Vietnam|India|Spain|Italy|Netherlands|Brazil|Mexico|Turkey|Indonesia|Philippines)\\b/i);
+      const match = text.match(/\b(US|USA|UK|United Kingdom|Canada|Germany|France|Australia|Nigeria|Vietnam|India|Spain|Italy|Netherlands|Brazil|Mexico|Turkey|Indonesia|Philippines)\b/i);
       if (match) values.add(match[1]);
     });
     return ["All", ...Array.from(values).sort()];
   }, [products]);
+
+  const boostCategories = useMemo(() => ["All", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean))).sort()], [products]);
 
   const filtered = useMemo(() => {
     const needle = normalize(query);
@@ -168,7 +170,7 @@ function CatalogOrderPage({ mode, products, balance, pointsWithNgn, onBuy }: Cat
                 onChange={(event) => setCountry(event.target.value)}
                 className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                {countries.map((item) => <option key={item}>{item}</option>)}
+                {(mode === "numbers" ? countries : boostCategories).map((item) => <option key={item}>{item}</option>)}
               </select>
             </div>
 
@@ -335,12 +337,12 @@ export default function Marketplace() {
     provider?: string,
     quantity = 1,
   ) => {
-    if ((balance ?? 0) < price) {
+    const totalPrice = price * quantity;\n    if ((balance ?? 0) < totalPrice) {
       toast.error("Insufficient points. Add funds before purchasing.");
       return;
     }
 
-    if (!confirm(`Purchase "${name}" for ${price} points?`)) return;
+    if (!confirm(`Purchase "${name}" for ${totalPrice} points?`)) return;
 
     setBuying(productId);
     try {
