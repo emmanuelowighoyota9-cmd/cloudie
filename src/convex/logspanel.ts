@@ -65,6 +65,89 @@ async function requestLogspanel(path: string, init?: RequestInit) {
   return body;
 }
 
+type NumberCountry = {
+  id: number | string;
+  name: string;
+  short?: string;
+  calling_code?: string;
+  region?: string;
+  image?: string | null;
+};
+
+type NumberService = {
+  service_id: string;
+  service_name: string;
+  country_id: string;
+  country_name: string;
+  price: string;
+  currency: string;
+  available_quantity: number;
+  category?: string;
+  success_rate?: number;
+};
+
+type BoostCategory = { name: string };
+type BoostService = {
+  service_id: string;
+  service_name: string;
+  category: string;
+  type: string;
+  rate_per_1000?: string;
+  price?: string;
+  currency: string;
+  min?: number;
+  max?: number;
+  refill?: boolean;
+  cancel?: boolean;
+};
+
+export const listNumberCountries = action({
+  args: {},
+  handler: async (): Promise<NumberCountry[]> => {
+    const body = await requestLogspanel("/numbers/countries");
+    return Array.isArray(body?.data) ? body.data : [];
+  },
+});
+
+export const listNumberServices = action({
+  args: { countryId: v.number() },
+  handler: async (_ctx, args): Promise<NumberService[]> => {
+    const body = await requestLogspanel(
+      `/numbers/services?country_id=${encodeURIComponent(String(args.countryId))}`,
+    );
+    return Array.isArray(body?.data) ? body.data : [];
+  },
+});
+
+export const listNumberAreaCodes = action({
+  args: { countryId: v.number(), serviceId: v.string() },
+  handler: async (_ctx, args): Promise<string[]> => {
+    const body = await requestLogspanel(
+      `/numbers/area-codes?country_id=${encodeURIComponent(String(args.countryId))}&service_id=${encodeURIComponent(args.serviceId)}`,
+    );
+    return Array.isArray(body?.data?.codes) ? body.data.codes : ["Random"];
+  },
+});
+
+export const listBoostCategories = action({
+  args: {},
+  handler: async (): Promise<BoostCategory[]> => {
+    const body = await requestLogspanel("/boost/categories");
+    return Array.isArray(body?.data) ? body.data : [];
+  },
+});
+
+export const listBoostServices = action({
+  args: { category: v.optional(v.string()) },
+  handler: async (_ctx, args): Promise<BoostService[]> => {
+    const query = args.category
+      ? `?category=${encodeURIComponent(args.category)}`
+      : "";
+    const body = await requestLogspanel(`/boost/services${query}`);
+    return Array.isArray(body?.data) ? body.data : [];
+  },
+});
+
 export const syncCatalog = action({
   args: {},
   handler: async (ctx): Promise<CatalogSyncResult> => {
