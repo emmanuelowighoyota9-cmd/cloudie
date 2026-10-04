@@ -395,6 +395,7 @@ export const adminCreateProduct = mutation({
     name: v.string(),
     description: v.string(),
     pointsPrice: v.number(),
+    priceNgn: v.optional(v.number()),
     category: v.string(),
     imageUrl: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
@@ -404,7 +405,8 @@ export const adminCreateProduct = mutation({
     const { adminId } = await requireAdmin(ctx);
     if (!args.name.trim()) throw new Error("Name required");
     if (!args.description.trim()) throw new Error("Description required");
-    if (!Number.isFinite(args.pointsPrice) || args.pointsPrice < 0) throw new Error("INVALID_PRICE");
+    const priceNgn = args.priceNgn ?? args.pointsPrice * 15;
+    if (!Number.isFinite(priceNgn) || priceNgn < 0) throw new Error("INVALID_PRICE");
     if (!args.category.trim()) throw new Error("Category required");
     // Admin-owned system vendor — create once and reuse.
     let systemVendor = await ctx.db.query("vendors").withIndex("by_status", (q) => q.eq("status", "approved")).first();

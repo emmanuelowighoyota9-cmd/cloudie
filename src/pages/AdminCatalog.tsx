@@ -806,7 +806,7 @@ export default function AdminCatalog() {
                 products.map((row) => {
                   const editValue = productEdits[row._id];
                   const dirtyRow = editValue !== undefined && editValue !== "";
-                  const current = dirtyRow ? Number(editValue) : row.pointsPrice;
+                  const current = dirtyRow ? Number(editValue) : (row.priceNgn ?? row.pointsPrice * ngnPerPoint);
                   return (
                     <div
                       key={row._id}
