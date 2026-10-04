@@ -594,7 +594,16 @@ const schema = defineSchema(
       isApproved: v.boolean(),
       totalSold: v.number(),
       createdAt: v.number(),
-    }).index("by_vendor", ["vendorId"]).index("by_category", ["category"]),
+      // Optional external-provider fields. Kept optional so existing listings remain valid.
+      provider: v.optional(v.string()),
+      providerProductRef: v.optional(v.string()),
+      providerCategoryId: v.optional(v.number()),
+      providerCostNgn: v.optional(v.number()),
+      providerAvailableQuantity: v.optional(v.number()),
+      providerStatus: v.optional(v.string()),
+      providerSyncedAt: v.optional(v.number()),
+      providerMetadata: v.optional(v.any()),
+    }).index("by_vendor", ["vendorId"]).index("by_category", ["category"]).index("by_provider_ref", ["provider", "providerProductRef"]),
 
     marketplaceOrders: defineTable({
       buyerId: v.id("users"),
@@ -606,7 +615,15 @@ const schema = defineSchema(
         ...literals(ORDER_STATUSES),
       ),
       createdAt: v.number(),
-    }).index("by_buyer", ["buyerId"]).index("by_vendor", ["vendorId"]),
+      provider: v.optional(v.string()),
+      providerOrderId: v.optional(v.string()),
+      providerStatus: v.optional(v.string()),
+      providerCostNgn: v.optional(v.number()),
+      providerResponse: v.optional(v.any()),
+      idempotencyKey: v.optional(v.string()),
+      fulfilledItems: v.optional(v.any()),
+      updatedAt: v.optional(v.number()),
+    }).index("by_buyer", ["buyerId"]).index("by_vendor", ["vendorId"]).index("by_provider_order", ["provider", "providerOrderId"]).index("by_order_idempotency", ["idempotencyKey"]),
 
     disputes: defineTable({
       orderId: v.id("marketplaceOrders"),
