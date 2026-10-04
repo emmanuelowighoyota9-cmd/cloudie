@@ -124,7 +124,7 @@ export default function Personal() {
                         : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
                     }`}
                   >
-                    {tx.amount > 0 ? (
+                    {tx.amountNgn > 0 ? (
                       <ArrowUpRight className="h-4 w-4" />
                     ) : (
                       <ArrowDownRight className="h-4 w-4" />
@@ -139,7 +139,7 @@ export default function Personal() {
                   <div className="text-right shrink-0">
                     <p
                       className={`text-sm font-bold ${
-                        tx.amount > 0 ? "text-green-600" : "text-red-600"
+                        tx.amountNgn > 0 ? "text-green-600" : "text-red-600"
                       }`}
                     >
                       {tx.amountNgn > 0 ? "+" : ""}
