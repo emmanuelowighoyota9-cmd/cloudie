@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { usePricing } from "@/lib/pricing";
+import { formatNgn } from "@/lib/pricing";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -88,10 +88,9 @@ function stockFor(product: { provider?: string; providerAvailableQuantity?: numb
 type CatalogOrderPageProps = {
   mode: "numbers" | "boost";
   balance: number | null | undefined;
-  ngnPerPoint: number;
 };
 
-function CatalogOrderPage({ mode, balance, ngnPerPoint }: CatalogOrderPageProps) {
+function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
   const listNumberCountries = useAction(api.logspanel.listNumberCountries);
   const listNumberServices = useAction(api.logspanel.listNumberServices);
   const listNumberAreaCodes = useAction(api.logspanel.listNumberAreaCodes);
@@ -218,8 +217,7 @@ function CatalogOrderPage({ mode, balance, ngnPerPoint }: CatalogOrderPageProps)
     ? providerPriceNgn * (quantity / 1000)
     : providerPriceNgn;
 
-  const totalPoints = Math.ceil(totalNgn / Math.max(ngnPerPoint, 0.01));
-  const canAfford = (balance ?? 0) >= totalPoints;
+  const canAfford = (balance ?? 0) >= totalNgn;
 
   return (
     <div className="min-w-0 max-w-full overflow-x-hidden pb-24">
@@ -246,7 +244,7 @@ function CatalogOrderPage({ mode, balance, ngnPerPoint }: CatalogOrderPageProps)
           <div className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
             <div>
               <p className="text-xs text-muted-foreground">Cloudie wallet</p>
-              <p className="text-lg font-bold">{(balance ?? 0).toLocaleString()} pts</p>
+              <p className="text-lg font-bold">{formatNgn(balance ?? 0)}</p>
             </div>
             <Badge variant="outline">{loading ? "Refreshing…" : "Live"}</Badge>
           </div>
@@ -361,7 +359,7 @@ function CatalogOrderPage({ mode, balance, ngnPerPoint }: CatalogOrderPageProps)
                   <span className="text-lg font-bold text-primary">₦{Math.ceil(totalNgn).toLocaleString("en-NG")}</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  ≈ {totalPoints.toLocaleString()} pts at ₦{ngnPerPoint.toLocaleString("en-NG")} per point
+                  Provider price · NGN wallet
                 </p>
                 {!canAfford && <p className="mt-2 text-xs font-medium text-destructive">Insufficient wallet balance.</p>}
               </div>
@@ -378,11 +376,11 @@ function CatalogOrderPage({ mode, balance, ngnPerPoint }: CatalogOrderPageProps)
 }
 
 export default function Marketplace() {
-  const { pointsWithNgn, ngnPerPoint } = usePricing();
+
   const location = useLocation();
   const products = useQuery(api.marketplace.listProducts, {});
   const orders = useQuery(api.marketplace.getMyOrders);
-  const balance = useQuery(api.points.getBalance);
+  const balance = useQuery(api.wallet.getBalance);
   const createOrder = useMutation(api.marketplace.createOrder);
   const purchaseLogspanel = useAction(api.logspanel.purchase);
   const refreshLogspanelOrder = useAction(api.logspanel.refreshOrder);
@@ -434,17 +432,17 @@ export default function Marketplace() {
   const handleBuy = async (
     productId: Id<"marketplaceProducts">,
     name: string,
-    price: number,
+    priceNgn: number,
     provider?: string,
     quantity = 1,
   ) => {
-    const totalPrice = price * quantity;
+    const totalPrice = priceNgn * quantity;
     if ((balance ?? 0) < totalPrice) {
-      toast.error("Insufficient points. Add funds before purchasing.");
+      toast.error("Insufficient NGN wallet balance. Fund your wallet before purchasing.");
       return;
     }
 
-    if (!confirm(`Purchase "${name}" for ${totalPrice} points?`)) return;
+    if (!confirm(`Purchase "${name}" for ${formatNgn(totalPrice)}?`)) return;
 
     setBuying(productId);
     try {
@@ -479,7 +477,6 @@ export default function Marketplace() {
       <CatalogOrderPage
         mode={orderMode}
         balance={balance}
-        ngnPerPoint={ngnPerPoint}
       />
     );
   }
@@ -693,10 +690,10 @@ export default function Marketplace() {
                           <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Price</span>
                           <span className="mt-0.5 flex items-center gap-1 text-base font-bold text-primary">
                             <Coins className="h-4 w-4 shrink-0" />
-                            {product.pointsPrice.toLocaleString()} pts
+                            {formatNgn(product.priceNgn ?? product.pointsPrice * 15)}
                           </span>
                           <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                            {pointsWithNgn(product.pointsPrice)}
+                            NGN wallet price
                           </span>
                         </div>
                         <div className="shrink-0 text-right">
@@ -718,8 +715,8 @@ export default function Marketplace() {
                         </Button>
                         <Button
                           className="min-w-0"
-                          disabled={outOfStock || buying === product._id || (balance ?? 0) < product.pointsPrice}
-                          onClick={() => handleBuy(product._id, product.name, product.pointsPrice, product.provider)}
+                          disabled={outOfStock || buying === product._id || (balance ?? 0) < (product.priceNgn ?? product.pointsPrice * 15)}
+                          onClick={() => handleBuy(product._id, product.name, product.priceNgn ?? product.pointsPrice * 15, product.provider)}
                         >
                           {buying === product._id ? "Processing..." : outOfStock ? "Unavailable" : "Buy now"}
                         </Button>
@@ -736,7 +733,7 @@ export default function Marketplace() {
               product={selected}
               balance={balance ?? 0}
               onClose={() => setSelectedProduct(null)}
-              onBuy={() => handleBuy(selected._id, selected.name, selected.pointsPrice, selected.provider)}
+              onBuy={() => handleBuy(selected._id, selected.name, selected.priceNgn ?? selected.pointsPrice * 15, selected.provider)}
               buying={buying === selected._id}
             />
           )}
@@ -779,7 +776,7 @@ function ProductDetails({
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border p-3">
               <span className="text-xs text-muted-foreground">Price</span>
-              <p className="mt-1 font-semibold">{product.pointsPrice} points</p>
+              <p className="mt-1 font-semibold">{formatNgn(product.priceNgn ?? product.pointsPrice * 15)}</p>
             </div>
             <div className="rounded-lg border p-3">
               <span className="text-xs text-muted-foreground">Stock</span>
@@ -787,7 +784,7 @@ function ProductDetails({
             </div>
             <div className="rounded-lg border p-3">
               <span className="text-xs text-muted-foreground">Your balance</span>
-              <p className="mt-1 font-semibold">{balance.toLocaleString()} points</p>
+              <p className="mt-1 font-semibold">{formatNgn(balance)}</p>
             </div>
           </div>
 
@@ -797,7 +794,7 @@ function ProductDetails({
 
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={outOfStock || balance < product.pointsPrice || buying} onClick={onBuy}>
+            <Button disabled={outOfStock || balance < (product.priceNgn ?? product.pointsPrice * 15) || buying} onClick={onBuy}>
               {buying ? "Processing..." : "Buy now"}
             </Button>
           </div>
@@ -840,7 +837,7 @@ function OrdersView({
             <div className="min-w-0">
               <p className="font-medium">Order {order._id.slice(-8)}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {pointsWithNgn(order.totalPoints)} • {new Date(order.createdAt).toLocaleString()}
+                {formatNgn(order.totalNgn ?? order.totalPoints * 15)} • {new Date(order.createdAt).toLocaleString()}
               </p>
               {order.providerStatus && (
                 <p className="mt-1 text-xs text-muted-foreground">Provider status: {order.providerStatus}</p>
