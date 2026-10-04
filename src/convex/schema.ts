@@ -274,6 +274,7 @@ const schema = defineSchema(
       title: v.string(),
       data: v.any(),
       pointsCost: v.number(),
+      priceNgn: v.optional(v.number()),
       createdAt: v.number(),
     }).index("by_user", ["userId", "createdAt"]),
 
