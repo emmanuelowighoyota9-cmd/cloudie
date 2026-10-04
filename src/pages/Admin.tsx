@@ -20,11 +20,9 @@ import {
 import { Link } from "react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { usePricing } from "@/lib/pricing";
 
 export default function Admin() {
   const data = useQuery(api.adminApi.adminDashboard);
-  const { ngnPerPoint } = usePricing();
   const ngnValue = (amountNgn: number) => `₦${Math.round(amountNgn).toLocaleString("en-NG")}`;
 
   if (data === undefined) {
