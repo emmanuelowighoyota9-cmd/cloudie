@@ -1,67 +1,59 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { pointTxTypeValidator } from "./schema";
 import { v } from "convex/values";
 
+/**
+ * Legacy compatibility surface.
+ *
+ * Cloudie is now NGN-wallet based. These exports remain temporarily so older
+ * callers can migrate without breaking the deployment, but every balance and
+ * money mutation is delegated to the authoritative wallet service.
+ */
 export const getBalance = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
     const user = await ctx.db.get(userId);
-    return user?.pointsBalance ?? 0;
+    if (!user) return 0;
+    if (typeof user.walletBalanceNgn === "number") return user.walletBalanceNgn;
+    return (user.pointsBalance ?? 0) * 15;
   },
 });
 
 export const getLedger = query({
-  args: {
-    limit: v.optional(v.number()),
-    type: v.optional(v.string()),
-  },
+  args: { limit: v.optional(v.number()), type: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    if (args.type) {
-      const results = await ctx.db
-        .query("pointLedger")
-        .withIndex("by_user", (q) => q.eq("userId", userId))
-        .order("desc")
-        .collect();
-      return results.filter((r) => r.type === args.type).slice(0, args.limit ?? 50);
-    }
-    return await ctx.db
-      .query("pointLedger")
+    const rows = await ctx.db.query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(args.limit ?? 50);
+      .take(Math.min(args.limit ?? 100, 200));
+    return args.type ? rows.filter((r) => r.type === args.type) : rows;
   },
 });
 
 export const getAdminLedger = query({
-  args: {
-    userId: v.optional(v.id("users")),
-    limit: v.optional(v.number()),
-  },
+  args: { userId: v.optional(v.id("users")), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const adminId = await getAuthUserId(ctx);
     if (!adminId) return [];
     const admin = await ctx.db.get(adminId);
     if (admin?.role !== "admin") return [];
     if (args.userId) {
-      return await ctx.db
-        .query("pointLedger")
+      return await ctx.db.query("walletLedger")
         .withIndex("by_user", (q) => q.eq("userId", args.userId!))
         .order("desc")
-        .take(args.limit ?? 50);
+        .take(Math.min(args.limit ?? 100, 500));
     }
-    return await ctx.db
-      .query("pointLedger")
-      .order("desc")
-      .take(args.limit ?? 50);
+    return await ctx.db.query("walletLedger").order("desc").take(Math.min(args.limit ?? 100, 500));
   },
 });
 
-export const credit = internalMutation({
+export const credit = mutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
@@ -73,53 +65,20 @@ export const credit = internalMutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    if (args.amount <= 0) throw new Error("Credit amount must be positive");
-
-    if (args.idempotencyKey) {
-      const existing = await ctx.db
-        .query("pointLedger")
-        .withIndex("by_idempotency", (q) =>
-          q.eq("idempotencyKey", args.idempotencyKey!),
-        )
-        .first();
-      if (existing) return existing._id;
-    }
-
-    const user = await ctx.db.get(args.userId);
-    if (!user) throw new Error("User not found");
-
-    const currentBalance = user.pointsBalance ?? 0;
-    const newBalance = currentBalance + args.amount;
-
-    await ctx.db.patch(args.userId, { pointsBalance: newBalance });
-
-    const ledgerId = await ctx.db.insert("pointLedger", {
+    return await ctx.runMutation(internal.wallet.credit, {
       userId: args.userId,
-      amount: args.amount,
-      balanceAfter: newBalance,
+      amountNgn: args.amount,
       description: args.description,
       type: args.type,
       reference: args.reference,
       referenceId: args.referenceId,
       idempotencyKey: args.idempotencyKey,
       metadata: args.metadata,
-      createdAt: Date.now(),
     });
-
-    await ctx.db.insert("notifications", {
-      userId: args.userId,
-      title: "Points credited",
-      message: `+${args.amount} pts — ${args.description}`,
-      type: "points_credited",
-      isRead: false,
-      createdAt: Date.now(),
-    });
-
-    return ledgerId;
   },
 });
 
-export const debit = internalMutation({
+export const debit = mutation({
   args: {
     userId: v.id("users"),
     amount: v.number(),
@@ -131,53 +90,16 @@ export const debit = internalMutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    if (args.amount <= 0) throw new Error("Debit amount must be positive");
-
-    if (args.idempotencyKey) {
-      const existing = await ctx.db
-        .query("pointLedger")
-        .withIndex("by_idempotency", (q) =>
-          q.eq("idempotencyKey", args.idempotencyKey!),
-        )
-        .first();
-      if (existing) return existing._id;
-    }
-
-    const user = await ctx.db.get(args.userId);
-    if (!user) throw new Error("User not found");
-
-    const currentBalance = user.pointsBalance ?? 0;
-    if (currentBalance < args.amount) {
-      throw new Error("Insufficient points balance");
-    }
-
-    const newBalance = currentBalance - args.amount;
-
-    await ctx.db.patch(args.userId, { pointsBalance: newBalance });
-
-    const ledgerId = await ctx.db.insert("pointLedger", {
+    return await ctx.runMutation(internal.wallet.debit, {
       userId: args.userId,
-      amount: -args.amount,
-      balanceAfter: newBalance,
+      amountNgn: args.amount,
       description: args.description,
       type: args.type,
       reference: args.reference,
       referenceId: args.referenceId,
       idempotencyKey: args.idempotencyKey,
       metadata: args.metadata,
-      createdAt: Date.now(),
     });
-
-    await ctx.db.insert("notifications", {
-      userId: args.userId,
-      title: "Points deducted",
-      message: `-${args.amount} pts — ${args.description}`,
-      type: "points_deducted",
-      isRead: false,
-      createdAt: Date.now(),
-    });
-
-    return ledgerId;
   },
 });
 
@@ -188,52 +110,11 @@ export const adminAdjust = mutation({
     reason: v.string(),
   },
   handler: async (ctx, args) => {
-    const adminId = await getAuthUserId(ctx);
-    if (!adminId) throw new Error("Unauthorized");
-    const admin = await ctx.db.get(adminId);
-    if (admin?.role !== "admin") throw new Error("Admin only");
-
-    if (!args.reason || args.reason.length < 3) {
-      throw new Error("A reason is required for admin adjustments");
-    }
-
-    const user = await ctx.db.get(args.userId);
-    if (!user) throw new Error("User not found");
-
-    const currentBalance = user.pointsBalance ?? 0;
-    const newBalance = currentBalance + args.amount;
-
-    if (newBalance < 0) {
-      throw new Error("Adjustment would result in negative balance");
-    }
-
-    await ctx.db.patch(args.userId, { pointsBalance: newBalance });
-
-    const ledgerId = await ctx.db.insert("pointLedger", {
+    return await ctx.runMutation(internal.wallet.adminAdjust, {
       userId: args.userId,
-      amount: args.amount,
-      balanceAfter: newBalance,
-      description: `Admin adjustment: ${args.reason}`,
-      type: "admin_adjustment",
-      reference: "admin",
-      referenceId: adminId,
-      metadata: { reason: args.reason, adminId },
-      createdAt: Date.now(),
-    });
-
-    await ctx.db.insert("auditLogs", {
-      actorId: adminId,
-      actorEmail: admin.email,
-      action: "point_adjustment",
-      resource: "user",
-      resourceId: args.userId,
-      before: { balance: currentBalance },
-      after: { balance: newBalance, adjustment: args.amount },
+      amountNgn: args.amount,
       reason: args.reason,
-      createdAt: Date.now(),
     });
-
-    return ledgerId;
   },
 });
 
@@ -248,6 +129,7 @@ export const getAllUsers = query({
   },
 });
 
+/** Intentionally disabled: balance credit must come from a verified payment. */
 export const buyPoints = mutation({
   args: {
     packageId: v.string(),
@@ -256,47 +138,8 @@ export const buyPoints = mutation({
     paymentMethod: v.string(),
     idempotencyKey: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
-
-    const key = args.idempotencyKey ?? `buy-${userId}-${args.packageId}-${Date.now()}`;
-    const existing = await ctx.db
-      .query("pointLedger")
-      .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", key))
-      .first();
-    if (existing) return existing._id;
-
-    const user = await ctx.db.get(userId);
-    if (!user) throw new Error("User not found");
-
-    const currentBalance = user.pointsBalance ?? 0;
-    const newBalance = currentBalance + args.points;
-
-    await ctx.db.patch(userId, { pointsBalance: newBalance });
-
-    const ledgerId = await ctx.db.insert("pointLedger", {
-      userId,
-      amount: args.points,
-      balanceAfter: newBalance,
-      description: `Points purchase: ${args.points.toLocaleString()} pts ($${args.amountUsd})`,
-      type: "purchase",
-      reference: args.paymentMethod,
-      idempotencyKey: key,
-      metadata: { packageId: args.packageId, amountUsd: args.amountUsd, paymentMethod: args.paymentMethod },
-      createdAt: Date.now(),
-    });
-
-    await ctx.db.insert("notifications", {
-      userId,
-      title: "Points purchased",
-      message: `+${args.points.toLocaleString()} pts — $${args.amountUsd} via ${args.paymentMethod}`,
-      type: "points_credited",
-      isRead: false,
-      createdAt: Date.now(),
-    });
-
-    return ledgerId;
+  handler: async () => {
+    throw new Error("POINTS_DEPRECATED: use verified NGN wallet funding");
   },
 });
 
@@ -315,8 +158,8 @@ export const getStats = query({
     const allTenants = await ctx.db.query("tenantSites").collect();
     const allVendors = await ctx.db.query("vendors").collect();
 
-    const totalPointsMinted = allUsers.reduce(
-      (sum, u) => sum + (u.pointsBalance ?? 0),
+    const totalWalletNgn = allUsers.reduce(
+      (sum, u) => sum + (u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * 15),
       0,
     );
 
@@ -327,7 +170,7 @@ export const getStats = query({
       approvedVendors: allVendors.filter((v) => v.status === "approved").length,
       tenants: allTenants.length,
       activeTenants: allTenants.filter((t) => t.isActive).length,
-      totalPointsMinted,
+      totalWalletNgn,
       shipments: allShipments.length,
       documents: allDocuments.length,
       products: allProducts.length,
