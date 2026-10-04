@@ -502,3 +502,184 @@ export const adminBulkImportProducts = mutation({
     return { created };
   },
 });
+
+
+/** Prepare and reserve a Logspanel marketplace order. External fulfillment happens in the action. */
+export const prepareLogspanelOrder = internalMutation({
+  args: {
+    userId: v.id("users"),
+    productId: v.id("marketplaceProducts"),
+    quantity: v.number(),
+    idempotencyKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    if (args.quantity < 1 || args.quantity > 100 || !Number.isInteger(args.quantity)) {
+      throw new Error("INVALID_QUANTITY");
+    }
+    if (args.idempotencyKey.length < 8 || args.idempotencyKey.length > 120) {
+      throw new Error("INVALID_IDEMPOTENCY_KEY");
+    }
+
+    const existing = await ctx.db
+      .query("marketplaceOrders")
+      .withIndex("by_order_idempotency", (q) => q.eq("idempotencyKey", args.idempotencyKey))
+      .first();
+    if (existing) return { orderId: existing._id, reused: true, productRef: existing.providerOrderId ?? null };
+
+    const product = await ctx.db.get(args.productId);
+    if (!product || product.provider !== "logspanel" || !product.providerProductRef || !product.isApproved || !product.isActive) {
+      throw new Error("LOGSPANEL_PRODUCT_UNAVAILABLE");
+    }
+
+    const user = await ctx.db.get(args.userId);
+    if (!user) throw new Error("USER_NOT_FOUND");
+
+    const totalPoints = Math.round(product.pointsPrice * args.quantity);
+    if (!Number.isFinite(totalPoints) || totalPoints <= 0) throw new Error("INVALID_ORDER_TOTAL");
+    const balance = user.pointsBalance ?? 0;
+    if (balance < totalPoints) throw new Error("Insufficient points");
+
+    const now = Date.now();
+    const newBalance = balance - totalPoints;
+    await ctx.db.patch(args.userId, { pointsBalance: newBalance });
+    await ctx.db.insert("pointLedger", {
+      userId: args.userId,
+      amount: -totalPoints,
+      balanceAfter: newBalance,
+      description: `Marketplace purchase: ${product.name}`,
+      type: "marketplace_purchase",
+      referenceId: args.productId,
+      idempotencyKey: args.idempotencyKey,
+      metadata: { provider: "logspanel", providerProductRef: product.providerProductRef },
+      createdAt: now,
+    });
+
+    const orderId = await ctx.db.insert("marketplaceOrders", {
+      buyerId: args.userId,
+      productId: args.productId,
+      vendorId: product.vendorId,
+      quantity: args.quantity,
+      totalPoints,
+      status: "pending",
+      createdAt: now,
+      provider: "logspanel",
+      providerStatus: "pending",
+      providerCostNgn: product.providerCostNgn,
+      idempotencyKey: args.idempotencyKey,
+      updatedAt: now,
+    });
+
+    return { orderId, reused: false, productRef: product.providerProductRef, totalPoints };
+  },
+});
+
+/** Apply provider result. Provider failure refunds the reserved customer points atomically. */
+export const finalizeLogspanelOrder = internalMutation({
+  args: {
+    orderId: v.id("marketplaceOrders"),
+    status: v.union(v.literal("completed"), v.literal("pending"), v.literal("cancelled")),
+    providerOrderId: v.optional(v.string()),
+    providerStatus: v.optional(v.string()),
+    providerResponse: v.optional(v.any()),
+    fulfilledItems: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new Error("ORDER_NOT_FOUND");
+
+    if (order.status === "completed" || order.status === "refunded" || order.status === "cancelled") {
+      return { status: order.status, alreadyFinalized: true };
+    }
+
+    const now = Date.now();
+    if (args.status === "cancelled") {
+      const user = await ctx.db.get(order.buyerId);
+      if (!user) throw new Error("USER_NOT_FOUND");
+      const balance = user.pointsBalance ?? 0;
+      const refundBalance = balance + order.totalPoints;
+      await ctx.db.patch(order.buyerId, { pointsBalance: refundBalance });
+      await ctx.db.insert("pointLedger", {
+        userId: order.buyerId,
+        amount: order.totalPoints,
+        balanceAfter: refundBalance,
+        description: `Refund: marketplace provider failure`,
+        type: "refund",
+        referenceId: order._id,
+        idempotencyKey: `logspanel-refund-${order._id}`,
+        metadata: { provider: "logspanel", providerOrderId: args.providerOrderId },
+        createdAt: now,
+      });
+    }
+
+    await ctx.db.patch(order._id, {
+      status: args.status,
+      providerOrderId: args.providerOrderId,
+      providerStatus: args.providerStatus,
+      providerResponse: args.providerResponse,
+      fulfilledItems: args.fulfilledItems,
+      updatedAt: now,
+    });
+
+    if (args.status === "completed") {
+      const product = await ctx.db.get(order.productId);
+      if (product) {
+        await ctx.db.patch(product._id, { totalSold: product.totalSold + order.quantity });
+      }
+    }
+
+    return { status: args.status, alreadyFinalized: false };
+  },
+});
+
+export const getLogspanelProducts = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit ?? 100, 200);
+    return await ctx.db
+      .query("marketplaceProducts")
+      .withIndex("by_provider_ref", (q) => q.eq("provider", "logspanel"))
+      .order("desc")
+      .take(limit);
+  },
+});
+
+export const getLogspanelAdminStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const enabled = await ctx.db.query("adminSettings").withIndex("by_key", (q) => q.eq("key", "logspanel_enabled")).first();
+    const markup = await ctx.db.query("adminSettings").withIndex("by_key", (q) => q.eq("key", "logspanel_markup_percent")).first();
+    const products = await ctx.db.query("marketplaceProducts").withIndex("by_provider_ref", (q) => q.eq("provider", "logspanel")).take(200);
+    return {
+      configured: Boolean(process.env.LOGSPANEL_API_KEY),
+      enabled: enabled?.value === true,
+      markupPercent: typeof markup?.value === "number" ? markup.value : 0,
+      syncedProducts: products.length,
+    };
+  },
+});
+
+export const setLogspanelSettings = mutation({
+  args: { enabled: v.boolean(), markupPercent: v.number() },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    if (!Number.isFinite(args.markupPercent) || args.markupPercent < 0 || args.markupPercent > 100) {
+      throw new Error("INVALID_MARKUP");
+    }
+    const now = Date.now();
+    for (const [key, value] of [
+      ["logspanel_enabled", args.enabled],
+      ["logspanel_markup_percent", args.markupPercent],
+    ] as const) {
+      const existing = await ctx.db.query("adminSettings").withIndex("by_key", (q) => q.eq("key", key)).first();
+      if (existing) await ctx.db.patch(existing._id, { value, category: "marketplace_provider", updatedBy: adminId, updatedAt: now });
+      else await ctx.db.insert("adminSettings", { key, value, category: "marketplace_provider", updatedBy: adminId, updatedAt: now });
+    }
+    await auditLog(ctx, adminId, {
+      action: "LOGSPANEL_SETTINGS_CHANGED",
+      resource: "marketplace_provider",
+      after: { enabled: args.enabled, markupPercent: args.markupPercent },
+    });
+    return { success: true };
+  },
+});
