@@ -409,7 +409,7 @@ export default function VtuBills() {
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-vtu-chip px-3 py-1 text-xs font-semibold tabular-nums">
-                    {detail.fixedNgn !== null
+                    {detail.priceNgn !== null
                       ? formatNgn(detail.fixedNgn)
                       : "Metered"}
                   </span>
