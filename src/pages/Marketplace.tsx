@@ -17,6 +17,7 @@ export default function Marketplace() {
   const balance = useQuery(api.points.getBalance);
   const createOrder = useMutation(api.marketplace.createOrder);
   const purchaseLogspanel = useAction(api.logspanel.purchase);
+  const refreshLogspanelOrder = useAction(api.logspanel.refreshOrder);
   const [view, setView] = useState<"products" | "orders">("products");
 
   const handleBuy = async (productId: Id<"marketplaceProducts">, name: string, price: number, provider?: string) => {
@@ -89,7 +90,7 @@ export default function Marketplace() {
               <Card key={o._id} className="notebook-card">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div>              <p className="text-sm font-medium text-slate-900 dark:text-white">Order {o._id.slice(-8)}</p><p className="text-xs text-muted-foreground">{pointsWithNgn(o.totalPoints)} • {new Date(o.createdAt).toLocaleDateString()}</p></div>
-                  <Badge variant={o.status === "completed" ? "default" : "secondary"}>{o.status}</Badge>
+                  <div className="flex items-center gap-2"><Badge variant={o.status === "completed" ? "default" : "secondary"}>{o.status}</Badge>{o.provider === "logspanel" && o.status === "pending" && <Button size="sm" variant="outline" onClick={async () => { try { const r = await refreshLogspanelOrder({ orderId: o._id }); toast.success("Provider status: " + r.status); } catch (e) { toast.error(e instanceof Error ? e.message : "Unable to refresh order"); } }}>Refresh</Button>}</div>
                 </CardContent>
               </Card>
             ))}
