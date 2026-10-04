@@ -294,11 +294,11 @@ export default function Marketplace() {
                 const stock = stockFor(product);
                 const outOfStock = stock !== undefined && stock <= 0;
                 return (
-                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-2xl border-slate-200 bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700">
+                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-xl border-slate-200 bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700">
                     <button
                       type="button"
                       onClick={() => setSelectedProduct(product._id)}
-                      className="relative block aspect-[16/9] w-full overflow-hidden bg-muted text-left"
+                      className="relative block aspect-[5/2] w-full overflow-hidden bg-muted text-left"
                       aria-label={`View ${product.name}`}
                     >
                       {product.imageUrl ? (
@@ -313,8 +313,8 @@ export default function Marketplace() {
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
-                          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white/80">
-                            <ImageOff className="h-7 w-7" />
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white/80">
+                            <ImageOff className="h-5 w-5" />
                           </div>
                         </div>
                       )}
@@ -331,24 +331,24 @@ export default function Marketplace() {
                       )}
                     </button>
 
-                    <CardContent className="min-w-0 p-4 sm:p-5">
+                    <CardContent className="min-w-0 p-3 sm:p-4">
                       <button
                         type="button"
                         onClick={() => setSelectedProduct(product._id)}
                         className="block w-full min-w-0 text-left"
                       >
-                        <h3 className="line-clamp-2 break-words text-base font-semibold leading-6 text-slate-900 dark:text-white">
+                        <h3 className="line-clamp-2 break-words text-sm font-semibold leading-5 text-slate-900 dark:text-white">
                           {product.name}
                         </h3>
-                        <p className="mt-1.5 line-clamp-2 break-words text-sm leading-5 text-muted-foreground">
+                        <p className="mt-1 line-clamp-2 break-words text-xs leading-4 text-muted-foreground">
                           {product.description}
                         </p>
                       </button>
 
-                      <div className="mt-4 flex items-end justify-between gap-3">
+                      <div className="mt-3 flex items-end justify-between gap-3">
                         <div className="min-w-0">
                           <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Price</span>
-                          <span className="mt-0.5 flex items-center gap-1 text-lg font-bold text-primary">
+                          <span className="mt-0.5 flex items-center gap-1 text-base font-bold text-primary">
                             <Coins className="h-4 w-4 shrink-0" />
                             {product.pointsPrice.toLocaleString()} pts
                           </span>
@@ -369,7 +369,7 @@ export default function Marketplace() {
                         </div>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="mt-3 grid grid-cols-2 gap-2">
                         <Button variant="outline" className="min-w-0" onClick={() => setSelectedProduct(product._id)}>
                           Details
                         </Button>
