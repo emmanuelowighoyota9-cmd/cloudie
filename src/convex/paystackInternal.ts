@@ -164,7 +164,7 @@ export const recordPaymentAndCredit = internalMutation({
     const points = existing?.points ?? args.points;
     const packageId = existing?.packageId ?? args.packageId;
     const amountSubunit = existing?.amountSubunit ?? args.amountKobo;
-    const walletAmountNgn = existing?.walletAmountNgn ?? args.walletAmountNgn ?? amountSubunit / 100;
+    const walletAmountNgn = paidCurrency === "NGN" ? paidSubunit / 100 : (existing?.walletAmountNgn ?? args.walletAmountNgn ?? amountSubunit / 100);
 
     // What Paystack actually settled. A variance is recorded (never used to
     // withhold points) so genuine pricing/currency drift is visible in admin.
