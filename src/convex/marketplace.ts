@@ -683,3 +683,91 @@ export const setLogspanelSettings = mutation({
     return { success: true };
   },
 });
+
+
+export const syncLogspanelProducts = internalMutation({
+  args: {
+    products: v.array(v.any()),
+    markupPercent: v.number(),
+    adminId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    let vendor = await ctx.db.query("vendors").withIndex("by_user", (q) => q.eq("userId", args.adminId)).first();
+    if (!vendor) {
+      vendor = await ctx.db.query("vendors").withIndex("by_status", (q) => q.eq("status", "approved")).first();
+    }
+    let vendorId = vendor?._id;
+    if (!vendorId) {
+      vendorId = await ctx.db.insert("vendors", {
+        userId: args.adminId,
+        businessName: "Logspanel Provider",
+        description: "External marketplace provider",
+        status: "approved",
+        earnings: 0,
+        totalSales: 0,
+        createdAt: Date.now(),
+      });
+    }
+
+    const seen = new Set<string>();
+    let created = 0;
+    let updated = 0;
+    for (const raw of args.products) {
+      const ref = typeof raw?.product_ref === "string" ? raw.product_ref.trim() : "";
+      if (!ref) continue;
+      const name = typeof raw?.name === "string" ? raw.name.trim() : "Logspanel Product";
+      const description = typeof raw?.description === "string" ? raw.description.trim() : "";
+      const providerPrice = Number(raw?.selling_price);
+      const available = Number(raw?.available_quantity);
+      const purchasable = raw?.purchasable !== false;
+      if (!Number.isFinite(providerPrice) || providerPrice < 0) continue;
+
+      seen.add(ref);
+      const customerPrice = Math.max(1, Math.ceil(providerPrice * (1 + args.markupPercent / 100)));
+      const existing = await ctx.db
+        .query("marketplaceProducts")
+        .withIndex("by_provider_ref", (q) => q.eq("provider", "logspanel").eq("providerProductRef", ref))
+        .first();
+
+      const patch = {
+        name: name.slice(0, 120),
+        description: description.slice(0, 800),
+        pointsPrice: customerPrice,
+        category: "Logs",
+        isActive: purchasable && (!Number.isFinite(available) || available > 0),
+        isApproved: true,
+        provider: "logspanel",
+        providerProductRef: ref,
+        providerCostNgn: providerPrice,
+        providerAvailableQuantity: Number.isFinite(available) ? available : undefined,
+        providerStatus: purchasable ? "available" : "unavailable",
+        providerSyncedAt: Date.now(),
+        providerMetadata: {
+          minQuantity: Number(raw?.min_quantity) || 1,
+          maxQuantity: Number(raw?.max_quantity) || 100,
+          currency: raw?.currency ?? "NGN",
+        },
+      };
+
+      if (existing) {
+        await ctx.db.patch(existing._id, patch);
+        updated++;
+      } else {
+        await ctx.db.insert("marketplaceProducts", {
+          vendorId,
+          ...patch,
+          totalSold: 0,
+          createdAt: Date.now(),
+        });
+        created++;
+      }
+    }
+
+    await auditLog(ctx, args.adminId, {
+      action: "LOGSPANEL_CATALOG_SYNCED",
+      resource: "marketplace_provider",
+      after: { received: args.products.length, created, updated },
+    });
+    return { created, updated, received: args.products.length, seen: Array.from(seen) };
+  },
+});
