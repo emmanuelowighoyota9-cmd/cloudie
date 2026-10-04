@@ -18,7 +18,7 @@ import {
   ChevronRight,
   ImageOff,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router";
 import { toast } from "sonner";
 
@@ -87,188 +87,289 @@ function stockFor(product: { provider?: string; providerAvailableQuantity?: numb
 
 type CatalogOrderPageProps = {
   mode: "numbers" | "boost";
-  products: Array<{
-    _id: Id<"marketplaceProducts">;
-    name: string;
-    description: string;
-    category: string;
-    pointsPrice: number;
-    imageUrl?: string;
-    provider?: string;
-    providerAvailableQuantity?: number;
-  }>;
   balance: number | null | undefined;
-  pointsWithNgn: (points: number) => string;
-  onBuy: (product: CatalogOrderPageProps["products"][number], quantity: number) => Promise<void>;
+  ngnPerPoint: number;
 };
 
-function CatalogOrderPage({ mode, products, balance, pointsWithNgn, onBuy }: CatalogOrderPageProps) {
-  const [selectedId, setSelectedId] = useState<Id<"marketplaceProducts"> | "">("");
+function CatalogOrderPage({ mode, balance, ngnPerPoint }: CatalogOrderPageProps) {
+  const listNumberCountries = useAction(api.logspanel.listNumberCountries);
+  const listNumberServices = useAction(api.logspanel.listNumberServices);
+  const listNumberAreaCodes = useAction(api.logspanel.listNumberAreaCodes);
+  const listBoostCategories = useAction(api.logspanel.listBoostCategories);
+  const listBoostServices = useAction(api.logspanel.listBoostServices);
+
+  const [countries, setCountries] = useState<Array<{ id: number | string; name: string; short?: string; image?: string | null }>>([]);
+  const [numberServices, setNumberServices] = useState<Array<{
+    service_id: string; service_name: string; country_id: string; country_name: string;
+    price: string; currency: string; available_quantity: number; category?: string; success_rate?: number;
+  }>>([]);
+  const [areaCodes, setAreaCodes] = useState<string[]>(["Random"]);
+  const [boostCategories, setBoostCategories] = useState<string[]>([]);
+  const [boostServices, setBoostServices] = useState<Array<{
+    service_id: string; service_name: string; category: string; type: string;
+    rate_per_1000?: string; price?: string; currency: string; min?: number; max?: number;
+    refill?: boolean; cancel?: boolean;
+  }>>([]);
+
+  const [countryId, setCountryId] = useState("");
+  const [serviceId, setServiceId] = useState("");
+  const [category, setCategory] = useState("");
+  const [areaCode, setAreaCode] = useState("Random");
   const [quantity, setQuantity] = useState(1);
   const [query, setQuery] = useState("");
-  const [country, setCountry] = useState("All");
-  const selected = products.find((product) => product._id === selectedId) ?? null;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const countries = useMemo(() => {
-    const values = new Set<string>();
-    products.forEach((product) => {
-      const text = `${product.name} ${product.category}`;
-      const match = text.match(/\b(US|USA|UK|United Kingdom|Canada|Germany|France|Australia|Nigeria|Vietnam|India|Spain|Italy|Netherlands|Brazil|Mexico|Turkey|Indonesia|Philippines)\b/i);
-      if (match) values.add(match[1]);
-    });
-    return ["All", ...Array.from(values).sort()];
-  }, [products]);
+  const selectedNumber = numberServices.find((item) => item.service_id === serviceId) ?? null;
+  const selectedBoost = boostServices.find((item) => item.service_id === serviceId) ?? null;
 
-  const boostCategories = useMemo(() => ["All", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean))).sort()], [products]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const load = async () => {
+      try {
+        if (mode === "numbers") {
+          const rows = await listNumberCountries({});
+          if (!cancelled) setCountries(rows as typeof countries);
+        } else {
+          const rows = await listBoostCategories({});
+          if (!cancelled) setBoostCategories(rows.map((row) => row.name));
+        }
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Unable to load catalog");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [mode, listNumberCountries, listBoostCategories]);
 
-  const filtered = useMemo(() => {
+  useEffect(() => {
+    if (mode !== "numbers" || !countryId) {
+      setNumberServices([]);
+      setServiceId("");
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    void listNumberServices({ countryId: Number(countryId) })
+      .then((rows) => {
+        if (!cancelled) {
+          setNumberServices(rows as typeof numberServices);
+          setServiceId("");
+          setAreaCode("Random");
+        }
+      })
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "Unable to load number services"))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [mode, countryId, listNumberServices]);
+
+  useEffect(() => {
+    if (mode !== "numbers" || !countryId || !serviceId) return;
+    let cancelled = false;
+    void listNumberAreaCodes({ countryId: Number(countryId), serviceId })
+      .then((codes) => !cancelled && setAreaCodes(codes))
+      .catch(() => !cancelled && setAreaCodes(["Random"]));
+    return () => { cancelled = true; };
+  }, [mode, countryId, serviceId, listNumberAreaCodes]);
+
+  useEffect(() => {
+    if (mode !== "boost") return;
+    let cancelled = false;
+    setLoading(true);
+    void listBoostServices({ category: category || undefined })
+      .then((rows) => {
+        if (!cancelled) {
+          setBoostServices(rows as typeof boostServices);
+          setServiceId("");
+        }
+      })
+      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "Unable to load boost services"))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [mode, category, listBoostServices]);
+
+  const visibleBoostServices = useMemo(() => {
     const needle = normalize(query);
-    return products.filter((product) => {
-      const haystack = normalize(`${product.name} ${product.category} ${product.description}`);
-      const matchesCountry = country === "All" || haystack.includes(normalize(country));
-      return matchesCountry && (!needle || haystack.includes(needle));
-    });
-  }, [products, query, country]);
+    return boostServices.filter((service) =>
+      !needle ||
+      normalize(service.service_name).includes(needle) ||
+      normalize(service.category).includes(needle) ||
+      normalize(service.type).includes(needle),
+    );
+  }, [boostServices, query]);
 
-  const charge = selected ? selected.pointsPrice * Math.max(1, quantity) : 0;
-  const canBuy = Boolean(selected) && (balance ?? 0) >= charge &&
-    quantity >= 1 && quantity <= Math.min(100, selected?.providerAvailableQuantity ?? 100);
+  const providerPriceNgn = mode === "numbers"
+    ? Number(selectedNumber?.price ?? 0)
+    : Number(selectedBoost?.rate_per_1000 ?? selectedBoost?.price ?? 0);
+
+  const maxQuantity = mode === "numbers"
+    ? Math.max(1, selectedNumber?.available_quantity ?? 1)
+    : Math.max(1, selectedBoost?.max ?? 1);
+
+  const minQuantity = mode === "boost"
+    ? Math.max(1, selectedBoost?.min ?? 1)
+    : 1;
+
+  const totalNgn = mode === "boost"
+    ? providerPriceNgn * (quantity / 1000)
+    : providerPriceNgn;
+
+  const totalPoints = Math.ceil(totalNgn / Math.max(ngnPerPoint, 0.01));
+  const canAfford = (balance ?? 0) >= totalPoints;
 
   return (
     <div className="min-w-0 max-w-full overflow-x-hidden pb-24">
       <div className="mb-4">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-          {mode === "numbers" ? "Numbers" : "Social boost"}
+          {mode === "numbers" ? "Live numbers catalog" : "Live social boost catalog"}
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight">
           {mode === "numbers" ? "Buy Number" : "Boost Socials"}
         </h1>
         <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-          {mode === "numbers"
-            ? "Choose a real number product, review availability and purchase securely with your points."
-            : "Choose a real growth service, select quantity and place the order from your points balance."}
+          Live catalog data from the provider. Prices and availability are refreshed when you open or change a selection.
         </p>
       </div>
+
+      {error && (
+        <Card className="mb-4 border-destructive/30">
+          <CardContent className="p-4 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      )}
 
       <Card className="overflow-hidden rounded-2xl border-primary/15 shadow-sm">
         <CardContent className="p-4 sm:p-6">
           <div className="mb-5 flex items-center justify-between gap-3 rounded-xl bg-muted/50 p-3">
             <div>
-              <p className="text-xs text-muted-foreground">Available balance</p>
+              <p className="text-xs text-muted-foreground">Cloudie wallet</p>
               <p className="text-lg font-bold">{(balance ?? 0).toLocaleString()} pts</p>
             </div>
-            <Badge variant="outline">{filtered.length} available products</Badge>
+            <Badge variant="outline">{loading ? "Refreshing…" : "Live"}</Badge>
           </div>
 
           <div className="space-y-5">
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                {mode === "numbers" ? "Select Country" : "Category"}
-              </label>
-              <select
-                value={country}
-                onChange={(event) => setCountry(event.target.value)}
-                className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {(mode === "numbers" ? countries : boostCategories).map((item) => <option key={item}>{item}</option>)}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">
-                {mode === "numbers" ? "Select Service" : "Service"}
-              </label>
-              <select
-                value={selectedId}
-                onChange={(event) => setSelectedId(event.target.value as Id<"marketplaceProducts">)}
-                className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <option value="">Choose a {mode === "numbers" ? "number service" : "boost service"}</option>
-                {filtered.map((product) => (
-                  <option key={product._id} value={product._id}>
-                    {product.name} — {product.pointsPrice.toLocaleString()} pts
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {mode === "numbers" && (
-              <div>
-                <label className="mb-2 block text-sm font-semibold">Select Pool</label>
-                <div className="flex min-h-12 items-center rounded-xl border bg-muted/40 px-4 text-sm text-muted-foreground">
-                  {selected ? "Provider pool selected from the product catalog" : "Choose a service first"}
+            {mode === "numbers" ? (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold">Select Country</label>
+                  <select value={countryId} onChange={(e) => setCountryId(e.target.value)}
+                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <option value="">Choose a country</option>
+                    {countries.map((country) => <option key={String(country.id)} value={String(country.id)}>{country.name}</option>)}
+                  </select>
                 </div>
-              </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold">Select Service</label>
+                  <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}
+                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <option value="">Choose a service</option>
+                    {numberServices.map((service) => (
+                      <option key={service.service_id} value={service.service_id}>
+                        {service.service_name} — ₦{Number(service.price).toLocaleString("en-NG")} · {service.available_quantity} available
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold">Area Code</label>
+                  <select value={areaCode} onChange={(e) => setAreaCode(e.target.value)}
+                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    {areaCodes.map((code) => <option key={code}>{code}</option>)}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold">Category</label>
+                  <select value={category} onChange={(e) => setCategory(e.target.value)}
+                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <option value="">All categories</option>
+                    {boostCategories.map((item) => <option key={item}>{item}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold">Service</label>
+                  <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}
+                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                    <option value="">Choose a boost service</option>
+                    {visibleBoostServices.map((service) => (
+                      <option key={service.service_id} value={service.service_id}>
+                        {service.service_name} — ₦{Number(service.rate_per_1000 ?? service.price ?? 0).toLocaleString("en-NG")}/1,000
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <input value={query} onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search followers, likes, views, comments…"
+                  className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                <div>
+                  <label className="mb-2 block text-sm font-semibold">Target link</label>
+                  <input type="url" placeholder="https://instagram.com/…"
+                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+                </div>
+              </>
             )}
 
-            {mode === "boost" && (
-              <div>
-                <label className="mb-2 block text-sm font-semibold">Product search</label>
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search followers, likes, views, comments..."
-                  className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                />
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Target links are not collected here because the connected provider purchase API currently does not accept a target URL.
-                </p>
-              </div>
-            )}
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold">Quantity</label>
-              <input
-                type="number"
-                min={1}
-                max={Math.min(100, selected?.providerAvailableQuantity ?? 100)}
-                value={quantity}
-                onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))}
-                className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Min: 1 · Max: {Math.min(100, selected?.providerAvailableQuantity ?? 100)}
-              </p>
-            </div>
-
-            {selected && (
+            {selectedNumber && (
               <div className="rounded-xl border bg-muted/30 p-4">
-                <div className="flex gap-3">
-                  <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {selected.imageUrl ? (
-                      <img src={selected.imageUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full items-center justify-center"><Package className="h-5 w-5 text-muted-foreground" /></div>
-                    )}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{selectedNumber.service_name}</p>
+                    <p className="text-xs text-muted-foreground">{selectedNumber.category ?? "Activation"} · {selectedNumber.success_rate ?? "—"}% success rate</p>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-sm font-semibold">{selected.name}</p>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{selected.description}</p>
-                  </div>
+                  <Badge variant={selectedNumber.available_quantity > 0 ? "outline" : "destructive"}>
+                    {selectedNumber.available_quantity} available
+                  </Badge>
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t pt-3">
-                  <span className="text-sm font-medium">Charge</span>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-primary">{charge.toLocaleString()} pts</p>
-                    <p className="text-xs text-muted-foreground">{pointsWithNgn(charge)}</p>
-                  </div>
+                  <span className="text-sm font-medium">Current price</span>
+                  <span className="text-lg font-bold text-primary">₦{Number(selectedNumber.price).toLocaleString("en-NG")}</span>
                 </div>
               </div>
             )}
 
-            <Button
-              className="h-12 w-full rounded-xl text-base font-semibold"
-              disabled={!canBuy}
-              onClick={() => selected && onBuy(selected, quantity)}
-            >
-              {selected ? `Place ${mode === "numbers" ? "number order" : "boost order"}` : "Choose a service first"}
-            </Button>
-
-            {selected && (balance ?? 0) < charge && (
-              <p className="text-center text-xs font-medium text-destructive">
-                Insufficient points for this order.
-              </p>
+            {selectedBoost && (
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <p className="font-semibold">{selectedBoost.service_name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{selectedBoost.type} · {selectedBoost.category}</p>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-lg bg-background p-3"><span className="text-muted-foreground">Rate</span><p className="font-semibold">₦{providerPriceNgn.toLocaleString("en-NG")} / 1,000</p></div>
+                  <div className="rounded-lg bg-background p-3"><span className="text-muted-foreground">Range</span><p className="font-semibold">{minQuantity.toLocaleString()}–{maxQuantity.toLocaleString()}</p></div>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">Refill: {selectedBoost.refill ? "Yes" : "No"} · Cancel: {selectedBoost.cancel ? "Yes" : "No"}</div>
+              </div>
             )}
+
+            {selectedBoost && (
+              <div>
+                <label className="mb-2 block text-sm font-semibold">Quantity</label>
+                <input type="number" min={minQuantity} max={maxQuantity} value={quantity}
+                  onChange={(e) => setQuantity(Math.min(maxQuantity, Math.max(minQuantity, Number(e.target.value) || minQuantity)))}
+                  className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary" />
+              </div>
+            )}
+
+            {(selectedNumber || selectedBoost) && (
+              <div className="rounded-xl border bg-muted/30 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Estimated charge</span>
+                  <span className="text-lg font-bold text-primary">₦{Math.ceil(totalNgn).toLocaleString("en-NG")}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ≈ {totalPoints.toLocaleString()} pts at ₦{ngnPerPoint.toLocaleString("en-NG")} per point
+                </p>
+                {!canAfford && <p className="mt-2 text-xs font-medium text-destructive">Insufficient wallet balance.</p>}
+              </div>
+            )}
+
+            <Button className="h-12 w-full rounded-xl text-base font-semibold" disabled>
+              {selectedNumber || selectedBoost ? "Checkout — provider order wiring next" : "Choose a service first"}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -277,7 +378,7 @@ function CatalogOrderPage({ mode, products, balance, pointsWithNgn, onBuy }: Cat
 }
 
 export default function Marketplace() {
-  const { pointsWithNgn } = usePricing();
+  const { pointsWithNgn, ngnPerPoint } = usePricing();
   const location = useLocation();
   const products = useQuery(api.marketplace.listProducts, {});
   const orders = useQuery(api.marketplace.getMyOrders);
