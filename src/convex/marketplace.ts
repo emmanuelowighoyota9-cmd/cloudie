@@ -659,6 +659,14 @@ export const getLogspanelAdminStatus = query({
   },
 });
 
+export const isLogspanelEnabled = query({
+  args: {},
+  handler: async (ctx) => {
+    const row = await ctx.db.query("adminSettings").withIndex("by_key", (q) => q.eq("key", "logspanel_enabled")).first();
+    return row?.value === true && Boolean(process.env.LOGSPANEL_API_KEY);
+  },
+});
+
 export const setLogspanelSettings = mutation({
   args: { enabled: v.boolean(), markupPercent: v.number() },
   handler: async (ctx, args) => {
