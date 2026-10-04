@@ -171,7 +171,7 @@ const schema = defineSchema(
       emailVerificationTime: v.optional(v.number()),
       isAnonymous: v.optional(v.boolean()),
       role: v.optional(roleValidator),
-      pointsBalance: v.optional(v.number()),
+      // Authoritative customer wallet balance in NGN. Legacy pointsBalance remains temporarily for migration/backward compatibility.\n      walletBalanceNgn: v.optional(v.number()),\n      pointsBalance: v.optional(v.number()),
       referralCode: v.optional(v.string()),
       referredBy: v.optional(v.string()),
       isSuspended: v.optional(v.boolean()),
@@ -184,6 +184,24 @@ const schema = defineSchema(
     })
       .index("email", ["email"])
       .index("referralCode", ["referralCode"])
+      .index("by_createdAt", ["createdAt"]),
+
+    /** Authoritative monetary wallet ledger. Amounts are NGN major units. */
+    walletLedger: defineTable({
+      userId: v.id("users"),
+      amountNgn: v.number(),
+      balanceAfterNgn: v.number(),
+      description: v.string(),
+      type: v.string(),
+      reference: v.optional(v.string()),
+      referenceId: v.optional(v.string()),
+      idempotencyKey: v.optional(v.string()),
+      metadata: v.optional(v.any()),
+      createdAt: v.number(),
+    })
+      .index("by_user", ["userId", "createdAt"])
+      .index("by_type", ["type", "createdAt"])
+      .index("by_idempotency", ["idempotencyKey"])
       .index("by_createdAt", ["createdAt"]),
 
     pointLedger: defineTable({
