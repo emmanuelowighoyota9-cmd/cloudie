@@ -78,7 +78,7 @@ export const initializePayment = action({
     if (!Number.isFinite(amountMajor) || amountMajor <= 0) {
       throw new Error("Invalid payment amount");
     }
-    if (currency === "NGN" && amountMajor <= 0) throw new Error("Invalid wallet funding amount");
+    if (currency === "NGN" && amountMajor < 100) throw new Error("Minimum wallet funding is ₦100");
 
     // Generate a unique reference
     const reference = `CLD-${args.packageId}-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
