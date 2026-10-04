@@ -19,8 +19,8 @@ export default function Personal() {
   const balance = useQuery(api.points.getBalance);
   const ledger = useQuery(api.points.getLedger, { limit: 50 });
 
-  const totalEarned = (ledger ?? []).filter((l) => l.amount > 0).reduce((s, l) => s + l.amount, 0);
-  const totalSpent = (ledger ?? []).filter((l) => l.amount < 0).reduce((s, l) => s + Math.abs(l.amount), 0);
+  const totalEarned = (ledger ?? []).filter((l) => l.amountNgn > 0).reduce((s, l) => s + l.amountNgn, 0);
+  const totalSpent = (ledger ?? []).filter((l) => l.amountNgn < 0).reduce((s, l) => s + Math.abs(l.amountNgn), 0);
 
   return (
     <div className="space-y-8">
@@ -28,7 +28,7 @@ export default function Personal() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Personal Workspace</h1>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <Link to="/buy-points" className="flex-1 sm:flex-none"><Button size="sm" className="w-full gap-1.5"><Plus className="h-4 w-4" /> Buy Points</Button></Link>
+            <Link to="/wallet" className="flex-1 sm:flex-none"><Button size="sm" className="w-full gap-1.5"><Plus className="h-4 w-4" /> Fund Wallet</Button></Link>
             <Link to="/orders" className="flex-1 sm:flex-none"><Button size="sm" variant="outline" className="w-full gap-1.5"><Receipt className="h-4 w-4" /> Orders</Button></Link>
             <Link to="/vendor" className="flex-1 sm:flex-none"><Button size="sm" variant="outline" className="w-full gap-1.5"><Store className="h-4 w-4" /> Vendor</Button></Link>
           </div>
@@ -46,8 +46,8 @@ export default function Personal() {
               </div>
               <div>
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-medium">Balance</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">{(balance ?? 0).toLocaleString()} pts</p>
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">≈ {ngnLabel(balance ?? 0)}</p>
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">{₦{(balance ?? 0).toLocaleString("en-NG")}</p>
+                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">NGN wallet</p>
               </div>
             </div>
           </CardContent>
@@ -143,10 +143,10 @@ export default function Personal() {
                       }`}
                     >
                       {tx.amount > 0 ? "+" : ""}
-                      {tx.amount.toLocaleString()}
+                      ₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
                     </p>
                     <p className="text-[10px] text-muted-foreground">
-                      Bal: {tx.balanceAfter.toLocaleString()}
+                      Bal: ₦{tx.balanceAfterNgn.toLocaleString("en-NG")}
                     </p>
                   </div>
                 </div>
