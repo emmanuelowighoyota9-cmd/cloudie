@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ArrowDownRight, ArrowUpRight, Download, Search, Wallet } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, downloadCsv, fmtDate } from "@/components/admin/shared";
-import { usePricing, formatNgn } from "@/lib/pricing";
+import { formatNgn } from "@/lib/pricing";
 
 type LedgerEntry = {
   _id: string;
