@@ -2,6 +2,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { readPointRate } from "./pricing";
+import { debitWallet, creditWallet } from "./wallet";
 import { v } from "convex/values";
 import { requireAdmin, auditLog } from "./adminApi";
 
@@ -127,7 +128,7 @@ export const createOrder = mutation({
     const totalNgn = Math.round(unitPriceNgn * args.quantity * 100) / 100;
     if (!Number.isFinite(totalNgn) || totalNgn <= 0) throw new Error("INVALID_ORDER_TOTAL");
 
-    await ctx.runMutation(internal.wallet.debit, {
+    await debitWallet(ctx, {
       userId,
       amountNgn: totalNgn,
       description: `Marketplace purchase: ${product.name}`,
@@ -140,7 +141,7 @@ export const createOrder = mutation({
     if (vendor) {
       const vendorUser = await ctx.db.get(vendor.userId);
       if (vendorUser) {
-        await ctx.runMutation(internal.wallet.credit, {
+        await creditWallet(ctx, {
           userId: vendor.userId,
           amountNgn: totalNgn,
           description: `Sale: ${product.name}`,
