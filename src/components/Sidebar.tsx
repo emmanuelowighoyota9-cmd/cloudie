@@ -27,6 +27,8 @@ import {
 const mainNav = [
   { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
+  { label: "Numbers", icon: Phone, to: "/marketplace/numbers" },
+  { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Buy Points", icon: CreditCard, to: "/buy-points" },
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
@@ -72,6 +74,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     // `/dashboard` must match exactly, or it would light up on every route
     // nested beneath it.
     if (path === "/dashboard") {
+      return location.pathname === path;
+    }
+    if (path === "/marketplace") {
       return location.pathname === path;
     }
     // `/vtu` is the PARENT of `/vtu/airtime` and `/vtu/bills`, so it matches by
