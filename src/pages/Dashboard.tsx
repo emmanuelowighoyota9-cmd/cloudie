@@ -276,8 +276,8 @@ export default function Dashboard() {
                       <p className="truncate text-sm font-medium text-foreground">{tx.description}</p>
                       <p className="text-xs text-slate-400">{typeLabel(tx.type)} • {new Date(tx.createdAt).toLocaleDateString()}</p>
                     </div>
-                    <span className={`text-sm font-bold ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
-                      {tx.amount > 0 ? "+" : ""}{tx.amount}
+                    <span className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-green-600" : "text-red-600"}`}>
+                      {tx.amountNgn > 0 ? "+" : ""}₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
                     </span>
                   </div>
                 ))}
