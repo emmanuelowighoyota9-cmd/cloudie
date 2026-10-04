@@ -540,10 +540,7 @@ export default function VtuBills() {
                     <VtuRow label="Wallet charge" value={priceNgn === null ? "—" : formatNgn(priceNgn)} />
                     <VtuRow
                       label="Balance after"
-                      value={`${Math.max(
-                        0,
-                        (balance ?? 0) - (priceNgn ?? 0),
-                      ).toLocaleString()} pts`}
+                      value={formatNgn(Math.max(0, (balance ?? 0) - (priceNgn ?? 0)))}
                       strong
                     />
                   </>

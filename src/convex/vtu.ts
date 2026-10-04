@@ -151,6 +151,7 @@ export interface VtuHistoryItem {
   nairaPrice: number;
   ngnPerPoint: number;
   pointsDebited: number;
+  walletDebitedNgn: number;
   /** The route, snapshotted at purchase. Null on pre-slice-3 rows. */
   routedProvider: string | null;
   routedProviderProductCode: string | null;
@@ -219,6 +220,7 @@ function toHistoryItem(
     nairaPrice: tx.nairaPrice,
     ngnPerPoint: tx.ngnPerPoint,
     pointsDebited: tx.pointsDebited,
+    walletDebitedNgn: tx.walletDebitedNgn ?? tx.nairaPrice,
     routedProvider: tx.routedProvider ?? null,
     routedProviderProductCode: tx.routedProviderProductCode ?? null,
     providerReference: tx.providerReference ?? null,

@@ -920,6 +920,7 @@ export const getTransaction = query({
       nairaPrice: tx.nairaPrice,
       ngnPerPoint: tx.ngnPerPoint,
       pointsDebited: tx.pointsDebited,
+      walletDebitedNgn: tx.walletDebitedNgn ?? tx.nairaPrice,
       providerReference: tx.providerReference ?? null,
       // For prepaid electricity the token IS the delivery, so the page that
       // just bought it must be able to show it without a round trip to the
