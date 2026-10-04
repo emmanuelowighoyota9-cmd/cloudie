@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { usePricing } from "@/lib/pricing";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -16,13 +16,20 @@ export default function Marketplace() {
   const orders = useQuery(api.marketplace.getMyOrders);
   const balance = useQuery(api.points.getBalance);
   const createOrder = useMutation(api.marketplace.createOrder);
+  const purchaseLogspanel = useAction(api.logspanel.purchase);
   const [view, setView] = useState<"products" | "orders">("products");
 
-  const handleBuy = async (productId: Id<"marketplaceProducts">, name: string, price: number) => {
+  const handleBuy = async (productId: Id<"marketplaceProducts">, name: string, price: number, provider?: string) => {
     if (!confirm(`Purchase "${name}" for ${price} points?`)) return;
     try {
-      await createOrder({ productId, quantity: 1 });
-      toast.success("Order placed!");
+      if (provider === "logspanel") {
+        const idempotencyKey = `cloudie-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        const result = await purchaseLogspanel({ productId, quantity: 1, idempotencyKey });
+        toast.success(result.status === "pending" ? "Order submitted and awaiting provider confirmation." : "Order placed and fulfilled.");
+      } else {
+        await createOrder({ productId, quantity: 1 });
+        toast.success("Order placed!");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to order");
     }
@@ -56,12 +63,12 @@ export default function Marketplace() {
               <Card key={p._id} className="notebook-card">
                 <CardContent className="p-5">
                   {p.imageUrl && <div className="mb-3 h-32 rounded-lg bg-muted overflow-hidden"><img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" /></div>}
-                  <Badge variant="outline" className="text-[10px] mb-2">{p.category}</Badge>
+                  <div className="mb-2 flex items-center gap-2"><Badge variant="outline" className="text-[10px]">{p.category}</Badge>{p.provider === "logspanel" && <Badge className="text-[10px]">Logspanel</Badge>}</div>
                   <h3 className="font-semibold text-slate-900 dark:text-white">{p.name}</h3>
                   <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{p.description}</p>
                   <div className="mt-3 flex items-center justify-between">
                     <span className="text-lg font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1"><Coins className="h-4 w-4" />{p.pointsPrice}</span>
-                    <Button size="sm" onClick={() => handleBuy(p._id, p.name, p.pointsPrice)} disabled={(balance ?? 0) < p.pointsPrice} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">Buy</Button>
+                    <Button size="sm" onClick={() => handleBuy(p._id, p.name, p.pointsPrice, p.provider)} disabled={(balance ?? 0) < p.pointsPrice} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">Buy</Button>
                   </div>
                 </CardContent>
               </Card>
