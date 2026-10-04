@@ -533,7 +533,7 @@ export const resolveDispute = mutation({
       });
 
       await ctx.db.patch(order._id, { status: "refunded" });
- else {
+    } else {
       await ctx.db.patch(order._id, { status: "completed" });
     }
 
