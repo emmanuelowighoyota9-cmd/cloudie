@@ -18,6 +18,8 @@ import {
   Receipt,
   FileStack,
   Zap,
+  Phone,
+  TrendingUp,
 } from "lucide-react";
 
 const navItems = [

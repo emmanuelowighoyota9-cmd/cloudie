@@ -97,7 +97,7 @@ type CatalogOrderPageProps = {
     provider?: string;
     providerAvailableQuantity?: number;
   }>;
-  balance: number | undefined;
+  balance: number | null | undefined;
   pointsWithNgn: (points: number) => string;
   onBuy: (product: CatalogOrderPageProps["products"][number], quantity: number) => Promise<void>;
 };
@@ -337,7 +337,8 @@ export default function Marketplace() {
     provider?: string,
     quantity = 1,
   ) => {
-    const totalPrice = price * quantity;\n    if ((balance ?? 0) < totalPrice) {
+    const totalPrice = price * quantity;
+    if ((balance ?? 0) < totalPrice) {
       toast.error("Insufficient points. Add funds before purchasing.");
       return;
     }

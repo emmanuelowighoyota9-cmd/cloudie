@@ -22,6 +22,8 @@ import {
   Store,
   Receipt,
   Zap,
+  Phone,
+  TrendingUp,
 } from "lucide-react";
 
 const mainNav = [
