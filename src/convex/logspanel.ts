@@ -135,3 +135,34 @@ export const purchase = action({
       items: data.items ?? [],
     };  },
 });
+
+
+export const refreshOrder = action({
+  args: { orderId: v.id("marketplaceOrders") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED");
+    const order = await ctx.runQuery(api.marketplace.getMyOrder, { orderId: args.orderId });
+    if (!order) throw new Error("ORDER_NOT_FOUND");
+    if (order.provider !== "logspanel" || !order.providerOrderId) throw new Error("NOT_A_LOGSPANEL_ORDER");
+
+    const body = await requestLogspanel("/logs/orders/" + encodeURIComponent(order.providerOrderId));
+    const data = body?.data ?? {};
+    const status = data.status === "completed" ? "completed" : data.status === "pending" ? "pending" : "cancelled";
+
+    await ctx.runMutation(internal.marketplace.finalizeLogspanelOrder, {
+      orderId: args.orderId,
+      status,
+      providerOrderId: order.providerOrderId,
+      providerStatus: typeof data.status === "string" ? data.status : undefined,
+      providerResponse: data,
+      fulfilledItems: data.items,
+    });
+
+    return {
+      orderId: args.orderId,
+      status: data.status ?? status,
+      items: data.items ?? [],
+    };
+  },
+});
