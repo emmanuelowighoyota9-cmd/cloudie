@@ -95,7 +95,7 @@ export const recordPendingOrder = internalMutation({
     return await ctx.db.insert("paymentOrders", {
       orderNumber,
       buyerId: args.userId,
-      kind: "points_package",
+      kind: "wallet_funding",
       packageId: args.packageId,
       points: args.points,
       walletAmountNgn: args.walletAmountNgn ?? args.amountSubunit / 100,
@@ -209,7 +209,7 @@ export const recordPaymentAndCredit = internalMutation({
       orderId = await ctx.db.insert("paymentOrders", {
         orderNumber: `ORD-${now}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
         buyerId: userId,
-        kind: "points_package",
+        kind: "wallet_funding",
         packageId,
         points,
         walletAmountNgn,
