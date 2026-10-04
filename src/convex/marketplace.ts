@@ -205,6 +205,17 @@ export const getMyOrders = query({
   },
 });
 
+export const getMyOrder = query({
+  args: { orderId: v.id("marketplaceOrders") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+    const order = await ctx.db.get(args.orderId);
+    if (!order || order.buyerId !== userId) return null;
+    return order;
+  },
+});
+
 export const getVendorOrders = query({
   args: {},
   handler: async (ctx) => {

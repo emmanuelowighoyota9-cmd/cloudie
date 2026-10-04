@@ -82,11 +82,12 @@ export const purchase = action({
       return { orderId: prepared.orderId, reused: true, status: "already_submitted" };
     }
 
+    let body: any;
     try {
       const product = await ctx.runQuery(api.marketplace.getProduct, { id: args.productId });
       if (!product?.providerProductRef) throw new Error("LOGSPANEL_PRODUCT_UNAVAILABLE");
 
-      const body = await requestLogspanel("/logs/orders", {
+      body = await requestLogspanel("/logs/orders", {
         method: "POST",
         body: JSON.stringify({
           product_ref: product.providerProductRef,
@@ -94,24 +95,6 @@ export const purchase = action({
           idempotency_key: args.idempotencyKey,
         }),
       });
-
-      const data = body?.data ?? {};
-      const status = data.status === "pending" ? "pending" : "completed";
-      await ctx.runMutation(internal.marketplace.finalizeLogspanelOrder, {
-        orderId: prepared.orderId,
-        status,
-        providerOrderId: typeof data.order_id === "string" ? data.order_id : undefined,
-        providerStatus: typeof data.status === "string" ? data.status : undefined,
-        providerResponse: data,
-        fulfilledItems: data.items,
-      });
-
-      return {
-        orderId: prepared.orderId,
-        providerOrderId: data.order_id ?? null,
-        status: data.status ?? status,
-        items: data.items ?? [],
-      };
     } catch (error) {
       await ctx.runMutation(internal.marketplace.finalizeLogspanelOrder, {
         orderId: prepared.orderId,
@@ -121,5 +104,65 @@ export const purchase = action({
       });
       throw error;
     }
+
+    const data = body?.data ?? {};
+    const status = data.status === "pending" ? "pending" : "completed";
+    const finalizeArgs = {
+      orderId: prepared.orderId,
+      status,
+      providerOrderId: typeof data.order_id === "string" ? data.order_id : undefined,
+      providerStatus: typeof data.status === "string" ? data.status : undefined,
+      providerResponse: data,
+      fulfilledItems: data.items,
+    } as const;
+
+    try {
+      await ctx.runMutation(internal.marketplace.finalizeLogspanelOrder, finalizeArgs);
+    } catch {
+      // The provider purchase succeeded. Do not refund automatically; keep the
+      // local order pending so an operator/retry can reconcile the provider ID.
+      try {
+        await ctx.runMutation(internal.marketplace.finalizeLogspanelOrder, finalizeArgs);
+      } catch {
+        throw new Error("LOGSPANEL_LOCAL_RECONCILIATION_REQUIRED");
+      }
+    }
+
+    return {
+      orderId: prepared.orderId,
+      providerOrderId: data.order_id ?? null,
+      status: data.status ?? status,
+      items: data.items ?? [],
+    };  },
+});
+
+
+export const refreshOrder = action({
+  args: { orderId: v.id("marketplaceOrders") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED");
+    const order = await ctx.runQuery(api.marketplace.getMyOrder, { orderId: args.orderId });
+    if (!order) throw new Error("ORDER_NOT_FOUND");
+    if (order.provider !== "logspanel" || !order.providerOrderId) throw new Error("NOT_A_LOGSPANEL_ORDER");
+
+    const body = await requestLogspanel("/logs/orders/" + encodeURIComponent(order.providerOrderId));
+    const data = body?.data ?? {};
+    const status = data.status === "completed" ? "completed" : data.status === "pending" ? "pending" : "cancelled";
+
+    await ctx.runMutation(internal.marketplace.finalizeLogspanelOrder, {
+      orderId: args.orderId,
+      status,
+      providerOrderId: order.providerOrderId,
+      providerStatus: typeof data.status === "string" ? data.status : undefined,
+      providerResponse: data,
+      fulfilledItems: data.items,
+    });
+
+    return {
+      orderId: args.orderId,
+      status: data.status ?? status,
+      items: data.items ?? [],
+    };
   },
 });
