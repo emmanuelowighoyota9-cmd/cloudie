@@ -1228,7 +1228,7 @@ const schema = defineSchema(
     paymentOrders: defineTable({
       orderNumber: v.string(),
       buyerId: v.id("users"),
-      kind: v.union(v.literal("points_package")),
+      kind: v.union(v.literal("points_package"), v.literal("wallet_funding")),
       packageId: v.string(),
       points: v.number(),
       walletAmountNgn: v.optional(v.number()),
