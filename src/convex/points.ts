@@ -153,6 +153,7 @@ export const getStats = query({
     const user = await ctx.db.get(userId);
     if (user?.role !== "admin") return null;
 
+    const rate = await readPointRate(ctx);
     const allUsers = await ctx.db.query("users").collect();
     const allShipments = await ctx.db.query("shipments").collect();
     const allDocuments = await ctx.db.query("documents").collect();
@@ -161,7 +162,7 @@ export const getStats = query({
     const allVendors = await ctx.db.query("vendors").collect();
 
     const totalWalletNgn = allUsers.reduce(
-      (sum, u) => sum + (u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * 15),
+      (sum, u) => sum + (u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * rate.ngnPerPoint),
       0,
     );
 
