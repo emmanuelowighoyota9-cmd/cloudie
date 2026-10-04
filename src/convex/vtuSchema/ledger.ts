@@ -79,7 +79,9 @@ export const vtuLedgerTables = {
     // than were taken.
     nairaPrice: v.number(),
     ngnPerPoint: v.number(),
-    pointsDebited: v.number(),\n    /** Authoritative NGN amount debited from the customer wallet. */\n    walletDebitedNgn: v.optional(v.number()),
+    pointsDebited: v.number(),
+    /** Authoritative NGN amount debited from the customer wallet. */
+    walletDebitedNgn: v.optional(v.number()),
 
     providerReference: v.optional(v.string()),
     /** "vtu:purchase:<clientRequestId>" — copied here so a refund can find
