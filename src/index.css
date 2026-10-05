@@ -420,9 +420,10 @@
   .vtu-panel {
     background-color: var(--vtu-card);
     border: 1px solid var(--vtu-line);
-    border-radius: calc(var(--radius) + 6px);
+    border-radius: 1.25rem;
     box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.04),
-      0 10px 24px -18px hsl(var(--shadow-color) / 0.28);
+      0 16px 34px -24px hsl(var(--shadow-color) / 0.34);
+    transition: transform 180ms var(--ease-out-quint), box-shadow 180ms var(--ease-out-quint), border-color 180ms var(--ease-out-quint);
   }
 
   /* The ink band: the balance, and the screen you land on. Two faint blooms
@@ -451,6 +452,8 @@
       box-shadow var(--duration-fast) var(--ease-out-quint);
   }
 
+  .vtu-panel:has(button:active), .vtu-panel:has(a:active) { transform: scale(0.995); }
+
   .vtu-chip:hover {
     border-color: color-mix(in srgb, var(--vtu-band) 30%, var(--vtu-line));
   }
@@ -463,6 +466,11 @@
     background-color: color-mix(in srgb, var(--vtu-accent) 26%, var(--vtu-card));
     border-color: var(--vtu-accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--vtu-accent) 45%, transparent);
+  }
+
+  @media (max-width: 639px) {
+    .vtu-panel { border-radius: 1.15rem; }
+    .vtu-receipt-row { padding-block: 0.5rem; }
   }
 
   /* Rows in a receipt or a confirmation: label left, value right, hairline
