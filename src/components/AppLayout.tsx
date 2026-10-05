@@ -18,7 +18,7 @@ export function AppLayout() {
   }, [pathname]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,color-mix(in_srgb,var(--primary)_5%,transparent),transparent_30%),var(--background)]">
       {/* Desktop sidebar */}
       <motion.div
         initial={{ x: -12, opacity: 0 }}
@@ -46,7 +46,7 @@ export function AppLayout() {
         >
           <div
             key={pathname}
-            className="mx-auto w-full max-w-7xl page-gutter py-4 sm:py-6 lg:py-8"
+            className="mx-auto w-full max-w-[1440px] page-gutter py-5 sm:py-7 lg:py-9"
           >
             <Outlet />
           </div>
