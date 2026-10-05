@@ -10,10 +10,8 @@ import {
   Radio,
   Wifi,
 } from "lucide-react";
-import { api } from "@/convex/_generated/api";
-import type { CatalogProductView } from "@/convex/vtuCatalog";
+
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
 // Shared with the history rows and the purchase pages, so one service type has
 // one glyph everywhere it appears.
@@ -24,9 +22,6 @@ import {
   VtuServiceIcon,
   VtuShell,
 } from "@/components/vtu/shared";
-import { formatNgn } from "@/lib/pricing";
-import { VTU_SERVICE_TYPE_COPY, vtuServiceTypeLabel } from "@/lib/vtu";
-import { cn } from "@/lib/utils";
 
 /**
  * Catalog browse — everything on sale, grouped by service type.
@@ -59,7 +54,6 @@ const QUICK_LINKS = [
 ] as const;
 
 export default function VtuCatalog() {
-  const catalog = useQuery(api.vtuCatalog.listCatalog, {});
   const balance = useQuery(api.points.getBalance);
 
   return (
@@ -115,52 +109,30 @@ export default function VtuCatalog() {
         </VtuSection>
       </Reveal>
 
-      {catalog === undefined ? (
-        <div className="space-y-4">
-          <Skeleton className="h-40" />
-          <Skeleton className="h-40" />
-        </div>
-      ) : catalog.groups.length === 0 ? (
-        <Reveal>
-          <div className="vtu-panel p-8 text-center">
-            <p className="text-sm font-semibold">Nothing is on sale yet</p>
-            <p className="mx-auto mt-1 max-w-md text-sm text-vtu-muted">
-              No services are enabled right now. If that is unexpected, an
-              administrator can add them under VTU Catalog &amp; Routing — this
-              page updates the moment they do.
-            </p>
-          </div>
-        </Reveal>
-      ) : (
-        catalog.groups.map((group, groupIndex) => {
-          const copy = VTU_SERVICE_TYPE_COPY[group.serviceType];
-          return (
-            <Reveal key={group.serviceType} delay={groupIndex * 0.04}>
-              <VtuSection
-                title={vtuServiceTypeLabel(group.serviceType)}
-                hint={copy?.blurb}
-                action={
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
-                    <VtuServiceIcon serviceType={group.serviceType} className="h-4 w-4" />
-                  </span>
-                }
+      <Reveal>
+        <VtuSection title="Services" hint="Choose what you want to pay for.">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              { to: "/vtu/airtime", label: "Airtime", icon: Radio },
+              { to: "/vtu/bills?category=data", label: "Data", icon: Wifi },
+              { to: "/vtu/bills?category=electricity", label: "Electricity", icon: Lightbulb },
+              { to: "/vtu/bills", label: "More bills", icon: LayoutGrid },
+            ].map((item) => (
+              <Link
+                key={item.label}
+                to={item.to}
+                className="vtu-chip flex min-h-20 items-center gap-3 rounded-2xl px-4 py-3 transition-transform active:scale-[0.98]"
               >
-                <StaggerGroup className="grid gap-2 sm:grid-cols-2">
-                  {group.products.map((product) => (
-                    <StaggerItem key={product.productCode}>
-                      <ProductCard
-                        product={product}
-                        serviceType={group.serviceType}
-                      />
-                    </StaggerItem>
-                  ))}
-                </StaggerGroup>
-              </VtuSection>
-            </Reveal>
-          );
-        })
-      )}
-
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-vtu-chip text-vtu-text">
+                  <item.icon className="h-5 w-5" aria-hidden />
+                </span>
+                <span className="text-sm font-semibold">{item.label}</span>
+                <ArrowRight className="ml-auto h-4 w-4 text-vtu-muted" aria-hidden />
+              </Link>
+            ))}
+          </div>
+        </VtuSection>
+      </Reveal>
       <Reveal>
         <p className="flex items-start gap-2 px-1 text-[11px] text-vtu-muted">
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -171,126 +143,4 @@ export default function VtuCatalog() {
       </Reveal>
     </VtuShell>
   );
-}
-
-function ProductCard({
-  product,
-  serviceType,
-}: {
-  product: CatalogProductView;
-  /** Carried by the GROUP; `CatalogProductView` does not re-state its own
-   *  category, so the glyph is passed down rather than re-derived. */
-  serviceType: string;
-}) {
-  const shape = describeShape(product);
-
-  return (
-    <div className="vtu-panel flex h-full flex-col gap-3 p-4">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
-          <VtuServiceIcon serviceType={serviceType} className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 space-y-0.5">
-          <p className="truncate text-sm font-semibold">{product.displayName}</p>
-          <p className="text-[11px] text-vtu-muted">
-            We&rsquo;ll ask for: {product.customerIdentifierLabel}
-          </p>
-        </div>
-        <span className="ml-auto shrink-0 text-right text-sm font-semibold tabular-nums">
-          <PriceBlock product={product} />
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {shape.map((chip) => (
-          <span
-            key={chip}
-            className="rounded-full bg-vtu-chip px-2.5 py-1 text-[11px] text-vtu-muted"
-          >
-            {chip}
-          </span>
-        ))}
-      </div>
-
-      {product.purchasable ? (
-        <Button asChild variant="vtu" className="mt-auto w-full">
-          {/* Airtime keeps its own grid (network + amount chips); every other
-              product is bought on the bills page by product code. */}
-          <Link
-            to={
-              product.airtimeNetwork
-                ? `/vtu/airtime?network=${product.airtimeNetwork}`
-                : `/vtu/bills?product=${product.productCode}`
-            }
-          >
-            Buy now
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
-      ) : (
-        <div
-          className={cn(
-            "mt-auto rounded-xl border border-dashed border-vtu-line px-3 py-2.5 text-center text-[11px] text-vtu-muted",
-          )}
-        >
-          Not available to buy yet — ask support to enable it
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * The price line.
- *
- * Three honest cases, in order of certainty:
- *   - a resolved fixed price, which is exact;
- *   - an estimated range for anything whose cost moves with the amount;
- *   - no number at all, rather than a guess the checkout will contradict.
- */
-function PriceBlock({ product }: { product: CatalogProductView }) {
-  if (product.fixedPoints !== null) {
-    return (
-      <span className="inline-flex items-center gap-1 text-vtu-text">
-        <Coins className="h-3.5 w-3.5 text-vtu-muted" aria-hidden />
-        {product.fixedPoints.toLocaleString()} pts
-      </span>
-    );
-  }
-
-  const { indicativeMinPoints: lo, indicativeMaxPoints: hi } = product;
-  if (lo !== null && hi !== null) {
-    return (
-      <span className="block space-y-0.5">
-        <span className="block">
-          {lo === hi
-            ? `${lo.toLocaleString()} pts`
-            : `${lo.toLocaleString()}–${hi.toLocaleString()} pts`}
-        </span>
-        <span className="block text-[10px] font-normal text-vtu-muted tabular-nums">
-          est. {formatNgn(product.minAmount ?? 0)}–{formatNgn(product.maxAmount ?? 0)}
-        </span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="text-xs font-medium text-vtu-muted">
-      Price shown at checkout
-    </span>
-  );
-}
-
-/** What the customer has to choose, in words rather than enum values. */
-function describeShape(product: CatalogProductView): string[] {
-  const chips: string[] = [];
-  if (product.requiresAmount) {
-    chips.push("You choose the amount");
-    if (product.minAmount !== null && product.maxAmount !== null) {
-      chips.push(`${formatNgn(product.minAmount)}–${formatNgn(product.maxAmount)}`);
-    }
-  }
-  if (product.requiresPackageCode) chips.push("Choose a plan");
-  if (chips.length === 0) chips.push("Fixed price");
-  return chips;
 }

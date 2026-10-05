@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
+import { Reveal } from "@/components/motion";
 import {
   VtuBand,
   VtuChoice,
@@ -25,11 +25,9 @@ import {
   validateCustomerIdentifier,
   vtuServiceTypeLabel,
 } from "@/lib/vtu";
-import { cn } from "@/lib/utils";
 import { ArrowLeft, Coins, Loader2, Lock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
-import type { CatalogProductView } from "@/convex/vtuCatalog";
 
 /**
  * Bills: data bundles, cable subscriptions, electricity tokens and exam PINs.
@@ -343,20 +341,33 @@ export default function VtuBills() {
               {activeGroup && (
                 <Reveal delay={0.04}>
                   <VtuSection
-                    title={`${vtuServiceTypeLabel(activeGroup.serviceType)} products`}
-                    hint="Prices are charged directly from your NGN wallet."
+                    title={`${vtuServiceTypeLabel(activeGroup.serviceType)} options`}
+                    hint="Tap an option to continue."
                   >
-                    <StaggerGroup className="grid gap-2 sm:grid-cols-2">
+                    <div className="vtu-panel overflow-hidden divide-y divide-vtu-line">
                       {activeGroup.products.map((product) => (
-                        <StaggerItem key={product.productCode}>
-                          <BillCard
-                            product={product}
-                            serviceType={activeGroup.serviceType}
-                            onChoose={() => choose(product.productCode)}
-                          />
-                        </StaggerItem>
+                        <button
+                          key={product.productCode}
+                          type="button"
+                          onClick={() => choose(product.productCode)}
+                          className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-vtu-chip/60 active:bg-vtu-chip"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vtu-chip text-vtu-text">
+                            <VtuServiceIcon serviceType={activeGroup.serviceType} className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold">{product.displayName}</span>
+                            <span className="mt-0.5 block truncate text-[11px] text-vtu-muted">
+                              {product.customerIdentifierLabel}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-vtu-text">
+                            {product.fixedPoints !== null ? `${product.fixedPoints.toLocaleString()} pts` : "View price"}
+                          </span>
+                          <span className="text-vtu-muted">›</span>
+                        </button>
                       ))}
-                    </StaggerGroup>
+                    </div>
                   </VtuSection>
                 </Reveal>
               )}
@@ -661,64 +672,3 @@ export default function VtuBills() {
  * dash for two of them: an exact price, an estimated range for anything whose
  * cost follows the amount, and "at checkout" when the server priced nothing.
  */
-function BillCard({
-  product,
-  serviceType,
-  onChoose,
-}: {
-  product: CatalogProductView;
-  /** Carried by the GROUP, not by the product: `CatalogProductView` is a view
-   *  of one product and deliberately does not re-state its category. */
-  serviceType: string;
-  onChoose: () => void;
-}) {
-  return (
-    <VtuChoice
-      selected={false}
-      onClick={onChoose}
-      disabled={!product.purchasable}
-      className="flex h-full w-full items-start gap-3"
-    >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-vtu-chip text-vtu-text">
-        <VtuServiceIcon serviceType={serviceType} className="h-4 w-4" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold">
-          {product.displayName}
-        </span>
-        <span className="mt-0.5 block text-[11px] text-vtu-muted">
-          {product.purchasable
-            ? `We'll ask for: ${product.customerIdentifierLabel}`
-            : "Not available to buy yet — ask support to enable it"}
-        </span>
-        <span className="mt-1.5 block text-sm font-semibold tabular-nums">
-          {product.fixedNgn !== null
-            ? formatNgn(product.fixedNgn)
-            : product.indicativeMinNgn !== null &&
-                product.indicativeMaxNgn !== null
-              ? product.indicativeMinNgn === product.indicativeMaxNgn
-                ? formatNgn(product.indicativeMinNgn)
-                : `${formatNgn(product.indicativeMinNgn)}–${formatNgn(product.indicativeMaxNgn)}`
-              : "Price shown at checkout"}
-        </span>
-      </span>
-    </VtuChoice>
-  );
-}
-
-const DATE_FORMAT: Intl.DateTimeFormatOptions = {
-  day: "numeric",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-};
-
-/** "12 Mar, 14:05" — the year only once it stops being obvious. */
-function fmtWhen(ts: number): string {
-  const date = new Date(ts);
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleString(
-    "en-NG",
-    sameYear ? DATE_FORMAT : { ...DATE_FORMAT, year: "numeric" },
-  );
-}
