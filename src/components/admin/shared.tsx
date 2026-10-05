@@ -25,10 +25,10 @@ export function AdminPageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-[0_12px_40px_-32px_hsl(var(--shadow-color)/0.5)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{title}</h1>
-        {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+        {description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
     </div>
