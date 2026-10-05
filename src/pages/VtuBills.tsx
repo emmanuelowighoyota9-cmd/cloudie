@@ -397,7 +397,7 @@ export default function VtuBills() {
                     </div>
                   </VtuSection>
                 </Reveal>
-              )} )}
+              )}
             </>
           )}
 
@@ -692,10 +692,25 @@ export default function VtuBills() {
   );
 }
 
+const DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
 /**
- * One buyable product in the list.
+ * "12 Mar, 14:05" — with the year only once it stops being obvious.
  *
- * The price line distinguishes the three honest cases rather than printing a
- * dash for two of them: an exact price, an estimated range for anything whose
- * cost follows the amount, and "at checkout" when the server priced nothing.
+ * The receipt cites the moment the order was requested, so a customer
+ * reconciling a charge against their wallet statement sees the minute they
+ * remember rather than a raw timestamp.
  */
+function fmtWhen(ts: number): string {
+  const date = new Date(ts);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleString(
+    "en-NG",
+    sameYear ? DATE_FORMAT : { ...DATE_FORMAT, year: "numeric" },
+  );
+}
