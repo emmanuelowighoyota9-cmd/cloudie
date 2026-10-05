@@ -66,7 +66,7 @@ export function Header() {
           <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
             <Truck className="size-4" />
           </span>
-          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Crestline Express</span>
+          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Cloudie Operations</span>
         </Link>
       </div>
 
