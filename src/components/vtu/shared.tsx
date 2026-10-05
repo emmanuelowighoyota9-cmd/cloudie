@@ -180,14 +180,14 @@ export function VtuShell({
   return (
     <div
       className={cn(
-        "bg-vtu-canvas text-vtu-text",
+        "bg-vtu-canvas text-vtu-text min-h-[calc(100dvh-4rem)]",
         // Cancels the app shell's gutter and vertical padding, at every
         // breakpoint it sets them (0.75/1.25/2rem and 1/1.5/2rem).
         "-mx-3 -my-4 sm:-mx-5 sm:-my-6 lg:-mx-8 lg:-my-8",
         className,
       )}
     >
-      <div className="mx-auto w-full max-w-5xl space-y-6 px-3 py-6 sm:px-5 sm:py-8 lg:px-8 lg:py-10">
+      <div className="mx-auto w-full max-w-5xl space-y-5 px-3 py-4 pb-8 sm:space-y-6 sm:px-5 sm:py-7 lg:px-8 lg:py-9">
         {children}
       </div>
     </div>
@@ -210,7 +210,7 @@ export function VtuBand({
   return (
     <div
       className={cn(
-        "vtu-band relative overflow-hidden rounded-[calc(var(--radius)+8px)] px-5 py-5 sm:px-6 sm:py-6",
+        "vtu-band relative overflow-hidden rounded-[1.5rem] px-5 py-5 shadow-[0_24px_55px_-35px_hsl(var(--vtu-band)/0.75)] sm:px-6 sm:py-6",
         className,
       )}
     >
@@ -243,7 +243,7 @@ export function VtuNav({ className }: { className?: string }) {
         // Scrolls rather than wraps on a narrow phone: four tabs plus their
         // labels do not fit 320px, and a wrapped nav pushes the page heading
         // down on exactly the screens where vertical space is scarcest.
-        "-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "sticky top-1 z-20 -mx-1 flex gap-1.5 overflow-x-auto rounded-2xl bg-vtu-canvas/90 px-1 py-1 pb-2 backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
     >
@@ -257,7 +257,7 @@ export function VtuNav({ className }: { className?: string }) {
             // would leave the current page unstated.
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex min-h-11 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-medium",
+              "flex min-h-12 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold",
               "transition-[background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
               active
                 ? "bg-vtu-band text-vtu-band-fg shadow-sm"
@@ -300,7 +300,7 @@ export function VtuChoice({
       aria-pressed={selected}
       disabled={disabled}
       className={cn(
-        "vtu-chip min-h-11 rounded-xl px-3 py-2.5 text-left disabled:opacity-60",
+        "vtu-chip min-h-14 rounded-2xl px-3.5 py-3 text-left shadow-[0_8px_24px_-20px_hsl(var(--vtu-text)/0.5)] transition-all duration-200 active:scale-[0.98] disabled:opacity-60",
         className,
       )}
     >
@@ -448,7 +448,7 @@ export function VtuRow({
   className?: string;
 }) {
   return (
-    <div className={cn("vtu-receipt-row", className)}>
+    <div className={cn("vtu-receipt-row min-h-11", className)}>
       <dt className="shrink-0 text-xs text-vtu-muted">{label}</dt>
       <dd
         className={cn(
