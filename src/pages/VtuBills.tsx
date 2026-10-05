@@ -25,9 +25,10 @@ import {
   validateCustomerIdentifier,
   vtuServiceTypeLabel,
 } from "@/lib/vtu";
-import { ArrowLeft, Coins, Loader2, Lock, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Coins, Loader2, Lock, Plus } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
 
 /**
  * Bills: data bundles, cable subscriptions, electricity tokens and exam PINs.
@@ -341,36 +342,62 @@ export default function VtuBills() {
               {activeGroup && (
                 <Reveal delay={0.04}>
                   <VtuSection
-                    title={`${vtuServiceTypeLabel(activeGroup.serviceType)} options`}
-                    hint="Tap an option to continue."
+                    title={
+                      activeGroup.serviceType === "data"
+                        ? "Choose a data plan"
+                        : activeGroup.serviceType === "electricity"
+                          ? "Choose electricity service"
+                          : activeGroup.serviceType === "cable"
+                            ? "Choose TV service"
+                            : "Choose education service"
+                    }
+                    hint={
+                      activeGroup.serviceType === "data"
+                        ? "Select a bundle, then enter the recipient number."
+                        : activeGroup.serviceType === "electricity"
+                          ? "Select your provider service, then enter your meter details."
+                          : activeGroup.serviceType === "cable"
+                            ? "Select your TV service, then enter your smartcard or IUC number."
+                            : "Select an exam service, then enter the required candidate details."
+                    }
                   >
-                    <div className="vtu-panel overflow-hidden divide-y divide-vtu-line">
-                      {activeGroup.products.map((product) => (
+                    <div className="overflow-hidden rounded-2xl border border-vtu-line bg-vtu-card">
+                      {activeGroup.products.map((product, index) => (
                         <button
                           key={product.productCode}
                           type="button"
                           onClick={() => choose(product.productCode)}
-                          className="flex min-h-[68px] w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-vtu-chip/60 active:bg-vtu-chip"
+                          className={cn(
+                            "flex min-h-[72px] w-full items-center gap-3 px-4 py-3 text-left",
+                            "transition-colors hover:bg-vtu-chip/60 active:bg-vtu-chip",
+                            index > 0 && "border-t border-vtu-line",
+                          )}
                         >
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-vtu-chip text-vtu-text">
                             <VtuServiceIcon serviceType={activeGroup.serviceType} className="h-4 w-4" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold">{product.displayName}</span>
+                            <span className="block truncate text-sm font-semibold">
+                              {product.displayName}
+                            </span>
                             <span className="mt-0.5 block truncate text-[11px] text-vtu-muted">
-                              {product.customerIdentifierLabel}
+                              {product.requiresAmount
+                                ? "Enter amount"
+                                : product.customerIdentifierLabel}
                             </span>
                           </span>
-                          <span className="shrink-0 text-right text-xs font-semibold tabular-nums text-vtu-text">
-                            {product.fixedPoints !== null ? `${product.fixedPoints.toLocaleString()} pts` : "View price"}
+                          <span className="shrink-0 text-xs font-semibold tabular-nums text-vtu-text">
+                            {product.fixedPoints !== null
+                              ? `${product.fixedPoints.toLocaleString()} pts`
+                              : "Select"}
                           </span>
-                          <span className="text-vtu-muted">›</span>
+                          <ArrowRight className="h-4 w-4 shrink-0 text-vtu-muted" aria-hidden />
                         </button>
                       ))}
                     </div>
                   </VtuSection>
                 </Reveal>
-              )}
+              )} )}
             </>
           )}
 
