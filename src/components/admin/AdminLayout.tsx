@@ -320,7 +320,7 @@ function AdminShell() {
         <div className="flex h-16 items-center gap-3 border-b border-border/70 px-4">
           <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-slate-900 dark:text-white">Crestline Express Admin</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">Cloudie Operations Admin</p>
             <p className="text-[10px] text-slate-400">Super Admin Console</p>
           </div>
         </div>
@@ -335,7 +335,7 @@ function AdminShell() {
           <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-80 flex-col border-r border-border bg-card shadow-2xl">
             <div className="flex h-16 items-center gap-2 border-b border-border/70 px-4">
               <Shield className="size-5 text-primary" />
-              <p className="flex-1 text-sm font-bold text-foreground">Crestline Express Admin</p>
+              <p className="flex-1 text-sm font-bold text-foreground">Cloudie Operations Admin</p>
               <Button variant="ghost" size="icon" className="size-11" onClick={() => setMobileOpen(false)} aria-label="Close menu">
                 <X className="size-5" />
               </Button>
