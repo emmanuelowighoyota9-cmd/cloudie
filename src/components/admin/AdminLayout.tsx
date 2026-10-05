@@ -253,7 +253,7 @@ function AdminShell() {
   };
 
   const navList = (
-    <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4" aria-label="Admin navigation">
+    <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Admin navigation">
       {NAV.map((item) => {
         const count = badgeFor(item.badge);
         const pendingCount = pendingCountFor(item.pendingScope);
@@ -265,11 +265,11 @@ function AdminShell() {
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
               cn(
-                        "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium " +
+                        "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-semibold " +
                         "transition-[background-color,color,transform,border-color] duration-200 " +
                         "ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98]",
                 isActive
-                  ? "border-primary/20 bg-primary/10 text-primary"
+                  ? "border-primary/15 bg-primary/10 text-primary shadow-sm"
                   : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
               )
             }
@@ -314,10 +314,10 @@ function AdminShell() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-900">
+    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_right,color-mix(in_srgb,var(--primary)_6%,transparent),transparent_30%),var(--background)]">
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800 lg:flex">
-        <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-4 dark:border-slate-700">
+      <aside className="hidden w-[272px] shrink-0 flex-col border-r border-border/70 bg-card/95 shadow-[10px_0_35px_-30px_hsl(var(--shadow-color)/0.7)] backdrop-blur-xl lg:flex">
+        <div className="flex h-16 items-center gap-3 border-b border-border/70 px-4">
           <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <div className="flex-1">
             <p className="text-sm font-bold text-slate-900 dark:text-white">Crestline Express Admin</p>
@@ -333,7 +333,7 @@ function AdminShell() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-foreground/40" onClick={() => setMobileOpen(false)} />
           <aside className="absolute left-0 top-0 flex h-full w-[88vw] max-w-80 flex-col border-r border-border bg-card shadow-2xl">
-            <div className="flex h-16 items-center gap-2 border-b border-border px-4">
+            <div className="flex h-16 items-center gap-2 border-b border-border/70 px-4">
               <Shield className="size-5 text-primary" />
               <p className="flex-1 text-sm font-bold text-foreground">Crestline Express Admin</p>
               <Button variant="ghost" size="icon" className="size-11" onClick={() => setMobileOpen(false)} aria-label="Close menu">
@@ -347,7 +347,7 @@ function AdminShell() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-card px-3 sm:h-14 sm:gap-3 sm:px-4">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-border/70 bg-card/80 px-3 shadow-[0_8px_30px_-24px_hsl(var(--shadow-color)/0.55)] backdrop-blur-xl sm:h-14 sm:gap-3 sm:px-5">
           <Button variant="ghost" size="icon" className="size-11 shrink-0 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <LayoutDashboard className="h-4 w-4" />
           </Button>
@@ -368,7 +368,7 @@ function AdminShell() {
           className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain pb-[calc(1rem+env(safe-area-inset-bottom))] lg:pb-0"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
-          <div className="mx-auto w-full max-w-7xl page-gutter py-4 sm:py-6 lg:py-8">
+          <div className="mx-auto w-full max-w-[1440px] page-gutter py-5 sm:py-7 lg:py-9">
             <Outlet />
           </div>
         </main>
