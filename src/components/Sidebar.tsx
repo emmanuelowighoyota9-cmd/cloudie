@@ -96,15 +96,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r border-border bg-card transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        "flex h-screen flex-col border-r border-border/70 bg-card/95 shadow-[8px_0_30px_-28px_hsl(var(--shadow-color)/0.6)] backdrop-blur-xl transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
         collapsed ? "w-16" : "w-60",
         "dark:border-border dark:bg-card",
       )}
     >
       {/* Logo */}
-      <div className="flex h-14 items-center border-b border-border px-4">
+      <div className="flex h-16 items-center border-b border-border/70 px-4">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm">
             <Cloud className="h-4 w-4 text-primary-foreground" />
           </div>
           {!collapsed && (
@@ -152,7 +152,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               key={item.to}
               to={item.to}
               className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium " +
+                "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium " +
                 "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] " +
                 "hover:translate-x-0.5 active:scale-[0.98]",
                 isActive(item.to)
@@ -217,7 +217,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         <button
           onClick={() => signOut()}
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
             "text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
           )}
         >
