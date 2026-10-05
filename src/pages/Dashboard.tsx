@@ -67,7 +67,7 @@ export default function Dashboard() {
           Welcome back{user?.name ? `, ${user.name}` : ""}
         </h1>
         <p className="page-subtitle">
-          Here's an overview of your Crestline Express workspace.
+          Here's an overview of your Cloudie Operations workspace.
         </p>
       </div>
 
