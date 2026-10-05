@@ -60,13 +60,13 @@ export default function Dashboard() {
   const recentTx = (ledger ?? []).slice(0, 5);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7 sm:space-y-9">
       {/* Welcome */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+        <h1 className="page-title text-foreground">
           Welcome back{user?.name ? `, ${user.name}` : ""}
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground dark:text-slate-400">
+        <p className="page-subtitle">
           Here's an overview of your Crestline Express workspace.
         </p>
       </div>
@@ -92,8 +92,8 @@ export default function Dashboard() {
       </nav>
 
       {/* Hero Points Card */}
-      <Card className="overflow-hidden border-0 shadow-md">
-        <div className="bg-primary px-6 py-2">
+      <Card className="overflow-hidden border border-primary/10 bg-card shadow-[0_24px_60px_-38px_hsl(var(--primary)/0.55)]">
+        <div className="bg-primary/95 px-6 py-2">
           <div className="h-1.5 w-32 bg-white/30 rounded-full" />
         </div>
         <CardContent className="p-6">
@@ -104,7 +104,7 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground dark:text-slate-400">NGN Wallet Balance</p>
-                <p className="text-3xl font-bold text-foreground">₦{(balance ?? 0).toLocaleString("en-NG")}</p>
+                <p className="mt-0.5 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">₦{(balance ?? 0).toLocaleString("en-NG")}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Nigerian Naira wallet</p>
               </div>
             </div>
@@ -222,7 +222,7 @@ export default function Dashboard() {
       {/* Workspace Hub */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <CardTitle className="section-label">
             Your Workspaces
           </CardTitle>
           <p className="text-xs text-slate-400">Everything else lives in one of these.</p>
