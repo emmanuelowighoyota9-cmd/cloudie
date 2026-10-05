@@ -99,7 +99,7 @@ export default function Admin() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-7 sm:space-y-9">
       <AdminPageHeader
         title="Admin Dashboard"
         description="Real-time platform metrics. Every number reflects live database state."
@@ -107,7 +107,7 @@ export default function Admin() {
 
       {metricGroups.map((group) => (
         <section key={group.title} className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">{group.title}</h2>
+          <h2 className="section-label">{group.title}</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {group.items.map((m) => (
               <Link key={m.title} to={m.to}>
