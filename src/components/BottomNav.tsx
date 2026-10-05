@@ -25,7 +25,7 @@ export function BottomNav() {
   };
 
   return (
-    <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_-18px_color-mix(in_srgb,var(--foreground)_35%,transparent)] backdrop-blur lg:hidden">
+    <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/70 bg-card/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_36px_-24px_hsl(var(--shadow-color)/0.55)] backdrop-blur-xl lg:hidden">
       <div className="flex items-stretch justify-around px-1 pt-1 sm:px-2">
         {navItems.map((item) => {
           const active = isActive(item.to);
@@ -34,7 +34,7 @@ export function BottomNav() {
               key={item.to}
               to={item.to}
               className={cn(
-                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-medium " +
+                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[10px] font-semibold " +
                 "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.95]",
                 active
                   ? "bg-primary/10 text-primary"

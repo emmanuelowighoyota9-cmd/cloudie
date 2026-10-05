@@ -480,3 +480,105 @@
     border-top: 0;
   }
 }
+
+
+/* ─────────────────────────────────────────────────────────────
+   PRODUCT-WIDE UI POLISH
+   Shared primitives below keep every route visually related without
+   requiring each page to carry its own one-off styling.
+   ───────────────────────────────────────────────────────────── */
+
+@layer components {
+  .page-title {
+    font-family: var(--font-display);
+    font-size: clamp(1.45rem, 2vw, 2rem);
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+  }
+
+  .page-subtitle {
+    margin-top: 0.4rem;
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .glass-surface {
+    background: color-mix(in srgb, var(--card) 86%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+    box-shadow: 0 18px 50px -38px hsl(var(--shadow-color) / 0.5);
+    backdrop-filter: blur(18px);
+  }
+
+  .section-label {
+    color: var(--muted-foreground);
+    font-size: 0.68rem;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .data-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3.25rem;
+    border-radius: 0.85rem;
+    padding: 0.55rem 0.75rem;
+    transition: background-color var(--duration-fast) var(--ease-out-quint);
+  }
+
+  .data-row:hover {
+    background: color-mix(in srgb, var(--muted) 62%, transparent);
+  }
+
+  .status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: var(--primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent);
+  }
+
+  .page-divider {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+
+  /* Give native controls the same visual language as the shadcn inputs. */
+  select,
+  textarea {
+    border-color: var(--input);
+    border-radius: 0.75rem;
+    background-color: var(--card);
+    color: var(--foreground);
+    transition: border-color var(--duration-fast) var(--ease-out-quint),
+      box-shadow var(--duration-fast) var(--ease-out-quint);
+  }
+
+  select:focus,
+  textarea:focus {
+    border-color: var(--ring);
+    outline: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+  }
+
+  /* Consistent mobile rhythm across long pages. */
+  @media (max-width: 639px) {
+    [data-slot="card"] {
+      border-radius: 1rem;
+    }
+
+    [data-slot="card-header"] {
+      padding-inline: 1rem;
+    }
+
+    [data-slot="card-content"] {
+      padding-inline: 1rem;
+    }
+  }
+}

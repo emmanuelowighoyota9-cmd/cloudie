@@ -50,7 +50,7 @@ export function Header() {
     : user?.email?.[0]?.toUpperCase() || "U";
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border bg-card/85 px-3 backdrop-blur-md supports-[backdrop-filter]:bg-card/70 sm:h-14 sm:px-4">
+    <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-border/70 bg-card/80 px-3 shadow-[0_8px_30px_-24px_hsl(var(--shadow-color)/0.55)] backdrop-blur-xl supports-[backdrop-filter]:bg-card/65 sm:h-14 sm:px-5">
       <div className="flex min-w-0 items-center gap-1 sm:gap-3">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
@@ -63,10 +63,10 @@ export function Header() {
           </SheetContent>
         </Sheet>
         <Link to="/dashboard" className="flex min-w-0 items-center gap-2 lg:hidden">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
             <Truck className="size-4" />
           </span>
-          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Crestline Express</span>
+          <span className="hidden truncate text-sm font-bold tracking-tight text-foreground min-[360px]:inline">Cloudie Operations</span>
         </Link>
       </div>
 
@@ -74,7 +74,7 @@ export function Header() {
         {/* Wallet Balance */}          <Link to="/buy-points" className="shrink-0 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Badge
               variant="default"
-              className="min-h-11 gap-1.5 rounded-full border-0 px-2.5 py-2 text-xs font-semibold shadow-sm transition-shadow duration-200 hover:shadow-md sm:min-h-8 sm:px-3 sm:text-sm"
+              className="min-h-11 gap-1.5 rounded-full border border-primary/10 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary shadow-none transition-all duration-200 hover:bg-primary/15 hover:shadow-sm sm:min-h-8 sm:px-3.5 sm:text-sm"
             >
             <Box className="h-3.5 w-3.5" />
             {walletBalance != null ? formatNgn(walletBalance) : "—"}
