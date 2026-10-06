@@ -2,24 +2,9 @@ import { Link, useLocation } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard,
-  ShoppingBag,
-  FileText,
-  Building2,
-  Layers,
-  Users,
-  Bell,
-  Settings,
-  Shield,
-  CreditCard,
-  Wallet,
-  Truck,
-  Store,
-  Receipt,
-  FileStack,
-  Zap,
-  Phone,
-  TrendingUp,
+  LayoutDashboard, ShoppingBag, FileText, Building2, Layers, Users, Bell,
+  Settings, Shield, CreditCard, Wallet, Truck, Store, Receipt, FileStack,
+  Zap, Phone, TrendingUp,
 } from "lucide-react";
 
 const navItems = [
@@ -29,9 +14,6 @@ const navItems = [
   { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Fund Wallet", icon: CreditCard, to: "/buy-points" },
-  // Mirrors the desktop sidebar, which already carried this entry. Without it
-  // the mobile drawer was the one navigation surface in the customer app with
-  // no route to airtime, data or bills at all.
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
@@ -46,52 +28,54 @@ const navItems = [
   { label: "Admin", icon: Shield, to: "/admin" },
 ];
 
-interface MobileNavProps {
-  onNavigate?: () => void;
-}
+interface MobileNavProps { onNavigate?: () => void; }
 
 export function MobileNav({ onNavigate }: MobileNavProps) {
   const location = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const isActive = (path: string) => {
-    if (path === "/dashboard") return location.pathname === "/dashboard";
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path: string) =>
+    path === "/dashboard"
+      ? location.pathname === "/dashboard"
+      : location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border/70 px-4 bg-card/70 backdrop-blur-xl">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border/70 bg-card/70 px-4 backdrop-blur-xl">
         <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <Truck className="size-4" />
+          <CloudieMark />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-base font-bold tracking-tight text-foreground">Crestline Express</p>
+          <p className="truncate text-base font-bold tracking-tight text-foreground">Cloudie</p>
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
         </div>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3 overscroll-contain" aria-label="Mobile navigation">
-        {navItems
-          .filter((item) => item.label !== "Admin" || isAdmin)
-          .map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              onClick={onNavigate}
-              aria-current={isActive(item.to) ? "page" : undefined}
-              className={cn(
-                "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium transition-colors",
-                isActive(item.to)
-                  ? "border-primary/20 bg-primary/10 text-primary"
-                  : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          ))}
+      <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3" aria-label="Mobile navigation">
+        {navItems.filter((item) => item.label !== "Admin" || isAdmin).map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            aria-current={isActive(item.to) ? "page" : undefined}
+            className={cn(
+              "flex min-h-11 items-center gap-3 rounded-xl border px-3 text-sm font-medium transition-colors",
+              isActive(item.to)
+                ? "border-primary/20 bg-primary/10 text-primary"
+                : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </Link>
+        ))}
       </nav>
     </div>
+  );
+}
+
+function CloudieMark() {
+  return (
+    <span aria-hidden className="text-sm font-black tracking-tight">C</span>
   );
 }
