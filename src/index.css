@@ -67,7 +67,7 @@
   --duration-slow: 380ms;
 }
 
-/* CRESTLINE DESIGN SYSTEM — deep ink, ocean teal, and signal amber */
+/* Cloudie base design tokens — legacy token values are overridden by the global dark system below. */
 :root {
   --radius: 0.75rem;
   --background: #f4f7fb;
