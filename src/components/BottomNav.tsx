@@ -25,7 +25,7 @@ export function BottomNav() {
   };
 
   return (
-    <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/70 bg-card/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_36px_-24px_hsl(var(--shadow-color)/0.55)] backdrop-blur-xl lg:hidden">
+    <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/70 bg-card/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_36px_-24px_hsl(var(--shadow-color)/0.55)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6px)" }}>
       <div className="flex items-stretch justify-around px-1 pt-1 sm:px-2">
         {navItems.map((item) => {
           const active = isActive(item.to);
