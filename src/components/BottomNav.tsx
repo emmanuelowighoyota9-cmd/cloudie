@@ -1,31 +1,30 @@
 import { Link, useLocation } from "react-router";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Home, CreditCard, Truck, FileText, Building2, FileStack, Zap } from "lucide-react";
+import { Home, ShoppingBag, Zap, Wallet, Receipt, MoreHorizontal } from "lucide-react";
 
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
-  { label: "Wallet", icon: CreditCard, to: "/buy-points" },
-  // Placed third, ahead of the back-office items, because on a phone this bar
-  // is the only permanent navigation and bill payment is what people open the
-  // app for. Every VTU sub-page highlights it: `/vtu` is prefix-matched below.
+  { label: "Market", icon: ShoppingBag, to: "/marketplace" },
   { label: "Airtime", icon: Zap, to: "/vtu" },
-  { label: "Shipments", icon: Truck, to: "/shipments" },
-  { label: "Docs", icon: FileStack, to: "/documents" },
-  { label: "Tickets", icon: FileText, to: "/ticketing" },
-  { label: "SaaS", icon: Building2, to: "/business" },
+  { label: "Wallet", icon: Wallet, to: "/buy-points" },
+  { label: "Orders", icon: Receipt, to: "/orders" },
+  { label: "More", icon: MoreHorizontal, to: "/transactions" },
 ];
 
 export function BottomNav() {
   const location = useLocation();
-
-  const isActive = (path: string) => {
-    if (path === "/dashboard") return location.pathname === "/dashboard";
-    return location.pathname.startsWith(path);
-  };
+  const isActive = (path: string) =>
+    path === "/dashboard"
+      ? location.pathname === "/dashboard"
+      : location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
-    <nav aria-label="Primary mobile navigation" className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/70 bg-card/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-16px_36px_-24px_hsl(var(--shadow-color)/0.55)] backdrop-blur-xl lg:hidden" style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6px)" }}>
+    <nav
+      aria-label="Primary mobile navigation"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/70 bg-card/90 backdrop-blur-xl lg:hidden"
+      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 6px)" }}
+    >
       <div className="flex items-stretch justify-around px-1 pt-1 sm:px-2">
         {navItems.map((item) => {
           const active = isActive(item.to);
@@ -33,14 +32,11 @@ export function BottomNav() {
             <Link
               key={item.to}
               to={item.to}
-              className={cn(
-                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[10px] font-semibold " +
-                "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.95]",
-                active
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
               aria-current={active ? "page" : undefined}
+              className={cn(
+                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[10px] font-semibold transition-[background-color,color,transform] duration-200 active:scale-[0.95]",
+                active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
             >
               {active && (
                 <motion.span
