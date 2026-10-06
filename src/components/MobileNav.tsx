@@ -61,8 +61,8 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-card">
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border px-4">
+    <div className="flex h-full flex-col bg-background">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-border/70 px-4 bg-card/70 backdrop-blur-xl">
         <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
           <Truck className="size-4" />
         </div>
@@ -71,7 +71,7 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
           <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
         </div>
       </div>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3" aria-label="Mobile navigation">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3 overscroll-contain" aria-label="Mobile navigation">
         {navItems
           .filter((item) => item.label !== "Admin" || isAdmin)
           .map((item) => (
