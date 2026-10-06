@@ -279,7 +279,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/marketplace" element={<MarketplacePage />} />
                   <Route path="/marketplace/numbers" element={<MarketplacePage />} />
                   <Route path="/marketplace/boost" element={<MarketplacePage />} />
-                  <Route path="/marketplace/orders" element={<MarketplacePage />} />
+                  <Route path="/marketplace/orders" element={<Orders />} />
                   <Route path="/referrals" element={<Referrals />} />
                   <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/settings" element={<Settings />} />
