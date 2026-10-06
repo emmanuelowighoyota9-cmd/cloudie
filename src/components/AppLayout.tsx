@@ -46,7 +46,7 @@ export function AppLayout() {
         >
           <div
             key={pathname}
-            className="mx-auto w-full max-w-[1440px] page-gutter page-motion py-5 sm:py-7 lg:py-9"
+            className="mx-auto w-full max-w-[1440px] page-gutter py-5 sm:py-7 lg:py-9"
           >
             <Outlet />
           </div>
