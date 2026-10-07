@@ -784,3 +784,102 @@ html,body{background:#050706!important;color:#f4f8f6!important}body{min-height:1
     .cloudie-transactions-page .cloudie-filter-bar > * { flex: 0 0 auto; }
   }
 }
+
+
+/* CLOUDIE DOCUMENTATION DESIGN SYSTEM */
+@layer base {
+  :root {
+    color-scheme: light;
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
+    --secondary: #eff6ff;
+    --secondary-foreground: #1e3a8a;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --accent: #1e6091;
+    --accent-foreground: #ffffff;
+    --border: #e2e8f0;
+    --input: #cbd5e1;
+    --ring: #2563eb;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #0f172a;
+    --sidebar-primary: #2563eb;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #eff6ff;
+    --sidebar-accent-foreground: #1e3a8a;
+    --sidebar-border: #e2e8f0;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --shadow-color: 215 25% 25%;
+  }
+  .dark {
+    color-scheme: dark;
+    --background: #08111f;
+    --foreground: #f8fafc;
+    --card: #0f1b2d;
+    --card-foreground: #f8fafc;
+    --popover: #0f1b2d;
+    --popover-foreground: #f8fafc;
+    --primary: #3b82f6;
+    --primary-foreground: #ffffff;
+    --secondary: #12233d;
+    --secondary-foreground: #dbeafe;
+    --muted: #132238;
+    --muted-foreground: #94a3b8;
+    --accent: #2563eb;
+    --accent-foreground: #ffffff;
+    --border: #24364f;
+    --input: #334963;
+    --ring: #60a5fa;
+    --sidebar: #0a1423;
+    --sidebar-foreground: #f8fafc;
+    --sidebar-primary: #3b82f6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #12233d;
+    --sidebar-accent-foreground: #dbeafe;
+    --sidebar-border: #24364f;
+    --surface: #0f1b2d;
+    --surface-2: #0b1626;
+    --shadow-color: 215 45% 3%;
+  }
+}
+
+@layer components {
+  .cloudie-doc-shell {
+    min-height: 100%;
+  }
+  .cloudie-doc-shell .interactive-card {
+    border-color: var(--border);
+    box-shadow: 0 8px 24px -20px hsl(var(--shadow-color) / .28);
+  }
+  .cloudie-doc-shell .interactive-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+    box-shadow: 0 20px 42px -30px hsl(var(--primary) / .25);
+  }
+  .cloudie-doc-hero {
+    background: linear-gradient(135deg, #1e6091 0%, #2563eb 55%, #3b82f6 100%);
+    color: white;
+    box-shadow: 0 28px 60px -38px rgb(37 99 235 / .5);
+  }
+  .cloudie-doc-balance {
+    background: linear-gradient(135deg, #1e6091, #2563eb);
+    color: white;
+    box-shadow: 0 26px 58px -34px rgb(37 99 235 / .48);
+  }
+  .cloudie-doc-bottom-dock {
+    background: color-mix(in srgb, var(--card) 94%, transparent);
+    border: 1px solid var(--border);
+    box-shadow: 0 18px 42px -24px rgb(15 23 42 / .28);
+    backdrop-filter: blur(18px);
+  }
+  @media (max-width:639px) {
+    .cloudie-doc-hero { border-radius: 1.25rem; }
+    .cloudie-doc-balance { border-radius: 1.25rem; }
+  }
+}
