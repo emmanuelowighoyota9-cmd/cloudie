@@ -176,9 +176,169 @@ export const tripSummary: StarterTemplate = {
   ]}]},
 };
 
+/** Expanded Cloudie catalog: additional travel and commemorative templates. */
+const flightETicket: StarterTemplate = {
+  ...common,
+  slug: "flight-e-ticket-summary",
+  name: "Flight E-Ticket Summary",
+  documentType: "flight_itinerary",
+  description: "Professional travel e-ticket summary for customer itineraries and trip records. Not an airline-issued ticket.",
+  requiredCredits: 30,
+  schema: { fields: [
+    { id:"passenger",type:"text",label:"Passenger",default:"Jordan Blake",required:true,maxLength:40 },
+    { id:"ticketNumber",type:"reference",label:"Ticket reference",default:"CLOUD-ETK-48291",required:true },
+    { id:"airline",type:"text",label:"Airline",default:"Northstar Airways",required:true,maxLength:40 },
+    { id:"flightNumber",type:"reference",label:"Flight number",default:"NS 214",required:true },
+    { id:"from",type:"text",label:"From",default:"New York (JFK)",required:true,maxLength:32 },
+    { id:"to",type:"text",label:"To",default:"London (LHR)",required:true,maxLength:32 },
+    { id:"date",type:"date",label:"Departure date",default:"2026-11-14",required:true },
+    { id:"time",type:"time",label:"Departure time",default:"19:40",required:true },
+    { id:"cabin",type:"select",label:"Cabin",default:"Economy",options:[{label:"Economy",value:"Economy"},{label:"Premium Economy",value:"Premium Economy"},{label:"Business",value:"Business"}]},
+    { id:"fare",type:"currency",label:"Illustrative fare",currency:"USD",default:"684.00"},
+    { id:"note",type:"text",label:"Notice",default:"Sample itinerary document — not proof of ticket issuance.",maxLength:120},
+    { id:"qrValue",type:"text",label:"QR payload",default:"cloudie.example/travel/CLOUD-ETK-48291",maxLength:120},
+  ]},
+  configuration:{renderScale:2,pages:[{width:794,height:1000,background:PAPER,elements:[
+    box(0,0,794,128,"#173f5f",0),txt(56,48,"E-TICKET SUMMARY",{size:11,weight:700,color:"#dbeafe",letterSpacing:2.8}),
+    val(56,91,"airline",{size:23,weight:800,color:"#fff",maxChars:32}),cap(620,48,"Reference",{color:"#bfdbfe",align:"right",w:118}),val(620,78,"ticketNumber",{size:13,weight:800,color:"#fff",align:"right",w:118}),
+    cap(56,168,"Passenger"),val(56,194,"passenger",{size:17,weight:700,color:INK}),cap(56,246,"Flight"),val(56,272,"flightNumber",{size:14,weight:700,color:INK}),
+    box(56,320,682,170,SURFACE,18,RULE),cap(84,352,"From"),val(84,386,"from",{size:16,weight:700,color:INK,maxChars:27}),cap(450,352,"To"),val(450,386,"to",{size:16,weight:700,color:INK,maxChars:27}),
+    cap(84,438,"Date"),val(84,462,"date",{size:12.5,color:MUTED}),cap(300,438,"Departure"),val(300,462,"time",{size:12.5,color:MUTED}),cap(500,438,"Cabin"),val(500,462,"cabin",{size:12.5,color:MUTED}),
+    cap(56,548,"Illustrative fare"),val(56,580,"fare",{size:24,weight:800,color:INK}),cap(56,634,"Notice"),val(56,658,"note",{size:10.5,color:MUTED,maxChars:115}),
+    rule(56,790,738,790),qr(56,814,86,"qrValue"),txt(158,842,"Travel record reference",{size:11,weight:600,color:INK}),txt(158,862,"Cloudie document workspace",{size:10.5,color:MUTED}),
+    txt(56,936,"NOT AN AIRLINE-ISSUED TICKET",{size:9,weight:700,color:"#b45309",letterSpacing:1.2}),txt(620,964,"1 / 1",{size:9.5,color:FAINT,align:"right",w:118}),
+  ]}]},
+};
+
+const multiCityItinerary: StarterTemplate = {
+  ...common,
+  slug:"multi-city-flight-itinerary",
+  name:"Multi-City Flight Itinerary",
+  documentType:"flight_itinerary",
+  description:"A structured multi-leg itinerary for trip planning, travel records and customer packs.",
+  requiredCredits:32,
+  schema:{fields:[
+    {id:"traveler",type:"text",label:"Traveler",default:"Jordan Blake",required:true,maxLength:40},
+    {id:"tripRef",type:"reference",label:"Trip reference",default:"TRIP-48291",required:true},
+    {id:"leg1",type:"text",label:"Leg 1",default:"JFK → LHR · 14 Nov · NS 214 · 19:40",required:true,maxLength:70},
+    {id:"leg2",type:"text",label:"Leg 2",default:"LHR → CDG · 16 Nov · NS 402 · 09:10",required:true,maxLength:70},
+    {id:"leg3",type:"text",label:"Leg 3",default:"CDG → JFK · 20 Nov · NS 611 · 14:25",required:true,maxLength:70},
+    {id:"hotel",type:"text",label:"Accommodation",default:"Harbour House London · 15–16 Nov",maxLength:70},
+    {id:"purpose",type:"text",label:"Trip purpose",default:"Business meetings",maxLength:60},
+    {id:"notes",type:"textarea",label:"Notes",default:"Keep airline and accommodation confirmations with this itinerary.",maxLength:180},
+  ]},
+  configuration:{renderScale:2,pages:[{width:794,height:1000,background:PAPER,elements:[
+    box(0,0,794,126,"#1e6091",0),txt(56,48,"MULTI-CITY ITINERARY",{size:11,weight:700,color:"#dbeafe",letterSpacing:2.5}),val(56,90,"traveler",{size:22,weight:800,color:"#fff"}),cap(620,48,"Trip reference",{color:"#bfdbfe",align:"right",w:118}),val(620,78,"tripRef",{size:13,weight:800,color:"#fff",align:"right",w:118}),
+    cap(56,168,"Flight leg 1"),box(56,184,682,66,SURFACE,12,RULE),val(76,222,"leg1",{size:12.5,weight:600,color:INK,maxChars:70}),
+    cap(56,278,"Flight leg 2"),box(56,294,682,66,SURFACE,12,RULE),val(76,332,"leg2",{size:12.5,weight:600,color:INK,maxChars:70}),
+    cap(56,388,"Flight leg 3"),box(56,404,682,66,SURFACE,12,RULE),val(76,442,"leg3",{size:12.5,weight:600,color:INK,maxChars:70}),
+    cap(56,510,"Accommodation"),val(56,536,"hotel",{size:13,color:INK,maxChars:70}),cap(56,584,"Purpose"),val(56,610,"purpose",{size:13,color:INK}),cap(56,660,"Notes"),val(56,686,"notes",{size:11.5,color:MUTED,maxChars:175,lineHeight:17}),
+    rule(56,800,738,800),txt(56,842,"Planning document · confirm final bookings with the relevant provider",{size:10,color:FAINT}),txt(620,936,"1 / 1",{size:9.5,color:FAINT,align:"right",w:118}),
+  ]}]},
+};
+
+const driversLicenseProfileCard: StarterTemplate = {
+  ...common,
+  slug:"drivers-license-profile-card",
+  name:"Driver Profile Card",
+  documentType:"general",
+  description:"A personal driver-profile card for training, UI mockups and internal records. It is not a government driver's license and cannot be used as identification.",
+  requiredCredits:24,
+  schema:{fields:[
+    {id:"fullName",type:"text",label:"Full name",default:"Jordan Blake",required:true,maxLength:40},
+    {id:"profileId",type:"reference",label:"Profile ID",default:"DRV-DEMO-48291",required:true},
+    {id:"dob",type:"date",label:"Date of birth",default:"1995-06-18",required:true},
+    {id:"country",type:"country",label:"Country",default:"United States",required:true},
+    {id:"class",type:"text",label:"Driving class",default:"Class C",required:true,maxLength:20},
+    {id:"expiry",type:"date",label:"Profile expiry",default:"2028-06-18",required:true},
+    {id:"address",type:"address",label:"Address",default:"100 Example Avenue, New York, NY",maxLength:100},
+    {id:"note",type:"text",label:"Status",default:"DEMO PROFILE — NOT GOVERNMENT ISSUED",maxLength:80},
+  ]},
+  configuration:{renderScale:2,pages:[{width:900,height:570,background:"#eef5f3",elements:[
+    box(0,0,900,570,"#eef5f3",0),box(0,0,900,94,"#1f4f49",0),txt(38,38,"CLOUDIE DRIVER PROFILE",{size:12,weight:800,color:"#fff",letterSpacing:2}),txt(38,68,"PERSONAL / TRAINING USE",{size:9,color:"#bfe7de",weight:700,letterSpacing:1.4}),
+    box(38,124,154,188,"#d9e8e3",14,RULE),txt(68,210,"PHOTO",{size:12,weight:700,color:MUTED,align:"center",w:94}),
+    cap(230,140,"Full name"),val(230,170,"fullName",{size:22,weight:800,color:INK,maxChars:30}),cap(230,222,"Profile ID"),val(230,248,"profileId",{size:13,weight:700,color:INK}),cap(230,288,"Class"),val(230,314,"class",{size:13,weight:700,color:INK}),
+    cap(500,140,"Date of birth"),val(500,170,"dob",{size:13,color:INK}),cap(500,222,"Country"),val(500,248,"country",{size:13,color:INK}),cap(500,288,"Expiry"),val(500,314,"expiry",{size:13,color:INK}),
+    cap(38,362,"Address"),val(38,388,"address",{size:12.5,color:INK,maxChars:80}),box(38,430,824,74,"#fff7ed",12,"#fed7aa"),txt(58,458,"NOT A GOVERNMENT DRIVER'S LICENSE",{size:11,weight:800,color:"#9a3412",letterSpacing:1}),val(58,484,"note",{size:9.5,color:"#9a3412",maxChars:80}),
+  ]}]},
+};
+
+const marriageKeepsakeCertificate: StarterTemplate = {
+  ...common,
+  slug:"marriage-keepsake-certificate",
+  name:"Marriage Keepsake Certificate",
+  documentType:"certificates",
+  description:"An elegant commemorative marriage certificate for ceremonies, keepsakes and design previews. Not a civil or government record.",
+  requiredCredits:28,
+  schema:{fields:[
+    {id:"partnerOne",type:"text",label:"Partner one",default:"Jordan Blake",required:true,maxLength:40},
+    {id:"partnerTwo",type:"text",label:"Partner two",default:"Taylor Morgan",required:true,maxLength:40},
+    {id:"date",type:"date",label:"Ceremony date",default:"2026-10-07",required:true},
+    {id:"venue",type:"text",label:"Venue",default:"The Garden House",required:true,maxLength:60},
+    {id:"officiant",type:"text",label:"Officiant",default:"Alex Rivera",maxLength:40},
+    {id:"witnessOne",type:"text",label:"Witness one",default:"Morgan Lee",maxLength:40},
+    {id:"witnessTwo",type:"text",label:"Witness two",default:"Casey Reed",maxLength:40},
+    {id:"certificateNo",type:"reference",label:"Keepsake number",default:"KEEP-2026-4829",required:true},
+  ]},
+  configuration:{renderScale:2,pages:[{width:1120,height:790,background:PAPER,elements:[
+    box(0,0,1120,790,PAPER,0,"#d8c7a5"),box(24,24,1072,742,"#fbfaf6",0,"#d8c7a5"),
+    txt(560,116,"MARRIAGE",{size:14,weight:700,color:"#8a6a2b",align:"center",w:500,letterSpacing:4}),txt(560,164,"Commemorative Certificate",{size:30,weight:800,color:INK,align:"center",w:600}),
+    txt(560,222,"Celebrating the union of",{size:12,color:MUTED,align:"center",w:500}),
+    val(560,286,"partnerOne",{size:30,weight:700,color:INK,align:"center",w:600}),txt(560,322,"and",{size:12,color:MUTED,align:"center",w:500}),val(560,378,"partnerTwo",{size:30,weight:700,color:INK,align:"center",w:600}),
+    txt(560,428,"on",{size:11,color:MUTED,align:"center",w:500}),val(560,458,"date",{size:13,weight:600,color:INK,align:"center",w:500}),val(560,490,"venue",{size:13,color:INK,align:"center",w:700}),
+    rule(120,566,1000,566,"#d8c7a5",1),cap(150,602,"Officiant"),val(150,632,"officiant",{size:11,color:INK}),cap(440,602,"Witness"),val(440,632,"witnessOne",{size:11,color:INK}),cap(720,602,"Witness"),val(720,632,"witnessTwo",{size:11,color:INK}),
+    txt(560,700,"Commemorative keepsake · not a civil or government record",{size:10,weight:700,color:"#9a3412",align:"center",w:800}),txt(560,728,"Certificate no. ",{size:9,color:FAINT,align:"center",w:180}),val(660,728,"certificateNo",{size:9,color:FAINT}),
+  ]}]},
+};
+
+const employmentCertificate: StarterTemplate = {
+  ...common,
+  slug:"employment-certificate",
+  name:"Employment Certificate",
+  documentType:"certificates",
+  description:"Professional employment confirmation template for HR, onboarding and internal records.",
+  requiredCredits:22,
+  schema:{fields:[
+    {id:"employee",type:"text",label:"Employee",default:"Jordan Blake",required:true,maxLength:40},
+    {id:"company",type:"text",label:"Company",default:"Cloudie Services Ltd.",required:true,maxLength:50},
+    {id:"role",type:"text",label:"Role",default:"Operations Specialist",required:true,maxLength:50},
+    {id:"startDate",type:"date",label:"Start date",default:"2024-03-04",required:true},
+    {id:"employmentType",type:"select",label:"Employment type",default:"Full-time",options:[{label:"Full-time",value:"Full-time"},{label:"Part-time",value:"Part-time"},{label:"Contract",value:"Contract"}]},
+    {id:"reference",type:"reference",label:"Reference",default:"EMP-48291",required:true},
+    {id:"issuedDate",type:"date",label:"Issued date",default:"2026-10-07",required:true},
+  ]},
+  configuration:{renderScale:2,pages:[{width:794,height:1000,background:PAPER,elements:[
+    box(0,0,794,112,"#28504a",0),txt(56,46,"EMPLOYMENT CERTIFICATE",{size:11,weight:700,color:"#c8eee6",letterSpacing:2.5}),val(56,82,"company",{size:20,weight:800,color:"#fff",maxChars:32}),
+    cap(56,164,"This certifies that"),val(56,204,"employee",{size:24,weight:800,color:INK}),txt(56,250,"is employed by the organization as",{size:12,color:MUTED}),val(56,282,"role",{size:17,weight:700,color:INK}),
+    box(56,334,682,146,SURFACE,16,RULE),cap(82,366,"Employment type"),val(82,394,"employmentType",{size:13,weight:600,color:INK}),cap(330,366,"Start date"),val(330,394,"startDate",{size:13,color:INK}),cap(520,366,"Reference"),val(520,394,"reference",{size:13,color:INK}),
+    cap(56,548,"Issued date"),val(56,574,"issuedDate",{size:12.5,color:INK}),rule(56,700,300,700),txt(56,730,"Authorized representative",{size:10,color:MUTED}),txt(620,936,"1 / 1",{size:9.5,color:FAINT,align:"right",w:118}),
+  ]}]},
+};
+
+const eventInvitationCertificate: StarterTemplate = {
+  ...common,
+  slug:"event-invitation-certificate",
+  name:"Event & Ceremony Certificate",
+  documentType:"certificates",
+  description:"Flexible certificate for ceremonies, participation, awards and event keepsakes.",
+  requiredCredits:20,
+  schema:{fields:[
+    {id:"recipient",type:"text",label:"Recipient",default:"Jordan Blake",required:true,maxLength:40},
+    {id:"title",type:"text",label:"Certificate title",default:"Certificate of Participation",required:true,maxLength:60},
+    {id:"event",type:"text",label:"Event",default:"Cloudie Digital Summit 2026",required:true,maxLength:60},
+    {id:"date",type:"date",label:"Date",default:"2026-10-07",required:true},
+    {id:"issuer",type:"text",label:"Issued by",default:"Cloudie Events",required:true,maxLength:50},
+    {id:"reference",type:"reference",label:"Reference",default:"CERT-48291",required:true},
+  ]},
+  configuration:{renderScale:2,pages:[{width:1120,height:790,background:PAPER,elements:[
+    box(0,0,1120,790,"#f8fafc",0),box(30,30,1060,730,"#fff",0,"#cbd5e1"),
+    txt(560,132,"CERTIFICATE",{size:13,weight:700,color:"#2563eb",align:"center",w:500,letterSpacing:4}),val(560,190,"title",{size:30,weight:800,color:INK,align:"center",w:760}),txt(560,242,"Presented to",{size:12,color:MUTED,align:"center",w:500}),val(560,302,"recipient",{size:32,weight:800,color:INK,align:"center",w:760}),
+    txt(560,360,"for participation in",{size:12,color:MUTED,align:"center",w:500}),val(560,400,"event",{size:16,weight:700,color:INK,align:"center",w:760}),val(560,452,"date",{size:12,color:MUTED,align:"center",w:500}),rule(170,548,950,548,"#cbd5e1",1),val(170,590,"issuer",{size:12,weight:700,color:INK}),val(850,590,"reference",{size:10,color:FAINT,align:"right",w:120}),txt(560,700,"Certificate template for events and keepsakes",{size:9.5,color:FAINT,align:"center",w:700}),
+  ]}]},
+};
+
 export const TICKETING_TEMPLATES: StarterTemplate[] = [
-  flightBookingConfirmation,
-  hotelBookingConfirmation,
-  travelVoucher,
-  tripSummary,
+  flightBookingConfirmation, hotelBookingConfirmation, travelVoucher, tripSummary,
+  flightETicket, multiCityItinerary, driversLicenseProfileCard, marriageKeepsakeCertificate,
+  employmentCertificate, eventInvitationCertificate,
 ];
