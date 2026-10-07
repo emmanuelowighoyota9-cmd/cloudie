@@ -235,6 +235,33 @@ const schema = defineSchema(
       .index("by_reference", ["reference", "referenceId"])
       .index("by_createdAt", ["createdAt"]),
 
+    /** Persistent financial risk cases. Cases are investigative records only; they never mutate funds. */
+    riskCases: defineTable({
+      userId: v.id("users"),
+      score: v.number(),
+      severity: v.string(),
+      status: v.string(),
+      reasons: v.array(v.string()),
+      transactionCount: v.number(),
+      debitTotal: v.number(),
+      largestDebit: v.number(),
+      assignedTo: v.optional(v.id("users")),
+      notes: v.optional(v.array(v.object({
+        authorId: v.id("users"),
+        authorEmail: v.optional(v.string()),
+        body: v.string(),
+        createdAt: v.number(),
+      }))),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      resolvedAt: v.optional(v.number()),
+    })
+      .index("by_status", ["status", "updatedAt"])
+      .index("by_severity", ["severity", "updatedAt"])
+      .index("by_user", ["userId", "updatedAt"])
+      .index("by_user_status", ["userId", "status"])
+      .index("by_createdAt", ["createdAt"]),
+
     pointLedger: defineTable({
       userId: v.id("users"),
       amount: v.number(),
