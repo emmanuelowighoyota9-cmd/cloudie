@@ -125,6 +125,9 @@ export interface SyncProvider {
   providerCode: string;
   name: string;
   packages: SyncPackage[];
+  /** Amount bounds published on provider rows, used by amount-priced electricity products. */
+  minAmount?: number;
+  maxAmount?: number;
 }
 
 /** One product + the route that serves it, ready to write. */
@@ -133,13 +136,16 @@ export interface CatalogDraft {
   productCode: string;
   displayName: string;
   customerIdentifierLabel: string;
-  requiresAmount: false;
-  requiresPackageCode: true;
-  priceNgn: number;
+  requiresAmount: boolean;
+  requiresPackageCode: boolean;
+  minAmount?: number;
+  maxAmount?: number;
+  priceNgn?: number;
   provider: string;
-  /** The provider's `package_api_code` — the ONLY wire id we keep. */
+  /** The provider's provider_code. */
   providerProductCode: string;
-  providerPackageCode: string;
+  /** Package code for package-priced services; omitted for electricity. */
+  providerPackageCode?: string;
 }
 
 /** Why a plan could not be turned into a product. Surfaced to the operator
@@ -240,10 +246,16 @@ export function parseServiceResponse(body: unknown): SyncProvider[] {
     if (providerCode === "") continue;
     if (seen.has(providerCode)) continue;
     seen.add(providerCode);
+    const minRaw = obj.min_amount ?? obj.minAmount;
+    const maxRaw = obj.max_amount ?? obj.maxAmount;
+    const minAmount = typeof minRaw === "number" ? minRaw : Number(minRaw);
+    const maxAmount = typeof maxRaw === "number" ? maxRaw : Number(maxRaw);
     out.push({
       providerCode,
       name: pick(obj, "name", "provider_name", "title") || providerCode,
       packages: [],
+      ...(Number.isFinite(minAmount) && minAmount > 0 ? { minAmount } : {}),
+      ...(Number.isFinite(maxAmount) && maxAmount > 0 ? { maxAmount } : {}),
     });
   }
   return out;
@@ -317,6 +329,38 @@ export function buildDrafts(
           providerCode: provider.providerCode,
           packageApiCode: pkg.packageApiCode,
           reason: "The provider's id is not usable as a service-code segment.",
+        });
+      }
+      continue;
+    }
+
+    // Electricity is an amount-priced product in AidaPay's API: the provider
+    // itself is the product and the purchase amount is supplied at checkout.
+    // It does NOT have a package list. Treating it like data/cable/exam used to
+    // call /packages/{provider} and produced zero electricity products.
+    if (serviceType === "electricity") {
+      const minAmount = provider.minAmount ?? 500;
+      const maxAmount = provider.maxAmount ?? 50_000;
+      const productCode = `electricity-${host}`;
+      const rest = productCode.slice("electricity-".length);
+      if (
+        minAmount > 0 &&
+        maxAmount >= minAmount &&
+        /^[a-z0-9]+(-[a-z0-9]+)*$/.test(productCode) &&
+        CODE_PART.test(rest)
+      ) {
+        drafts.push({
+          serviceType,
+          productCode,
+          displayName: provider.name || host,
+          customerIdentifierLabel,
+          requiresAmount: true,
+          requiresPackageCode: false,
+          minAmount,
+          maxAmount,
+          provider: providerName,
+          providerProductCode: provider.providerCode,
+          providerPackageCode: undefined,
         });
       }
       continue;
