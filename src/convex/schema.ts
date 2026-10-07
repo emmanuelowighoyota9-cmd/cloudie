@@ -205,6 +205,7 @@ const schema = defineSchema(
       .index("by_user", ["userId", "createdAt"])
       .index("by_type", ["type", "createdAt"])
       .index("by_idempotency", ["idempotencyKey"])
+      .index("by_reference", ["reference", "referenceId"])
       .index("by_createdAt", ["createdAt"]),
 
     pointLedger: defineTable({
