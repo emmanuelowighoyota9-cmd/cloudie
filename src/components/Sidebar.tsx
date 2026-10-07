@@ -23,6 +23,9 @@ import {
   Receipt,
   Zap,
   Phone,
+  Wifi,
+  Lightbulb,
+  GraduationCap,
   TrendingUp,
 } from "lucide-react";
 
@@ -36,6 +39,7 @@ const mainNav = [
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
   { label: "Data", icon: Wifi, to: "/vtu/data" },
   { label: "Electricity", icon: Lightbulb, to: "/vtu/electricity" },
+  { label: "Exam Pins", icon: GraduationCap, to: "/vtu/exam-pins" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
