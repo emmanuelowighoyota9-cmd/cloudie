@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { Link } from "react-router";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,11 @@ const catalog = [
 
 export default function MyServices() {
   const services = useQuery(api.serviceHub.listMyServices, { limit: 50 });
+  const syncMyServices = useMutation(api.serviceHub.syncMyServices);
+
+  useEffect(() => {
+    syncMyServices({}).catch(() => undefined);
+  }, [syncMyServices]);
 
   return (
     <div className="space-y-7">
