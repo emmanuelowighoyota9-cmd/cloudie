@@ -301,8 +301,8 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
   const canAfford = (balance ?? 0) >= totalNgn;
 
   return (
-    <div className="min-w-0 max-w-full overflow-x-hidden pb-24">
-      <div className="mb-4">
+    <div className="cloudie-marketplace min-w-0 max-w-full overflow-x-hidden pb-24">
+      <div className="mb-5">
         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
           {mode === "numbers" ? "Live numbers catalog" : "Live social boost catalog"}
         </div>
@@ -395,7 +395,7 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
             )}
 
             {selectedNumber && (
-              <div className="rounded-xl border bg-muted/30 p-4">
+              <div className="rounded-2xl border border-primary/10 bg-primary/[0.035] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{selectedNumber.service_name}</p>
@@ -413,7 +413,7 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
             )}
 
             {selectedBoost && (
-              <div className="rounded-xl border bg-muted/30 p-4">
+              <div className="rounded-2xl border border-primary/10 bg-primary/[0.035] p-4">
                 <p className="font-semibold">{selectedBoost.service_name}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{selectedBoost.type} · {selectedBoost.category}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -434,7 +434,7 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
             )}
 
             {(selectedNumber || selectedBoost) && (
-              <div className="rounded-xl border bg-muted/30 p-4">
+              <div className="rounded-2xl border border-primary/10 bg-primary/[0.035] p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Estimated charge</span>
                   <span className="text-lg font-bold text-primary">₦{Math.ceil(totalNgn).toLocaleString("en-NG")}</span>
