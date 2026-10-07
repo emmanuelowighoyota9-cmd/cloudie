@@ -13,9 +13,9 @@ export function useTheme() {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "dark";
+    if (typeof window === "undefined") return "light";
     const stored = localStorage.getItem("cloudie-theme");
-    return stored === "light" || stored === "dark" ? stored : "dark";
+    return stored === "light" || stored === "dark" ? stored : "light";
   });
 
   useEffect(() => {
