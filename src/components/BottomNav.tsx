@@ -1,15 +1,15 @@
 import { Link, useLocation } from "react-router";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Home, ShoppingBag, Zap, Wallet, Receipt, MoreHorizontal } from "lucide-react";
+import { Home, Layers, ShoppingBag, Zap, Wallet, MoreHorizontal } from "lucide-react";
 
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
+  { label: "Services", icon: Layers, to: "/services/my" },
   { label: "Market", icon: ShoppingBag, to: "/marketplace" },
   { label: "Airtime", icon: Zap, to: "/vtu/airtime" },
-  { label: "Wallet", icon: Wallet, to: "/buy-points" },
-  { label: "Orders", icon: Receipt, to: "/orders" },
-  { label: "More", icon: MoreHorizontal, to: "/transactions" },
+  { label: "Wallet", icon: Wallet, to: "/personal/wallet" },
+  { label: "More", icon: MoreHorizontal, to: "/billing" },
 ];
 
 export function BottomNav() {
