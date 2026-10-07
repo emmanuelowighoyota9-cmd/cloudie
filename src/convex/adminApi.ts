@@ -1152,6 +1152,8 @@ export const adminDashboard = query({
           minted.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + l.amountNgn, 0) -
           burned.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + Math.abs(l.amountNgn), 0),
         mintedCount24h: minted.filter((l) => l.createdAt > dayAgo).length,
+        debited24h: burned.filter((l) => l.createdAt > dayAgo).reduce((s, l) => s + Math.abs(l.amountNgn), 0),
+        debitedCount24h: burned.filter((l) => l.createdAt > dayAgo).length,
       },
       vendors: {
         total: vendors.length,
