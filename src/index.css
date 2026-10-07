@@ -723,3 +723,19 @@ html,body{background:#050706!important;color:#f4f8f6!important}body{min-height:1
     .cloudie-dashboard nav[aria-label="Quick actions"] a { border-radius: 1rem; background: var(--surface-2); border-color: var(--border); }
   }
 }
+
+
+@layer components {
+  .cloudie-marketplace [data-slot="card"] { border-color: color-mix(in srgb, var(--border) 88%, transparent); }
+  .cloudie-marketplace > .mb-4:first-child,
+  .cloudie-marketplace > .mb-5:first-child { padding: 0.25rem 0; }
+  .cloudie-marketplace .group { transition: transform var(--duration-base) var(--ease-out-quint), box-shadow var(--duration-base) var(--ease-out-quint), border-color var(--duration-base) var(--ease-out-quint); }
+  .cloudie-marketplace .group:hover { border-color: color-mix(in srgb, var(--primary) 28%, var(--border)); box-shadow: 0 20px 48px -34px hsl(var(--primary) / .42); }
+  .cloudie-marketplace .group button:first-child { background: radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 55%), var(--muted); }
+  .cloudie-marketplace .group .text-primary { text-shadow: 0 0 20px hsl(var(--primary) / .18); }
+  @media (max-width:639px) {
+    .cloudie-marketplace { padding-bottom: 1rem; }
+    .cloudie-marketplace [data-slot="card"] { border-radius: 1.1rem; }
+    .cloudie-marketplace input, .cloudie-marketplace select { border-radius: .9rem; }
+  }
+}
