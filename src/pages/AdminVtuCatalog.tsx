@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useAction } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
@@ -173,10 +173,54 @@ const SKIP_REASON: Record<string, string> = {
 export default function AdminVtuCatalog() {
   const products = useQuery(api.vtuServiceAdmin.listProducts, {});
   const routes = useQuery(api.vtuServiceAdmin.listRoutes, {});
+  const providers = useQuery(api.vtuProviderAdmin.listProviders, {});
   const seedAirtime = useMutation(api.vtuServiceAdmin.seedAirtimeCatalog);
   const [seeding, setSeeding] = useState(false);
   const syncCatalog = useAction(api.vtuCatalogSync.syncAidaPayCatalog);
   const [syncing, setSyncing] = useState(false);
+  const autoSyncVersion = useRef<string | null>(null);
+
+  // Once AidaPay has a saved credential, keep the catalog page self-managing:
+  // the first load after provider configuration performs the same read-only
+  // sync as the button. `updatedAt` is the provider configuration version, so
+  // replacing the key/base URL causes exactly one fresh sync on the next load.
+  // This never invents products or runs for an unconfigured provider.
+  useEffect(() => {
+    const aidapay = (providers ?? []).find((p) => p.name === "aidapay");
+    if (!aidapay?.hasApiKey) return;
+    const version = `${aidapay.updatedAt}:${aidapay.status}:${aidapay.baseUrl}`;
+    if (autoSyncVersion.current === version) return;
+    autoSyncVersion.current = version;
+
+    let cancelled = false;
+    setSyncing(true);
+    syncCatalog({ dryRun: false })
+      .then((res) => {
+        if (cancelled) return;
+        if (!res.ok) {
+          toast.warning(SYNC_ERROR_HINT[res.error ?? ""] ?? "AidaPay catalog sync could not complete.");
+          return;
+        }
+        const billTypes = new Set<string>();
+        for (const key of Object.keys(res.serviceErrors)) billTypes.add(key.split(":")[0]);
+        const changed = res.productsCreated + res.productsUpdated + res.routesCreated + res.routesUpdated;
+        if (changed > 0) {
+          toast.success(`Catalog refreshed automatically — ${changed} catalog update${changed === 1 ? "" : "s"}.`);
+        } else if (billTypes.size > 0) {
+          toast.warning(`Catalog refresh completed with service issues: ${[...billTypes].join(", ")}.`);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) toast.warning(error instanceof Error ? error.message : "Automatic catalog sync failed.");
+      })
+      .finally(() => {
+        if (!cancelled) setSyncing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [providers, syncCatalog]);
 
   const [tab, setTab] = useState("products");
   const [productDialog, setProductDialog] = useState<ProductRow | "new" | null>(null);
@@ -208,7 +252,7 @@ export default function AdminVtuCatalog() {
     <div className="space-y-6">
       <AdminPageHeader
         title="VTU Catalog & Routing"
-        description="Which products can be bought, and which provider serves each one. Routing is read at purchase time and snapshotted onto the transaction."
+        description="Which products can be bought, and which provider serves each one. After AidaPay is configured, this page automatically refreshes Data, Electricity, Cable and Exam Pins from the provider catalog."
         actions={
           <>
             <Button
