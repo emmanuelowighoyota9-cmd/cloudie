@@ -234,36 +234,32 @@ export default function VtuAirtime() {
                 title="Amount"
                 hint="Prices are shown directly in Nigerian naira."
               >
-                <StaggerGroup className="grid grid-cols-3 gap-2">
+                <div className="vtu-quick-grid">
                   {AMOUNTS.map((n) => {
                     const offer = offers?.offers.find(
                       (o) => o.serviceCode === `airtime.${network}.${n}`,
                     );
                     const active = amount === n;
                     return (
-                      <StaggerItem key={n}>
-                        <VtuChoice
-                          selected={active}
-                          onClick={() => setAmount(n)}
-                          className="w-full text-center"
-                        >
-                          <span className="block text-sm font-semibold tabular-nums">
-                            {formatNgn(n)}
-                          </span>
-                          <span
-                            className={
-                              active
-                                ? "mt-0.5 block text-[11px] font-medium text-vtu-accent-ink/80 tabular-nums"
-                                : "mt-0.5 block text-[11px] text-vtu-muted tabular-nums"
-                            }
-                          >
-                            {offer ? formatNgn(offer.amountNgn) : "…"}
-                          </span>
-                        </VtuChoice>
-                      </StaggerItem>
+                      <button
+                        key={n}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setAmount(n)}
+                        className={cn(
+                          "flex min-h-[58px] flex-col items-center justify-center",
+                          active &&
+                            "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_8%,var(--card))] text-[var(--primary)] shadow-sm",
+                        )}
+                      >
+                        <span className="text-sm font-bold tabular-nums">{formatNgn(n)}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {offer ? "Available" : "Checking…"}
+                        </span>
+                      </button>
                     );
                   })}
-                </StaggerGroup>
+                </div>
                 {selected?.override && (
                   <p className="text-[11px] text-vtu-muted">
                     This amount has an admin-set price override.
