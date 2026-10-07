@@ -289,14 +289,24 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
       ) : groups.length === 0 ? (
         <Reveal>
           <div className="vtu-panel p-8 text-center">
-            <p className="text-sm font-semibold">Nothing is on sale yet</p>
+            <p className="text-sm font-semibold">
+              {initialCategory === "electricity"
+                ? "Electricity service is not available yet"
+                : initialCategory === "exam"
+                  ? "Exam PINs are not available yet"
+                  : initialCategory === "data"
+                    ? "Data plans are not available yet"
+                    : "Nothing is on sale yet"}
+            </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-vtu-muted">
-              No bill products are switched on right now. If that is unexpected,
-              an administrator can add them under VTU Catalog &amp; Routing —
-              this page updates the moment they do.
+              {initialCategory === "electricity"
+                ? "The electricity form is ready, but no active electricity provider has been synced from the payment provider yet."
+                : "No products are switched on right now. Once the catalog is synced and routed, this screen will update automatically."}
             </p>
             <Button asChild variant="vtu" className="mt-4">
-              <Link to="/vtu/airtime">Buy airtime instead</Link>
+              <Link to={initialCategory === "electricity" ? "/vtu" : "/vtu/airtime"}>
+                {initialCategory === "electricity" ? "Back to services" : "Buy airtime instead"}
+              </Link>
             </Button>
           </div>
         </Reveal>
