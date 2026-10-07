@@ -687,3 +687,39 @@ html,body{background:#050706!important;color:#f4f8f6!important}body{min-height:1
   header a[href="/buy-points"] [data-slot="badge"]{padding-inline:.6rem!important;min-height:2.5rem}
   header a[href="/notifications"] button,header button[aria-label="Open profile menu"]{width:2.75rem;height:2.75rem}
 }
+
+
+/* CLOUDIE MODERN APP LAYER — shared customer dashboard language */
+@layer components {
+  .cloudie-dashboard .cloudie-wallet-card {
+    position: relative;
+    background:
+      radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 32%),
+      radial-gradient(circle at 8% 100%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 34%),
+      var(--card);
+    box-shadow: 0 28px 70px -44px hsl(var(--primary) / 0.72);
+  }
+  .cloudie-dashboard .cloudie-wallet-strip {
+    background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--accent) 76%, var(--primary)));
+  }
+  .cloudie-dashboard .cloudie-wallet-icon {
+    background: color-mix(in srgb, var(--primary) 18%, var(--card));
+    color: var(--primary);
+    border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  }
+  .cloudie-dashboard [data-slot="card"] {
+    border-color: color-mix(in srgb, var(--border) 88%, transparent);
+  }
+  .cloudie-dashboard .interactive-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
+    box-shadow: 0 18px 42px -30px hsl(var(--primary) / 0.45);
+  }
+  @media (max-width: 639px) {
+    .cloudie-dashboard { padding-bottom: 0.5rem; }
+    .cloudie-dashboard .cloudie-wallet-card [data-slot="card-content"] { padding: 1rem; }
+    .cloudie-dashboard .cloudie-wallet-card .cloudie-wallet-icon { width: 3rem; height: 3rem; border-radius: 0.9rem; }
+    .cloudie-dashboard .cloudie-wallet-card .text-3xl { font-size: 1.8rem; }
+    .cloudie-dashboard nav[aria-label="Quick actions"] { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .cloudie-dashboard nav[aria-label="Quick actions"] a { border-radius: 1rem; background: var(--surface-2); border-color: var(--border); }
+  }
+}
