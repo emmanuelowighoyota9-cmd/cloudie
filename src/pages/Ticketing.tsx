@@ -83,10 +83,6 @@ export default function Ticketing() {
             </CardContent>
           </Card>
         ))}
-      </section>
-
-      </section>
-
       <section>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
