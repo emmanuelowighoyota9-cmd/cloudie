@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function Admin() {
   const data = useQuery(api.adminApi.adminDashboard);
+  const risk = useQuery(api.adminApi.getFinancialRisk, { hours: 24, limit: 5 });
   const ngnValue = (amountNgn: number) => `₦${Math.round(amountNgn).toLocaleString("en-NG")}`;
 
   if (data === undefined) return <div className="space-y-6"><AdminPageHeader title="Cloudie Command Center" description="Loading live platform controls…" /><AdminSkeleton rows={5} /></div>;
@@ -164,6 +165,14 @@ export default function Admin() {
           <Link to="/admin/disputes" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Risk queue</span><CircleAlert className={data.disputes.open > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.disputes.open.toLocaleString()}</p><p className="text-xs text-muted-foreground">Open marketplace disputes</p></Link>
           <Link to="/admin/tenants" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Tenant controls</span><CircleAlert className={data.tenants.locked > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.tenants.locked.toLocaleString()}</p><p className="text-xs text-muted-foreground">Locked business tenants</p></Link>
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <div><div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-primary" /><h2 className="font-semibold">Financial risk engine</h2></div><p className="mt-1 text-xs text-muted-foreground">Explainable, advisory monitoring of recent wallet movement. No funds are automatically frozen.</p></div>
+          <Link to="/admin/transactions" className="text-xs font-semibold text-primary hover:underline">Open monitor →</Link>
+        </div>
+        {risk === undefined ? <div className="h-24 animate-pulse rounded-2xl bg-muted" /> : risk.alerts.length === 0 ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm"><span className="font-semibold text-emerald-600">No elevated wallet risk detected.</span><span className="ml-2 text-muted-foreground">{risk.scannedTransactions.toLocaleString()} transactions scanned.</span></div> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{risk.alerts.map((a) => <Link key={a.userId} to="/admin/transactions" className="rounded-2xl border border-border p-4 transition hover:border-primary/30 hover:bg-muted/30"><div className="flex items-center justify-between gap-2"><span className="font-mono text-[10px] text-muted-foreground">{a.userId.slice(-12)}</span><Badge variant={a.severity === "critical" ? "destructive" : "outline"}>{a.severity.toUpperCase()} · {a.score}</Badge></div><p className="mt-3 text-sm font-semibold">₦{Math.round(a.debitTotal).toLocaleString("en-NG")} debited</p><p className="mt-1 text-xs text-muted-foreground">{a.transactionCount} transactions · largest ₦{Math.round(a.largestDebit).toLocaleString("en-NG")}</p><p className="mt-2 text-xs">{a.reasons[0]}</p></Link>)}</div>}
       </section>
 
       <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
