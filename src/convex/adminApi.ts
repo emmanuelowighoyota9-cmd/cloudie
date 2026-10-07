@@ -1262,6 +1262,84 @@ export const getFinancialRisk = query({
   },
 });
 
+export const getRiskCases = query({
+  args: { status: v.optional(v.string()), severity: v.optional(v.string()), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const limit = Math.min(200, Math.max(1, args.limit ?? 100));
+    const cases = args.status
+      ? await ctx.db.query("riskCases").withIndex("by_status", (q) => q.eq("status", args.status!)).order("desc").take(limit)
+      : args.severity
+        ? await ctx.db.query("riskCases").withIndex("by_severity", (q) => q.eq("severity", args.severity!)).order("desc").take(limit)
+        : await ctx.db.query("riskCases").withIndex("by_createdAt").order("desc").take(limit);
+    return Promise.all(cases.map(async (riskCase) => {
+      const user = await ctx.db.get(riskCase.userId);
+      const assignee = riskCase.assignedTo ? await ctx.db.get(riskCase.assignedTo) : null;
+      return { ...riskCase, user: user ? { _id: user._id, name: user.name, email: user.email, isSuspended: user.isSuspended, isTerminated: user.isTerminated } : null, assignee: assignee ? { _id: assignee._id, name: assignee.name, email: assignee.email } : null };
+    }));
+  },
+});
+
+export const openRiskCase = mutation({
+  args: { userId: v.id("users"), score: v.number(), severity: v.string(), reasons: v.array(v.string()), transactionCount: v.number(), debitTotal: v.number(), largestDebit: v.number() },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const existing = await ctx.db.query("riskCases").withIndex("by_user_status", (q) => q.eq("userId", args.userId).eq("status", "open")).first();
+    if (existing) return { id: existing._id, existing: true };
+    const now = Date.now();
+    const id = await ctx.db.insert("riskCases", { ...args, score: Math.min(100, Math.max(0, args.score)), status: "open", reasons: args.reasons.slice(0, 20).map((x) => x.slice(0, 300)), notes: [], createdAt: now, updatedAt: now });
+    await auditLog(ctx, adminId, { action: "RISK_CASE_OPENED", resource: "riskCase", resourceId: id, after: { userId: args.userId, score: args.score, severity: args.severity }, reason: "Opened from financial risk queue" });
+    return { id, existing: false };
+  },
+});
+
+export const assignRiskCase = mutation({
+  args: { caseId: v.id("riskCases"), adminUserId: v.optional(v.id("users")) },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const riskCase = await ctx.db.get(args.caseId);
+    if (!riskCase) throw new Error("RISK_CASE_NOT_FOUND");
+    if (args.adminUserId) {
+      const assignee = await ctx.db.get(args.adminUserId);
+      if (!assignee || assignee.role !== "admin" || assignee.isSuspended) throw new Error("INVALID_ASSIGNEE");
+    }
+    await ctx.db.patch(args.caseId, { assignedTo: args.adminUserId, updatedAt: Date.now() });
+    await auditLog(ctx, adminId, { action: "RISK_CASE_ASSIGNED", resource: "riskCase", resourceId: args.caseId, before: { assignedTo: riskCase.assignedTo }, after: { assignedTo: args.adminUserId } });
+    return { success: true };
+  },
+});
+
+export const addRiskCaseNote = mutation({
+  args: { caseId: v.id("riskCases"), body: v.string() },
+  handler: async (ctx, args) => {
+    const { adminId, admin } = await requireAdmin(ctx);
+    const riskCase = await ctx.db.get(args.caseId);
+    if (!riskCase) throw new Error("RISK_CASE_NOT_FOUND");
+    const body = args.body.trim().slice(0, 1000);
+    if (!body) throw new Error("NOTE_REQUIRED");
+    const notes = [...(riskCase.notes ?? []), { authorId: adminId, authorEmail: admin.email, body, createdAt: Date.now() }].slice(-50);
+    await ctx.db.patch(args.caseId, { notes, updatedAt: Date.now() });
+    await auditLog(ctx, adminId, { action: "RISK_CASE_NOTE_ADDED", resource: "riskCase", resourceId: args.caseId, after: { noteLength: body.length } });
+    return { success: true };
+  },
+});
+
+export const transitionRiskCase = mutation({
+  args: { caseId: v.id("riskCases"), status: v.string(), reason: v.string() },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const riskCase = await ctx.db.get(args.caseId);
+    if (!riskCase) throw new Error("RISK_CASE_NOT_FOUND");
+    if (!["open", "reviewing", "resolved", "dismissed"].includes(args.status)) throw new Error("INVALID_RISK_STATUS");
+    const reason = args.reason.trim().slice(0, 500);
+    if (!reason) throw new Error("REASON_REQUIRED");
+    const now = Date.now();
+    await ctx.db.patch(args.caseId, { status: args.status, updatedAt: now, resolvedAt: ["resolved", "dismissed"].includes(args.status) ? now : undefined });
+    await auditLog(ctx, adminId, { action: "RISK_CASE_STATUS_CHANGED", resource: "riskCase", resourceId: args.caseId, before: { status: riskCase.status }, after: { status: args.status }, reason });
+    return { success: true };
+  },
+});
+
 /** Move a dispute into review before resolution. Audited. */
 export const markDisputeUnderReview = mutation({
   args: { disputeId: v.id("disputes") },
