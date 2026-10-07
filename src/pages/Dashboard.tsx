@@ -60,7 +60,7 @@ export default function Dashboard() {
   const recentTx = (ledger ?? []).slice(0, 5);
 
   return (
-    <div className="space-y-7 sm:space-y-9">
+    <div className="cloudie-dashboard space-y-7 sm:space-y-9">
       {/* Welcome */}
       <div>
         <h1 className="page-title text-foreground">
@@ -92,14 +92,14 @@ export default function Dashboard() {
       </nav>
 
       {/* Hero Points Card */}
-      <Card className="overflow-hidden border border-primary/10 bg-card shadow-[0_24px_60px_-38px_hsl(var(--primary)/0.55)]">
-        <div className="bg-primary/95 px-6 py-2">
+      <Card className="cloudie-wallet-card overflow-hidden border border-primary/15 bg-card">
+        <div className="cloudie-wallet-strip px-6 py-2">
           <div className="h-1.5 w-32 bg-white/30 rounded-full" />
         </div>
         <CardContent className="p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-accent-foreground shadow-lg">
+              <div className="cloudie-wallet-icon flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg">
                 <Coins className="h-7 w-7 text-white" />
               </div>
               <div>
@@ -110,7 +110,7 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link to="/personal/wallet">
-                <Button className="gap-2 bg-primary hover:from-blue-700 hover:to-indigo-700 px-6">
+                <Button className="gap-2 bg-primary px-6 text-primary-foreground shadow-[0_12px_30px_-18px_hsl(var(--primary)/0.9)] hover:bg-primary/90">
                   <ShoppingBag className="h-4 w-4" /> Fund Wallet
                 </Button>
               </Link>
@@ -130,7 +130,7 @@ export default function Dashboard() {
             title="Shipments"
             value={shipments?.length ?? 0}
             icon={Package}
-            color="bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+            color="bg-primary/10 text-primary"
           />
         </StaggerItem>
         <StaggerItem>
@@ -138,7 +138,7 @@ export default function Dashboard() {
             title="Referrals"
             value={referrals?.length ?? 0}
             icon={Users}
-            color="bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+            color="bg-primary/10 text-primary"
           />
         </StaggerItem>
         <StaggerItem>
@@ -146,7 +146,7 @@ export default function Dashboard() {
             title="Transactions This Month"
             value={monthlyTransactions}
             icon={TrendingUp}
-            color="bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400"
+            color="bg-primary/10 text-primary"
           />
         </StaggerItem>
       </StaggerGroup>
@@ -230,11 +230,11 @@ export default function Dashboard() {
         <CardContent className="p-2">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {[
-              { icon: FileStack, title: "Documents", desc: "Generate branded PDFs and images from dynamic templates.", to: "/documents", color: "bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400" },
-              { icon: Package, title: "Shipments", desc: "Create and track parcels end to end.", to: "/shipments", color: "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" },
-              { icon: FileText, title: "Ticketing", desc: "Flights, hotels, invoices and receipts.", to: "/ticketing", color: "bg-green-50 text-green-600 dark:bg-green-900/30 dark:text-green-400" },
-              { icon: Building2, title: "Business Suite", desc: "Spin up and manage your bank and investment sites.", to: "/business", color: "bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" },
-              { icon: Layers, title: "Services", desc: "Small tools that stand on their own, email and pictures.", to: "/services", color: "bg-purple-50 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" },
+              { icon: FileStack, title: "Documents", desc: "Generate branded PDFs and images from dynamic templates.", to: "/documents", color: "bg-primary/10 text-primary" },
+              { icon: Package, title: "Shipments", desc: "Create and track parcels end to end.", to: "/shipments", color: "bg-primary/10 text-primary" },
+              { icon: FileText, title: "Ticketing", desc: "Flights, hotels, invoices and receipts.", to: "/ticketing", color: "bg-primary/10 text-primary" },
+              { icon: Building2, title: "Business Suite", desc: "Spin up and manage your bank and investment sites.", to: "/business", color: "bg-primary/10 text-primary" },
+              { icon: Layers, title: "Services", desc: "Small tools that stand on their own, email and pictures.", to: "/services", color: "bg-primary/10 text-primary" },
             ].map((w) => (
               <Link key={w.to} to={w.to} className="group">
                 <Card className="interactive-card h-full">
