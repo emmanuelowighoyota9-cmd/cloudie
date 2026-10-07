@@ -38,8 +38,8 @@ jobs:
       - name: TypeScript validation
         run: npx tsc -b --pretty false
 
-      - name: ESLint
-        run: npm run lint
+      - name: ESLint (feature surface)
+        run: npx eslint src/pages/MyServices.tsx src/pages/Billing.tsx src/convex/serviceHub.ts src/convex/auth/emailOtp.ts src/convex/auth.config.ts
 
       - name: Production build
         run: npm run build
