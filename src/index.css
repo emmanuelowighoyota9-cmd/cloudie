@@ -625,3 +625,65 @@ html,body{background:#050706!important;color:#f4f8f6!important}body{min-height:1
 .stagger-children>*:nth-child(1){animation-delay:30ms}.stagger-children>*:nth-child(2){animation-delay:60ms}.stagger-children>*:nth-child(3){animation-delay:90ms}.stagger-children>*:nth-child(4){animation-delay:120ms}.stagger-children>*:nth-child(5){animation-delay:150ms}.stagger-children>*:nth-child(6){animation-delay:180ms}
 .skeleton-pulse{animation:cloudie-pulse 1.4s ease-in-out infinite}
 @media (prefers-reduced-motion:reduce){.page-motion,.stagger-children>*{animation:none!important}}
+
+
+/* ================================================================
+   CLOUDIE MOBILE-FIRST PAGE SYSTEM
+   One layout boundary makes every existing route responsive while
+   preserving desktop composition and business logic.
+   ================================================================ */
+.cloudie-page{min-width:0;overflow-x:clip}
+.cloudie-page img,.cloudie-page svg{max-width:100%}
+.cloudie-page pre,.cloudie-page code{overflow-wrap:anywhere}
+@media (max-width:1023px){
+  .cloudie-page{width:100%}
+  .cloudie-page h1,.cloudie-page .page-title{font-size:clamp(1.35rem,6vw,1.8rem);line-height:1.12}
+  .cloudie-page h2{font-size:clamp(1.1rem,5vw,1.4rem)}
+  .cloudie-page .grid,.cloudie-page form{min-width:0}
+  .cloudie-page .grid>*{min-width:0}
+  .cloudie-page form [class*="grid-cols-"]{grid-template-columns:minmax(0,1fr)!important}
+  .cloudie-page [class*="overflow-x-auto"]{max-width:100%;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .cloudie-page [class*="overflow-x-auto"]::-webkit-scrollbar{display:none}
+  .cloudie-page [data-slot="card"]{min-width:0;overflow:hidden}
+  .cloudie-page input,.cloudie-page textarea,.cloudie-page select{max-width:100%;font-size:16px}
+  .cloudie-page button{touch-action:manipulation}
+}
+@media (max-width:639px){
+  .cloudie-page{padding-bottom:calc(1.25rem + env(safe-area-inset-bottom))}
+  .cloudie-page>.space-y-8>*+*{margin-top:1rem}
+  .cloudie-page>.space-y-6>*+*{margin-top:.875rem}
+  .cloudie-page>.space-y-4>*+*{margin-top:.75rem}
+  .cloudie-page [class*="gap-8"]{gap:1rem}
+  .cloudie-page [class*="gap-6"]{gap:.875rem}
+  .cloudie-page [class*="gap-5"]{gap:.75rem}
+  .cloudie-page [class*="p-8"]{padding:1rem}
+  .cloudie-page [class*="p-6"]{padding:1rem}
+  .cloudie-page [class*="px-8"]{padding-inline:1rem}
+  .cloudie-page [class*="py-8"]{padding-block:1rem}
+  .cloudie-page [class*="rounded-2xl"]{border-radius:1.1rem}
+  .cloudie-page [class*="rounded-3xl"]{border-radius:1.25rem}
+  .cloudie-page [class*="text-4xl"]{font-size:2rem;line-height:1.05}
+  .cloudie-page [class*="text-3xl"]{font-size:1.65rem;line-height:1.08}
+  .cloudie-page [class*="sm:flex-row"]{flex-direction:column}
+  .cloudie-page [class*="sm:w-auto"]{width:100%}
+  .cloudie-page [class*="sm:w-"]{width:100%}
+  .cloudie-page .data-row{min-height:3.5rem;padding:.65rem}
+  .cloudie-page .vtu-panel{padding:.9rem}
+  .cloudie-page .vtu-receipt-row{gap:.75rem;align-items:flex-start}
+  .cloudie-page [data-slot="card-header"]{padding-inline:1rem}
+  .cloudie-page [data-slot="card-content"]{padding-inline:1rem}
+  .cloudie-page [data-slot="card-footer"]{padding-inline:1rem}
+  .cloudie-page table{font-size:.78rem;min-width:620px}
+  .cloudie-page th,.cloudie-page td{white-space:nowrap;padding:.65rem .75rem}
+  .cloudie-page [role="dialog"]{max-height:calc(100dvh - 1rem);overflow-y:auto}
+}
+@media (max-width:380px){
+  .cloudie-page{padding-inline:.75rem}
+  .cloudie-page [class*="text-2xl"]{font-size:1.3rem}
+}
+@media (max-width:639px){
+  header{height:3.75rem!important;padding-inline:.625rem!important}
+  header a[href="/dashboard"] span:last-child{max-width:8.5rem}
+  header a[href="/buy-points"] [data-slot="badge"]{padding-inline:.6rem!important;min-height:2.5rem}
+  header a[href="/notifications"] button,header button[aria-label="Open profile menu"]{width:2.75rem;height:2.75rem}
+}
