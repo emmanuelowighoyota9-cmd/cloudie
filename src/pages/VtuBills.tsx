@@ -108,10 +108,11 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
     groups.find((group) => group.serviceType === category) ?? groups[0] ?? null;
 
   useEffect(() => {
-    // Only deep-link straight into details when the category has exactly one
-    // product. With multiple providers/plans, never silently pick the first
-    // one — electricity and data especially need an explicit customer choice.
-    if (!initialCategory || productCode || !activeGroup || activeGroup.products.length !== 1) return;
+    // Category routes open directly into the mobile purchase form. The first
+    // live product supplies the initial plan/provider; customers can switch
+    // provider, plan, or DisCo from the fields below without returning to a
+    // generic catalog screen.
+    if (!initialCategory || productCode || !activeGroup || activeGroup.products.length === 0) return;
     setSearchParams({ product: activeGroup.products[0].productCode }, { replace: true });
   }, [initialCategory, productCode, activeGroup, setSearchParams]);
 
