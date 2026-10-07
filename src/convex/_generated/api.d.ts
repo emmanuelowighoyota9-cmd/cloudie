@@ -48,6 +48,7 @@ import type * as pricing from "../pricing.js";
 import type * as providers_aidapay from "../providers/aidapay.js";
 import type * as providers_signature from "../providers/signature.js";
 import type * as referrals from "../referrals.js";
+import type * as serviceHub from "../serviceHub.js";
 import type * as shipments from "../shipments.js";
 import type * as storage from "../storage.js";
 import type * as tenantResolver from "../tenantResolver.js";
@@ -132,6 +133,7 @@ declare const fullApi: ApiFromModules<{
   "providers/aidapay": typeof providers_aidapay;
   "providers/signature": typeof providers_signature;
   referrals: typeof referrals;
+  serviceHub: typeof serviceHub;
   shipments: typeof shipments;
   storage: typeof storage;
   tenantResolver: typeof tenantResolver;
