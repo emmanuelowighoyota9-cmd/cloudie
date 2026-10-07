@@ -9,15 +9,16 @@
 
 import { STARTER_SET_VERSION, STARTER_TEMPLATES, type StarterTemplate } from "./starterTemplates";
 import { COMMERCIAL_TEMPLATES } from "./commercialTemplates";
+import { TICKETING_TEMPLATES } from "./ticketingTemplates";
 
 /** Every template the seeder installs, base set first. */
-export const PLATFORM_TEMPLATES: StarterTemplate[] = [...STARTER_TEMPLATES, ...COMMERCIAL_TEMPLATES];
+export const PLATFORM_TEMPLATES: StarterTemplate[] = [...STARTER_TEMPLATES, ...COMMERCIAL_TEMPLATES, ...TICKETING_TEMPLATES];
 
 /**
  * Bumped whenever a new batch is added to COMMERCIAL_TEMPLATES. Keep it in step
  * with that array so installations holding an older marker republish once.
  */
-const COMMERCIAL_SET_VERSION = 5;
+const COMMERCIAL_SET_VERSION = 6;
 
 /**
  * Seed marker. Adding a batch of templates bumps one of the versions above, and
