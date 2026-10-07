@@ -166,6 +166,18 @@ export default function Admin() {
         </div>
       </section>
 
+      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+        <div className="mb-5 flex flex-col gap-1"><div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><h2 className="font-semibold">Finance & risk command center</h2></div><p className="text-xs text-muted-foreground">Live financial movement and risk queues requiring privileged review.</p></div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["Credits · 24h", ngnValue(data.points.minted), data.points.mintedCount24h.toLocaleString()+" credit events", "/admin/transactions"],
+            ["Net movement · 24h", ngnValue(data.points.velocity24h), data.points.velocity24h >= 0 ? "Net positive" : "Net negative", "/admin/transactions"],
+            ["Escrow exposure", data.marketplace.escrowPending.toLocaleString(), "orders awaiting resolution", "/admin/orders"],
+            ["Risk queues", (data.disputes.open + data.kyc.pending + data.tenants.locked).toLocaleString(), "disputes + KYC + locked tenants", "/admin/audit"],
+          ].map(([label,value,sub,to]) => <Link key={label} to={to} className="rounded-2xl border border-border p-4 transition hover:border-primary/30 hover:bg-primary/[0.03]"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-2 text-xl font-bold tracking-tight">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{sub}</p></Link>)}
+        </div>
+      </section>
+
       <AdminPageHeader title="Platform overview" description="Live metrics from the current production data layer." />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
