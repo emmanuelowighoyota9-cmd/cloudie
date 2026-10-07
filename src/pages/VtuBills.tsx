@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -105,6 +105,12 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
 
   const activeGroup =
     groups.find((group) => group.serviceType === category) ?? groups[0] ?? null;
+
+  useEffect(() => {
+    if (!initialCategory || productCode || !activeGroup || activeGroup.products.length === 0) return;
+    setSearchParams({ product: activeGroup.products[0].productCode }, { replace: true });
+  }, [initialCategory, productCode, activeGroup, setSearchParams]);
+
 
   const amountNgn = detail?.requiresAmount ? Number(amount) : null;
   const amountValid = amountNgn !== null && Number.isFinite(amountNgn) && amountNgn > 0;
