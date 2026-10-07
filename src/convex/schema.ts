@@ -185,6 +185,7 @@ const schema = defineSchema(
       createdAt: v.optional(v.number()),
     })
       .index("email", ["email"])
+      .index("by_role", ["role"])
       .index("referralCode", ["referralCode"])
       .index("by_createdAt", ["createdAt"]),
 
@@ -772,6 +773,17 @@ const schema = defineSchema(
       category: v.string(),
       updatedBy: v.optional(v.id("users")),
       updatedAt: v.number(),
+    }).index("by_key", ["key"]),
+
+    /**
+     * One-time bootstrap gate for ADMIN_SETUP_CODE claims.
+     * The table is intentionally singleton-keyed and records consumption so
+     * the deployment secret cannot be replayed to create additional admins.
+     */
+    adminBootstrapState: defineTable({
+      key: v.string(),
+      consumedAt: v.optional(v.number()),
+      consumedBy: v.optional(v.id("users")),
     }).index("by_key", ["key"]),
 
     moderationFlags: defineTable({
