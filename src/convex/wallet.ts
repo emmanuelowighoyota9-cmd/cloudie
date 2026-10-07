@@ -63,7 +63,11 @@ export type WalletMutationArgs = {
 };
 
 /** Use these helpers when another mutation needs wallet movement in the SAME transaction. */
-async function assertNoConflictingReplay(ctx: any, args: WalletMutationArgs) {
+async function assertNoConflictingReplay(
+  ctx: any,
+  args: WalletMutationArgs,
+  expectedSign: 1 | -1,
+) {
   if (args.idempotencyKey) {
     const existing = await ctx.db
       .query("walletLedger")
@@ -75,7 +79,7 @@ async function assertNoConflictingReplay(ctx: any, args: WalletMutationArgs) {
       if (
         existing.userId !== args.userId ||
         existingAmount !== expectedAmount ||
-        (existing.amountNgn > 0) !== (args.amountNgn > 0)
+        Math.sign(existing.amountNgn) !== expectedSign
       ) {
         throw new Error("IDEMPOTENCY_KEY_REUSE");
       }
@@ -109,7 +113,7 @@ async function assertNoConflictingReplay(ctx: any, args: WalletMutationArgs) {
 
 export async function creditWallet(ctx: any, args: WalletMutationArgs) {
   if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Credit amount must be positive");
-  const replay = await assertNoConflictingReplay(ctx, args);
+  const replay = await assertNoConflictingReplay(ctx, args, 1);
   if (replay) return replay;
   const balance = await ensureWallet(ctx, args.userId);
   const newBalance = Math.round((balance + args.amountNgn) * 100) / 100;
@@ -130,7 +134,7 @@ export async function creditWallet(ctx: any, args: WalletMutationArgs) {
 
 export async function debitWallet(ctx: any, args: WalletMutationArgs) {
   if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Debit amount must be positive");
-  const replay = await assertNoConflictingReplay(ctx, args);
+  const replay = await assertNoConflictingReplay(ctx, args, -1);
   if (replay) return replay;
   const balance = await ensureWallet(ctx, args.userId);
   if (balance + 1e-9 < args.amountNgn) throw new Error("Insufficient NGN wallet balance");
@@ -208,7 +212,34 @@ export const credit = internalMutation({
       const existing = await ctx.db.query("walletLedger")
         .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", args.idempotencyKey!))
         .first();
-      if (existing) return existing._id;
+      if (existing) {
+        if (
+          existing.userId !== args.userId ||
+          existing.amountNgn !== args.amountNgn ||
+          existing.type !== args.type
+        ) {
+          throw new Error("IDEMPOTENCY_KEY_REUSE");
+        }
+        return existing._id;
+      }
+    }
+
+    if (args.reference && args.referenceId) {
+      const existing = await ctx.db.query("walletLedger")
+        .withIndex("by_reference", (q) =>
+          q.eq("reference", args.reference!).eq("referenceId", args.referenceId!)
+        )
+        .first();
+      if (existing) {
+        if (
+          existing.userId !== args.userId ||
+          existing.amountNgn !== args.amountNgn ||
+          existing.type !== args.type
+        ) {
+          throw new Error("REFERENCE_ALREADY_USED");
+        }
+        return existing._id;
+      }
     }
 
     const balance = await ensureWallet(ctx, args.userId);
@@ -257,7 +288,34 @@ export const debit = internalMutation({
       const existing = await ctx.db.query("walletLedger")
         .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", args.idempotencyKey!))
         .first();
-      if (existing) return existing._id;
+      if (existing) {
+        if (
+          existing.userId !== args.userId ||
+          existing.amountNgn !== -args.amountNgn ||
+          existing.type !== args.type
+        ) {
+          throw new Error("IDEMPOTENCY_KEY_REUSE");
+        }
+        return existing._id;
+      }
+    }
+
+    if (args.reference && args.referenceId) {
+      const existing = await ctx.db.query("walletLedger")
+        .withIndex("by_reference", (q) =>
+          q.eq("reference", args.reference!).eq("referenceId", args.referenceId!)
+        )
+        .first();
+      if (existing) {
+        if (
+          existing.userId !== args.userId ||
+          existing.amountNgn !== -args.amountNgn ||
+          existing.type !== args.type
+        ) {
+          throw new Error("REFERENCE_ALREADY_USED");
+        }
+        return existing._id;
+      }
     }
 
     const balance = await ensureWallet(ctx, args.userId);
