@@ -6,8 +6,6 @@ import {
   ArrowRight,
   Search,
   FilePlus2,
-  FolderOpen,
-  Clock3,
   Coins,
   FileStack,
   HardDrive,
