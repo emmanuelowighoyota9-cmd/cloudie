@@ -84,6 +84,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
   );
   const [identifier, setIdentifier] = useState("");
   const [amount, setAmount] = useState("");
+  const [meterType, setMeterType] = useState<"prepaid" | "postpaid">("prepaid");
   const [confirmed, setConfirmed] = useState(false);
   const [transactionId, setTransactionId] = useState<Id<"vtuTransactions"> | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -474,6 +475,113 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                 </div>
 
                 <div className="space-y-5 px-5 py-5">
+                  {detail.serviceType === "data" && (
+                    <div className="space-y-4">
+                      <div>
+                        <p className="mb-2 text-sm font-medium text-vtu-text">Choose provider</p>
+                        <div className="grid grid-cols-4 gap-2">
+                          {["mtn", "airtel", "glo", "9mobile"].map((provider) => {
+                            const providerProduct = activeGroup?.products.find((p) =>
+                              p.displayName.toLowerCase().includes(provider),
+                            );
+                            const active = Boolean(
+                              providerProduct &&
+                                detail.productCode === providerProduct.productCode,
+                            );
+                            return (
+                              <button
+                                key={provider}
+                                type="button"
+                                disabled={!providerProduct || locked}
+                                onClick={() => providerProduct && choose(providerProduct.productCode)}
+                                className={cn(
+                                  "relative min-h-[64px] rounded-2xl border text-sm font-semibold transition-all active:scale-[.98]",
+                                  active ? "border-vtu-accent ring-2 ring-vtu-accent/30" : "border-vtu-line bg-white",
+                                  provider === "mtn" && "bg-[#ffd91a]",
+                                  provider === "airtel" && "bg-[#e42b32] text-white",
+                                  provider === "glo" && "bg-[#62bf3c] text-white",
+                                  provider === "9mobile" && "bg-[#dff2e6]",
+                                  !providerProduct && "opacity-40",
+                                )}
+                              >
+                                {provider === "mtn" || provider === "airtel" ? (
+                                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#69a844] px-2 py-1 text-[9px] font-bold text-white">
+                                    ₦120 cashback
+                                  </span>
+                                ) : null}
+                                {provider.toUpperCase()}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="data-plan" className="text-sm font-medium text-vtu-text">
+                          Select Data Plan
+                        </Label>
+                        <select
+                          id="data-plan"
+                          value={productCode}
+                          onChange={(e) => choose(e.target.value)}
+                          disabled={locked}
+                          className="min-h-12 w-full rounded-xl border border-vtu-line bg-white px-4 text-sm text-vtu-text outline-none focus:ring-2 focus:ring-vtu-accent/30"
+                        >
+                          {(activeGroup?.products ?? []).map((product) => (
+                            <option key={product.productCode} value={product.productCode}>
+                              {product.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {detail.serviceType === "electricity" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="disco" className="text-sm font-medium text-vtu-text">
+                          Select DisCo (Distribution Company)
+                        </Label>
+                        <select
+                          id="disco"
+                          value={productCode}
+                          onChange={(e) => choose(e.target.value)}
+                          disabled={locked}
+                          className="min-h-12 w-full rounded-xl border border-vtu-line bg-white px-4 text-sm text-vtu-text outline-none focus:ring-2 focus:ring-vtu-accent/30"
+                        >
+                          {(activeGroup?.products ?? []).map((product) => (
+                            <option key={product.productCode} value={product.productCode}>
+                              {product.displayName}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-sm font-medium text-vtu-text">Meter Type</p>
+                        <div className="flex rounded-full bg-[#e8e2eb] p-1">
+                          {(["prepaid", "postpaid"] as const).map((kind) => (
+                            <button
+                              key={kind}
+                              type="button"
+                              onClick={() => setMeterType(kind)}
+                              disabled={locked}
+                              className={cn(
+                                "min-h-11 flex-1 rounded-full text-sm font-medium capitalize transition-all",
+                                meterType === kind
+                                  ? "bg-white text-[#3a3340] shadow-sm"
+                                  : "text-[#756b79]",
+                              )}
+                            >
+                              {kind}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="bill-target" className="text-sm font-medium text-vtu-text">
                       {detail.serviceType === "data"
