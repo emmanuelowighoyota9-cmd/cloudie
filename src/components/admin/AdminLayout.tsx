@@ -70,8 +70,6 @@ const ADMIN_GROUPS: AdminGroup[] = [
   ]},
 ] as const;
 
-type GroupLabel = (typeof ADMIN_GROUPS)[number]["label"];
-
 function AdminShell() {
   const location = useLocation();
   const navigate = useNavigate();
