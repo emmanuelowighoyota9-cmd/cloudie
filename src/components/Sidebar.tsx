@@ -34,6 +34,8 @@ const mainNav = [
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Fund Wallet", icon: CreditCard, to: "/buy-points" },
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
+  { label: "Data", icon: Wifi, to: "/vtu/data" },
+  { label: "Electricity", icon: Lightbulb, to: "/vtu/electricity" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
