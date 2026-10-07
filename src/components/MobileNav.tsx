@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ShoppingBag, FileText, Building2, Layers, Users, Bell,
   Settings, Shield, CreditCard, Wallet, Truck, Store, Receipt, FileStack,
-  Zap, Phone, TrendingUp, Wifi, Lightbulb,
+  Zap, Phone, TrendingUp, Wifi, Lightbulb, GraduationCap,
 } from "lucide-react";
 
 const navItems = [
@@ -17,6 +17,7 @@ const navItems = [
   { label: "Airtime & Data", icon: Zap, to: "/vtu" },
   { label: "Data", icon: Wifi, to: "/vtu/data" },
   { label: "Electricity", icon: Lightbulb, to: "/vtu/electricity" },
+  { label: "Exam Pins", icon: GraduationCap, to: "/vtu/exam-pins" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
