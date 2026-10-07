@@ -320,8 +320,8 @@ function AdminShell() {
         <div className="flex h-16 items-center gap-3 border-b border-border/70 px-4">
           <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <div className="flex-1">
-            <p className="text-sm font-bold text-slate-900 dark:text-white">Cloudie Operations Admin</p>
-            <p className="text-[10px] text-slate-400">Super Admin Console</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">Cloudie Command Center</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Master Super Admin</p>
           </div>
         </div>
         {navList}
@@ -353,6 +353,9 @@ function AdminShell() {
           </Button>
           <GlobalSearch />
           <div className="ml-auto flex items-center gap-1">
+            <span className="mr-2 hidden items-center gap-1 rounded-full border border-primary/15 bg-primary/5 px-2 py-1 text-[10px] font-semibold text-primary sm:flex">
+              <ShieldCheck className="h-3 w-3" /> Super Admin
+            </span>
             <span className="mr-2 hidden items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-[10px] font-medium text-green-700 dark:bg-green-900/40 dark:text-green-300 sm:flex">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> Secure session
             </span>
