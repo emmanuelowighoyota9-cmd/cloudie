@@ -3,7 +3,7 @@ import { api } from "@/convex/_generated/api";
 import { RequireAdmin } from "@/components/RequireAdmin";
 import { cn } from "@/lib/utils";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePendingChanges } from "@/lib/pendingChanges";
 import { toast } from "sonner";
 import {
@@ -11,9 +11,14 @@ import {
   ClipboardCheck, CreditCard, FileText, Gavel, Inbox, Layers, LayoutDashboard,
   LogOut, Mail, MapPin, Menu, Package, Palette, Search, Settings, ShieldAlert,
   ShieldCheck, ShoppingCart, Sun, Moon, Tags, Truck, Users, X, Zap, Waypoints,
+  type LucideIcon,
 } from "lucide-react";
 
-const ADMIN_GROUPS = [
+type AdminItem = { to: string; label: string; icon: LucideIcon; exact?: boolean; badge?: "openFlags" | "pendingKyc" | "pendingVendors" | "openDisputes"; pendingScope?: "pricing" | "catalog" };
+type AdminGroup = { label: GroupLabel; items: AdminItem[] };
+type GroupLabel = "Command Center" | "Users & Access" | "Finance" | "VTU & Providers" | "Marketplace" | "Logistics" | "Documents & AI" | "Communications" | "Configuration";
+
+const ADMIN_GROUPS: AdminGroup[] = [
   { label: "Command Center", items: [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
