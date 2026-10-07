@@ -3,7 +3,8 @@ import { query, mutation, type MutationCtx, type QueryCtx } from "./_generated/s
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { auditLog } from "./adminApi";
-import { effectivePointsCost } from "./pricing";
+import { effectiveNgnCost, effectivePointsCost, readPointRate } from "./pricing";
+import { debitWallet } from "./wallet";
 import type { Id } from "./_generated/dataModel";
 
 type StorageFileId = Id<"storageFiles">;
@@ -42,7 +43,7 @@ import { VTU_RECEIPT_LIBRARY_TAG } from "../lib/vtu";
  * `finalizeDocument` completes the record — server-side, schema-validated and
  * idempotent per render attempt.
  *
- * Points are charged at the full render cost by `createDocument`, so a
+ * NGN wallet funds are charged at the full render cost by `createDocument`, so a
  * document is a paid object from the moment it exists: unlimited free drafts
  * are no longer possible, and the price a customer is quoted is the price they
  * keep even if pricing changes before the render finishes. That charge pays for
@@ -56,6 +57,13 @@ const RENDER_SERVICE = "document_render";
 const DEFAULT_RENDER_COST = 40;
 const DESIGN_SERVICE = "custom_document_design";
 const DEFAULT_DESIGN_COST = 25;
+
+async function resolveDocumentNgnCost(ctx: QueryCtx | MutationCtx, billable: boolean | undefined, service: string, requiredCredits: number, fallbackPoints: number): Promise<number> {
+  const pointCost = resolveDocumentCost(billable, await effectivePointsCost(ctx, service, fallbackPoints), requiredCredits, fallbackPoints);
+  if (pointCost <= 0) return 0;
+  const rate = await readPointRate(ctx);
+  return Math.round((await effectiveNgnCost(ctx, service, pointCost * rate.ngnPerPoint)) * 100) / 100;
+}
 const MAX_LIST = 100;
 const MAX_DOCUMENTS = 60;
 const MAX_IMAGE_B64 = 4_500_000;
@@ -133,26 +141,23 @@ async function chargeDocumentDesign(
   templateId: Id<"documentTemplates">,
   templateName: string,
 ): Promise<number> {
-  const cost = await effectivePointsCost(ctx, DESIGN_SERVICE, DEFAULT_DESIGN_COST);
+  const cost = await effectiveNgnCost(ctx, DESIGN_SERVICE, (await effectivePointsCost(ctx, DESIGN_SERVICE, DEFAULT_DESIGN_COST)) * (await readPointRate(ctx)).ngnPerPoint);
   const user = await ctx.db.get(userId);
   if (!user) throw new Error("User not found");
-  const balance = user.pointsBalance ?? 0;
+  const balance = user.walletBalanceNgn ?? ((user.pointsBalance ?? 0) * (await readPointRate(ctx)).ngnPerPoint);
   if (balance < cost) {
-    throw new Error(`Insufficient points. Designing a document costs ${cost} points.`);
+    throw new Error(`Insufficient NGN wallet balance. Designing a document costs ₦${cost.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`);
   }
 
-  const balanceAfter = balance - cost;
-  await ctx.db.patch(userId, { pointsBalance: balanceAfter });
-  await ctx.db.insert("pointLedger", {
+  await debitWallet(ctx, {
     userId,
-    amount: -cost,
-    balanceAfter,
+    amountNgn: cost,
     description: `Custom document design: ${templateName}`,
     type: "service_charge",
     reference: DESIGN_SERVICE,
     referenceId: templateId,
+    idempotencyKey: `document-design:${templateId}`,
     metadata: { service: DESIGN_SERVICE, action: "design" },
-    createdAt: Date.now(),
   });
   return cost;
 }
@@ -516,7 +521,7 @@ export async function insertDocumentRecord(
     .first();
   if (!version) throw new Error("Template has no published version");
 
-  // ── Points are taken HERE, once, for the full render cost ──
+  // ── NGN wallet funds are taken HERE, once, for the full render cost ──
   // Creating a document is a chargeable act. A draft is therefore a paid object
   // from the moment it exists, and the price quoted at this instant is the price
   // the customer keeps for the whole render.
@@ -525,9 +530,10 @@ export async function insertDocumentRecord(
   }
 
   const blocks = version.blocks as VersionBlocks;
-  const cost = resolveDocumentCost(
+  const cost = await resolveDocumentNgnCost(
+    ctx,
     blocks?.billable ?? template.billable,
-    await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
+    RENDER_SERVICE,
     blocks?.requiredCredits ?? template.requiredCredits ?? 0,
     DEFAULT_RENDER_COST,
   );
@@ -537,10 +543,10 @@ export async function insertDocumentRecord(
   // outlive the row it belongs to.
   const payer = await ctx.db.get(input.userId);
   if (!payer) throw new Error("User not found");
-  const balance = payer.pointsBalance ?? 0;
+  const balance = payer.walletBalanceNgn ?? ((payer.pointsBalance ?? 0) * (await readPointRate(ctx)).ngnPerPoint);
   if (balance < cost) {
     throw new Error(
-      `Insufficient points. Creating a document costs ${cost} points and your balance is ${balance}.`,
+      `Insufficient NGN wallet balance. Creating a document costs ₦${cost.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} and your balance is ₦${balance.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`,
     );
   }
 
@@ -617,19 +623,15 @@ export async function insertDocumentRecord(
   // paid one to anything counting rows rather than amounts.
   if (cost > 0) {
     const idempotencyKey = documentCreationKey(documentId);
-    const balanceAfter = balance - cost;
-    await ctx.db.patch(input.userId, { pointsBalance: balanceAfter });
-    await ctx.db.insert("pointLedger", {
+    await debitWallet(ctx, {
       userId: input.userId,
-      amount: -cost,
-      balanceAfter,
+      amountNgn: cost,
       description: `${title} — document created`,
       type: "document_generation",
       reference: "document",
       referenceId: documentId,
       idempotencyKey,
-      metadata: { stage: "creation", cost },
-      createdAt: now,
+      metadata: { stage: "creation", costNgn: cost },
     });
   }
 
@@ -757,12 +759,13 @@ export const finalizeDocument = mutation({
       throw new Error("No rendered artifacts were uploaded");
     }
 
-    const cost = resolveDocumentCost(
+    const cost = await resolveDocumentNgnCost(
+      ctx,
       // No fallback to `template.billable` here: this mutation deliberately does
       // not load the template row, and the flag is frozen into the version this
       // document was created from — which is the one that must be honoured.
       blocks?.billable,
-      await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
+      RENDER_SERVICE,
       blocks?.requiredCredits ?? 0,
       DEFAULT_RENDER_COST,
     );
@@ -784,32 +787,17 @@ export const finalizeDocument = mutation({
     let charged = 0;
     if (billThisAttempt) {
       const idempotencyKey = renderIdempotencyKey(args.documentId, "pdf", attemptId);
-      const prior = await ctx.db
-        .query("pointLedger")
-        .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", idempotencyKey))
-        .first();
-      const freshUser = await ctx.db.get(userId);
-      const balance = freshUser?.pointsBalance ?? 0;
-      if (!prior) {
-        if (balance < cost) {
-          throw new Error(`Insufficient points. This render costs ${cost} points.`);
-        }
-        const newBalance = balance - cost;
-        await ctx.db.patch(userId, { pointsBalance: newBalance });
-        await ctx.db.insert("pointLedger", {
-          userId,
-          amount: -cost,
-          balanceAfter: newBalance,
-          description: `${doc.title ?? "Document"} render`,
-          type: "document_generation",
-          reference: "document",
-          referenceId: args.documentId,
-          idempotencyKey,
-          metadata: { attemptId, pageCount: args.pageCount },
-          createdAt: Date.now(),
-        });
-        charged = cost;
-      }
+      await debitWallet(ctx, {
+        userId,
+        amountNgn: cost,
+        description: `${doc.title ?? "Document"} render`,
+        type: "document_generation",
+        reference: "document",
+        referenceId: args.documentId,
+        idempotencyKey,
+        metadata: { attemptId, pageCount: args.pageCount, costNgn: cost },
+      });
+      charged = cost;
     }
 
     // ── Register artifacts, replacing any previous render of this document ──
@@ -1084,14 +1072,17 @@ export const getRenderQuote = query({
       .order("desc")
       .first();
     const blocks = version?.blocks as VersionBlocks | undefined;
-    const cost = resolveDocumentCost(
+    const cost = await resolveDocumentNgnCost(
+      ctx,
       blocks?.billable ?? template.billable,
-      await effectivePointsCost(ctx, RENDER_SERVICE, DEFAULT_RENDER_COST),
+      RENDER_SERVICE,
       blocks?.requiredCredits ?? template.requiredCredits ?? 0,
       DEFAULT_RENDER_COST,
     );
     const user = await ctx.db.get(userId);
-    return { cost, balance: user?.pointsBalance ?? 0, affordable: (user?.pointsBalance ?? 0) >= cost };
+    const rate = await readPointRate(ctx);
+    const balance = user?.walletBalanceNgn ?? ((user?.pointsBalance ?? 0) * rate.ngnPerPoint);
+    return { cost, balance, currency: "NGN", affordable: balance >= cost };
   },
 });
 
