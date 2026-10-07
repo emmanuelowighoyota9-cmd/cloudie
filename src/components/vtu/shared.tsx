@@ -156,7 +156,8 @@ export function VtuServiceIcon({
 const VTU_DESTINATIONS = [
   { to: "/vtu", label: "Browse", icon: LayoutGrid },
   { to: "/vtu/airtime", label: "Airtime", icon: Radio },
-  { to: "/vtu/bills", label: "Data & bills", icon: Receipt },
+  { to: "/vtu/data", label: "Data", icon: Wifi },
+  { to: "/vtu/electricity", label: "Electricity", icon: Lightbulb },
   { to: "/vtu/history", label: "History", icon: Clock },
 ] as const;
 
