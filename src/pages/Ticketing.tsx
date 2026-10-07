@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Plane, Building, FileSpreadsheet, ScrollText, ArrowUpRight,
-  Search, FileText, Clock3, Plus, ChevronRight, Sparkles,
+  Search, FileText, Clock3, Plus, ChevronRight, Sparkles, LayoutGrid, ArrowRight, Hotel, ReceiptText, Car, CalendarDays,
 } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
@@ -22,6 +22,9 @@ const docTypes = [
 export default function Ticketing() {
   const { price } = usePricing();
   const documents = useQuery(api.documents.list, { limit: 20 });
+  const flightTemplates = useQuery(api.docTemplates.listTemplates, { documentType: "flight_itinerary", limit: 12 });
+  const corporateTemplates = useQuery(api.docTemplates.listTemplates, { documentType: "corporate", limit: 12 });
+  const generalTemplates = useQuery(api.docTemplates.listTemplates, { documentType: "general", limit: 12 });
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "flight" | "hotel" | "invoice" | "customs">("all");
 
@@ -80,6 +83,50 @@ export default function Ticketing() {
             </CardContent>
           </Card>
         ))}
+      </section>
+
+      </section>
+
+      <section>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">Ticketing templates</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Use the dedicated ticketing pack or browse the wider document studio.</p>
+          </div>
+          <Link to="/documents/templates" className="inline-flex items-center text-sm font-semibold text-primary hover:underline">
+            Browse all templates <ArrowRight className="ml-1 size-4" />
+          </Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Flight booking", description: "Passenger, route, fare and confirmation.", icon: Plane, to: "/documents/templates?category=flight_itinerary", tone: "bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400" },
+            { label: "Hotel confirmation", description: "Guest, stay, room and reservation details.", icon: Hotel, to: "/documents/templates?category=corporate", tone: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400" },
+            { label: "Travel voucher", description: "Transfers and itinerary-linked services.", icon: Car, to: "/documents/templates?category=general", tone: "bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400" },
+            { label: "Trip summary", description: "One-page multi-stop travel overview.", icon: CalendarDays, to: "/documents/templates?category=flight_itinerary", tone: "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400" },
+          ].map((item) => { const Icon = item.icon; return (
+            <Link key={item.label} to={item.to} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+              <div className={`flex size-10 items-center justify-center rounded-xl ${item.tone}`}><Icon className="size-5" /></div>
+              <h3 className="mt-3 text-sm font-semibold text-foreground">{item.label}</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+              <span className="mt-3 inline-flex items-center text-xs font-semibold text-primary">Use template <ArrowRight className="ml-1 size-3.5 transition-transform group-hover:translate-x-0.5" /></span>
+            </Link>
+          ); })}
+        </div>
+        <div className="mt-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2"><LayoutGrid className="size-4 text-primary" /><h3 className="text-sm font-semibold text-foreground">Live template catalog</h3></div>
+            <span className="text-xs text-muted-foreground">{(flightTemplates?.length ?? 0) + (corporateTemplates?.length ?? 0) + (generalTemplates?.length ?? 0)} templates available</span>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {[...(flightTemplates ?? []), ...(corporateTemplates ?? []), ...(generalTemplates ?? [])].slice(0, 9).map((template) => (
+              <Link key={template._id} to={`/documents/new/${template._id}`} className="flex items-center gap-3 rounded-xl border border-border/80 p-3 transition-colors hover:bg-muted/60">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><FileText className="size-4" /></span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-xs font-semibold text-foreground">{template.name}</span><span className="block truncate text-[10px] text-muted-foreground">{template.requiredCredits} pts · {template.fieldCount} fields</span></span>
+                <ArrowRight className="size-3.5 text-muted-foreground" />
+              </Link>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section>
@@ -152,7 +199,7 @@ export default function Ticketing() {
             ) : (
               <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
                 {filteredDocs.slice(0, 8).map((doc) => {
-                  const meta = docTypes.find((item) => item.short.toLowerCase() === doc.type || item.type === doc.type);
+                  const meta = docTypes.find((item) => item.short.toLowerCase() === doc.type);
                   const Icon = meta?.icon ?? FileText;
                   return (
                     <Link key={doc._id} to={`/documents/${doc._id}`} className="flex items-center gap-3 p-3 transition-colors hover:bg-muted/60 sm:p-4">
