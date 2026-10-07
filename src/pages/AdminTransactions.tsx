@@ -47,7 +47,6 @@ export default function AdminTransactions() {
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = ledger?.find((l) => l._id === selectedId);
-  const selectedUser = selected ? userMap.get(selected.userId) : undefined;
   const highValue = (amount: number) => Math.abs(amount) >= 100000;
   const riskFlags = selected ? [
     ...(highValue(selected.amountNgn) ? ["HIGH_VALUE"] : []),
@@ -57,6 +56,7 @@ export default function AdminTransactions() {
   ] : [];
 
   const userMap = useMemo(() => new Map<string, NonNullable<typeof users>[number]>((users ?? []).map((u) => [u._id as string, u])), [users]);
+  const selectedUser = selected ? userMap.get(selected.userId) : undefined;
 
   const filtered = useMemo(() => {
     if (!ledger) return undefined;
