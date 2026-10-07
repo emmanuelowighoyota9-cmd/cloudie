@@ -128,6 +128,36 @@ export default function Ticketing() {
       </section>
 
       <section>
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">Expanded document catalog</h2>
+            <p className="mt-1 text-sm text-muted-foreground">More mature travel, identity-profile, certificate and business document templates.</p>
+          </div>
+          <Link to="/documents/templates" className="text-sm font-semibold text-primary hover:underline">Open full catalog <ArrowRight className="ml-1 inline size-4" /></Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            { title:"Flight e-ticket summary", description:"Passenger, route, cabin and fare summary.", category:"flight_itinerary", icon:Plane },
+            { title:"Multi-city flight itinerary", description:"Organize multiple flight legs into one trip pack.", category:"flight_itinerary", icon:CalendarDays },
+            { title:"Driver profile card", description:"Non-government driver profile for training and UI use.", category:"general", icon:FileText },
+            { title:"Marriage keepsake certificate", description:"Ceremony keepsake clearly marked as non-government record.", category:"certificates", icon:Sparkles },
+            { title:"Employment certificate", description:"Professional HR confirmation and internal record.", category:"certificates", icon:FileSpreadsheet },
+            { title:"Event & ceremony certificate", description:"Flexible certificate for participation and events.", category:"certificates", icon:ScrollText },
+          ].map((item) => { const Icon = item.icon; return (
+            <Link key={item.title} to={`/documents/templates?category=${item.category}&search=${encodeURIComponent(item.title)}`} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" /></span>
+                <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+              </div>
+              <h3 className="mt-3 text-sm font-semibold text-foreground">{item.title}</h3>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+              <span className="mt-3 inline-flex items-center text-xs font-semibold text-primary">Use template <ArrowRight className="ml-1 size-3.5" /></span>
+            </Link>
+          ); })}
+        </div>
+      </section>
+
+      <section>
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">Create a document</h2>
