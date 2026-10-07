@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AdminPageHeader, StatCard, AdminSkeleton } from "@/components/admin/shared";
 import {
-  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,
+  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,\n  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,
   ClipboardCheck, Coins, CreditCard, FileText, Gavel, Package, Settings,
   ShieldAlert, ShieldCheck, ShoppingCart, Truck, UserCheck, UserX, Users, Zap
 } from "lucide-react";
@@ -89,6 +89,45 @@ export default function Admin() {
             <Link to="/admin/administrators"><Button variant="outline" className="w-full gap-2"><ShieldCheck className="h-4 w-4" /> Admins</Button></Link>
             <Link to="/admin/system-health"><Button className="w-full gap-2"><Activity className="h-4 w-4" /> Health</Button></Link>
           </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Link to="/admin/transactions" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Wallet control</span><WalletCards className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{ngnValue(data.points.minted)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Credits processed</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-full rounded-full bg-primary" /></div>
+        </Link>
+        <Link to="/admin/orders" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Order control</span><Workflow className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{data.marketplace.orders.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{data.marketplace.escrowPending.toLocaleString()} awaiting escrow resolution</p>
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> LIVE ORDER QUEUE</div>
+        </Link>
+        <Link to="/admin/system-health" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Platform signals</span><Server className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">LIVE</p>
+          <p className="mt-1 text-xs text-muted-foreground">{data.documents.last24h.toLocaleString()} documents processed in 24h</p>
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> DATA LAYER RESPONDING</div>
+        </Link>
+        <Link to="/admin/audit" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Security control</span><LockKeyhole className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{data.users.suspended.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Suspended accounts under control</p>
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-primary"><Eye className="h-3.5 w-3.5" /> AUDIT READY</div>
+        </Link>
+      </section>
+
+      <section className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /><h2 className="font-semibold">Master control room</h2></div><p className="mt-1 text-xs text-muted-foreground">Prioritized signals for the administrator responsible for the whole platform.</p></div>
+          <Link to="/admin/audit" className="text-xs font-semibold text-primary hover:underline">Open audit trail →</Link>
+        </div>
+        <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <Link to="/admin/kyc" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Identity queue</span><CircleAlert className={data.kyc.pending > 0 ? "h-4 w-4 text-amber-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.kyc.pending.toLocaleString()}</p><p className="text-xs text-muted-foreground">KYC reviews pending</p></Link>
+          <Link to="/admin/disputes" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Risk queue</span><CircleAlert className={data.disputes.open > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.disputes.open.toLocaleString()}</p><p className="text-xs text-muted-foreground">Open marketplace disputes</p></Link>
+          <Link to="/admin/tenants" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Tenant controls</span><CircleAlert className={data.tenants.locked > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.tenants.locked.toLocaleString()}</p><p className="text-xs text-muted-foreground">Locked business tenants</p></Link>
         </div>
       </section>
 
