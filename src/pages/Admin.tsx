@@ -2,7 +2,8 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AdminPageHeader, StatCard, AdminSkeleton } from "@/components/admin/shared";
 import {
-  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,\n  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,
+  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,
+  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,
   ClipboardCheck, Coins, CreditCard, FileText, Gavel, Package, Settings,
   ShieldAlert, ShieldCheck, ShoppingCart, Truck, UserCheck, UserX, Users, Zap
 } from "lucide-react";
