@@ -693,10 +693,12 @@ export const applyCatalogSync = internalMutation({
         customerIdentifierLabel: v.string(),
         requiresAmount: v.boolean(),
         requiresPackageCode: v.boolean(),
-        priceNgn: v.number(),
+        minAmount: v.optional(v.number()),
+        maxAmount: v.optional(v.number()),
+        priceNgn: v.optional(v.number()),
         provider: v.string(),
         providerProductCode: v.string(),
-        providerPackageCode: v.string(),
+        providerPackageCode: v.optional(v.string()),
       }),
     ),
     provider: v.string(),
@@ -727,7 +729,9 @@ export const applyCatalogSync = internalMutation({
           customerIdentifierLabel: draft.customerIdentifierLabel,
           requiresAmount: draft.requiresAmount,
           requiresPackageCode: draft.requiresPackageCode,
-          priceNgn: draft.priceNgn,
+          ...(draft.minAmount !== undefined ? { minAmount: draft.minAmount } : {}),
+          ...(draft.maxAmount !== undefined ? { maxAmount: draft.maxAmount } : {}),
+          ...(draft.priceNgn !== undefined ? { priceNgn: draft.priceNgn } : {}),
           active: true,
           createdAt: now,
           updatedAt: now,
@@ -737,7 +741,18 @@ export const applyCatalogSync = internalMutation({
         // Provider-owned fields only. `active` is deliberately absent.
         await ctx.db.patch(existing._id, {
           displayName: draft.displayName,
-          priceNgn: draft.priceNgn,
+          ...(draft.requiresAmount
+            ? {
+                requiresAmount: true,
+                requiresPackageCode: false,
+                ...(draft.minAmount !== undefined ? { minAmount: draft.minAmount } : {}),
+                ...(draft.maxAmount !== undefined ? { maxAmount: draft.maxAmount } : {}),
+              }
+            : {
+                requiresAmount: false,
+                requiresPackageCode: true,
+                ...(draft.priceNgn !== undefined ? { priceNgn: draft.priceNgn } : {}),
+              }),
           updatedAt: now,
         });
         productsUpdated += 1;
@@ -749,7 +764,9 @@ export const applyCatalogSync = internalMutation({
           productCode: draft.productCode,
           provider: draft.provider,
           providerProductCode: draft.providerProductCode,
-          providerPackageCode: draft.providerPackageCode,
+          ...(draft.providerPackageCode !== undefined
+            ? { providerPackageCode: draft.providerPackageCode }
+            : {}),
           // Above the Pairgate fallback and alongside nothing else, so a synced
           // AidaPay route wins for every product it has one for.
           priority: 10,
@@ -763,7 +780,9 @@ export const applyCatalogSync = internalMutation({
         // the operator's and do not.
         await ctx.db.patch(existingRoute._id, {
           providerProductCode: draft.providerProductCode,
-          providerPackageCode: draft.providerPackageCode,
+          ...(draft.providerPackageCode !== undefined
+            ? { providerPackageCode: draft.providerPackageCode }
+            : {}),
           updatedAt: now,
         });
         routesUpdated += 1;
