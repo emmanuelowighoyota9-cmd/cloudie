@@ -331,48 +331,63 @@ function generateReferralCode(): string {
 }
 
 /**
- * Promote the signed-in user to ADMIN. Two legitimate cases:
+ * Promote the signed-in user to ADMIN.
  *
- *  1. Bootstrap — the platform has no administrator yet.
- *  2. Recovery — an administrator exists but cannot be reached (no email on
- *     the account, so neither password reset nor email-code sign-in is
- *     possible), or the operator supplies the ADMIN_SETUP_CODE master code.
- *
- * In normal operation (an administrator with an email exists) this is refused
- * server-side. Every claim is audited.
+ * This is a guarded bootstrap/recovery operation:
+ * - ADMIN_SETUP_CODE is mandatory.
+ * - The code can be consumed only once.
+ * - Once any administrator exists, this endpoint cannot create another admin.
+ *   Use the authenticated admin console flow to create additional admins.
+ * - Every successful claim is audited.
  */
 export const claimFirstAdmin = mutation({
-  args: { setupCode: v.optional(v.string()) },
+  args: { setupCode: v.string() },
+  returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED: sign in first");
-
-    const users = await ctx.db.query("users").take(1000);
-    const admins = users.filter((u) => u.role === "admin");
-
-    const expected = process.env.ADMIN_SETUP_CODE;
-    const hasSetupCode = typeof expected === "string" && expected.length > 0;
-    const codeMatches = hasSetupCode && args.setupCode === expected;
-
-    if (admins.length > 0) {
-      // The operator's master code always authorises a claim. Otherwise the
-      // claim is only allowed when every existing administrator is locked out
-      // (no email = no password reset, no email-code sign-in) — refusing here
-      // would leave the platform permanently unadministrable.
-      const anyReachable = admins.some(
-        (a) => typeof a.email === "string" && a.email.trim().length > 0,
-      );
-      if (!codeMatches && anyReachable) {
-        throw new Error("FORBIDDEN: an administrator already exists");
-      }
-    } else if (hasSetupCode && !codeMatches) {
-      throw new Error("INVALID_SETUP_CODE");
-    }
 
     const user = await ctx.db.get(userId);
     if (!user) throw new Error("USER_NOT_FOUND");
     if (user.isSuspended || user.isTerminated) {
       throw new Error("FORBIDDEN: account is suspended");
+    }
+
+    const existingAdmin = await ctx.db
+      .query("users")
+      .withIndex("by_role", (q) => q.eq("role", "admin"))
+      .first();
+    if (existingAdmin) {
+      throw new Error("FORBIDDEN: an administrator already exists");
+    }
+
+    const expected = process.env.ADMIN_SETUP_CODE?.trim();
+    if (!expected) {
+      throw new Error("SETUP_UNAVAILABLE: ADMIN_SETUP_CODE is not configured");
+    }
+    if (args.setupCode !== expected) {
+      throw new Error("INVALID_SETUP_CODE");
+    }
+
+    const gate = await ctx.db
+      .query("adminBootstrapState")
+      .withIndex("by_key", (q) => q.eq("key", "primary"))
+      .first();
+    if (gate?.consumedAt !== undefined) {
+      throw new Error("SETUP_CODE_ALREADY_USED");
+    }
+
+    if (gate) {
+      await ctx.db.patch(gate._id, {
+        consumedAt: Date.now(),
+        consumedBy: userId,
+      });
+    } else {
+      await ctx.db.insert("adminBootstrapState", {
+        key: "primary",
+        consumedAt: Date.now(),
+        consumedBy: userId,
+      });
     }
 
     await ctx.db.patch(userId, { role: "admin" });
@@ -383,13 +398,10 @@ export const claimFirstAdmin = mutation({
       resource: "user",
       resourceId: userId,
       after: { role: "admin" },
-      reason: codeMatches
-        ? "setup_code"
-        : admins.length > 0
-          ? "no_reachable_administrator"
-          : "bootstrap",
+      reason: "setup_code",
       createdAt: Date.now(),
     });
+
     return { success: true };
   },
 });
