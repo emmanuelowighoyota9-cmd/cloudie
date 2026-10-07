@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
   Plane, Building, FileSpreadsheet, ScrollText, ArrowUpRight,
-  Search, FileText, Clock3, Plus, ChevronRight, Sparkles, LayoutGrid, ArrowRight, Hotel, ReceiptText, Car, CalendarDays,
+  Search, FileText, Clock3, Plus, ChevronRight, Sparkles, LayoutGrid, ArrowRight, Hotel , Car, CalendarDays,
 } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
