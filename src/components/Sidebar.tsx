@@ -19,14 +19,8 @@ import {
   Truck,
   ChevronLeft,
   Cloud,
-  Store,
   Receipt,
   Zap,
-  Phone,
-  Wifi,
-  Lightbulb,
-  GraduationCap,
-  TrendingUp,
 } from "lucide-react";
 
 const mainNav = [
