@@ -30,25 +30,20 @@ import {
 } from "lucide-react";
 
 const mainNav = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "Overview", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "My Services", icon: Layers, to: "/services/my" },
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
-  { label: "Numbers", icon: Phone, to: "/marketplace/numbers" },
-  { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
-  { label: "Fund Wallet", icon: CreditCard, to: "/buy-points" },
-  { label: "Airtime & Data", icon: Zap, to: "/vtu" },
-  { label: "Data", icon: Wifi, to: "/vtu/data" },
-  { label: "Electricity", icon: Lightbulb, to: "/vtu/electricity" },
-  { label: "Exam Pins", icon: GraduationCap, to: "/vtu/exam-pins" },
-  { label: "Transactions", icon: Wallet, to: "/transactions" },
-  { label: "Become Vendor", icon: Store, to: "/vendor" },
-  { label: "Referrals", icon: Users, to: "/referrals" },
+  { label: "Wallet", icon: Wallet, to: "/personal/wallet" },
+  { label: "Billing", icon: CreditCard, to: "/billing" },
+  { label: "Digital Services", icon: Zap, to: "/vtu" },
   { label: "Shipments", icon: Truck, to: "/shipments" },
   { label: "Documents", icon: FileStack, to: "/documents" },
   { label: "Ticketing", icon: FileText, to: "/ticketing" },
   { label: "Business Suite", icon: Building2, to: "/business" },
   { label: "Services", icon: Layers, to: "/services" },
   { label: "Notifications", icon: Bell, to: "/notifications" },
+  { label: "Referrals", icon: Users, to: "/referrals" },
   { label: "Settings", icon: Settings, to: "/settings" },
 ];
 
