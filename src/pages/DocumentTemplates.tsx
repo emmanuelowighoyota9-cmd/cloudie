@@ -13,6 +13,11 @@ import {
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Plane,
+  Hotel,
+  Car,
+  BriefcaseBusiness,
+  Layers3,
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -64,6 +69,21 @@ export default function DocumentTemplates() {
           </>
         }
       />
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: "Travel & flights", description: "Itineraries, booking summaries and trip packs.", category: "flight_itinerary", icon: Plane },
+          { label: "Hotels & stays", description: "Reservations and accommodation paperwork.", category: "corporate", icon: Hotel },
+          { label: "Travel services", description: "Vouchers for transfers and itinerary services.", category: "general", icon: Car },
+          { label: "Business paperwork", description: "Invoices, quotes, orders and letters.", category: "corporate", icon: BriefcaseBusiness },
+        ].map((item) => { const Icon = item.icon; return (
+          <Link key={item.label} to={`/documents/templates?category=${item.category}`} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+            <div className="flex items-start justify-between gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="size-5" /></span><Layers3 className="size-4 text-muted-foreground group-hover:text-primary" /></div>
+            <h2 className="mt-3 text-sm font-semibold text-foreground">{item.label}</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.description}</p>
+          </Link>
+        ); })}
+      </section>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">
