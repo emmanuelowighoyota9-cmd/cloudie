@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack, Receipt, LifeBuoy, Search, CreditCard, Sparkles } from "lucide-react";
+import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack, Receipt, LifeBuoy, Search, CreditCard, Sparkles, Smartphone, Wifi, Zap, Tv, GraduationCap, Truck, MoreHorizontal, Plus, ArrowDownLeft } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
@@ -181,6 +181,63 @@ export default function Dashboard() {
           />
         </StaggerItem>
       </StaggerGroup>
+
+      {/* Customer service launcher */}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div><h2 className="text-lg font-bold tracking-tight text-foreground">Pay & manage</h2><p className="text-xs text-muted-foreground">Your most-used Cloudie services, one tap away.</p></div>
+          <Link to="/services/my" className="text-xs font-semibold text-primary">View all</Link>
+        </div>
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+          {[
+            { label: "Airtime", icon: Smartphone, to: "/vtu/airtime" },
+            { label: "Data", icon: Wifi, to: "/vtu/data" },
+            { label: "Electricity", icon: Zap, to: "/vtu/electricity" },
+            { label: "TV", icon: Tv, to: "/vtu/bills" },
+            { label: "Exam", icon: GraduationCap, to: "/vtu/exam-pins" },
+            { label: "Ship", icon: Truck, to: "/shipments/new" },
+            { label: "Market", icon: ShoppingBag, to: "/marketplace" },
+            { label: "More", icon: MoreHorizontal, to: "/services/my" },
+          ].map((item) => (
+            <Link key={item.label} to={item.to} className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/[0.03] active:scale-[0.97]">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary/15"><item.icon className="size-4" /></span>
+              <span className="truncate text-[10px] font-semibold text-foreground">{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Customer activity center */}
+      <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
+        <Card className="overflow-hidden border-border shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between border-b border-border/70 pb-4">
+            <div><CardTitle className="text-base">Recent wallet activity</CardTitle><p className="mt-1 text-xs text-muted-foreground">Your latest account movements.</p></div>
+            <Link to="/transactions" className="text-xs font-semibold text-primary">See all</Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            {recentTx.length === 0 ? (
+              <div className="p-6 text-center"><div className="mx-auto flex size-10 items-center justify-center rounded-full bg-muted"><Receipt className="size-4 text-muted-foreground" /></div><p className="mt-3 text-sm font-medium">No wallet activity yet</p><p className="mt-1 text-xs text-muted-foreground">Fund your wallet to start using Cloudie services.</p></div>
+            ) : recentTx.map((tx) => (
+              <div key={tx._id} className="flex items-center gap-3 border-b border-border/60 px-4 py-3 last:border-0">
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${tx.amountNgn >= 0 ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"}`}><ArrowDownLeft className="size-4" /></span>
+                <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{tx.description}</p><p className="text-[11px] text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString()}</p></div>
+                <span className={`text-sm font-bold ${tx.amountNgn >= 0 ? "text-emerald-600" : "text-foreground"}`}>{tx.amountNgn >= 0 ? "+" : ""}₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Plus className="size-5" /></span><div><p className="font-semibold">Keep your wallet ready</p><p className="text-xs text-muted-foreground">Top up before you need a service.</p></div></div>
+            <Link to="/buy-points" className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-[.98]"><Coins className="size-4" /> Fund wallet</Link>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Link to="/vtu/history" className="rounded-xl border border-border p-3 hover:bg-muted/50"><p className="text-xs font-semibold">VTU history</p><p className="mt-1 text-[10px] text-muted-foreground">Airtime & bills</p></Link>
+              <Link to="/orders" className="rounded-xl border border-border p-3 hover:bg-muted/50"><p className="text-xs font-semibold">Orders</p><p className="mt-1 text-[10px] text-muted-foreground">Track purchases</p></Link>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
 
       {/* Quick Actions */}
       <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
