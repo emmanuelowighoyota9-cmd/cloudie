@@ -32,14 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
+      - name: Convex validation
+        run: npx convex codegen
+
       - name: TypeScript validation
         run: npx tsc -b --pretty false
 
       - name: ESLint
         run: npm run lint
-
-      - name: Convex validation
-        run: npx convex codegen
 
       - name: Production build
         run: npm run build
