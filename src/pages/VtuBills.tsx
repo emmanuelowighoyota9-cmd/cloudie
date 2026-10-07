@@ -97,7 +97,8 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
   const groups = useMemo(
     () =>
       (catalog?.groups ?? []).filter((group) =>
-        (BILL_SERVICE_TYPES as readonly string[]).includes(group.serviceType),
+        (BILL_SERVICE_TYPES as readonly string[]).includes(group.serviceType) &&
+        (!initialCategory || group.serviceType === initialCategory),
       ),
     [catalog],
   );
