@@ -190,6 +190,33 @@ const schema = defineSchema(
       .index("by_createdAt", ["createdAt"]),
 
     /** Authoritative monetary wallet ledger. Amounts are NGN major units. */
+    // Customer-facing service lifecycle records. These are intentionally separate
+    // from marketplace orders: an order is a transaction; a service is something
+    // the customer can keep managing, renewing, pausing or inspecting.
+    serviceSubscriptions: defineTable({
+      userId: v.id("users"),
+      serviceKey: v.string(),
+      name: v.string(),
+      category: v.string(),
+      status: v.union(
+        v.literal("active"),
+        v.literal("paused"),
+        v.literal("cancelled"),
+        v.literal("provisioning"),
+      ),
+      resourceId: v.optional(v.string()),
+      resourceLabel: v.optional(v.string()),
+      planLabel: v.optional(v.string()),
+      usageLabel: v.optional(v.string()),
+      renewalAt: v.optional(v.number()),
+      metadata: v.optional(v.any()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    })
+      .index("by_user", ["userId", "updatedAt"])
+      .index("by_user_and_status", ["userId", "status", "updatedAt"])
+      .index("by_user_and_service", ["userId", "serviceKey"]),
+
     walletLedger: defineTable({
       userId: v.id("users"),
       amountNgn: v.number(),
