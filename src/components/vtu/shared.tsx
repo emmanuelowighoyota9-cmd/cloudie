@@ -158,6 +158,7 @@ const VTU_DESTINATIONS = [
   { to: "/vtu/airtime", label: "Airtime", icon: Radio },
   { to: "/vtu/data", label: "Data", icon: Wifi },
   { to: "/vtu/electricity", label: "Electricity", icon: Lightbulb },
+  { to: "/vtu/exam-pins", label: "Exam Pins", icon: GraduationCap },
   { to: "/vtu/history", label: "History", icon: Clock },
 ] as const;
 
