@@ -1198,6 +1198,26 @@ export const adminDashboard = query({
   },
 });
 
+/** Record an admin's review of a wallet transaction. No financial mutation is performed. */
+export const auditTransactionReview = mutation({
+  args: { ledgerId: v.id("walletLedger"), reason: v.string() },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const entry = await ctx.db.get(args.ledgerId);
+    if (!entry) throw new Error("LEDGER_ENTRY_NOT_FOUND");
+    const reason = args.reason.trim().slice(0, 500);
+    if (!reason) throw new Error("REVIEW_REASON_REQUIRED");
+    await auditLog(ctx, adminId, {
+      action: "TRANSACTION_REVIEWED",
+      resource: "walletLedger",
+      resourceId: args.ledgerId,
+      after: { amountNgn: entry.amountNgn, type: entry.type, referenceId: entry.referenceId },
+      reason,
+    });
+    return { success: true };
+  },
+});
+
 /** Move a dispute into review before resolution. Audited. */
 export const markDisputeUnderReview = mutation({
   args: { disputeId: v.id("disputes") },
