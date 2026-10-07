@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { AdminPageHeader, StatCard, AdminSkeleton } from "@/components/admin/shared";
 import {
-  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,\n  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,
+  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,\n  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,\n  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,
   ClipboardCheck, Coins, CreditCard, FileText, Gavel, Package, Settings,
   ShieldAlert, ShieldCheck, ShoppingCart, Truck, UserCheck, UserX, Users, Zap
 } from "lucide-react";
@@ -131,10 +131,56 @@ export default function Admin() {
         </div>
       </section>
 
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Link to="/admin/transactions" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Wallet control</span><WalletCards className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{ngnValue(data.points.minted)}</p><p className="mt-1 text-xs text-muted-foreground">Credits processed</p>
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-full rounded-full bg-primary" /></div>
+        </Link>
+        <Link to="/admin/orders" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Order control</span><Workflow className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{data.marketplace.orders.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">{data.marketplace.escrowPending.toLocaleString()} awaiting escrow resolution</p>
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> LIVE ORDER QUEUE</div>
+        </Link>
+        <Link to="/admin/system-health" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Platform signals</span><Server className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">LIVE</p><p className="mt-1 text-xs text-muted-foreground">{data.documents.last24h.toLocaleString()} documents processed in 24h</p>
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> DATA LAYER RESPONDING</div>
+        </Link>
+        <Link to="/admin/audit" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
+          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Security control</span><LockKeyhole className="h-4 w-4 text-primary" /></div>
+          <p className="mt-3 text-2xl font-bold tracking-tight">{data.users.suspended.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">Suspended accounts under control</p>
+          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-primary"><Eye className="h-3.5 w-3.5" /> AUDIT READY</div>
+        </Link>
+      </section>
+
+      <section className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /><h2 className="font-semibold">Master control room</h2></div><p className="mt-1 text-xs text-muted-foreground">Prioritized signals for the administrator responsible for the whole platform.</p></div>
+          <Link to="/admin/audit" className="text-xs font-semibold text-primary hover:underline">Open audit trail →</Link>
+        </div>
+        <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <Link to="/admin/kyc" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Identity queue</span><CircleAlert className={data.kyc.pending > 0 ? "h-4 w-4 text-amber-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.kyc.pending.toLocaleString()}</p><p className="text-xs text-muted-foreground">KYC reviews pending</p></Link>
+          <Link to="/admin/disputes" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Risk queue</span><CircleAlert className={data.disputes.open > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.disputes.open.toLocaleString()}</p><p className="text-xs text-muted-foreground">Open marketplace disputes</p></Link>
+          <Link to="/admin/tenants" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Tenant controls</span><CircleAlert className={data.tenants.locked > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.tenants.locked.toLocaleString()}</p><p className="text-xs text-muted-foreground">Locked business tenants</p></Link>
+        </div>
+      </section>
+
       <AdminPageHeader title="Platform overview" description="Live metrics from the current production data layer." />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((m) => <Link key={m.label} to={m.to} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{m.label}</p><p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{typeof m.value === "number" ? m.value.toLocaleString() : m.value}</p><p className="mt-1 text-xs text-muted-foreground">{m.sub}</p></Link>)}
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-2">
+        <Card className="rounded-2xl border-border shadow-sm"><CardContent className="p-5 sm:p-6">
+          <div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Live transaction activity</h2><p className="text-xs text-muted-foreground">Latest wallet ledger movements.</p></div><Link to="/admin/transactions" className="text-xs font-semibold text-primary">View all</Link></div>
+          <div className="space-y-2">{data.activity.transactions.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No recent transactions.</p> : data.activity.transactions.map((t) => <div key={t.id} className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"><span className={t.amountNgn >= 0 ? "flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600" : "flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-600"}>{t.amountNgn >= 0 ? "+" : "−"}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{t.description || t.type || "Wallet transaction"}</p><p className="text-[10px] text-muted-foreground">{new Date(t.createdAt).toLocaleString()}</p></div><span className={t.amountNgn >= 0 ? "text-sm font-bold text-emerald-600" : "text-sm font-bold text-red-600"}>{t.amountNgn >= 0 ? "+" : "−"}₦{Math.abs(t.amountNgn).toLocaleString("en-NG")}</span></div>)}</div>
+        </CardContent></Card>
+        <Card className="rounded-2xl border-border shadow-sm"><CardContent className="p-5 sm:p-6">
+          <div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Admin activity</h2><p className="text-xs text-muted-foreground">Recent privileged actions.</p></div><Link to="/admin/audit" className="text-xs font-semibold text-primary">Audit trail</Link></div>
+          <div className="space-y-2">{data.activity.audit.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">No recent admin activity.</p> : data.activity.audit.map((a) => <div key={a.id} className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{a.action.replace(/_/g, " ")}</p><p className="truncate text-[10px] text-muted-foreground">{a.actorEmail} · {a.resource}</p></div><span className="hidden text-[10px] text-muted-foreground sm:block">{new Date(a.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>)}</div>
+        </CardContent></Card>
       </section>
 
       <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
