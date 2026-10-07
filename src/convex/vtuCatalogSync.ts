@@ -178,6 +178,23 @@ export const syncAidaPayCatalog = action({
 
       const providers = parseServiceResponse(servicesResult.body);
       for (const provider of providers) {
+        // AidaPay electricity providers are amount-priced services. Their
+        // provider row supplies min/max and the purchase sends amount directly;
+        // there is no package endpoint to enumerate. Data/cable/exam still
+        // enumerate package codes because those are fixed-price products.
+        if (service.serviceType === "electricity") {
+          const built = buildDrafts(
+            service.serviceType,
+            service.label,
+            [provider],
+            PROVIDER,
+          );
+          plansRead += 1;
+          drafts.push(...built.drafts);
+          skipped.push(...built.skipped);
+          continue;
+        }
+
         const packagesResult = await getJson(
           `/packages/${encodeURIComponent(provider.providerCode)}`,
         );
