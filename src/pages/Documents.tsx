@@ -1,9 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
+  Search,
+  FilePlus2,
+  FolderOpen,
+  Clock3,
   Coins,
   FileStack,
   HardDrive,
@@ -43,6 +47,17 @@ export default function Documents() {
   const mine = useQuery(api.docTemplates.listMyTemplates, {});
   const ensureStarterTemplates = useMutation(api.docTemplates.ensureStarterTemplates);
   const seeded = useRef(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "completed" | "shared">("all");
+
+  const filteredRecent = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (recent ?? []).filter((doc) => {
+      const statusOk = statusFilter === "all" || doc.status === statusFilter;
+      const searchOk = !q || doc.title.toLowerCase().includes(q) || (doc.category ?? "").toLowerCase().includes(q);
+      return statusOk && searchOk;
+    });
+  }, [recent, search, statusFilter]);
 
   // Install (or upgrade) the platform starter templates once per visit. The
   // mutation is a no-op when the deployment already has the current set.
@@ -68,7 +83,7 @@ export default function Documents() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <PageHeader
         title="Documents"
         description="Cloudie turns dynamic templates into print-ready PNG and PDF documents — with live preview, storage and share links."
@@ -93,22 +108,39 @@ export default function Documents() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-[#1e6091] via-[#2563eb] to-[#3b82f6] p-5 text-white shadow-[0_28px_60px_-38px_rgba(37,99,235,.55)] sm:rounded-3xl sm:p-7">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="max-w-2xl">
+            <div className="flex items-center gap-2 text-xs font-semibold text-blue-100"><Sparkles className="size-4" /> Cloudie document studio</div>
+            <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Create, manage and share documents</h2>
+            <p className="mt-2 text-sm leading-6 text-blue-50 sm:text-base">Start from a professional template, build your own layout, or turn a short brief into a ready-to-edit document.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button className="bg-white text-[#1e6091] hover:bg-blue-50" asChild><Link to="/documents/templates"><FilePlus2 className="mr-2 size-4" /> Create document</Link></Button>
+            <Button variant="outline" className="border-white/30 bg-white/10 text-white hover:bg-white/20" asChild><Link to="/documents/generate"><Sparkles className="mr-2 size-4" /> Generate from brief</Link></Button>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <StatCard label="Documents" value={stats.documents} icon={<FileStack className="h-4 w-4" />} index={0} />
         <StatCard label="Generated" value={stats.generated} icon={<Sparkles className="h-4 w-4" />} index={1} />
-        <StatCard label="Shared" value={stats.shared} icon={<Share2 className="h-4 w-4" />} index={2} />
+        <StatCard label="Drafts" value={stats.drafts} icon={<Pencil className="h-4 w-4" />} index={3} />
+        <StatCard label="Templates" value={stats.templates} icon={<LayoutGrid className="h-4 w-4" />} index={4} />
+        <StatCard label="Shared" value={stats.shared} icon={<Share2 className="h-4 w-4" />} index={5} />
         <StatCard
           label="Credits used"
           value={stats.credits.toLocaleString()}
           hint="points spent rendering"
           icon={<Coins className="h-4 w-4" />}
-          index={3}
+          index={6}
         />
         <StatCard
           label="Storage"
           value={formatBytes(stats.storageBytes)}
           icon={<HardDrive className="h-4 w-4" />}
-          index={4}
+          index={7}
         />
         <StatCard
           label="Points balance"
@@ -116,7 +148,7 @@ export default function Documents() {
           hint={stats.balance < 40 ? "Top up to keep generating" : undefined}
           icon={<Coins className="h-4 w-4" />}
           accent
-          index={5}
+          index={8}
         />
       </div>
 
@@ -231,13 +263,22 @@ export default function Documents() {
       </section>
 
       <section className="space-y-3">
-        <SectionHeader title="Recent documents" />
+        <SectionHeader title="Recent documents" action={<Link to="/documents/templates" className="text-xs font-medium text-primary hover:underline">Browse templates</Link>} />
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search your documents…" className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-3 text-sm text-foreground outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20" />
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {([["all","All"],["draft","Drafts"],["completed","Generated"],["shared","Shared"]] as const).map(([key,label]) => <button key={key} type="button" onClick={() => setStatusFilter(key)} className={cn("shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition-colors", statusFilter === key ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:bg-muted")}>{label}</button>)}
+          </div>
+        </div>
         {recent === undefined ? (
           <Skeleton className="h-40" />
-        ) : recent.length === 0 ? (
+        ) : filteredRecent.length === 0 ? (
           <EmptyBlock
             title="No documents yet"
-            message="Pick a template and fill in the dynamic form — your generated PNG and PDF will appear here."
+            message={search || statusFilter !== "all" ? "No documents match your current search or filter." : "Pick a template and fill in the dynamic form — your generated PNG and PDF will appear here."}
             action={
               <Button asChild size="sm">
                 <Link to="/documents/templates">Browse templates</Link>
@@ -246,7 +287,7 @@ export default function Documents() {
           />
         ) : (
           <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-            {recent.map((doc, index) => (
+            {filteredRecent.map((doc, index) => (
               <motion.div
                 key={doc._id}
                 initial={{ opacity: 0 }}
