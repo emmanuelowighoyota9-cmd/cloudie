@@ -1105,7 +1105,8 @@ export const adminBadgeCounts = query({
     const kyc = await ctx.db.query("kycRecords").take(1000);
     const disputes = await ctx.db.query("disputes").withIndex("by_status").take(1000);
     const flags = await ctx.db.query("moderationFlags").withIndex("by_status").take(1000);
-    const recentAudit = await ctx.db.query("auditLogs").order("desc").take(8);\n    const recentLedger = await ctx.db.query("walletLedger").withIndex("by_createdAt").order("desc").take(8);
+    const recentAudit = await ctx.db.query("auditLogs").order("desc").take(8);
+    const recentLedger = await ctx.db.query("walletLedger").withIndex("by_createdAt").order("desc").take(8);
     return {
       pendingVendors: vendors.filter((v) => v.status === "pending").length,
       pendingKyc: kyc.filter((k) => k.status === "submitted" || k.status === "under_review" || k.status === "resubmission_required").length,
