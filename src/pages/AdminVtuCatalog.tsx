@@ -26,17 +26,22 @@ import {
 import { AdminPageHeader, AdminSkeleton } from "@/components/admin/shared";
 import { Reveal } from "@/components/motion";
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
   Ban,
   CheckCircle2,
+  GraduationCap,
+  Lightbulb,
   Loader2,
   Pencil,
   Plus,
   RefreshCw,
   Route as RouteIcon,
   Trash2,
+  Tv,
   Waypoints,
+  Wifi,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -248,6 +253,21 @@ export default function AdminVtuCatalog() {
     (r) => r.active && r.providerStatus !== "active",
   );
 
+  const aidapay = useMemo(
+    () => (providers ?? []).find((p) => p.name === "aidapay") ?? null,
+    [providers],
+  );
+
+  const catalogCards = useMemo(
+    () => [
+      { key: "data", label: "Data", icon: Wifi, tone: "text-cyan-400", count: (products ?? []).filter((p) => p.serviceType === "data").length },
+      { key: "electricity", label: "Electricity", icon: Lightbulb, tone: "text-amber-400", count: (products ?? []).filter((p) => p.serviceType === "electricity").length },
+      { key: "cable", label: "Cable TV", icon: Tv, tone: "text-violet-400", count: (products ?? []).filter((p) => p.serviceType === "cable").length },
+      { key: "exam", label: "Exam Pins", icon: GraduationCap, tone: "text-emerald-400", count: (products ?? []).filter((p) => p.serviceType === "exam").length },
+    ],
+    [products],
+  );
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -347,6 +367,90 @@ export default function AdminVtuCatalog() {
           </>
         }
       />
+
+      <Reveal>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.25fr_1fr]">
+          <Card className="overflow-hidden border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 via-[#0b100e] to-[#07100d] shadow-lg">
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-400">
+                      <Zap className="h-4 w-4" />
+                    </span>
+                    <Badge className="border border-emerald-400/20 bg-emerald-400/10 text-emerald-300">
+                      {aidapay?.hasApiKey ? "AidaPay connected" : "Provider not connected"}
+                    </Badge>
+                  </div>
+                  <h2 className="text-xl font-semibold tracking-tight text-white">
+                    VTU catalog control center
+                  </h2>
+                  <p className="mt-1 max-w-xl text-sm text-slate-400">
+                    Provider-owned Data, Electricity, Cable TV and Exam Pins are surfaced here
+                    without inventing product codes or prices.
+                  </p>
+                </div>
+                <Activity className={`mt-1 h-5 w-5 ${syncing ? "animate-pulse text-emerald-400" : "text-slate-500"}`} />
+              </div>
+              <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-emerald-400/5 px-3 py-1.5 text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Automatic catalog sync enabled
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-slate-400">
+                  {syncing ? "Refreshing provider catalog…" : "Catalog ready"}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-[#0b100e]">
+            <CardContent className="p-5 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">Provider status</p>
+                  <p className="mt-1 text-lg font-semibold text-white">
+                    {aidapay?.hasApiKey ? (aidapay.status === "active" ? "Live" : "Configured") : "Not configured"}
+                  </p>
+                </div>
+                <span className={`h-2.5 w-2.5 rounded-full ${aidapay?.hasApiKey ? "bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.7)]" : "bg-slate-600"}`} />
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-slate-500">Products</p>
+                  <p className="mt-1 text-xl font-semibold text-white">{products?.length ?? "—"}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-slate-500">Routes</p>
+                  <p className="mt-1 text-xl font-semibold text-white">{routes?.length ?? "—"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Reveal>
+
+      <Reveal>
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {catalogCards.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card key={item.key} className="border-white/10 bg-[#0b100e] transition-transform duration-200 hover:-translate-y-0.5">
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-center justify-between">
+                    <span className={`flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] ${item.tone}`}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="text-2xl font-bold text-white">{products === undefined ? "—" : item.count}</span>
+                  </div>
+                  <p className="mt-3 text-sm font-medium text-slate-300">{item.label}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">provider catalog products</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </Reveal>
 
       {/* The two warnings that matter. Both are cheap to fix and expensive to
           discover from a support ticket. */}
