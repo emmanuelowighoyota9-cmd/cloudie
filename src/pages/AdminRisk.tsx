@@ -30,7 +30,7 @@ export default function AdminRisk() {
     limit: 100,
   });
   const live = useQuery(api.adminApi.getFinancialRisk, { hours: 24, limit: 50 });
-  const admins = useQuery(api.admin.listAdministrators, { limit: 100 });
+  const admins = useQuery(api.admin.listAdministrators, {});
   const ledger = useQuery(api.wallet.getAdminLedger, { limit: 1000 });
 
   const openCase = useMutation(api.adminApi.openRiskCase);
