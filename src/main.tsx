@@ -21,7 +21,9 @@ const AdminLogin = lazy(() => import("./pages/AdminLogin.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
 const Personal = lazy(() => import("./pages/Personal.tsx"));
-const Wallet = lazy(() => import("./pages/Wallet.tsx"));\nconst MyServices = lazy(() => import("./pages/MyServices.tsx"));\nconst Billing = lazy(() => import("./pages/Billing.tsx"));
+const Wallet = lazy(() => import("./pages/Wallet.tsx"));
+const MyServices = lazy(() => import("./pages/MyServices.tsx"));
+const Billing = lazy(() => import("./pages/Billing.tsx"));
 const Shipments = lazy(() => import("./pages/Shipments.tsx"));
 const NewShipment = lazy(() => import("./pages/NewShipment.tsx"));
 const ShipmentDetail = lazy(() => import("./pages/ShipmentDetail.tsx"));
@@ -246,7 +248,9 @@ createRoot(document.getElementById("root")!).render(
 
                 {/* Authenticated app routes with layout */}
                 <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-                  <Route path="/dashboard" element={<Dashboard />} />\n                  <Route path="/services/my" element={<MyServices />} />\n                  <Route path="/billing" element={<Billing />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/services/my" element={<MyServices />} />
+                  <Route path="/billing" element={<Billing />} />
                   <Route path="/personal" element={<Personal />} />
                   <Route path="/personal/wallet" element={<Wallet />} />
                   <Route path="/personal/transactions" element={<Wallet />} />
@@ -289,7 +293,8 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/referrals" element={<Referrals />} />
                   <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/settings" element={<Settings />} />
-                  <Route path="/buy-points" element={<BuyPoints />} />\n                  <Route path="/wallet/fund" element={<BuyPoints />} />
+                  <Route path="/buy-points" element={<BuyPoints />} />
+                  <Route path="/wallet/fund" element={<BuyPoints />} />
                   <Route path="/orders" element={<Orders />} />
                   <Route path="/vendor" element={<Vendor />} />
                   <Route path="/transactions" element={<Transactions />} />
