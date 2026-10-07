@@ -49,8 +49,8 @@ import {
  */
 const QUICK_LINKS = [
   { to: "/vtu/airtime", label: "Airtime", icon: Radio },
-  { to: "/vtu/bills?category=data", label: "Data", icon: Wifi },
-  { to: "/vtu/bills?category=electricity", label: "Electricity", icon: Lightbulb },
+  { to: "/vtu/data", label: "Data", icon: Wifi },
+  { to: "/vtu/electricity", label: "Electricity", icon: Lightbulb },
   { to: "/vtu/bills", label: "All bills", icon: LayoutGrid },
 ] as const;
 
@@ -115,8 +115,8 @@ export default function VtuCatalog() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               { to: "/vtu/airtime", label: "Airtime", icon: Radio },
-              { to: "/vtu/bills?category=data", label: "Data", icon: Wifi },
-              { to: "/vtu/bills?category=electricity", label: "Electricity", icon: Lightbulb },
+              { to: "/vtu/data", label: "Data", icon: Wifi },
+              { to: "/vtu/electricity", label: "Electricity", icon: Lightbulb },
               { to: "/vtu/bills", label: "More bills", icon: LayoutGrid },
             ].map((item) => (
               <Link
