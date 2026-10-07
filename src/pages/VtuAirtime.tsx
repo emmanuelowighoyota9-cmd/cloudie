@@ -22,7 +22,7 @@ import {
 } from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
 import { maskIdentifier, validatePhone } from "@/lib/vtu";
-import { ArrowLeft, Coins, Loader2, Lock, Plus } from "lucide-react";
+import { ArrowLeft, Coins, Contact, Loader2, Lock, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -56,6 +56,7 @@ export default function VtuAirtime() {
   );
   const [amount, setAmount] = useState<number>(1000);
   const [phone, setPhone] = useState("");
+  const [airtimeType, setAirtimeType] = useState<"prepaid" | "postpaid">("prepaid");
   const [confirmed, setConfirmed] = useState(false);
   const [transactionId, setTransactionId] = useState<Id<"vtuTransactions"> | null>(
     null,
@@ -187,22 +188,42 @@ export default function VtuAirtime() {
       {step === "details" && (
         <>
           <Reveal>
-            <div className="vtu-panel space-y-5 px-5 py-5">
-              <VtuSection title="Network" hint="The network the number is on.">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {VTU_NETWORKS.map((n) => (
-                    <VtuChoice
-                      key={n.key}
-                      selected={network === n.key}
-                      onClick={() => setNetwork(n.key)}
-                      className="flex items-center gap-2"
-                    >
-                      <VtuNetworkMark network={n.key} className="h-8 w-8" />
-                      <span className="text-sm font-medium">{n.label}</span>
-                    </VtuChoice>
-                  ))}
+            <div className="space-y-5">
+              <div>
+                <p className="mb-2 text-sm font-medium text-vtu-muted">Choose provider</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {VTU_NETWORKS.map((n) => {
+                    const active = network === n.key;
+                    const cashback = n.key === "mtn" || n.key === "airtel";
+                    return (
+                      <button
+                        key={n.key}
+                        type="button"
+                        onClick={() => setNetwork(n.key)}
+                        aria-pressed={active}
+                        className={cn(
+                          "relative min-h-[72px] rounded-2xl border text-sm font-semibold transition-all active:scale-[.98]",
+                          active ? "border-transparent shadow-md ring-2 ring-vtu-accent/50" : "border-vtu-line bg-white",
+                          n.key === "mtn" && "bg-[#ffd91a]",
+                          n.key === "airtel" && "bg-[#e42b32] text-white",
+                          n.key === "glo" && "bg-[#62bf3c] text-white",
+                          n.key === "9mobile" && "bg-[#dff2e6]",
+                        )}
+                      >
+                        {cashback && (
+                          <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#69a844] px-2 py-1 text-[9px] font-bold text-white">
+                            ₦120 cashback
+                          </span>
+                        )}
+                        <span className="flex flex-col items-center gap-1.5 pt-1">
+                          <VtuNetworkMark network={n.key} className="h-7 w-7" />
+                          <span>{n.label}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              </VtuSection>
+              </div>
             </div>
           </Reveal>
 
@@ -249,28 +270,64 @@ export default function VtuAirtime() {
                 )}
               </VtuSection>
 
-              <div className="space-y-2">
-                <Label htmlFor="vtu-phone" className="text-xs text-vtu-muted">
-                  Phone number
-                </Label>
-                <Input
-                  id="vtu-phone"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0803 123 4567"
-                  inputMode="tel"
-                  autoComplete="off"
-                  disabled={locked}
-                  className="min-h-11 border-vtu-line bg-vtu-card text-vtu-text placeholder:text-vtu-muted"
-                  aria-invalid={phone.length > 0 && !phoneCheck.ok}
-                />
-                {phone.length > 0 && !phoneCheck.ok ? (
-                  <p className="text-xs text-destructive">{phoneCheck.error}</p>
-                ) : (
-                  <p className="text-[11px] text-vtu-muted">
-                    The airtime is sent to this number.
-                  </p>
-                )}
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-sm font-medium text-vtu-muted">Select Airtime Type</p>
+                  <div className="flex rounded-full bg-[#e8e2eb] p-1">
+                    {(["prepaid", "postpaid"] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setAirtimeType(kind)}
+                        className={cn(
+                          "min-h-11 flex-1 rounded-full text-sm font-medium capitalize transition-all",
+                          airtimeType === kind ? "bg-white text-[#3a3340] shadow-sm" : "text-[#756b79]",
+                        )}
+                      >
+                        {kind}
+                      </button>
+                    ))}
+                  </div>
+                  {airtimeType === "postpaid" && (
+                    <p className="mt-2 text-[11px] text-vtu-muted">
+                      Postpaid selection is prepared in the mobile UI; the current provider catalog will determine availability.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="vtu-phone" className="text-sm font-medium text-vtu-text">
+                    Phone Number
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="vtu-phone"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Enter Phone Number"
+                      inputMode="tel"
+                      autoComplete="off"
+                      disabled={locked}
+                      className="min-h-12 pr-20 border-vtu-line bg-white text-vtu-text placeholder:text-vtu-muted"
+                      aria-invalid={phone.length > 0 && !phoneCheck.ok}
+                    />
+                    <div className="absolute inset-y-0 right-2 flex items-center gap-1">
+                      <button type="button" className="rounded-lg p-2 text-vtu-accent-ink" aria-label="Search contact">
+                        <Search className="h-4 w-4" />
+                      </button>
+                      <button type="button" className="rounded-lg p-2 text-vtu-accent-ink" aria-label="Choose contact">
+                        <Contact className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {phone.length > 0 && !phoneCheck.ok ? (
+                    <p className="text-xs text-destructive">{phoneCheck.error}</p>
+                  ) : (
+                    <p className="text-[11px] text-[#b45e63]">
+                      Please verify the recipient's phone number before proceeding.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-between rounded-xl bg-vtu-chip px-4 py-3">
