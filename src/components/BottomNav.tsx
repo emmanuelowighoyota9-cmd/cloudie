@@ -6,7 +6,7 @@ import { Home, ShoppingBag, Zap, Wallet, Receipt, MoreHorizontal } from "lucide-
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
   { label: "Market", icon: ShoppingBag, to: "/marketplace" },
-  { label: "Airtime", icon: Zap, to: "/vtu" },
+  { label: "Airtime", icon: Zap, to: "/vtu/airtime" },
   { label: "Wallet", icon: Wallet, to: "/buy-points" },
   { label: "Orders", icon: Receipt, to: "/orders" },
   { label: "More", icon: MoreHorizontal, to: "/transactions" },
