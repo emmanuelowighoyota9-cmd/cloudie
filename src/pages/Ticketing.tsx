@@ -68,11 +68,11 @@ export default function Ticketing() {
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          ["Total documents", counts.total, FileText],
-          ["Flight", counts.flight, Plane],
-          ["Hotel", counts.hotel, Building],
-          ["Business", counts.business, FileSpreadsheet],
-        ].map(([label, value, Icon]) => (
+          { label: "Total documents", value: counts.total, icon: FileText },
+          { label: "Flight", value: counts.flight, icon: Plane },
+          { label: "Hotel", value: counts.hotel, icon: Building },
+          { label: "Business", value: counts.business, icon: FileSpreadsheet },
+        ].map(({ label, value, icon: Icon }) => (
           <Card key={String(label)} className="border-border/80 shadow-sm">
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-center justify-between gap-2">
