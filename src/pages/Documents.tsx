@@ -121,6 +121,27 @@ export default function Documents() {
         </div>
       </section>
 
+      <section className="space-y-3">
+        <SectionHeader title="Workspace packs" action={<Link to="/documents/templates" className="text-xs font-medium text-primary hover:underline">Browse all</Link>} />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { title:"Travel & aviation", text:"Flight e-tickets, booking confirmations and multi-city itineraries.", category:"flight_itinerary" },
+            { title:"Certificates & records", text:"Employment, ceremony and commemorative certificate templates.", category:"certificates" },
+            { title:"Business documents", text:"Invoices, quotations, statements and operational paperwork.", category:"corporate" },
+            { title:"Profiles & forms", text:"Non-government profile cards, forms and general document layouts.", category:"general" },
+          ].map((pack) => (
+            <Link key={pack.title} to={`/documents/templates?category=${pack.category}`} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-foreground">{pack.title}</span>
+                <ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{pack.text}</p>
+              <span className="mt-3 inline-flex text-[11px] font-semibold text-primary">Explore pack</span>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
         <StatCard label="Documents" value={stats.documents} icon={<FileStack className="h-4 w-4" />} index={0} />
         <StatCard label="Generated" value={stats.generated} icon={<Sparkles className="h-4 w-4" />} index={1} />
