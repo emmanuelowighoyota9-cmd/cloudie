@@ -191,24 +191,31 @@ export function VtuShell({
       )}
     >
       <style>{`.cloudie-vtu-ref{background:var(--background)!important;color:var(--foreground)!important;min-height:100dvh!important}
-.cloudie-vtu-ref>div{max-width:520px!important;padding:0 16px 28px!important;gap:18px!important}
-.cloudie-vtu-ref .vtu-band{background:transparent!important;box-shadow:none!important;border-radius:0!important;padding:14px 0 2px!important;color:var(--foreground)!important}
-.cloudie-vtu-ref .vtu-band h1{font-size:28px!important;letter-spacing:-.04em!important}
+.cloudie-vtu-ref>div{max-width:560px!important;padding:0 16px 32px!important;gap:20px!important}
+.cloudie-vtu-ref .vtu-band{background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,var(--card)),var(--card))!important;border:1px solid color-mix(in srgb,var(--primary) 12%,var(--border))!important;box-shadow:0 12px 30px color-mix(in srgb,var(--primary) 8%,transparent)!important;border-radius:22px!important;padding:18px!important;color:var(--foreground)!important}
+.cloudie-vtu-ref .vtu-band h1{font-size:27px!important;line-height:1.05!important;letter-spacing:-.045em!important}
 .cloudie-vtu-ref .vtu-band p{color:var(--muted-foreground)!important}
 .cloudie-vtu-ref .vtu-band>div>div:last-child{display:none!important}
 .cloudie-vtu-ref nav[aria-label="VTU sections"]{display:none!important}
-.cloudie-vtu-ref .vtu-panel{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:18px!important;box-shadow:0 10px 30px color-mix(in srgb,var(--primary) 10%,transparent)!important}
-.cloudie-vtu-ref .vtu-chip{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--foreground)!important;box-shadow:none!important}
-.cloudie-vtu-ref .vtu-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--primary) 12%,var(--card))!important;border-color:var(--primary)!important;box-shadow:0 4px 14px color-mix(in srgb,var(--primary) 16%,transparent)!important}
-.cloudie-vtu-ref input,.cloudie-vtu-ref select{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:13px!important;color:var(--foreground)!important;min-height:48px!important}
+.cloudie-vtu-ref .vtu-panel{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:20px!important;box-shadow:0 12px 32px color-mix(in srgb,var(--primary) 7%,transparent)!important}
+.cloudie-vtu-ref .vtu-chip{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--foreground)!important;box-shadow:none!important;transition:all .18s ease!important}
+.cloudie-vtu-ref .vtu-chip:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--border))!important;transform:translateY(-1px)}
+.cloudie-vtu-ref .vtu-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--primary) 9%,var(--card))!important;border-color:var(--primary)!important;box-shadow:0 6px 18px color-mix(in srgb,var(--primary) 14%,transparent)!important}
+.cloudie-vtu-ref input,.cloudie-vtu-ref select{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--foreground)!important;min-height:50px!important;transition:border-color .18s,box-shadow .18s!important}
+.cloudie-vtu-ref input:focus,.cloudie-vtu-ref select:focus{border-color:var(--primary)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 12%,transparent)!important;outline:none!important}
 .cloudie-vtu-ref input::placeholder{color:var(--muted-foreground)!important}
 .cloudie-vtu-ref .vtu-receipt-row{border-color:var(--border)!important}
-.cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]{background:linear-gradient(100deg,var(--primary),var(--accent))!important;color:var(--primary-foreground)!important;border:0!important;border-radius:999px!important;min-height:52px!important;box-shadow:0 10px 24px color-mix(in srgb,var(--primary) 20%,transparent)!important}
-.cloudie-vtu-ref .cloudie-vtu-mobile-head{display:flex;align-items:center;justify-content:center;position:relative;padding:12px 0 2px}
-.cloudie-vtu-ref .cloudie-vtu-back{position:absolute;left:0;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;background:transparent;color:var(--foreground);font-size:30px}
-.cloudie-vtu-ref .cloudie-vtu-logo{font-weight:800;font-size:21px;letter-spacing:-.04em;color:var(--primary)}
+.cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]{background:linear-gradient(100deg,var(--primary),var(--accent))!important;color:var(--primary-foreground)!important;border:0!important;border-radius:14px!important;min-height:52px!important;font-weight:700!important;box-shadow:0 10px 24px color-mix(in srgb,var(--primary) 20%,transparent)!important}
+.cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]:hover{filter:saturate(1.08) brightness(1.03)!important;transform:translateY(-1px)}
+.cloudie-vtu-ref .cloudie-vtu-mobile-head{display:flex;align-items:center;justify-content:center;position:relative;padding:12px 0 4px}
+.cloudie-vtu-ref .cloudie-vtu-back{position:absolute;left:0;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:28px;border-radius:12px;box-shadow:0 4px 12px color-mix(in srgb,var(--primary) 7%,transparent)}
+.cloudie-vtu-ref .cloudie-vtu-logo{font-weight:850;font-size:22px;letter-spacing:-.045em;color:var(--primary)}
 .cloudie-vtu-ref .cloudie-vtu-logo-mark{display:inline-block;width:13px;height:13px;margin-right:6px;border-radius:7px 7px 4px 7px;background:linear-gradient(135deg,var(--primary),var(--accent));transform:rotate(-35deg);vertical-align:-1px}
-@media(min-width:1024px){.cloudie-vtu-ref>div{max-width:680px!important}}      `}</style>
+.cloudie-vtu-ref .vtu-quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.cloudie-vtu-ref .vtu-quick-grid button{min-height:48px;border-radius:13px;border:1px solid var(--border);background:var(--card);font-weight:700;color:var(--foreground);transition:.18s}
+.cloudie-vtu-ref .vtu-quick-grid button:hover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--card))}
+@media(max-width:420px){.cloudie-vtu-ref>div{padding-left:13px!important;padding-right:13px!important}.cloudie-vtu-ref .vtu-band{padding:16px!important}}
+@media(min-width:1024px){.cloudie-vtu-ref>div{max-width:700px!important}}      `}</style>
       <div className="cloudie-vtu-mobile-head">
         <button type="button" className="cloudie-vtu-back" aria-label="Go back" onClick={() => navigate(-1)}>‹</button>
         <div className="cloudie-vtu-logo"><span className="cloudie-vtu-logo-mark" />Cloudie</div>
