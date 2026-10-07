@@ -107,7 +107,10 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
     groups.find((group) => group.serviceType === category) ?? groups[0] ?? null;
 
   useEffect(() => {
-    if (!initialCategory || productCode || !activeGroup || activeGroup.products.length === 0) return;
+    // Only deep-link straight into details when the category has exactly one
+    // product. With multiple providers/plans, never silently pick the first
+    // one — electricity and data especially need an explicit customer choice.
+    if (!initialCategory || productCode || !activeGroup || activeGroup.products.length !== 1) return;
     setSearchParams({ product: activeGroup.products[0].productCode }, { replace: true });
   }, [initialCategory, productCode, activeGroup, setSearchParams]);
 
