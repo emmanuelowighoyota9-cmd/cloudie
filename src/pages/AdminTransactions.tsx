@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,7 @@ const PAGE_SIZE = 25;
 
 export default function AdminTransactions() {
   const ledger = useQuery(api.wallet.getAdminLedger, { limit: 1000 }) as LedgerEntry[] | undefined;
+  const reviewTransaction = useMutation(api.adminApi.auditTransactionReview);
   const users = useQuery(api.admin.listUsers, { limit: 1000 });
 
   const [search, setSearch] = useState("");
@@ -236,6 +237,18 @@ export default function AdminTransactions() {
               </dl>
               <div className="mt-4 rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Description</p><p className="mt-1 text-sm">{selected.description}</p></div>
               {riskFlags.length > 0 && <div className="mt-4 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" /><div><p className="font-semibold">Risk review recommended</p><p className="mt-0.5 text-xs text-muted-foreground">This transaction matches one or more monitoring rules. Review the user, reference and ledger context before taking action.</p></div></div>}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" onClick={async () => {
+                  const reason = window.prompt("Reason for transaction review");
+                  if (!reason?.trim()) return;
+                  try {
+                    await reviewTransaction({ ledgerId: selected._id as never, reason: reason.trim() });
+                    toast.success("Transaction review audited");
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "Review failed");
+                  }
+                }}>Audit review</Button>
+              </div>
             </div>
           </div>
         </div>
