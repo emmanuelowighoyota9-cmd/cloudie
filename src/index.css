@@ -739,3 +739,48 @@ html,body{background:#050706!important;color:#f4f8f6!important}body{min-height:1
     .cloudie-marketplace input, .cloudie-marketplace select { border-radius: .9rem; }
   }
 }
+
+/* CLOUDIE WALLET + TRANSACTIONS APP SURFACES */
+@layer components {
+  .cloudie-wallet-page,
+  .cloudie-transactions-page { min-width: 0; }
+  .cloudie-wallet-page .cloudie-balance-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--primary) 24%, var(--border));
+    background:
+      radial-gradient(circle at 92% 8%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 34%),
+      radial-gradient(circle at 5% 100%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 38%),
+      var(--card);
+    box-shadow: 0 26px 64px -44px hsl(var(--primary) / .7);
+  }
+  .cloudie-wallet-page .cloudie-activity-row,
+  .cloudie-transactions-page .cloudie-transaction-row {
+    border: 1px solid transparent;
+    transition: background-color var(--duration-fast) var(--ease-out-quint), border-color var(--duration-fast) var(--ease-out-quint), transform var(--duration-fast) var(--ease-out-quint);
+  }
+  .cloudie-wallet-page .cloudie-activity-row:hover,
+  .cloudie-transactions-page .cloudie-transaction-row:hover {
+    border-color: color-mix(in srgb, var(--primary) 18%, var(--border));
+    background: color-mix(in srgb, var(--primary) 5%, var(--card));
+  }
+  .cloudie-wallet-page .cloudie-flow-icon,
+  .cloudie-transactions-page .cloudie-flow-icon {
+    border: 1px solid color-mix(in srgb, var(--primary) 16%, var(--border));
+  }
+  .cloudie-transactions-page .cloudie-filter-bar {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cloudie-transactions-page .cloudie-filter-bar::-webkit-scrollbar { display: none; }
+  @media (max-width:639px) {
+    .cloudie-wallet-page,
+    .cloudie-transactions-page { padding-bottom: .5rem; }
+    .cloudie-wallet-page .cloudie-balance-card [data-slot="card-content"] { padding: 1rem; }
+    .cloudie-wallet-page .cloudie-balance-amount { font-size: 2.15rem; }
+    .cloudie-wallet-page .cloudie-activity-row,
+    .cloudie-transactions-page .cloudie-transaction-row { padding: .7rem .65rem; border-radius: .9rem; }
+    .cloudie-transactions-page .cloudie-filter-bar { flex-wrap: nowrap; overflow-x: auto; padding-bottom: .2rem; }
+    .cloudie-transactions-page .cloudie-filter-bar > * { flex: 0 0 auto; }
+  }
+}

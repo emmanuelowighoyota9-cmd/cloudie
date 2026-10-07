@@ -57,11 +57,11 @@ export default function Transactions() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="cloudie-transactions-page space-y-5 sm:space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Transactions</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your complete NGN wallet transaction history.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Transactions</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Your complete NGN wallet transaction history.</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!filtered.length} className="gap-2">
           <Download className="h-4 w-4" /> Export CSV
@@ -69,7 +69,7 @@ export default function Transactions() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      <div className="cloudie-filter-bar flex flex-wrap gap-2">
         {[
           { value: "all", label: "All" },
           { value: "credits", label: "Credits" },
@@ -114,22 +114,22 @@ export default function Transactions() {
           <CardContent className="p-0 divide-y divide-slate-100 dark:divide-slate-700/50">
             {filtered.map((tx) => (
               <div key={tx._id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                <div className={`cloudie-flow-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                   tx.amountNgn > 0
-                    ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400"
-                    : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"
+                    ? "bg-primary/10 text-primary"
+                    : "bg-destructive/10 text-destructive"
                 }`}>
                   {tx.amountNgn > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{tx.description}</p>
+                  <p className="truncate text-sm font-medium text-foreground">{tx.description}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{typeLabels[tx.type] ?? tx.type}</Badge>
                     <span className="text-[11px] text-slate-400">{new Date(tx.createdAt).toLocaleDateString()} {new Date(tx.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-green-600" : "text-red-600"}`}>
+                  <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-primary" : "text-destructive"}`}>
                     {tx.amountNgn > 0 ? "+" : ""}₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
                   </p>
                   <p className="text-[10px] text-slate-400">Bal: {tx.balanceAfterNgn.toLocaleString("en-NG")}</p>

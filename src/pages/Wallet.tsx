@@ -31,11 +31,11 @@ export default function Wallet() {
   }, []);
 
   return (
-    <div className="space-y-8">
+    <div className="cloudie-wallet-page space-y-5 sm:space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">NGN Wallet</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your real naira balance and transaction history.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">NGN Wallet</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Your real naira balance and transaction history.</p>
         </div>
         <Link to="/buy-points" className="w-full sm:w-auto">
           <Button size="sm" className="w-full gap-1.5 sm:w-auto">
@@ -44,11 +44,11 @@ export default function Wallet() {
         </Link>
       </div>
 
-      <Card className="notebook-card border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 dark:border-blue-800 dark:from-blue-950/50 dark:to-blue-900/50">
+      <Card className="cloudie-balance-card">
         <CardContent className="p-6">
-          <p className="text-sm font-medium uppercase tracking-wider text-blue-600 dark:text-blue-400">Available balance</p>
-          <p className="mt-2 text-4xl font-bold text-blue-900 dark:text-blue-100">{formatNgn(balance ?? 0)}</p>
-          <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">Nigerian Naira · NGN</p>
+          <p className="text-sm font-medium uppercase tracking-wider text-primary">Available balance</p>
+          <p className="mt-2 cloudie-balance-amount mt-2 text-4xl font-bold text-foreground">{formatNgn(balance ?? 0)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Nigerian Naira · NGN</p>
         </CardContent>
       </Card>
 
@@ -67,16 +67,16 @@ export default function Wallet() {
           ) : (
             <div className="space-y-1">
               {ledger.map((tx) => (
-                <div key={tx._id} className="flex items-center gap-3 rounded-lg p-3 transition-colors hover:bg-[var(--nb-ink)]/5">
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tx.amountNgn > 0 ? "bg-green-100 text-green-600 dark:bg-green-900/50 dark:text-green-400" : "bg-red-100 text-red-600 dark:bg-red-900/50 dark:text-red-400"}`}>
+                <div key={tx._id} className="cloudie-activity-row flex items-center gap-3 rounded-lg p-3">
+                  <div className={`cloudie-flow-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tx.amountNgn > 0 ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
                     {tx.amountNgn > 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-[var(--nb-ink)]">{tx.description}</p>
+                    <p className="truncate text-sm font-medium text-foreground">{tx.description}</p>
                     <p className="text-xs text-slate-400">{typeLabel(tx.type)} • {new Date(tx.createdAt).toLocaleDateString()}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-green-600" : "text-red-600"}`}>
+                    <p className={`text-sm font-bold ${tx.amountNgn > 0 ? "text-primary" : "text-destructive"}`}>
                       {tx.amountNgn > 0 ? "+" : ""}{formatNgn(tx.amountNgn)}
                     </p>
                     <p className="text-[11px] text-slate-400">Balance {formatNgn(tx.balanceAfterNgn)}</p>
