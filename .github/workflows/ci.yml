@@ -33,7 +33,7 @@ jobs:
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Convex validation
-        run: npx convex codegen
+        run: CONVEX_AGENT_MODE=anonymous npx convex dev --once
 
       - name: TypeScript validation
         run: npx tsc -b --pretty false
