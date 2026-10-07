@@ -25,7 +25,7 @@ import {
   validateCustomerIdentifier,
   vtuServiceTypeLabel,
 } from "@/lib/vtu";
-import { ArrowLeft, ArrowRight, Coins, Loader2, Lock, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Coins, Contact, Loader2, Lock, Plus, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
@@ -462,28 +462,52 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
 
                 <div className="space-y-5 px-5 py-5">
                   <div className="space-y-2">
-                    <Label htmlFor="bill-target" className="text-xs text-vtu-muted">
-                      {detail.customerIdentifierLabel}
+                    <Label htmlFor="bill-target" className="text-sm font-medium text-vtu-text">
+                      {detail.serviceType === "data"
+                        ? "Phone Number"
+                        : detail.serviceType === "electricity"
+                          ? "Meter Number"
+                          : detail.customerIdentifierLabel}
                     </Label>
-                    <Input
-                      id="bill-target"
-                      value={identifier}
-                      onChange={(e) => setIdentifier(e.target.value)}
-                      inputMode={detail.serviceType === "cable" ? "text" : "numeric"}
-                      placeholder={detail.customerIdentifierLabel}
-                      autoComplete="off"
-                      disabled={locked}
-                      className="min-h-11 border-vtu-line bg-vtu-card text-vtu-text placeholder:text-vtu-muted"
-                    />
-                    <p className="text-[11px] text-vtu-muted">
-                      We send the {vtuServiceTypeLabel(detail.serviceType).toLowerCase()}{" "}
-                      to this {detail.customerIdentifierLabel.toLowerCase()}.
+                    <div className="relative">
+                      <Input
+                        id="bill-target"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                        inputMode={detail.serviceType === "cable" ? "text" : "numeric"}
+                        placeholder={
+                          detail.serviceType === "data"
+                            ? "Enter Phone Number"
+                            : detail.serviceType === "electricity"
+                              ? "Enter Meter Number"
+                              : detail.customerIdentifierLabel
+                        }
+                        autoComplete="off"
+                        disabled={locked}
+                        className="min-h-12 border-vtu-line bg-white pr-14 text-vtu-text placeholder:text-vtu-muted"
+                      />
+                      {detail.serviceType === "electricity" ? (
+                        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-vtu-accent-ink" aria-label="Scan meter number">
+                          <ScanLine className="h-5 w-5" />
+                        </button>
+                      ) : detail.serviceType === "data" ? (
+                        <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-vtu-accent-ink" aria-label="Choose contact">
+                          <Contact className="h-5 w-5" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <p className="text-[11px] text-[#b45e63]">
+                      {detail.serviceType === "data"
+                        ? "Please verify the recipient's phone number before proceeding."
+                        : detail.serviceType === "electricity"
+                          ? "Verify the meter number before proceeding."
+                          : `We send the ${vtuServiceTypeLabel(detail.serviceType).toLowerCase()} to this ${detail.customerIdentifierLabel.toLowerCase()}.`}
                     </p>
                   </div>
 
                   {detail.requiresAmount && (
                     <div className="space-y-3">
-                      <Label className="text-xs text-vtu-muted">Amount</Label>
+                      <Label className="text-sm font-medium text-vtu-text">Amount (₦)</Label>
                       <div className="grid grid-cols-3 gap-2">
                         {presets.map((preset) => (
                           <VtuChoice
@@ -516,7 +540,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                     </div>
                   )}
 
-                  <div className="flex items-center justify-between rounded-xl bg-vtu-chip px-4 py-3">
+                  <div className="flex items-center justify-between rounded-2xl border border-vtu-line bg-white px-4 py-3">
                     <span className="flex items-center gap-1.5 text-xs text-vtu-muted">
                       <Coins className="h-3.5 w-3.5" />
                       You pay
