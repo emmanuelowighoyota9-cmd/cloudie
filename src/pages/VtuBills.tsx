@@ -65,7 +65,7 @@ const AMOUNT_PRESETS = [500, 1000, 2000, 5000, 10000, 20000] as const;
 
 const STEP_LABELS = ["Choose", "Details", "Confirm"] as const;
 
-export default function VtuBills() {
+export default function VtuBills({ initialCategory }: { initialCategory?: "data" | "electricity" } = {}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const productCode = searchParams.get("product") ?? "";
 
@@ -80,7 +80,7 @@ export default function VtuBills() {
   // The catalogue's quick links land here with a category already chosen, so
   // "Electricity" opens on electricity rather than on a list to scroll.
   const [category, setCategory] = useState<string | null>(
-    searchParams.get("category"),
+    initialCategory ?? searchParams.get("category"),
   );
   const [identifier, setIdentifier] = useState("");
   const [amount, setAmount] = useState("");
@@ -238,10 +238,10 @@ export default function VtuBills() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] opacity-70">
-              Bills &amp; bundles
+              {initialCategory === "data" ? "Mobile data" : initialCategory === "electricity" ? "Electricity" : "Bills & bundles"}
             </p>
             <h1 className="mt-1 font-display text-xl font-bold sm:text-2xl">
-              Data, cable, meter &amp; exam
+              {initialCategory === "data" ? "Buy a data bundle" : initialCategory === "electricity" ? "Pay your electricity bill" : "Data, cable, meter &amp; exam"}
             </h1>
             <p className="mt-1 max-w-md text-xs text-vtu-band-fg/75">
               Paid from your NGN wallet. A payment that does not go through returns
