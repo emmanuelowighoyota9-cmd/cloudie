@@ -30,7 +30,7 @@ function ClaimAdminPanel() {
   const handleClaim = async () => {
     setBusy(true);
     try {
-      await claim({ setupCode: code.trim() || undefined });
+      await claim({ setupCode: code.trim() });
       toast.success("You are now the platform administrator");
       // Reload so the gate re-evaluates against the fresh role.
       window.location.reload();
@@ -119,7 +119,7 @@ function NonAdminNotice() {
   const handleRecovery = async () => {
     setRecoveryBusy(true);
     try {
-      await claim({ setupCode: recoveryCode.trim() || undefined });
+      await claim({ setupCode: recoveryCode.trim() });
       toast.success("Administrator access granted");
       window.location.reload();
     } catch (e) {
