@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowDownRight, ArrowUpRight, Download, Search, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Download, Search, Wallet, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, downloadCsv, fmtDate } from "@/components/admin/shared";
+import { Badge } from "@/components/ui/badge";
 
 type LedgerEntry = {
   _id: string;
@@ -43,6 +44,16 @@ export default function AdminTransactions() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
   const [page, setPage] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = ledger?.find((l) => l._id === selectedId);
+  const selectedUser = selected ? userMap.get(selected.userId) : undefined;
+  const highValue = (amount: number) => Math.abs(amount) >= 100000;
+  const riskFlags = selected ? [
+    ...(highValue(selected.amountNgn) ? ["HIGH_VALUE"] : []),
+    ...(selected.amountNgn < 0 ? ["DEBIT"] : []),
+    ...(selected.type === "admin_adjustment" ? ["ADMIN_ADJUSTMENT"] : []),
+    ...(selected.referenceId ? [] : ["NO_REFERENCE"]),
+  ] : [];
 
   const userMap = useMemo(() => new Map<string, NonNullable<typeof users>[number]>((users ?? []).map((u) => [u._id as string, u])), [users]);
 
@@ -151,7 +162,7 @@ export default function AdminTransactions() {
             const u = userMap.get(l.userId);
             const isCredit = l.amountNgn > 0;
             return (
-              <Card key={l._id} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
+              <Card key={l._id} onClick={() => setSelectedId(l._id)} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
                 <CardContent className="p-4">
                   {/* Top: amount + badge */}
                   <div className="flex items-start justify-between gap-3">
@@ -197,6 +208,36 @@ export default function AdminTransactions() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Transaction details">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-card p-5 shadow-2xl sm:rounded-3xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Transaction monitoring</p>
+                <h2 className="mt-1 text-xl font-bold">Ledger transaction</h2>
+                <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{selected._id}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)} aria-label="Close transaction details"><X className="h-4 w-4" /></Button>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border bg-muted/30 p-4"><p className="text-xs text-muted-foreground">Amount</p><p className="mt-1 text-2xl font-bold">₦{selected.amountNgn.toLocaleString("en-NG")}</p></div>
+              <div className="rounded-2xl border bg-muted/30 p-4"><p className="text-xs text-muted-foreground">Balance after</p><p className="mt-1 text-2xl font-bold">₦{selected.balanceAfterNgn.toLocaleString("en-NG")}</p></div>
+            </div>
+            <div className="mt-4 rounded-2xl border p-4">
+              <div className="flex flex-wrap items-center gap-2"><StatusBadge status={selected.type} /><Badge variant="outline">POSTED</Badge>{riskFlags.map((flag) => <Badge key={flag} variant="destructive">{flag}</Badge>)}</div>
+              <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div><dt className="text-xs text-muted-foreground">User</dt><dd className="mt-1 break-all text-sm font-medium">{selectedUser?.email ?? selected.userId}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Created</dt><dd className="mt-1 text-sm">{fmtDate(selected.createdAt)}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Reference</dt><dd className="mt-1 break-all font-mono text-xs">{selected.referenceId ?? "None"}</dd></div>
+                <div><dt className="text-xs text-muted-foreground">Idempotency key</dt><dd className="mt-1 break-all font-mono text-xs">{selected.idempotencyKey ?? "None"}</dd></div>
+              </dl>
+              <div className="mt-4 rounded-xl bg-muted/40 p-3"><p className="text-xs text-muted-foreground">Description</p><p className="mt-1 text-sm">{selected.description}</p></div>
+              {riskFlags.length > 0 && <div className="mt-4 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" /><div><p className="font-semibold">Risk review recommended</p><p className="mt-0.5 text-xs text-muted-foreground">This transaction matches one or more monitoring rules. Review the user, reference and ledger context before taking action.</p></div></div>}
+            </div>
+          </div>
         </div>
       )}
 
