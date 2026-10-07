@@ -52,6 +52,7 @@ const ADMIN_GROUPS = [
     { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
     { to: "/admin/system-health", label: "System Health", icon: Activity },
+    { to: "/admin/risk", label: "Risk Operations", icon: ShieldAlert },
   ]},
   { label: "Users & Access", items: [
     { to: "/admin/users", label: "Users", icon: Users },
