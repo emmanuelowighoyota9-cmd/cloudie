@@ -1218,6 +1218,50 @@ export const auditTransactionReview = mutation({
   },
 });
 
+/**
+ * Financial risk engine: deterministic, explainable monitoring over recent wallet activity.
+ * This is advisory only; it never freezes or mutates customer funds.
+ */
+export const getFinancialRisk = query({
+  args: { hours: v.optional(v.number()), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const now = Date.now();
+    const windowHours = Math.min(168, Math.max(1, args.hours ?? 24));
+    const start = now - windowHours * 60 * 60 * 1000;
+    const rows = await ctx.db.query("walletLedger").withIndex("by_createdAt").order("desc").take(2000);
+    const recent = rows.filter((r) => r.createdAt >= start);
+    const byUser = new Map<string, typeof recent>();
+    for (const row of recent) {
+      const key = String(row.userId);
+      const list = byUser.get(key) ?? [];
+      list.push(row);
+      byUser.set(key, list);
+    }
+    const alerts: Array<{ userId: string; score: number; severity: "medium"|"high"|"critical"; reasons: string[]; transactionCount: number; debitTotal: number; largestDebit: number; lastActivity: number }> = [];
+    for (const [userId, list] of byUser) {
+      const debits = list.filter((r) => r.amountNgn < 0);
+      const debitTotal = debits.reduce((s, r) => s + Math.abs(r.amountNgn), 0);
+      const largestDebit = debits.reduce((m, r) => Math.max(m, Math.abs(r.amountNgn)), 0);
+      const reasons: string[] = [];
+      let score = 0;
+      if (largestDebit >= 500000) { score += 45; reasons.push("Single debit ≥ ₦500,000"); }
+      else if (largestDebit >= 100000) { score += 25; reasons.push("Single debit ≥ ₦100,000"); }
+      if (debitTotal >= 1000000) { score += 30; reasons.push("24h debit volume ≥ ₦1,000,000"); }
+      else if (debitTotal >= 500000) { score += 18; reasons.push("24h debit volume ≥ ₦500,000"); }
+      if (debits.length >= 20) { score += 25; reasons.push("20+ debits in monitoring window"); }
+      else if (debits.length >= 10) { score += 15; reasons.push("10+ debits in monitoring window"); }
+      if (debits.length >= 5 && windowHours <= 1) { score += 25; reasons.push("High debit velocity"); }
+      if (list.some((r) => r.type === "admin_adjustment")) { score += 35; reasons.push("Admin adjustment activity"); }
+      if (list.some((r) => r.amountNgn < 0 && !r.referenceId)) { score += 10; reasons.push("Debit without reference"); }
+      if (score < 25) continue;
+      alerts.push({ userId, score: Math.min(100, score), severity: score >= 70 ? "critical" : score >= 45 ? "high" : "medium", reasons, transactionCount: list.length, debitTotal, largestDebit, lastActivity: Math.max(...list.map((r) => r.createdAt)) });
+    }
+    alerts.sort((a, b) => b.score - a.score || b.lastActivity - a.lastActivity);
+    return { windowHours, generatedAt: now, scannedTransactions: recent.length, alerts: alerts.slice(0, Math.min(100, Math.max(1, args.limit ?? 50))) };
+  },
+});
+
 /** Move a dispute into review before resolution. Audited. */
 export const markDisputeUnderReview = mutation({
   args: { disputeId: v.id("disputes") },
