@@ -43,7 +43,7 @@ import { VTU_RECEIPT_LIBRARY_TAG } from "../lib/vtu";
  * `finalizeDocument` completes the record — server-side, schema-validated and
  * idempotent per render attempt.
  *
- * Points are charged at the full render cost by `createDocument`, so a
+ * NGN wallet funds are charged at the full render cost by `createDocument`, so a
  * document is a paid object from the moment it exists: unlimited free drafts
  * are no longer possible, and the price a customer is quoted is the price they
  * keep even if pricing changes before the render finishes. That charge pays for
@@ -521,7 +521,7 @@ export async function insertDocumentRecord(
     .first();
   if (!version) throw new Error("Template has no published version");
 
-  // ── Points are taken HERE, once, for the full render cost ──
+  // ── NGN wallet funds are taken HERE, once, for the full render cost ──
   // Creating a document is a chargeable act. A draft is therefore a paid object
   // from the moment it exists, and the price quoted at this instant is the price
   // the customer keeps for the whole render.
@@ -798,7 +798,6 @@ export const finalizeDocument = mutation({
         metadata: { attemptId, pageCount: args.pageCount, costNgn: cost },
       });
       charged = cost;
-      }
     }
 
     // ── Register artifacts, replacing any previous render of this document ──
