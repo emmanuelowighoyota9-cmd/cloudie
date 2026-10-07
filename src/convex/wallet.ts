@@ -100,7 +100,7 @@ async function assertNoConflictingReplay(
       if (
         existing.userId !== args.userId ||
         existingAmount !== expectedAmount ||
-        (existing.amountNgn > 0) !== (args.amountNgn > 0)
+        Math.sign(existing.amountNgn) !== expectedSign
       ) {
         throw new Error("REFERENCE_ALREADY_USED");
       }
