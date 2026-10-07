@@ -63,14 +63,54 @@ export type WalletMutationArgs = {
 };
 
 /** Use these helpers when another mutation needs wallet movement in the SAME transaction. */
-export async function creditWallet(ctx: any, args: WalletMutationArgs) {
-  if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Credit amount must be positive");
+async function assertNoConflictingReplay(ctx: any, args: WalletMutationArgs) {
   if (args.idempotencyKey) {
-    const existing = await ctx.db.query("walletLedger")
+    const existing = await ctx.db
+      .query("walletLedger")
       .withIndex("by_idempotency", (q: any) => q.eq("idempotencyKey", args.idempotencyKey!))
       .first();
-    if (existing) return existing._id;
+    if (existing) {
+      const expectedAmount = args.amountNgn;
+      const existingAmount = Math.abs(existing.amountNgn);
+      if (
+        existing.userId !== args.userId ||
+        existingAmount !== expectedAmount ||
+        (existing.amountNgn > 0) !== (args.amountNgn > 0)
+      ) {
+        throw new Error("IDEMPOTENCY_KEY_REUSE");
+      }
+      return existing._id;
+    }
   }
+
+  if (args.reference && args.referenceId) {
+    const existing = await ctx.db
+      .query("walletLedger")
+      .withIndex("by_reference", (q: any) =>
+        q.eq("reference", args.reference!).eq("referenceId", args.referenceId!)
+      )
+      .first();
+    if (existing) {
+      const expectedAmount = args.amountNgn;
+      const existingAmount = Math.abs(existing.amountNgn);
+      if (
+        existing.userId !== args.userId ||
+        existingAmount !== expectedAmount ||
+        (existing.amountNgn > 0) !== (args.amountNgn > 0)
+      ) {
+        throw new Error("REFERENCE_ALREADY_USED");
+      }
+      return existing._id;
+    }
+  }
+
+  return null;
+}
+
+export async function creditWallet(ctx: any, args: WalletMutationArgs) {
+  if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Credit amount must be positive");
+  const replay = await assertNoConflictingReplay(ctx, args);
+  if (replay) return replay;
   const balance = await ensureWallet(ctx, args.userId);
   const newBalance = Math.round((balance + args.amountNgn) * 100) / 100;
   await ctx.db.patch(args.userId, { walletBalanceNgn: newBalance });
@@ -90,12 +130,8 @@ export async function creditWallet(ctx: any, args: WalletMutationArgs) {
 
 export async function debitWallet(ctx: any, args: WalletMutationArgs) {
   if (!Number.isFinite(args.amountNgn) || args.amountNgn <= 0) throw new Error("Debit amount must be positive");
-  if (args.idempotencyKey) {
-    const existing = await ctx.db.query("walletLedger")
-      .withIndex("by_idempotency", (q: any) => q.eq("idempotencyKey", args.idempotencyKey!))
-      .first();
-    if (existing) return existing._id;
-  }
+  const replay = await assertNoConflictingReplay(ctx, args);
+  if (replay) return replay;
   const balance = await ensureWallet(ctx, args.userId);
   if (balance + 1e-9 < args.amountNgn) throw new Error("Insufficient NGN wallet balance");
   const newBalance = Math.round((balance - args.amountNgn) * 100) / 100;
@@ -256,13 +292,39 @@ export const debit = internalMutation({
 });
 
 export const adminAdjust = mutation({
-  args: { userId: v.id("users"), amountNgn: v.number(), reason: v.string() },
+  args: {
+    userId: v.id("users"),
+    amountNgn: v.number(),
+    reason: v.string(),
+    idempotencyKey: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const adminId = await getAuthUserId(ctx);
     if (!adminId) throw new Error("UNAUTHORIZED");
     const admin = await ctx.db.get(adminId);
     if (!admin || admin.role !== "admin" || admin.isSuspended) throw new Error("FORBIDDEN");
     if (!args.reason.trim()) throw new Error("A reason is required");
+    if (!Number.isFinite(args.amountNgn) || args.amountNgn === 0) {
+      throw new Error("Adjustment amount must be a non-zero finite number");
+    }
+
+    if (args.idempotencyKey) {
+      const existing = await ctx.db
+        .query("walletLedger")
+        .withIndex("by_idempotency", (q) => q.eq("idempotencyKey", args.idempotencyKey!))
+        .first();
+      if (existing) {
+        if (
+          existing.userId !== args.userId ||
+          existing.amountNgn !== args.amountNgn ||
+          existing.type !== "admin_adjustment"
+        ) {
+          throw new Error("IDEMPOTENCY_KEY_REUSE");
+        }
+        return existing._id;
+      }
+    }
+
     const before = await ensureWallet(ctx, args.userId);
     const after = Math.round((before + args.amountNgn) * 100) / 100;
     if (after < 0) throw new Error("Adjustment would result in a negative balance");
@@ -276,6 +338,7 @@ export const adminAdjust = mutation({
       type: "admin_adjustment",
       reference: "admin",
       referenceId: adminId,
+      idempotencyKey: args.idempotencyKey,
       metadata: { reason: args.reason, adminId },
       createdAt: Date.now(),
     });
