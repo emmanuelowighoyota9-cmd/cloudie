@@ -222,46 +222,7 @@ export default function Admin() {
         </CardContent></Card>
       </section>
 
-      <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
-        <Card className="overflow-hidden rounded-2xl border-border shadow-sm">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between border-b border-border p-5">
-              <div><h2 className="font-semibold">Live administrator activity</h2><p className="mt-1 text-xs text-muted-foreground">Most recent privileged actions across the platform.</p></div>
-              <Link to="/admin/audit" className="text-xs font-semibold text-primary">View all</Link>
-            </div>
-            <div className="divide-y divide-border">
-              {data.activity.recentAudit.length === 0 ? (
-                <div className="p-6 text-sm text-muted-foreground">No administrator activity recorded yet.</div>
-              ) : data.activity.recentAudit.map((entry) => (
-                <div key={entry._id} className="flex items-center gap-3 px-5 py-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="h-4 w-4" /></span>
-                  <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{entry.action.replaceAll("_", " ")}</p><p className="truncate text-[11px] text-muted-foreground">{entry.actorEmail ?? "Administrator"} · {entry.resource}</p></div>
-                  <time className="shrink-0 text-[10px] text-muted-foreground">{new Date(entry.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="rounded-2xl border-border shadow-sm">
-          <CardContent className="p-5">
-            <div className="mb-4"><h2 className="font-semibold">Operations pulse</h2><p className="mt-1 text-xs text-muted-foreground">Current workload and 24-hour movement.</p></div>
-            <div className="space-y-3">
-              {[
-                ["New users · 7d", data.activity.newUsers7d.toLocaleString(), "/admin/users"],
-                ["Ledger events · 7d", data.activity.ledger7d.toLocaleString(), "/admin/transactions"],
-                ["Orders · 24h", data.marketplace.orders24h.toLocaleString(), "/admin/orders"],
-                ["Documents · 24h", data.documents.last24h.toLocaleString(), "/admin/documents"],
-                ["Open moderation flags", data.moderation.openFlags.toLocaleString(), "/admin/tenants"],
-              ].map(([label, value, to]) => (
-                <Link key={label} to={to} className="flex items-center justify-between rounded-xl border border-border px-3 py-2.5 transition hover:border-primary/30 hover:bg-primary/[0.04]">
-                  <span className="text-xs text-muted-foreground">{label}</span><span className="text-sm font-bold">{value}</span>
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </section>
 
       {groups.map((group) => <section key={group.title} className="space-y-3"><h2 className="section-label">{group.title}</h2><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{group.items.map((m) => <Link key={m.title} to={m.to}><StatCard title={m.title} value={m.value} icon={m.icon} color={m.color} hint={"hint" in m ? m.hint : undefined} /></Link>)}</div></section>)}
     </div>
