@@ -5,7 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack, Receipt, LifeBuoy, Search } from "lucide-react";
+import { Coins, Package, Users, TrendingUp, ArrowUpRight, ShoppingBag, Building2, FileText, Layers, FileStack, Receipt, LifeBuoy, Search, CreditCard, Sparkles } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
@@ -117,11 +117,42 @@ export default function Dashboard() {
               <Link to="/settings">
                 <Button variant="outline" className="gap-2">Guide</Button>
               </Link>
-              <Button variant="outline">Get Help</Button>
+              <Button asChild variant="outline"><Link to="/services/my">My Services</Link></Button>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Link to="/services/my">
+          <Card className="interactive-card h-full border-primary/15 bg-gradient-to-br from-primary/[0.06] to-card">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-foreground">My Services</p>
+                <p className="mt-1 text-sm text-muted-foreground">Manage your active Cloudie services from one place.</p>
+              </div>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+        <Link to="/billing">
+          <Card className="interactive-card h-full">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted text-foreground">
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-foreground">Billing</p>
+                <p className="mt-1 text-sm text-muted-foreground">Track wallet funding and service spending.</p>
+              </div>
+              <ArrowUpRight className="h-4 w-4 text-muted-foreground" />
+            </CardContent>
+          </Card>
+        </Link>
+      </div>
 
       {/* Metrics */}
       <StaggerGroup className="grid gap-4 sm:grid-cols-3">
