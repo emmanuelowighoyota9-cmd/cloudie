@@ -190,27 +190,25 @@ export function VtuShell({
         className,
       )}
     >
-      <style>{`
-        .cloudie-vtu-ref{background:#fbf8ff!important;color:#17131d!important;min-height:100dvh!important}
-        .cloudie-vtu-ref>div{max-width:520px!important;padding:0 16px 28px!important;gap:18px!important}
-        .cloudie-vtu-ref .vtu-band{background:transparent!important;box-shadow:none!important;border-radius:0!important;padding:14px 0 2px!important;color:#17131d!important}
-        .cloudie-vtu-ref .vtu-band h1{font-size:28px!important;letter-spacing:-.04em!important}
-        .cloudie-vtu-ref .vtu-band p{color:#665d6d!important}
-        .cloudie-vtu-ref .vtu-band>div>div:last-child{display:none!important}
-        .cloudie-vtu-ref nav[aria-label="VTU sections"]{display:none!important}
-        .cloudie-vtu-ref .vtu-panel{background:#fff!important;border:1px solid #e8e0ec!important;border-radius:18px!important;box-shadow:0 10px 30px rgba(51,34,66,.07)!important}
-        .cloudie-vtu-ref .vtu-chip{background:#fff!important;border:1px solid #d9d0df!important;border-radius:14px!important;color:#302a35!important;box-shadow:none!important}
-        .cloudie-vtu-ref .vtu-chip[aria-pressed="true"]{background:linear-gradient(135deg,#eef5dc,#fff)!important;border-color:#9ac34d!important;box-shadow:0 4px 14px rgba(126,170,55,.13)!important}
-        .cloudie-vtu-ref input,.cloudie-vtu-ref select{background:#fff!important;border:1px solid #d9d0df!important;border-radius:13px!important;color:#302a35!important;min-height:48px!important}
-        .cloudie-vtu-ref input::placeholder{color:#9b929f!important}
-        .cloudie-vtu-ref .vtu-receipt-row{border-color:#eee7f0!important}
-        .cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]{background:linear-gradient(100deg,#5420e9 0%,#d94370 52%,#42c5bc 100%)!important;color:#fff!important;border:0!important;border-radius:999px!important;min-height:52px!important;box-shadow:0 10px 24px rgba(101,46,190,.18)!important}
-        .cloudie-vtu-ref .cloudie-vtu-mobile-head{display:flex;align-items:center;justify-content:center;position:relative;padding:12px 0 2px}
-        .cloudie-vtu-ref .cloudie-vtu-back{position:absolute;left:0;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;background:transparent;color:#413a47;font-size:30px}
-        .cloudie-vtu-ref .cloudie-vtu-logo{font-weight:800;font-size:21px;letter-spacing:-.04em;background:linear-gradient(90deg,#4f20d9,#bd3c8e);-webkit-background-clip:text;background-clip:text;color:transparent}
-        .cloudie-vtu-ref .cloudie-vtu-logo-mark{display:inline-block;width:13px;height:13px;margin-right:6px;border-radius:7px 7px 4px 7px;background:linear-gradient(135deg,#5420e9,#e94d78);transform:rotate(-35deg);vertical-align:-1px}
-        @media(min-width:1024px){.cloudie-vtu-ref>div{max-width:680px!important}}
-      `}</style>
+      <style>{`.cloudie-vtu-ref{background:var(--background)!important;color:var(--foreground)!important;min-height:100dvh!important}
+.cloudie-vtu-ref>div{max-width:520px!important;padding:0 16px 28px!important;gap:18px!important}
+.cloudie-vtu-ref .vtu-band{background:transparent!important;box-shadow:none!important;border-radius:0!important;padding:14px 0 2px!important;color:var(--foreground)!important}
+.cloudie-vtu-ref .vtu-band h1{font-size:28px!important;letter-spacing:-.04em!important}
+.cloudie-vtu-ref .vtu-band p{color:var(--muted-foreground)!important}
+.cloudie-vtu-ref .vtu-band>div>div:last-child{display:none!important}
+.cloudie-vtu-ref nav[aria-label="VTU sections"]{display:none!important}
+.cloudie-vtu-ref .vtu-panel{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:18px!important;box-shadow:0 10px 30px color-mix(in srgb,var(--primary) 10%,transparent)!important}
+.cloudie-vtu-ref .vtu-chip{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--foreground)!important;box-shadow:none!important}
+.cloudie-vtu-ref .vtu-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--primary) 12%,var(--card))!important;border-color:var(--primary)!important;box-shadow:0 4px 14px color-mix(in srgb,var(--primary) 16%,transparent)!important}
+.cloudie-vtu-ref input,.cloudie-vtu-ref select{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:13px!important;color:var(--foreground)!important;min-height:48px!important}
+.cloudie-vtu-ref input::placeholder{color:var(--muted-foreground)!important}
+.cloudie-vtu-ref .vtu-receipt-row{border-color:var(--border)!important}
+.cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]{background:linear-gradient(100deg,var(--primary),var(--accent))!important;color:var(--primary-foreground)!important;border:0!important;border-radius:999px!important;min-height:52px!important;box-shadow:0 10px 24px color-mix(in srgb,var(--primary) 20%,transparent)!important}
+.cloudie-vtu-ref .cloudie-vtu-mobile-head{display:flex;align-items:center;justify-content:center;position:relative;padding:12px 0 2px}
+.cloudie-vtu-ref .cloudie-vtu-back{position:absolute;left:0;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border:0;background:transparent;color:var(--foreground);font-size:30px}
+.cloudie-vtu-ref .cloudie-vtu-logo{font-weight:800;font-size:21px;letter-spacing:-.04em;color:var(--primary)}
+.cloudie-vtu-ref .cloudie-vtu-logo-mark{display:inline-block;width:13px;height:13px;margin-right:6px;border-radius:7px 7px 4px 7px;background:linear-gradient(135deg,var(--primary),var(--accent));transform:rotate(-35deg);vertical-align:-1px}
+@media(min-width:1024px){.cloudie-vtu-ref>div{max-width:680px!important}}      `}</style>
       <div className="cloudie-vtu-mobile-head">
         <button type="button" className="cloudie-vtu-back" aria-label="Go back" onClick={() => navigate(-1)}>‹</button>
         <div className="cloudie-vtu-logo"><span className="cloudie-vtu-logo-mark" />Cloudie</div>
