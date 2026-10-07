@@ -111,6 +111,97 @@ export const createService = mutation({
   },
 });
 
+export const syncMyServices = mutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+    const now = Date.now();
+    let created = 0;
+
+    const sites = await ctx.db
+      .query("tenantSites")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .take(100);
+
+    for (const site of sites) {
+      const serviceKey = `business:${site._id}`;
+      const existing = await ctx.db
+        .query("serviceSubscriptions")
+        .withIndex("by_user_and_service", (q) =>
+          q.eq("userId", userId).eq("serviceKey", serviceKey),
+        )
+        .first();
+      if (existing) {
+        await ctx.db.patch(existing._id, {
+          name: site.displayName ?? site.siteName,
+          category: "Business",
+          status: site.isActive ? "active" : "paused",
+          resourceId: site._id,
+          resourceLabel: site.subdomain,
+          planLabel: site.plan ?? "Business site",
+          renewalAt: site.renewalDate,
+          updatedAt: now,
+        });
+      } else {
+        await ctx.db.insert("serviceSubscriptions", {
+          userId,
+          serviceKey,
+          name: site.displayName ?? site.siteName,
+          category: "Business",
+          status: site.isActive ? "active" : "paused",
+          resourceId: site._id,
+          resourceLabel: site.subdomain,
+          planLabel: site.plan ?? "Business site",
+          renewalAt: site.renewalDate,
+          createdAt: now,
+          updatedAt: now,
+        });
+        created += 1;
+      }
+    }
+
+    const shipments = await ctx.db
+      .query("shipments")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(100);
+    if (shipments.length > 0) {
+      const serviceKey = "shipments";
+      const existing = await ctx.db
+        .query("serviceSubscriptions")
+        .withIndex("by_user_and_service", (q) =>
+          q.eq("userId", userId).eq("serviceKey", serviceKey),
+        )
+        .first();
+      const activeShipments = shipments.filter((shipment) =>
+        !["delivered", "cancelled"].includes(shipment.status),
+      ).length;
+      const payload = {
+        name: "Shipments",
+        category: "Logistics",
+        status: "active" as const,
+        resourceLabel: `${activeShipments} active shipment${activeShipments === 1 ? "" : "s"}`,
+        usageLabel: `${shipments.length} shipment record${shipments.length === 1 ? "" : "s"}`,
+        updatedAt: now,
+      };
+      if (existing) {
+        await ctx.db.patch(existing._id, payload);
+      } else {
+        await ctx.db.insert("serviceSubscriptions", {
+          userId,
+          serviceKey,
+          ...payload,
+          createdAt: now,
+        });
+        created += 1;
+      }
+    }
+
+    return created;
+  },
+});
+
 export const getOverview = query({
   args: {},
   returns: v.object({
