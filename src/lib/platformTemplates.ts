@@ -1,9 +1,9 @@
 /**
- * The complete platform template set.
+ * The complete Cloudie platform template set.
  *
  * `starterTemplates.ts` holds the base set, `commercialTemplates.ts` the second
  * batch of commercial paperwork. The Convex seeder installs both, so this module
- * is the single source of truth for "what ships with Crestline" and for the
+ * is the single source of truth for "what ships with Cloudie" and for the
  * version marker that triggers a republish.
  */
 
@@ -15,7 +15,7 @@ import { TICKETING_TEMPLATES } from "./ticketingTemplates";
 export const PLATFORM_TEMPLATES: StarterTemplate[] = [...STARTER_TEMPLATES, ...COMMERCIAL_TEMPLATES, ...TICKETING_TEMPLATES];
 
 /**
- * Bumped whenever a new batch is added to COMMERCIAL_TEMPLATES. Keep it in step
+ * Bumped whenever a new platform template batch is added. Keep it in step
  * with that array so installations holding an older marker republish once.
  */
 const COMMERCIAL_SET_VERSION = 6;
