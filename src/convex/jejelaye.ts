@@ -96,6 +96,20 @@ function catalogProducts(body: unknown): NumberProduct[] {
 
 export const listNumberProducts = action({
   args: { category: v.optional(v.string()) },
+  returns: v.array(v.object({
+  productKey: v.string(),
+  serviceName: v.string(),
+  countryCode: v.string(),
+  countryName: v.string(),
+  serverKey: v.string(),
+  publicServiceKey: v.string(),
+  numberType: v.string(),
+  price: v.number(),
+  currency: v.string(),
+  available: v.union(v.number(), v.null()),
+  variationId: v.optional(v.string()),
+  areaCodes: v.array(v.string()),
+})),
   handler: async (_ctx, args): Promise<NumberProduct[]> => {
     const category = args.category?.trim().toLowerCase() || "usa";
     return catalogProducts(await request(`/virtual-numbers/catalog?category=${encodeURIComponent(category)}`));
@@ -133,28 +147,49 @@ export const purchaseNumber = action({
     if (args.areaCodes?.trim()) payload.area_codes = args.areaCodes.trim();
     if (args.carrier?.trim()) payload.carrier = args.carrier.trim();
 
+    let body: any;
     try {
-      const body = await request("/virtual-numbers/purchase", { method: "POST", body: JSON.stringify(payload) });
-      const session = body?.session ?? body?.data ?? body;
-      const status = str(session?.status, body?.status, "waiting_for_otp");
-      const reference = str(session?.reference, session?.order_reference, session?.order_id, body?.reference) || undefined;
-      await ctx.runMutation(internal.marketplace.finalizeJejelayeNumberOrder, {
-        orderId: prepared.orderId, status: status === "refunded" ? "cancelled" : "pending",
-        providerOrderId: reference, providerStatus: status, providerResponse: session, fulfilledItems: session,
+      body = await request("/virtual-numbers/purchase", {
+        method: "POST",
+        body: JSON.stringify(payload),
       });
-      return { orderId: prepared.orderId, status, session };
     } catch (error) {
       await ctx.runMutation(internal.marketplace.finalizeJejelayeNumberOrder, {
-        orderId: prepared.orderId, status: "cancelled", providerStatus: "failed",
+        orderId: prepared.orderId,
+        status: "cancelled",
+        providerStatus: "failed",
         providerResponse: { error: error instanceof Error ? error.message : "JejeLaye purchase failed" },
       });
       throw error;
     }
+
+    const session = body?.session ?? body?.data ?? body;
+    const status = str(session?.status, body?.status, "waiting_for_otp");
+    const reference = str(session?.reference, session?.order_reference, session?.order_id, body?.reference) || undefined;
+    try {
+      await ctx.runMutation(internal.marketplace.finalizeJejelayeNumberOrder, {
+        orderId: prepared.orderId,
+        status: status === "refunded" ? "cancelled" : "pending",
+        providerOrderId: reference,
+        providerStatus: status,
+        providerResponse: session,
+        fulfilledItems: session,
+      });
+    } catch {
+      throw new Error("JEJELAYE_LOCAL_RECONCILIATION_REQUIRED");
+    }
+
+    return { orderId: prepared.orderId, status, session };
   },
 });
 
 export const refreshNumberSession = action({
   args: { orderId: v.id("marketplaceOrders") },
+  returns: v.object({
+    orderId: v.id("marketplaceOrders"),
+    status: v.string(),
+    session: v.optional(v.any()),
+  }),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
