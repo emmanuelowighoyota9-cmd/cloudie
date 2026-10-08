@@ -738,6 +738,35 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_referrer", ["referrerId"]).index("by_referred", ["referredUserId"]),
 
+    supportTickets: defineTable({
+      userId: v.id("users"),
+      ticketNumber: v.string(),
+      subject: v.string(),
+      category: v.string(),
+      priority: v.union(v.literal("low"), v.literal("normal"), v.literal("high"), v.literal("urgent")),
+      status: v.union(v.literal("open"), v.literal("pending"), v.literal("resolved"), v.literal("closed")),
+      lastMessageAt: v.number(),
+      lastMessageBy: v.string(),
+      unreadForCustomer: v.number(),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+      resolvedAt: v.optional(v.number()),
+    })
+      .index("by_user", ["userId", "updatedAt"])
+      .index("by_user_status", ["userId", "status", "updatedAt"])
+      .index("by_ticketNumber", ["ticketNumber"])
+      .index("by_status", ["status", "updatedAt"]),
+
+    supportMessages: defineTable({
+      ticketId: v.id("supportTickets"),
+      senderId: v.id("users"),
+      senderRole: v.string(),
+      body: v.string(),
+      createdAt: v.number(),
+      readByCustomer: v.boolean(),
+    })
+      .index("by_ticket", ["ticketId", "createdAt"]),
+
     notifications: defineTable({
       userId: v.id("users"),
       title: v.string(),
