@@ -1428,3 +1428,49 @@ export const getAnalyticsRange = query({
     };
   },
 });
+
+
+export const getMaintenanceMode = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const row = await ctx.db.query("platformSettings").withIndex("by_key", q => q.eq("key", "maintenance_mode")).unique();
+    return row?.value ?? { enabled: false, title: "Cloudie is under maintenance", message: "We’re making improvements. Please check back shortly.", scheduledStartAt: null, scheduledEndAt: null, readOnly: false };
+  },
+});
+
+export const setMaintenanceMode = mutation({
+  args: {
+    enabled: v.boolean(),
+    title: v.string(),
+    message: v.string(),
+    scheduledStartAt: v.optional(v.number()),
+    scheduledEndAt: v.optional(v.number()),
+    readOnly: v.boolean(),
+  },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const title = args.title.trim().slice(0, 120);
+    const message = args.message.trim().slice(0, 500);
+    if (!title || !message) throw new Error("MAINTENANCE_COPY_REQUIRED");
+    const now = Date.now();
+    const value = {
+      enabled: args.enabled,
+      title,
+      message,
+      scheduledStartAt: args.scheduledStartAt ?? null,
+      scheduledEndAt: args.scheduledEndAt ?? null,
+      readOnly: args.readOnly,
+    };
+    const existing = await ctx.db.query("platformSettings").withIndex("by_key", q => q.eq("key", "maintenance_mode")).unique();
+    if (existing) await ctx.db.patch(existing._id, { value, updatedAt: now, updatedBy: adminId });
+    else await ctx.db.insert("platformSettings", { key: "maintenance_mode", value, updatedAt: now, updatedBy: adminId });
+    await auditLog(ctx, adminId, {
+      action: args.enabled ? "MAINTENANCE_ENABLED" : "MAINTENANCE_UPDATED",
+      resource: "platformSettings",
+      resourceId: existing?._id,
+      after: value,
+    });
+    return value;
+  },
+});
