@@ -373,7 +373,7 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
                     </p>
                     <p className="text-xs text-muted-foreground">{selectedNumber.numberType} · {selectedNumber.serverKey || "Live catalog"}</p>
                   </div>
-                  <Badge variant={selectedNumber.available_quantity > 0 ? "outline" : "destructive"}>
+                  <Badge variant={selectedNumber.available === null || selectedNumber.available > 0 ? "outline" : "destructive"}>
                     {selectedNumber.available === null ? "Available" : `${selectedNumber.available} available`}
                   </Badge>
                 </div>
