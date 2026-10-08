@@ -172,18 +172,16 @@ type CatalogOrderPageProps = {
 };
 
 function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
-  const listNumberCountries = useAction(api.logspanel.listNumberCountries);
-  const listNumberServices = useAction(api.logspanel.listNumberServices);
-  const listNumberAreaCodes = useAction(api.logspanel.listNumberAreaCodes);
+  const listNumberProducts = useAction(api.jejelaye.listNumberProducts);
+  const purchaseNumber = useAction(api.jejelaye.purchaseNumber);
   const listBoostCategories = useAction(api.logspanel.listBoostCategories);
   const listBoostServices = useAction(api.logspanel.listBoostServices);
 
-  const [countries, setCountries] = useState<Array<{ id: number | string; name: string; short?: string; image?: string | null }>>([]);
-  const [numberServices, setNumberServices] = useState<Array<{
-    service_id: string; service_name: string; country_id: string; country_name: string;
-    price: string; currency: string; available_quantity: number; category?: string; success_rate?: number;
+  const [numberProducts, setNumberProducts] = useState<Array<{
+    productKey: string; serviceName: string; countryCode: string; countryName: string;
+    serverKey: string; publicServiceKey: string; numberType: string; price: number;
+    currency: string; available: number | null; variationId?: string; areaCodes: string[];
   }>>([]);
-  const [areaCodes, setAreaCodes] = useState<string[]>(["Random"]);
   const [boostCategories, setBoostCategories] = useState<string[]>([]);
   const [boostServices, setBoostServices] = useState<Array<{
     service_id: string; service_name: string; category: string; type: string;
@@ -191,16 +189,16 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
     refill?: boolean; cancel?: boolean;
   }>>([]);
 
-  const [countryId, setCountryId] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [category, setCategory] = useState("");
-  const [areaCode, setAreaCode] = useState("Random");
+  const [areaCode, setAreaCode] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [buyingNumber, setBuyingNumber] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedNumber = numberServices.find((item) => item.service_id === serviceId) ?? null;
+  const selectedNumber = numberProducts.find((item) => item.productKey === serviceId) ?? null;
   const selectedBoost = boostServices.find((item) => item.service_id === serviceId) ?? null;
 
   useEffect(() => {
@@ -210,8 +208,8 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
     const load = async () => {
       try {
         if (mode === "numbers") {
-          const rows = await listNumberCountries({});
-          if (!cancelled) setCountries(rows as typeof countries);
+          const rows = await listNumberProducts({ category: "usa" });
+          if (!cancelled) setNumberProducts(rows);
         } else {
           const rows = await listBoostCategories({});
           if (!cancelled) setBoostCategories(rows.map((row) => row.name));
@@ -224,38 +222,15 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
     };
     void load();
     return () => { cancelled = true; };
-  }, [mode, listNumberCountries, listBoostCategories]);
+  }, [mode, listNumberProducts, listBoostCategories]);
 
   useEffect(() => {
-    if (mode !== "numbers" || !countryId) {
-      setNumberServices([]);
-      setServiceId("");
+    if (mode !== "numbers" || !selectedNumber) {
+      setAreaCode("");
       return;
     }
-    let cancelled = false;
-    setLoading(true);
-    void listNumberServices({ countryId: Number(countryId) })
-      .then((rows) => {
-        if (!cancelled) {
-          setNumberServices(rows as typeof numberServices);
-          setServiceId("");
-          setAreaCode("Random");
-        }
-      })
-      .catch((err) => !cancelled && setError(err instanceof Error ? err.message : "Unable to load number services"))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, [mode, countryId, listNumberServices]);
-
-  useEffect(() => {
-    if (mode !== "numbers" || !countryId || !serviceId) return;
-    let cancelled = false;
-    void listNumberAreaCodes({ countryId: Number(countryId), serviceId })
-      .then((codes) => !cancelled && setAreaCodes(codes))
-      .catch(() => !cancelled && setAreaCodes(["Random"]));
-    return () => { cancelled = true; };
-  }, [mode, countryId, serviceId, listNumberAreaCodes]);
-
+    setAreaCode(selectedNumber.areaCodes[0] ?? "");
+  }, [mode, selectedNumber?.productKey]);
   useEffect(() => {
     if (mode !== "boost") return;
     let cancelled = false;
@@ -334,39 +309,27 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
             {mode === "numbers" ? (
               <>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Select Country</label>
-                  <select value={countryId} onChange={(e) => setCountryId(e.target.value)}
-                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    <option value="">Choose a country</option>
-                    {countries.map((country) => <option key={String(country.id)} value={String(country.id)}>{country.name}</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className="mb-2 block text-sm font-semibold">Select product</label>
                   <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                     className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
                     <option value="">Choose a number product</option>
-                    {numberServices.map((service) => {
-                      const country = service.country_name || countries.find((item) => String(item.id) === String(service.country_id))?.name || "";
-                      const countryCode =
-                        countries.find((item) => String(item.id) === String(service.country_id))?.short?.toUpperCase() ||
-                        (country === "United States" ? "USA" : country);
-                      const productName = service.service_name?.trim() || `Service ${service.service_id}`;
-                      return (
-                        <option key={service.service_id} value={service.service_id}>
-                          {productName} - {countryCode}
-                        </option>
-                      );
-                    })}
+                    {numberProducts.map((product) => (
+                      <option key={product.productKey} value={product.productKey}>
+                        {product.serviceName} - {product.countryCode}
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold">Area Code</label>
-                  <select value={areaCode} onChange={(e) => setAreaCode(e.target.value)}
-                    className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    {areaCodes.map((code) => <option key={code}>{code}</option>)}
-                  </select>
-                </div>
+                {selectedNumber?.areaCodes.length ? (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold">Area Code</label>
+                    <select value={areaCode} onChange={(e) => setAreaCode(e.target.value)}
+                      className="h-12 w-full rounded-xl border bg-background px-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                      <option value="">Random</option>
+                      {selectedNumber.areaCodes.map((code) => <option key={code}>{code}</option>)}
+                    </select>
+                  </div>
+                ) : null}
               </>
             ) : (
               <>
@@ -406,20 +369,17 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">
-                      {selectedNumber.service_name} - {(
-                        countries.find((item) => String(item.id) === String(selectedNumber.country_id))?.short?.toUpperCase() ||
-                        (selectedNumber.country_name === "United States" ? "USA" : selectedNumber.country_name)
-                      )}
+                      {selectedNumber.serviceName} - {selectedNumber.countryCode}
                     </p>
-                    <p className="text-xs text-muted-foreground">{selectedNumber.category ?? "Activation"} · {selectedNumber.success_rate ?? "—"}% success rate</p>
+                    <p className="text-xs text-muted-foreground">{selectedNumber.numberType} · {selectedNumber.serverKey || "Live catalog"}</p>
                   </div>
                   <Badge variant={selectedNumber.available_quantity > 0 ? "outline" : "destructive"}>
-                    {selectedNumber.available_quantity} available
+                    {selectedNumber.available === null ? "Available" : `${selectedNumber.available} available`}
                   </Badge>
                 </div>
                 <div className="mt-4 flex items-center justify-between border-t pt-3">
                   <span className="text-sm font-medium">Current price</span>
-                  <span className="text-lg font-bold text-primary">₦{Number(selectedNumber.price).toLocaleString("en-NG")}</span>
+                  <span className="text-lg font-bold text-primary">₦{selectedNumber.price.toLocaleString("en-NG")}</span>
                 </div>
               </div>
             )}
@@ -458,8 +418,33 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
               </div>
             )}
 
-            <Button className="h-12 w-full rounded-xl text-base font-semibold" disabled>
-              {selectedNumber || selectedBoost ? "Checkout — provider order wiring next" : "Choose a service first"}
+            <Button
+              className="h-12 w-full rounded-xl text-base font-semibold"
+              disabled={!selectedNumber || !canAfford || buyingNumber}
+              onClick={async () => {
+                if (!selectedNumber || !canAfford || buyingNumber) return;
+                setBuyingNumber(true);
+                try {
+                  const idempotencyKey = `jejelaye-number-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+                  const result = await purchaseNumber({
+                    productKey: selectedNumber.productKey,
+                    category: "usa",
+                    serverKey: selectedNumber.serverKey,
+                    publicServiceKey: selectedNumber.publicServiceKey,
+                    numberType: selectedNumber.numberType,
+                    variationId: selectedNumber.variationId,
+                    areaCodes: areaCode || undefined,
+                    idempotencyKey,
+                  });
+                  toast.success(result.status === "waiting_for_otp" ? "Number reserved. Waiting for OTP." : "Number order submitted.");
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "Unable to purchase number");
+                } finally {
+                  setBuyingNumber(false);
+                }
+              }}
+            >
+              {buyingNumber ? "Processing…" : selectedNumber ? `Buy ${selectedNumber.serviceName}` : "Choose a product first"}
             </Button>
           </div>
         </CardContent>
