@@ -775,3 +775,173 @@ export const syncLogspanelProducts = internalMutation({
     return { created, updated, received: args.products.length, seen: Array.from(seen) };
   },
 });
+
+
+export const prepareJejelayeNumberOrder = internalMutation({
+  args: {
+    userId: v.id("users"),
+    productKey: v.string(),
+    productName: v.string(),
+    totalNgn: v.number(),
+    idempotencyKey: v.string(),
+    providerMetadata: v.any(),
+  },
+  returns: v.object({
+    orderId: v.id("marketplaceOrders"),
+    reused: v.boolean(),
+    providerResponse: v.optional(v.any()),
+  }),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("marketplaceOrders")
+      .withIndex("by_order_idempotency", (q) => q.eq("idempotencyKey", args.idempotencyKey))
+      .first();
+    if (existing) {
+      return {
+        orderId: existing._id,
+        reused: true,
+        providerResponse: existing.providerResponse,
+      };
+    }
+    if (!Number.isFinite(args.totalNgn) || args.totalNgn <= 0) throw new Error("INVALID_ORDER_TOTAL");
+
+    let vendor = await ctx.db
+      .query("vendors")
+      .withIndex("by_status", (q) => q.eq("status", "approved"))
+      .first();
+    if (!vendor) {
+      vendor = await ctx.db
+        .query("vendors")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId))
+        .first();
+    }
+    if (!vendor) {
+      const vendorId = await ctx.db.insert("vendors", {
+        userId: args.userId,
+        businessName: "Cloudie Provider",
+        description: "System provider account",
+        status: "approved",
+        earnings: 0,
+        totalSales: 0,
+        createdAt: Date.now(),
+      });
+      vendor = await ctx.db.get(vendorId);
+    }
+    if (!vendor) throw new Error("SYSTEM_VENDOR_UNAVAILABLE");
+
+    let product = await ctx.db
+      .query("marketplaceProducts")
+      .withIndex("by_provider_ref", (q) =>
+        q.eq("provider", "jejelaye").eq("providerProductRef", args.productKey),
+      )
+      .first();
+
+    if (product) {
+      await ctx.db.patch(product._id, {
+        name: args.productName,
+        priceNgn: args.totalNgn,
+        isActive: true,
+        isApproved: true,
+        providerMetadata: args.providerMetadata,
+        providerSyncedAt: Date.now(),
+      });
+    } else {
+      const productId = await ctx.db.insert("marketplaceProducts", {
+        vendorId: vendor._id,
+        name: args.productName,
+        description: "JejeLaye virtual number",
+        pointsPrice: 0,
+        priceNgn: args.totalNgn,
+        category: "Virtual Numbers",
+        isActive: true,
+        isApproved: true,
+        totalSold: 0,
+        provider: "jejelaye",
+        providerProductRef: args.productKey,
+        providerCostNgn: args.totalNgn,
+        providerStatus: "available",
+        providerSyncedAt: Date.now(),
+        providerMetadata: args.providerMetadata,
+        createdAt: Date.now(),
+      });
+      product = await ctx.db.get(productId);
+    }
+    if (!product) throw new Error("JEJELAYE_PRODUCT_UNAVAILABLE");
+
+    await debitWallet(ctx, {
+      userId: args.userId,
+      amountNgn: args.totalNgn,
+      description: `Virtual number purchase: ${args.productName}`,
+      type: "marketplace_purchase",
+      referenceId: product._id,
+      idempotencyKey: args.idempotencyKey,
+      metadata: { provider: "jejelaye", productKey: args.productKey },
+    });
+
+    const now = Date.now();
+    const orderId = await ctx.db.insert("marketplaceOrders", {
+      buyerId: args.userId,
+      productId: product._id,
+      vendorId: product.vendorId,
+      quantity: 1,
+      totalPoints: 0,
+      totalNgn: args.totalNgn,
+      status: "pending",
+      createdAt: now,
+      provider: "jejelaye",
+      providerStatus: "pending",
+      providerCostNgn: args.totalNgn,
+      idempotencyKey: args.idempotencyKey,
+      updatedAt: now,
+    });
+
+    return { orderId, reused: false };
+  },
+});
+
+export const finalizeJejelayeNumberOrder = internalMutation({
+  args: {
+    orderId: v.id("marketplaceOrders"),
+    status: v.union(v.literal("completed"), v.literal("pending"), v.literal("cancelled")),
+    providerOrderId: v.optional(v.string()),
+    providerStatus: v.optional(v.string()),
+    providerResponse: v.optional(v.any()),
+    fulfilledItems: v.optional(v.any()),
+  },
+  returns: v.object({ status: v.string(), alreadyFinalized: v.boolean() }),
+  handler: async (ctx, args) => {
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new Error("ORDER_NOT_FOUND");
+    if (order.status === "completed" || order.status === "refunded" || order.status === "cancelled") {
+      return { status: order.status, alreadyFinalized: true };
+    }
+
+    if (args.status === "cancelled") {
+      if (!order.totalNgn || order.totalNgn <= 0) throw new Error("ORDER_MISSING_NGN_TOTAL");
+      await creditWallet(ctx, {
+        userId: order.buyerId,
+        amountNgn: order.totalNgn,
+        description: "Refund: JejeLaye virtual number purchase failed",
+        type: "refund",
+        referenceId: order._id,
+        idempotencyKey: `jejelaye-number-refund-${order._id}`,
+        metadata: { provider: "jejelaye", providerOrderId: args.providerOrderId },
+      });
+    }
+
+    await ctx.db.patch(order._id, {
+      status: args.status,
+      providerOrderId: args.providerOrderId,
+      providerStatus: args.providerStatus,
+      providerResponse: args.providerResponse,
+      fulfilledItems: args.fulfilledItems,
+      updatedAt: Date.now(),
+    });
+
+    if (args.status === "completed") {
+      const product = await ctx.db.get(order.productId);
+      if (product) await ctx.db.patch(product._id, { totalSold: product.totalSold + 1 });
+    }
+    return { status: args.status, alreadyFinalized: false };
+  },
+});
