@@ -24,6 +24,7 @@ const ADMIN_GROUPS: AdminGroup[] = [
     { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
     { to: "/admin/system-health", label: "System Health", icon: Activity },
     { to: "/admin/risk", label: "Risk Operations", icon: ShieldAlert },
+    { to: "/admin/maintenance", label: "Maintenance Mode", icon: Wrench },
   ]},
   { label: "Users & Access", items: [
     { to: "/admin/users", label: "Users", icon: Users },
