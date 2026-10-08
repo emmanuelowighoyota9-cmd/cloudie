@@ -236,6 +236,13 @@ const schema = defineSchema(
       .index("by_createdAt", ["createdAt"]),
 
     /** Persistent financial risk cases. Cases are investigative records only; they never mutate funds. */
+    platformSettings: defineTable({
+      key: v.string(),
+      value: v.any(),
+      updatedAt: v.number(),
+      updatedBy: v.optional(v.id("users")),
+    }).index("by_key", ["key"]),
+
     riskCases: defineTable({
       userId: v.id("users"),
       score: v.number(),
