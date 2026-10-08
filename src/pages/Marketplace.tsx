@@ -342,15 +342,22 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Select Service</label>
+                  <label className="mb-2 block text-sm font-semibold">Select product</label>
                   <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                     className="h-12 w-full rounded-xl border bg-background px-4 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                    <option value="">Choose a service</option>
-                    {numberServices.map((service) => (
-                      <option key={service.service_id} value={service.service_id}>
-                        {service.service_name} — ₦{Number(service.price).toLocaleString("en-NG")} · {service.available_quantity} available
-                      </option>
-                    ))}
+                    <option value="">Choose a number product</option>
+                    {numberServices.map((service) => {
+                      const country = service.country_name || countries.find((item) => String(item.id) === String(service.country_id))?.name || "";
+                      const countryCode =
+                        countries.find((item) => String(item.id) === String(service.country_id))?.short?.toUpperCase() ||
+                        (country === "United States" ? "USA" : country);
+                      const productName = service.service_name?.trim() || `Service ${service.service_id}`;
+                      return (
+                        <option key={service.service_id} value={service.service_id}>
+                          {productName} - {countryCode}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -398,7 +405,12 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
               <div className="rounded-2xl border border-primary/10 bg-primary/[0.035] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold">{selectedNumber.service_name}</p>
+                    <p className="font-semibold">
+                      {selectedNumber.service_name} - {(
+                        countries.find((item) => String(item.id) === String(selectedNumber.country_id))?.short?.toUpperCase() ||
+                        (selectedNumber.country_name === "United States" ? "USA" : selectedNumber.country_name)
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">{selectedNumber.category ?? "Activation"} · {selectedNumber.success_rate ?? "—"}% success rate</p>
                   </div>
                   <Badge variant={selectedNumber.available_quantity > 0 ? "outline" : "destructive"}>
