@@ -102,6 +102,7 @@ const AdminLocations = lazy(() => import("./pages/AdminLocations.tsx"));
 const AdminDocuments = lazy(() => import("./pages/AdminDocuments.tsx"));
 const AdminTransactions = lazy(() => import("./pages/AdminTransactions.tsx"));
 const AdminRisk = lazy(() => import("./pages/AdminRisk.tsx"));
+const AdminMaintenance = lazy(() => import("./pages/AdminMaintenance.tsx"));
 const AdminKYC = lazy(() => import("./pages/AdminKYC.tsx"));
 const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
 const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
@@ -316,6 +317,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="disputes" element={<AdminDisputes />} />
                   <Route path="transactions" element={<AdminTransactions />} />
                   <Route path="risk" element={<AdminRisk />} />
+                  <Route path="maintenance" element={<AdminMaintenance />} />
                   <Route path="shipments" element={<AdminShipments />} />
                   <Route path="shipments/create" element={<AdminCreateShipment />} />
                   <Route path="shipments/:shipmentId" element={<AdminShipmentDetail />} />
