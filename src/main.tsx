@@ -77,6 +77,7 @@ const AssetsPage = lazy(() => import("./pages/Assets.tsx"));
 const MarketplacePage = lazy(() => import("./pages/Marketplace.tsx"));
 const Referrals = lazy(() => import("./pages/Referrals.tsx"));
 const NotificationsPage = lazy(() => import("./pages/Notifications.tsx"));
+const Support = lazy(() => import("./pages/Support.tsx"));
 const Settings = lazy(() => import("./pages/Settings.tsx"));
 const BuyPoints = lazy(() => import("./pages/BuyPoints.tsx"));
 const Orders = lazy(() => import("./pages/Orders.tsx"));
@@ -293,6 +294,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/marketplace/orders" element={<Orders />} />
                   <Route path="/referrals" element={<Referrals />} />
                   <Route path="/notifications" element={<NotificationsPage />} />
+                  <Route path="/support" element={<Support />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/buy-points" element={<BuyPoints />} />
                   <Route path="/wallet/fund" element={<BuyPoints />} />
