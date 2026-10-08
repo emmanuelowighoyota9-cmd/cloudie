@@ -262,7 +262,7 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
     : Number(selectedBoost?.rate_per_1000 ?? selectedBoost?.price ?? 0);
 
   const maxQuantity = mode === "numbers"
-    ? Math.max(1, selectedNumber?.available_quantity ?? 1)
+    ? Math.max(1, selectedNumber?.available ?? 1)
     : Math.max(1, selectedBoost?.max ?? 1);
 
   const minQuantity = mode === "boost"
