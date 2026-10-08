@@ -147,23 +147,39 @@ export const purchaseNumber = action({
     if (args.areaCodes?.trim()) payload.area_codes = args.areaCodes.trim();
     if (args.carrier?.trim()) payload.carrier = args.carrier.trim();
 
+    let body: any;
     try {
-      const body = await request("/virtual-numbers/purchase", { method: "POST", body: JSON.stringify(payload) });
-      const session = body?.session ?? body?.data ?? body;
-      const status = str(session?.status, body?.status, "waiting_for_otp");
-      const reference = str(session?.reference, session?.order_reference, session?.order_id, body?.reference) || undefined;
-      await ctx.runMutation(internal.marketplace.finalizeJejelayeNumberOrder, {
-        orderId: prepared.orderId, status: status === "refunded" ? "cancelled" : "pending",
-        providerOrderId: reference, providerStatus: status, providerResponse: session, fulfilledItems: session,
+      body = await request("/virtual-numbers/purchase", {
+        method: "POST",
+        body: JSON.stringify(payload),
       });
-      return { orderId: prepared.orderId, status, session };
     } catch (error) {
       await ctx.runMutation(internal.marketplace.finalizeJejelayeNumberOrder, {
-        orderId: prepared.orderId, status: "cancelled", providerStatus: "failed",
+        orderId: prepared.orderId,
+        status: "cancelled",
+        providerStatus: "failed",
         providerResponse: { error: error instanceof Error ? error.message : "JejeLaye purchase failed" },
       });
       throw error;
     }
+
+    const session = body?.session ?? body?.data ?? body;
+    const status = str(session?.status, body?.status, "waiting_for_otp");
+    const reference = str(session?.reference, session?.order_reference, session?.order_id, body?.reference) || undefined;
+    try {
+      await ctx.runMutation(internal.marketplace.finalizeJejelayeNumberOrder, {
+        orderId: prepared.orderId,
+        status: status === "refunded" ? "cancelled" : "pending",
+        providerOrderId: reference,
+        providerStatus: status,
+        providerResponse: session,
+        fulfilledItems: session,
+      });
+    } catch {
+      throw new Error("JEJELAYE_LOCAL_RECONCILIATION_REQUIRED");
+    }
+
+    return { orderId: prepared.orderId, status, session };
   },
 });
 
