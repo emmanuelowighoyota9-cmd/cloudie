@@ -10,7 +10,7 @@ import {
   Activity, BadgeDollarSign, BarChart3, Bell, Boxes, Brain, Building2,
   ClipboardCheck, CreditCard, FileText, Gavel, Inbox, Layers, LayoutDashboard,
   LogOut, Mail, MapPin, Menu, Package, Palette, Search, Settings, ShieldAlert,
-  ShieldCheck, ShoppingCart, Sun, Moon, Tags, Truck, Users, X, Zap, Waypoints,
+  ShieldCheck, ShoppingCart, Sun, Moon, Tags, Truck, Users, X, Zap, Waypoints, Wrench,
   type LucideIcon,
 } from "lucide-react";
 

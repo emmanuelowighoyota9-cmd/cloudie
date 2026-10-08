@@ -48,7 +48,7 @@ export const create = mutation({
     if (!categories.includes(args.category as typeof categories[number])) throw new Error("INVALID_CATEGORY");
     const now = Date.now();
     const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
-    const ticketNumber = `CLD-${new Date(now).toISOString().slice(0,10).replaceAll("-","")}-${suffix}`;
+    const ticketNumber = `CLD-${new Date(now).toISOString().slice(0,10).split("-").join("")}-${suffix}`;
     const ticketId = await ctx.db.insert("supportTickets", {
       userId, ticketNumber, subject, category: args.category, priority: args.priority,
       status: "open", lastMessageAt: now, lastMessageBy: "customer", unreadForCustomer: 0,
