@@ -123,6 +123,11 @@ export const purchaseNumber = action({
     variationId: v.optional(v.string()), areaCodes: v.optional(v.string()),
     carrier: v.optional(v.string()), idempotencyKey: v.string(),
   },
+  returns: v.object({
+    orderId: v.id("marketplaceOrders"),
+    status: v.string(),
+    session: v.optional(v.any()),
+  }),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
