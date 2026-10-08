@@ -96,6 +96,20 @@ function catalogProducts(body: unknown): NumberProduct[] {
 
 export const listNumberProducts = action({
   args: { category: v.optional(v.string()) },
+  returns: v.array(v.object({
+  productKey: v.string(),
+  serviceName: v.string(),
+  countryCode: v.string(),
+  countryName: v.string(),
+  serverKey: v.string(),
+  publicServiceKey: v.string(),
+  numberType: v.string(),
+  price: v.number(),
+  currency: v.string(),
+  available: v.union(v.number(), v.null()),
+  variationId: v.optional(v.string()),
+  areaCodes: v.array(v.string()),
+})),
   handler: async (_ctx, args): Promise<NumberProduct[]> => {
     const category = args.category?.trim().toLowerCase() || "usa";
     return catalogProducts(await request(`/virtual-numbers/catalog?category=${encodeURIComponent(category)}`));
@@ -155,6 +169,11 @@ export const purchaseNumber = action({
 
 export const refreshNumberSession = action({
   args: { orderId: v.id("marketplaceOrders") },
+  returns: v.object({
+    orderId: v.id("marketplaceOrders"),
+    status: v.string(),
+    session: v.optional(v.any()),
+  }),
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
