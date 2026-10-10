@@ -789,6 +789,24 @@ export function documentCreationKey(documentId: string): string {
 }
 
 /**
+ * Ledger key for ONE customer-authored design save.
+ *
+ * A design is charged per SAVE, not once per design, and `debitWallet` refuses
+ * any debit whose idempotency key OR (reference, referenceId) pair it has
+ * already seen. Both of those must therefore vary with the save: keying either
+ * one on the template id alone made the first save consume the key, so every
+ * later save — a new version, a renamed design — was silently replayed and
+ * went unbilled, even though the editor promises a charge "per save".
+ *
+ * `version` is the version this save publishes: 1 for a brand-new design, and
+ * the template's next version number when an existing design is re-saved.
+ */
+export function documentDesignKey(templateId: string, version: number): string {
+  const v = Number.isFinite(version) ? Math.max(1, Math.trunc(version)) : 1;
+  return `${templateId}:v${v}`;
+}
+
+/**
  * Should this finalize attempt take a render charge?
  *
  * The creation charge pays for the document's FIRST render and no more. Every

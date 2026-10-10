@@ -132,7 +132,10 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
 
   const preview = useQuery(api.vtu.previewCost, serviceCode ? { serviceCode } : "skip");
 
-  const priceNgn = preview?.nairaPrice ?? detail?.priceNgn ?? null;
+  // What the wallet will actually be charged, from the same resolver the
+  // purchase calls. `detail.priceNgn` is the catalog's face price and is the
+  // fallback only while the preview is still loading.
+  const priceNgn = preview?.chargeNgn ?? detail?.priceNgn ?? null;
   const affordable = priceNgn === null ? true : (balance ?? 0) >= priceNgn;
   const inFlight = tx ? tx.status === "pending" || tx.status === "processing" : false;
   const locked = submitting || inFlight;

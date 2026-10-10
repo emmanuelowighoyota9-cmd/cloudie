@@ -15,6 +15,7 @@ import {
   generateShareSlug,
   isValidShareSlug,
   documentCreationKey,
+  documentDesignKey,
   shouldChargeForRender,
   renderIdempotencyKey,
   resolveDocumentCost,
@@ -134,12 +135,20 @@ export function slugify(value: string): string {
     .slice(0, 60) || "document";
 }
 
-/** Charge the owner for one customer-authored design save, atomically with it. */
+/**
+ * Charge the owner for one customer-authored design save, atomically with it.
+ *
+ * `saveKey` identifies the single save being paid for — see
+ * `documentDesignKey`. It scopes BOTH the idempotency key and the
+ * (reference, referenceId) pair, because `debitWallet` treats a repeat of
+ * either one as a replay and moves no money.
+ */
 async function chargeDocumentDesign(
   ctx: MutationCtx,
   userId: Id<"users">,
   templateId: Id<"documentTemplates">,
   templateName: string,
+  saveKey: string,
 ): Promise<number> {
   const cost = await effectiveNgnCost(ctx, DESIGN_SERVICE, (await effectivePointsCost(ctx, DESIGN_SERVICE, DEFAULT_DESIGN_COST)) * (await readPointRate(ctx)).ngnPerPoint);
   const user = await ctx.db.get(userId);
@@ -155,9 +164,11 @@ async function chargeDocumentDesign(
     description: `Custom document design: ${templateName}`,
     type: "service_charge",
     reference: DESIGN_SERVICE,
-    referenceId: templateId,
-    idempotencyKey: `document-design:${templateId}`,
-    metadata: { service: DESIGN_SERVICE, action: "design" },
+    // Save-scoped, not template-scoped: a repeat of this pair is read as a
+    // replay by `debitWallet` and would make the second save free.
+    referenceId: saveKey,
+    idempotencyKey: `document-design:${saveKey}`,
+    metadata: { service: DESIGN_SERVICE, action: "design", templateId },
   });
   return cost;
 }
@@ -1418,7 +1429,13 @@ export const createMyTemplate = mutation({
       updatedAt: now,
     });
 
-    const charged = await chargeDocumentDesign(ctx, userId, templateId, name);
+    const charged = await chargeDocumentDesign(
+      ctx,
+      userId,
+      templateId,
+      name,
+      documentDesignKey(templateId, 1),
+    );
 
     await ctx.db.insert("documentTemplateVersions", {
       templateId,
@@ -1484,7 +1501,13 @@ export const updateMyTemplate = mutation({
     const nextVersion = template.currentVersion + 1;
     const now = Date.now();
 
-    const charged = await chargeDocumentDesign(ctx, userId, template._id, name);
+    const charged = await chargeDocumentDesign(
+      ctx,
+      userId,
+      template._id,
+      name,
+      documentDesignKey(template._id, nextVersion),
+    );
 
     await ctx.db.insert("documentTemplateVersions", {
       templateId: template._id,

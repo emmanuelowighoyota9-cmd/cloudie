@@ -99,7 +99,11 @@ export default function VtuAirtime() {
     api.vtu.previewCost,
     confirmed && selected ? { serviceCode } : "skip",
   );
-  const priceToPay = preview?.nairaPrice ?? selected?.amountNgn ?? 0;
+  // `chargeNgn` is what the wallet is debited, which a route override can make
+  // CHEAPER than the face value of the airtime being bought. `nairaPrice` is
+  // the value on the airtime itself, so showing that as the price would promise
+  // a number the wallet will not take.
+  const priceToPay = preview?.chargeNgn ?? selected?.amountNgn ?? 0;
   const affordable = (balance ?? 0) >= priceToPay;
   const pointsToPay = priceToPay;
 

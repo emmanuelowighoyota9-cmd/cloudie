@@ -715,11 +715,14 @@ describe("points cost precedence: route > pointPricing > conversion", () => {
     })(t);
 
     expect(reserved.pointsDebited).toBe(42);
-    // The override is what the POINTS figure comes from — not what the wallet
-    // takes. The wallet is debited the naira price of the airtime being bought,
-    // so a route whose override only names points no longer discounts the
-    // charge. Pinned as-is so the gap is visible rather than assumed away.
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
+
+    // The override IS the price, on both halves of it: 42 points at ₦15/point
+    // is ₦630, and ₦630 is what leaves the wallet. This used to diverge — the
+    // points figure came from the override while the debit was re-derived from
+    // the airtime's face value, so the shop showed ₦630 and took ₦1,000.
+    const OVERRIDE_PRICE = 42 * RATE; // ₦630
+    expect(reserved.walletDebitedNgn).toBe(OVERRIDE_PRICE);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - OVERRIDE_PRICE);
 
     const ledger = await t.run(async (ctx) =>
       ctx.db
@@ -729,7 +732,68 @@ describe("points cost precedence: route > pointPricing > conversion", () => {
         )
         .first(),
     );
-    expect(ledger.amountNgn).toBe(-AIRTIME_PRICE);
+    expect(ledger.amountNgn).toBe(-OVERRIDE_PRICE);
+    // And the override is a genuine discount, not a relabelled face value.
+    expect(ledger.amountNgn).not.toBe(-AIRTIME_PRICE);
+
+    // The transaction records both numbers, and they are allowed to differ:
+    // the customer received ₦1,000 of airtime and paid ₦630 for it.
+    const tx = await txOf(t, reserved.transactionId);
+    expect(tx!.nairaPrice).toBe(AIRTIME_PRICE);
+    expect(tx!.walletDebitedNgn).toBe(OVERRIDE_PRICE);
+  });
+
+  test("the POINTS override prices the wallet the same way the routing one does", async () => {
+    // Level 2 is the same rule as level 1 — an override names the price — so it
+    // must not be the one level that only half-applies.
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "aidapay" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "aidapay" });
+    await t.run(async (ctx) =>
+      ctx.db.insert("pointPricing", {
+        serviceCode: SERVICE_CODE,
+        priceNgn: 1000,
+        pointsCost: 55,
+        active: true,
+        isActive: true,
+        createdAt: Date.now(),
+      } as any),
+    );
+
+    const reserved: any = await begin({
+      userId,
+      clientRequestId: "req_point_override_charged",
+      serviceCode: SERVICE_CODE,
+      customerIdentifier: PHONE,
+    })(t);
+
+    expect(reserved.pointsDebited).toBe(55);
+    expect(reserved.walletDebitedNgn).toBe(55 * RATE); // ₦825
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 55 * RATE);
+  });
+
+  test("with NO override the charge is the face value, to the kobo", async () => {
+    // The other half of the rule: the conversion rounds UP to a whole number of
+    // points (67), and charging 67 × ₦15 would make ₦1,000 of airtime cost
+    // ₦1,005. With no override the naira price is already the answer.
+    const t = convexTest(schema, modules);
+    const userId = await seedUser(t);
+    await seedProvider(t, { name: "pairgate" });
+    await seedProduct(t);
+    await seedRoute(t, { provider: "pairgate" });
+
+    const reserved: any = await begin({
+      userId,
+      clientRequestId: "req_no_override_face_value",
+      serviceCode: SERVICE_CODE,
+      customerIdentifier: PHONE,
+    })(t);
+
+    expect(reserved.pointsDebited).toBe(67);
+    expect(reserved.walletDebitedNgn).toBe(AIRTIME_PRICE);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
   });
 });
 
@@ -1159,6 +1223,10 @@ describe("the offer grid and the purchase agree on the price", () => {
     expect(quoted.points).toBe(42);
     expect(quoted.costSource).toBe("routing_override");
 
+    const preview: any = await t.query(api.vtu.previewCost, { serviceCode: SERVICE_CODE });
+    // What the checkout screen tells the customer they will pay.
+    expect(preview.chargeNgn).toBe(42 * RATE);
+
     const reserved: any = await begin({
       userId,
       clientRequestId: "req_grid_agrees",
@@ -1166,8 +1234,10 @@ describe("the offer grid and the purchase agree on the price", () => {
       customerIdentifier: PHONE,
     })(t);
 
-    // Quoted == charged. That is the whole assertion.
+    // Quoted == charged, in points AND in the money that actually moves.
     expect(reserved.pointsDebited).toBe(quoted.points);
+    expect(reserved.walletDebitedNgn).toBe(preview.chargeNgn);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - preview.chargeNgn);
   });
 
   test("with no override the grid falls back to the conversion, as before", async () => {

@@ -298,7 +298,35 @@ export type ResolvedPointsCost = {
   /** True when either override applied. Kept for the existing UI that
    *  labels an overridden price. */
   override: boolean;
+  /**
+   * What the customer's WALLET is debited, in NGN.
+   *
+   * This is the money half of the same answer, computed here rather than at
+   * the debit, because the alternative — quoting `points` to the customer and
+   * charging a separately-derived naira figure — is exactly how a shop promises
+   * one price and takes another. Nothing else may derive a charge.
+   *
+   * Two cases, and only two:
+   *
+   *   no override       `chargeNgn` IS the naira price of what is being bought
+   *                     (the amount the customer typed, or the catalog row's own
+   *                     fixed price). Not a points round-trip: ₦1,000 of
+   *                     airtime costs ₦1,000, not the ₦1,005 that 67 points
+   *                     would convert back to.
+   *
+   *   an override       the override IS the price, so the charge is the points
+   *                     it names at the frozen rate (42 points at 15 → ₦630).
+   *                     An operator pointing a route at a cheaper aggregator is
+   *                     changing what the customer pays, which is the whole
+   *                     reason a route-level override exists.
+   */
+  chargeNgn: number;
 };
+
+/** NGN for a whole number of points at a frozen rate, to the kobo. */
+function ngnForPoints(points: number, ngnPerPoint: number): number {
+  return Math.round(points * ngnPerPoint * 100) / 100;
+}
 
 /**
  * Resolve what a product costs in points, for one specific route.
@@ -351,6 +379,9 @@ export async function resolvePointsCost(
         ngnPerPoint: rate.ngnPerPoint,
         source: "routing_override",
         override: true,
+        // The override IS the price: what the customer pays is the points it
+        // names, at the rate frozen onto the transaction.
+        chargeNgn: ngnForPoints(route.pointsCostOverride, rate.ngnPerPoint),
       };
     }
   }
@@ -370,11 +401,20 @@ export async function resolvePointsCost(
       ? pricingRow.pointsCost
       : undefined;
 
+  const points = resolveVtuPointsCost(args.nairaPrice, rate.ngnPerPoint, overridePoints);
   return {
-    points: resolveVtuPointsCost(args.nairaPrice, rate.ngnPerPoint, overridePoints),
+    points,
     ngnPerPoint: rate.ngnPerPoint,
     source: overridePoints !== undefined ? "point_pricing_override" : "default_conversion",
     override: overrideActive,
+    // Keyed on the SOURCE, not on `override`: an active `pointPricing` row with
+    // no usable `pointsCost` leaves `override` true while the price it produced
+    // is the default conversion, and charging `points * rate` there would round
+    // the customer up by a few kobo for nothing.
+    chargeNgn:
+      overridePoints === undefined
+        ? args.nairaPrice
+        : ngnForPoints(points, rate.ngnPerPoint),
   };
 }
 

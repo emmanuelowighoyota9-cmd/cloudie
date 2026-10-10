@@ -131,7 +131,14 @@ export const previewCost = query({
       override: cost.override,
       costSource: cost.source,
       provider: route.winner.provider,
+      // The face value of what is being bought. Kept because it is what the
+      // provider must deliver, but it is NOT the price to display: an override
+      // can make the two differ.
       nairaPrice,
+      // What the wallet will take, straight from the resolver the purchase
+      // itself calls. The confirm step renders THIS, so the arithmetic that
+      // quotes the price and the arithmetic that charges it cannot disagree.
+      chargeNgn: cost.chargeNgn,
     };
   },
 });

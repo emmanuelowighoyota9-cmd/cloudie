@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   documentCreationKey,
+  documentDesignKey,
   renderIdempotencyKey,
   resolveRenderCost,
   shouldChargeForRender,
@@ -40,6 +41,34 @@ describe("document charge keys", () => {
 
   test("the same document always yields the same creation key (idempotent)", () => {
     expect(documentCreationKey("doc9")).toBe(documentCreationKey("doc9"));
+  });
+});
+
+// ─── A design is paid for per SAVE ───────────────────────────────────────────
+
+describe("design save keys", () => {
+  test("each save of one design gets its own key", () => {
+    // The bug this prevents: keyed on the template id alone, the first save
+    // consumed the key and every later version was replayed as free work.
+    const saves = [1, 2, 3, 4].map((v) => documentDesignKey("tmpl7", v));
+    expect(new Set(saves).size).toBe(4);
+    expect(documentDesignKey("tmpl7", 2)).not.toBe(documentDesignKey("tmpl7", 1));
+  });
+
+  test("the SAME save yields the same key, so a retried save is never billed twice", () => {
+    expect(documentDesignKey("tmpl7", 3)).toBe(documentDesignKey("tmpl7", 3));
+  });
+
+  test("two designs never share a save key", () => {
+    expect(documentDesignKey("a", 1)).not.toBe(documentDesignKey("b", 1));
+    // A prefix template id must not alias a longer one.
+    expect(documentDesignKey("t", 11)).not.toBe(documentDesignKey("t1", 1));
+  });
+
+  test("a version below 1 is normalised rather than producing a bogus key", () => {
+    expect(documentDesignKey("t", 0)).toBe("t:v1");
+    expect(documentDesignKey("t", -5)).toBe("t:v1");
+    expect(documentDesignKey("t", Number.NaN)).toBe("t:v1");
   });
 });
 

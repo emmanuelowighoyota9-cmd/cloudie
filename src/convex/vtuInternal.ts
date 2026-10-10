@@ -339,9 +339,15 @@ export const beginPurchase = internalMutation({
       );
     }
 
-    // The ONE cost function. Level 1 (this route's override) is only
-    // consulted because a route exists; see `resolvePointsCost`.
-    const { points, ngnPerPoint } = await resolvePointsCost(ctx, {
+    // The ONE cost function, and it answers both halves of the price: the
+    // points figure the customer is quoted, and `chargeNgn` — the money the
+    // wallet is debited. Level 1 (this route's override) is only consulted
+    // because a route exists; see `resolvePointsCost`.
+    //
+    // Deriving the debit from `nairaPrice` instead was the drift this closes: a
+    // route override priced the product at 42 points, the app quoted that, and
+    // the wallet took ₦1,000 anyway.
+    const { points, ngnPerPoint, chargeNgn } = await resolvePointsCost(ctx, {
       productCode: route.winner.productCode,
       serviceCode: args.serviceCode,
       provider: route.winner.provider,
@@ -370,10 +376,13 @@ export const beginPurchase = internalMutation({
       customerIdentifier: maskIdentifier(identity.value),
       network: parsed.network,
       amountNgn: parsed.amountNgn ?? undefined,
+      // The FACE VALUE of what is being bought, which is not the same number
+      // as the charge: an override makes those two differ, and the receipt
+      // shows both ("Value" beside "Wallet charged").
       nairaPrice,
       ngnPerPoint,
       pointsDebited: points,
-      walletDebitedNgn: nairaPrice,
+      walletDebitedNgn: chargeNgn,
       idempotencyKey: key,
       createdAt: now,
       updatedAt: now,
@@ -382,7 +391,7 @@ export const beginPurchase = internalMutation({
     // 6. Debit, keyed on this attempt.
     const debitId = await debitWallet(ctx, {
       userId: args.userId,
-      amountNgn: nairaPrice,
+      amountNgn: chargeNgn,
       type: "vtu_purchase",
       description: `${args.serviceCode} for ${maskIdentifier(identity.value)}`,
       reference: route.winner.provider,
@@ -392,6 +401,7 @@ export const beginPurchase = internalMutation({
         serviceCode: args.serviceCode,
         customerIdentifier: maskIdentifier(identity.value),
         nairaPrice,
+        chargeNgn,
         transactionId,
       },
     });
@@ -404,7 +414,7 @@ export const beginPurchase = internalMutation({
       transactionId,
       status: "pending",
       pointsDebited: points,
-      walletDebitedNgn: nairaPrice,
+      walletDebitedNgn: chargeNgn,
       ngnPerPoint,
       routedProvider: route.winner.provider,
       routedProviderProductCode,

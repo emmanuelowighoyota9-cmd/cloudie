@@ -389,3 +389,111 @@ describe("renderPrice stays a price, not a running total", () => {
     expect(doc!.renderPrice!).toBeLessThanOrEqual(doc!.pointsCost!);
   });
 });
+
+// ─── Customer-authored designs are charged per SAVE ────────────────────────
+
+/**
+ * The editor promises a charge "per save", and this is what makes that true.
+ *
+ * The debit was keyed on the template id, so the FIRST save consumed the key
+ * and every later one — a new version, a renamed design — was read as a replay
+ * by `debitWallet` and silently went unbilled. `debitWallet` refuses a repeat of
+ * EITHER the idempotency key or the (reference, referenceId) pair, and both were
+ * template-scoped, so both halves have to vary with the save for the charge to
+ * land.
+ */
+describe("a customer-authored design is charged per save", () => {
+  const DESIGN_COST = 25; // DEFAULT_DESIGN_COST in docTemplates.ts, in points
+  const DESIGN_COST_NGN = DESIGN_COST * RATE;
+  const DESIGN = {
+    schema: SCHEMA,
+    configuration: { renderScale: 1, pages: [{ width: 794, height: 1123, elements: [] }] },
+  };
+
+  const createDesign = (t: Harness, userId: any, name = "My certificate") =>
+    as(t, userId, (tt) =>
+      tt.mutation(api.docTemplates.createMyTemplate, {
+        name,
+        documentType: "general",
+        ...DESIGN,
+      }),
+    );
+
+  const saveDesign = (t: Harness, userId: any, templateId: any, name?: string) =>
+    as(t, userId, (tt) =>
+      tt.mutation(api.docTemplates.updateMyTemplate, {
+        templateId,
+        ...(name ? { name } : {}),
+        documentType: "general",
+        ...DESIGN,
+      }),
+    );
+
+  test("creating a design charges the design price, keyed to the first version", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t, { balance: 500 * RATE });
+
+    const result: any = await createDesign(t, userId);
+
+    expect(result.charged).toBe(DESIGN_COST_NGN);
+    expect(await balanceOf(t, userId)).toBe(500 * RATE - DESIGN_COST_NGN);
+
+    const ledger = await ledgerFor(t, userId);
+    expect(ledger).toHaveLength(1);
+    expect(ledger[0].amountNgn).toBe(-DESIGN_COST_NGN);
+    expect(ledger[0].idempotencyKey).toBe(`document-design:${result.templateId}:v1`);
+    // The reference pair is save-scoped too, and not the bare template id.
+    expect(ledger[0].referenceId).toBe(`${result.templateId}:v1`);
+  });
+
+  test("a SECOND save is charged again — one charge per save, not one per design", async () => {
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t, { balance: 500 * RATE });
+
+    const created: any = await createDesign(t, userId);
+    const second: any = await saveDesign(t, userId, created.templateId, "My certificate v2");
+    const third: any = await saveDesign(t, userId, created.templateId, "My certificate v3");
+
+    expect(second.charged).toBe(DESIGN_COST_NGN);
+    expect(third.charged).toBe(DESIGN_COST_NGN);
+    // Three saves, three charges. Before the fix this was ONE.
+    expect(await balanceOf(t, userId)).toBe(500 * RATE - DESIGN_COST_NGN * 3);
+
+    const ledger = await ledgerFor(t, userId);
+    expect(ledger).toHaveLength(3);
+    // Distinct keys AND distinct references — either one repeated would have
+    // been enough for `debitWallet` to treat the save as a replay.
+    expect(new Set(ledger.map((r) => r.idempotencyKey)).size).toBe(3);
+    expect(new Set(ledger.map((r) => r.referenceId)).size).toBe(3);
+    expect([...ledger.map((r) => r.referenceId)].sort()).toEqual(
+      [
+        `${created.templateId}:v1`,
+        `${created.templateId}:v2`,
+        `${created.templateId}:v3`,
+      ].sort(),
+    );
+  });
+
+  test("a design save the customer cannot afford leaves no new version", async () => {
+    // Enough for the creation charge only.
+    const t = convexTest(schema, modules);
+    const { userId } = await seed(t, { balance: DESIGN_COST_NGN });
+
+    const created: any = await createDesign(t, userId);
+    await expect(saveDesign(t, userId, created.templateId, "Renamed")).rejects.toThrow(
+      /Insufficient NGN wallet balance/,
+    );
+
+    expect(await balanceOf(t, userId)).toBe(0);
+    expect(await ledgerFor(t, userId)).toHaveLength(1);
+    // The charge runs inside the same transaction as the version insert, so a
+    // refused save must not leave a version the customer did not pay for.
+    const versions = await t.run(async (ctx) =>
+      ctx.db
+        .query("documentTemplateVersions")
+        .withIndex("by_template", (q) => q.eq("templateId", created.templateId))
+        .collect(),
+    );
+    expect(versions).toHaveLength(1);
+  });
+});
