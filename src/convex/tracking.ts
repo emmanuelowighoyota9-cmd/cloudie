@@ -899,6 +899,11 @@ export const adminDeleteFacility = mutation({
 export const seedTrackingDefaults = mutation({
   args: {},
   handler: async (ctx) => {
+    // Admin-only. It only installs reference rows and is idempotent, but it is a
+    // public WRITE endpoint on the deployment URL, which is not something an
+    // anonymous caller should be able to trigger.
+    await requireAdmin(ctx);
+
     let seeded = 0;
     const carriers: Array<{ name: string; code: string }> = [
       { name: "Cloudie Air", code: "CLAIR" },

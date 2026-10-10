@@ -1,6 +1,7 @@
 "use node";
 
 import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { vly } from "../lib/vly-integrations";
 import {
@@ -32,7 +33,13 @@ export const classifyWithAi = action({
     fields: v.optional(v.array(v.object({ id: v.optional(v.string()), label: v.optional(v.string()), type: v.optional(v.string()) }))),
     preferAi: v.optional(v.boolean()),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
+    // Admin-only. This action spends money on every call (the AI gateway), and
+    // a Convex deployment is reachable by anyone holding the public URL from
+    // the client bundle — so without this gate it was an open, billable
+    // endpoint. `assertAdminSession` is a query because actions have no db.
+    await ctx.runQuery(internal.adminApi.assertAdminSession, {});
+
     const input: ClassifierInput = {
       template_title: args.templateTitle,
       name: args.name,

@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { QueryCtx, MutationCtx, query, mutation, internalMutation } from "./_generated/server";
+import { QueryCtx, MutationCtx, query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
@@ -56,6 +56,24 @@ export async function auditLog(
     createdAt: Date.now(),
   });
 }
+
+/**
+ * Admin gate for Convex ACTIONS.
+ *
+ * Actions have no `ctx.db`, so an action cannot resolve the caller's role
+ * itself — it has to ask a query. This is that query, and it is internal so the
+ * app can call it as
+ * `await ctx.runQuery(internal.adminApi.assertAdminSession, {})` from a
+ * `"use node"` action. Identity propagates through `runQuery`, so the check is
+ * made against the real session rather than against anything the client sent.
+ */
+export const assertAdminSession = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    return true;
+  },
+});
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
 

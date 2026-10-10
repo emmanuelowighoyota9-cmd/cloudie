@@ -13,6 +13,33 @@ function Money({ minor, currency = "USD" }: { minor: number; currency?: string }
 
 function fmtDate(ms?: number) { return ms ? new Date(ms).toLocaleString() : "—"; }
 
+/**
+ * Declared at module scope on purpose.
+ *
+ * This used to be defined inside the page component, which makes React see a
+ * brand-new component type on every render — each keystroke or refetch tore
+ * the five tab buttons down and rebuilt them (losing focus along the way).
+ * Hoisted here, the type is stable and the props carry what the closure used
+ * to capture.
+ */
+function TenantNavItem({ active, onClick, label, icon: Icon }: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: any;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300"}`}
+    >
+      <Icon className="h-4 w-4" /> {label}
+    </button>
+  );
+}
+
 export default function AdminBankingTenantDetail() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const id = tenantId as Id<"tenantSites">;
@@ -97,12 +124,6 @@ export default function AdminBankingTenantDetail() {
     finally { setBusy(false); setPendingSlug(null); }
   };
 
-  const NavItem = ({ v, label, icon: Icon }: any) => (
-    <button onClick={() => setTab(v)} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${tab === v ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300"}`}>
-      <Icon className="h-4 w-4" /> {label}
-    </button>
-  );
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -124,11 +145,11 @@ export default function AdminBankingTenantDetail() {
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        <NavItem v="overview" label="Overview" icon={Activity} />
-        <NavItem v="customers" label="Customers & accounts" icon={Users} />
-        <NavItem v="transfers" label="Transactions" icon={CreditCard} />
-        <NavItem v="design" label="Design kit" icon={Palette} />
-        <NavItem v="settings" label="Settings & fees" icon={Paintbrush} />
+        <TenantNavItem active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" icon={Activity} />
+        <TenantNavItem active={tab === "customers"} onClick={() => setTab("customers")} label="Customers & accounts" icon={Users} />
+        <TenantNavItem active={tab === "transfers"} onClick={() => setTab("transfers")} label="Transactions" icon={CreditCard} />
+        <TenantNavItem active={tab === "design"} onClick={() => setTab("design")} label="Design kit" icon={Palette} />
+        <TenantNavItem active={tab === "settings"} onClick={() => setTab("settings")} label="Settings & fees" icon={Paintbrush} />
       </div>
 
       {tab === "overview" && (

@@ -112,7 +112,13 @@ export const listNumberProducts = action({
   variationId: v.optional(v.string()),
   areaCodes: v.array(v.string()),
 })),
-  handler: async (_ctx, args): Promise<NumberProduct[]> => {
+  handler: async (ctx, args): Promise<NumberProduct[]> => {
+    // Signed-in only: this is a proxy onto Jejelaye's paid catalog API, reached
+    // from the authenticated marketplace. Open, it was a public endpoint that
+    // spent the platform's provider quota on anyone's behalf.
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("UNAUTHORIZED");
+
     const category = args.category?.trim().toLowerCase() || "usa";
     return catalogProducts(await request(`/virtual-numbers/catalog?category=${encodeURIComponent(category)}`));
   },

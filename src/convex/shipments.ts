@@ -123,17 +123,6 @@ export const get = query({
   },
 });
 
-export const getEvents = query({
-  args: { shipmentId: v.id("shipments") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("shipmentEvents")
-      .withIndex("by_shipment", (q) => q.eq("shipmentId", args.shipmentId))
-      .order("desc")
-      .collect();
-  },
-});
-
 export const publicTracking = query({
   args: { trackingNumber: v.string() },
   handler: async (ctx, args) => {

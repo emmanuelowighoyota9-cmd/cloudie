@@ -629,6 +629,9 @@ export const finalizeLogspanelOrder = internalMutation({
 export const getLogspanelProducts = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
+    // Admin-only: this is the operator's provider catalog view, not something a
+    // customer reads.
+    await requireAdmin(ctx);
     const limit = Math.min(args.limit ?? 100, 200);
     return await ctx.db
       .query("marketplaceProducts")

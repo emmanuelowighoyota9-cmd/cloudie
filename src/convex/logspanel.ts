@@ -101,9 +101,22 @@ type BoostService = {
   cancel?: boolean;
 };
 
+/**
+ * Every `list*` reader below is a thin proxy onto Logspanel's paid API, so each
+ * one requires a signed-in caller. They are reachable from the authenticated
+ * marketplace only; left open they were a public, billable proxy — anyone with
+ * the deployment URL could spend the platform's Logspanel quota from a script.
+ */
+async function requireSignedIn(ctx: any) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) throw new Error("UNAUTHORIZED");
+  return userId;
+}
+
 export const listNumberCountries = action({
   args: {},
-  handler: async (): Promise<NumberCountry[]> => {
+  handler: async (ctx): Promise<NumberCountry[]> => {
+    await requireSignedIn(ctx);
     const body = await requestLogspanel("/numbers/countries");
     return Array.isArray(body?.data) ? body.data : [];
   },
@@ -111,7 +124,8 @@ export const listNumberCountries = action({
 
 export const listNumberServices = action({
   args: { countryId: v.number() },
-  handler: async (_ctx, args): Promise<NumberService[]> => {
+  handler: async (ctx, args): Promise<NumberService[]> => {
+    await requireSignedIn(ctx);
     const body = await requestLogspanel(
       `/numbers/services?country_id=${encodeURIComponent(String(args.countryId))}`,
     );
@@ -121,7 +135,8 @@ export const listNumberServices = action({
 
 export const listNumberAreaCodes = action({
   args: { countryId: v.number(), serviceId: v.string() },
-  handler: async (_ctx, args): Promise<string[]> => {
+  handler: async (ctx, args): Promise<string[]> => {
+    await requireSignedIn(ctx);
     const body = await requestLogspanel(
       `/numbers/area-codes?country_id=${encodeURIComponent(String(args.countryId))}&service_id=${encodeURIComponent(args.serviceId)}`,
     );
@@ -131,7 +146,8 @@ export const listNumberAreaCodes = action({
 
 export const listBoostCategories = action({
   args: {},
-  handler: async (): Promise<BoostCategory[]> => {
+  handler: async (ctx): Promise<BoostCategory[]> => {
+    await requireSignedIn(ctx);
     const body = await requestLogspanel("/boost/categories");
     return Array.isArray(body?.data) ? body.data : [];
   },
@@ -139,7 +155,8 @@ export const listBoostCategories = action({
 
 export const listBoostServices = action({
   args: { category: v.optional(v.string()) },
-  handler: async (_ctx, args): Promise<BoostService[]> => {
+  handler: async (ctx, args): Promise<BoostService[]> => {
+    await requireSignedIn(ctx);
     const query = args.category
       ? `?category=${encodeURIComponent(args.category)}`
       : "";
