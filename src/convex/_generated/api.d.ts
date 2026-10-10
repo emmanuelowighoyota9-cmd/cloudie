@@ -34,6 +34,7 @@ import type * as emailRender from "../emailRender.js";
 import type * as emailShared from "../emailShared.js";
 import type * as health from "../health.js";
 import type * as http from "../http.js";
+import type * as jejelaye from "../jejelaye.js";
 import type * as lib_encryption from "../lib/encryption.js";
 import type * as logspanel from "../logspanel.js";
 import type * as maintenance from "../maintenance.js";
@@ -121,6 +122,7 @@ declare const fullApi: ApiFromModules<{
   emailShared: typeof emailShared;
   health: typeof health;
   http: typeof http;
+  jejelaye: typeof jejelaye;
   "lib/encryption": typeof lib_encryption;
   logspanel: typeof logspanel;
   maintenance: typeof maintenance;
