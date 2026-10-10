@@ -2,11 +2,24 @@ import { query, mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
+// Apex hosts that serve the app itself, never a tenant. `cloudieexpress.duckdns.org`
+// is the app's custom production domain. Without this guard the generic branch at
+// the end returns "cloudieexpress" as a subdomain for that host.
+const APP_APEX_HOSTS = [
+  "cloudieexpress.duckdns.org",
+  "g0ki.com",
+  "vly.sh",
+  "vercel.app",
+  "convex.site",
+  "convex.cloud",
+];
+
 // Extract subdomain from a host string. Handles *.g0ki.com wildcard, preview hosts, localhost.
 function extractSubdomain(host: string): string | null {
   const h = host.trim().toLowerCase();
   // strip port
   const withoutPort = h.split(":")[0] ?? h;
+  if (APP_APEX_HOSTS.includes(withoutPort)) return null;
   // known suffixes in order of specificity
   const suffixes = [".g0ki.com", ".vercel.app", ".convex.site", ".convex.cloud", ".vly.sh"];
   for (const sfx of suffixes) {

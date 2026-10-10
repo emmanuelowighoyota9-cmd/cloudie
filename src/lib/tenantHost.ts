@@ -10,8 +10,32 @@ export function getHost(): string {
   return window.location.host.toLowerCase();
 }
 
+/**
+ * Hosts that serve the app itself (the apex domain), never a tenant subdomain.
+ *
+ * `cloudieexpress.duckdns.org` is this app's own production domain; the other
+ * entries are platform hosts. Without this guard the generic branch at the
+ * bottom of `extractSubdomain` reports a tenant for an apex host — the first
+ * label of `cloudieexpress.duckdns.org` would resolve as tenant "cloudieexpress",
+ * which is a different product surface (banking portals) than the app shell.
+ * Tenant sites stay on `<tenant>.g0ki.com` and the `/site/<id>` path form.
+ */
+export const APP_APEX_HOSTS = [
+  "cloudieexpress.duckdns.org",
+  "g0ki.com",
+  "vly.sh",
+  "vercel.app",
+  "convex.site",
+  "convex.cloud",
+] as const;
+
+function isAppApexHost(host: string): boolean {
+  return (APP_APEX_HOSTS as readonly string[]).includes(host);
+}
+
 export function extractSubdomain(host = getHost()): string | null {
   const h = host.split(":")[0] ?? host;
+  if (isAppApexHost(h)) return null;
   const suffixes = [".g0ki.com", ".vercel.app", ".convex.site", ".convex.cloud", ".vly.sh"];
   for (const sfx of suffixes) {
     if (h.endsWith(sfx)) {

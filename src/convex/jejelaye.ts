@@ -3,6 +3,7 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 const BASE_URL = "https://jejelayegct.com.ng/api/v1";
@@ -22,7 +23,8 @@ type NumberProduct = {
   areaCodes: string[];
 };
 
-const str = (...xs: unknown[]) => xs.find((x): x is string => typeof x === "string" && x.trim())?.trim() ?? "";
+const str = (...xs: unknown[]) =>
+  xs.find((x): x is string => typeof x === "string" && x.trim().length > 0)?.trim() ?? "";
 const num = (...xs: unknown[]) => {
   for (const x of xs) { const n = Number(x); if (Number.isFinite(n)) return n; }
   return 0;
@@ -116,6 +118,10 @@ export const listNumberProducts = action({
   },
 });
 
+// The handler return type is annotated rather than inferred. `_generated/api`
+// imports this module, so an inferred return type that flows back through
+// `ctx.runMutation(internal.*)` is a cycle TypeScript reports as TS7022/TS7023 —
+// which degrades the whole generated `api` object to `any` for every caller.
 export const purchaseNumber = action({
   args: {
     productKey: v.string(), category: v.string(), serverKey: v.string(),
@@ -128,7 +134,7 @@ export const purchaseNumber = action({
     status: v.string(),
     session: v.optional(v.any()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ orderId: Id<"marketplaceOrders">; status: string; session?: unknown }> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
     const products = catalogProducts(await request(
@@ -195,7 +201,7 @@ export const refreshNumberSession = action({
     status: v.string(),
     session: v.optional(v.any()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ orderId: Id<"marketplaceOrders">; status: string; session?: unknown }> => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("UNAUTHORIZED");
     const order = await ctx.runQuery(api.marketplace.getMyOrder, { orderId: args.orderId });

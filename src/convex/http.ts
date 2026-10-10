@@ -17,9 +17,22 @@ function json(data: unknown, status = 200, extra?: Record<string, string>) {
   });
 }
 
+// Apex hosts that serve the app itself rather than a tenant site. The app's own
+// production domain is cloudieexpress.duckdns.org; asking for a tenant on it is
+// a mistake, so report "no subdomain" instead of echoing the host back.
+const APP_APEX_HOSTS = [
+  "cloudieexpress.duckdns.org",
+  "g0ki.com",
+  "vly.sh",
+  "vercel.app",
+  "convex.site",
+  "convex.cloud",
+];
+
 function extractSubFromRaw(raw: string): string {
   const h = raw.trim().toLowerCase();
   const withoutPort = h.split(":")[0] ?? h;
+  if (APP_APEX_HOSTS.includes(withoutPort)) return "";
   const suffixes = [".g0ki.com", ".vercel.app", ".convex.site", ".convex.cloud", ".vly.sh"];
   for (const sfx of suffixes) {
     if (withoutPort.endsWith(sfx)) {

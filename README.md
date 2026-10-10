@@ -50,6 +50,23 @@ Do not put `CONVEX_DEPLOY_KEY` or `LOGSPANEL_API_KEY` into `VITE_*` variables.
 
 The generated Vite output is `dist/`. Freebuff must serve `dist/` as an SPA so direct routes such as `/dashboard`, `/marketplace`, and `/admin` fall back to `index.html`.
 
+## Custom domain: cloudieexpress.duckdns.org
+
+The domain is served from a VPS (nginx + Let's Encrypt) while Convex remains the
+backend — the same production deployment the frontend already talks to.
+
+Setup, verification, updates and rollback are documented in
+[`deploy/README.md`](./deploy/README.md). In short, on the VPS:
+
+```bash
+sudo EMAIL=you@example.com ./deploy/bootstrap.sh   # nginx + certificate
+sudo nano /etc/cloudieexpress/cloudieexpress.env   # set VITE_CONVEX_URL
+sudo ./deploy/release.sh                           # build + publish + verify
+```
+
+The nginx site (`deploy/nginx/`) serves `index.html` and `sw.js` uncached, caches
+`/assets/*` immutably, and falls back to the app shell for deep routes.
+
 ### Post-deployment smoke test
 
 Check:
