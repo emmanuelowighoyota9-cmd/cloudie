@@ -66,7 +66,13 @@ const SERVICE_CODE = "airtime.mtn.1000";
 const RATE = 15;
 /** ₦1,000 at 15 naira/point → 66.67 → 67, rounded up. */
 const EXPECTED_POINTS = 67;
-const START_BALANCE = 5_000;
+/**
+ * What the wallet is debited: the NAIRA amount bought. `EXPECTED_POINTS` is the
+ * display derivation of the same price and is asserted alongside it.
+ */
+const AIRTIME_PRICE = 1_000;
+/** What the customer starts with, in NGN — the old 5,000-point figure at 15/point. */
+const START_BALANCE = 5_000 * RATE;
 /** A fixed base so "newest first" is a property of the data, not of the clock. */
 const T0 = 1_700_000_000_000;
 
@@ -78,7 +84,7 @@ async function seedUser(t: Harness, opts: { name?: string; email?: string; balan
     ctx.db.insert("users", {
       name: opts.name ?? "Ada",
       email: opts.email ?? "ada@example.com",
-      pointsBalance: opts.balance ?? START_BALANCE,
+      walletBalanceNgn: opts.balance ?? START_BALANCE,
       createdAt: now,
     }),
   );
@@ -188,8 +194,9 @@ async function insertTx(t: Harness, userId: any, overrides: Record<string, any> 
   );
 }
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? 0);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? 0);
 
 const historyPage = (t: Harness, userId: any, numItems = 10, cursor: string | null = null) =>
   t
@@ -543,7 +550,7 @@ describe("a receipt is issued on the first request and never twice", () => {
     const { userId } = await seed(t);
     const bought = await purchase(t, userId, { requestId: "req_receipt_free" });
     const afterPurchase = await balanceOf(t, userId);
-    expect(afterPurchase).toBe(START_BALANCE - EXPECTED_POINTS);
+    expect(afterPurchase).toBe(START_BALANCE - AIRTIME_PRICE);
 
     const prepared = await t
       .withIdentity({ subject: userId })
@@ -1057,12 +1064,18 @@ describe("catalog browse lists what can be bought and nothing else", () => {
     // Belt and braces: not one product carries a provider-shaped key.
     for (const group of catalog.groups) {
       for (const product of group.products) {
+        // The NGN figures are the authoritative prices; the `*Points` fields
+        // beside them are what the same prices read as in points. Both are
+        // customer-facing numbers, and neither names a provider.
         expect(Object.keys(product).sort()).toEqual([
           "airtimeNetwork",
           "customerIdentifierLabel",
           "displayName",
+          "fixedNgn",
           "fixedPoints",
+          "indicativeMaxNgn",
           "indicativeMaxPoints",
+          "indicativeMinNgn",
           "indicativeMinPoints",
           "maxAmount",
           "minAmount",
@@ -1146,7 +1159,7 @@ describe("catalog browse lists what can be bought and nothing else", () => {
 
     const bought = await purchase(t, userId, { requestId: "req_browse_then_buy" });
     expect(bought.pointsDebited).toBe(EXPECTED_POINTS);
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - EXPECTED_POINTS);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
     // The route was resolved inside the purchase, and snapshotted on the row —
     // never re-read by the browser, and never re-derived by the catalog query.

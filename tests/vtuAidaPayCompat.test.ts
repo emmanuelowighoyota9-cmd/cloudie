@@ -535,7 +535,7 @@ describe("purchaseVtu forwards the transaction id as attemptId", () => {
         ctx.db.insert("users", {
           name: "Ada",
           email: "ada@example.com",
-          pointsBalance: 5_000,
+          walletBalanceNgn: 75_000, // ₦75,000 — the legacy 5,000-point seed at 15 naira/point
           createdAt: now,
         }),
       );
@@ -616,7 +616,7 @@ describe("purchaseVtu forwards the transaction id as attemptId", () => {
         ctx.db.insert("users", {
           name: "Bo",
           email: "bo@example.com",
-          pointsBalance: 5_000,
+          walletBalanceNgn: 75_000, // ₦75,000 — the legacy 5,000-point seed at 15 naira/point
           createdAt: now,
         }),
       );
@@ -943,7 +943,7 @@ describe("a reversed transaction always records why", () => {
         ctx.db.insert("users", {
           name: "Cyd",
           email: "cyd@example.com",
-          pointsBalance: 5_000,
+          walletBalanceNgn: 75_000, // ₦75,000 — the legacy 5,000-point seed at 15 naira/point
           createdAt: now,
         }),
       );
@@ -1010,7 +1010,7 @@ describe("a reversed transaction always records why", () => {
           ctx.db.insert("users", {
             name: "Dee",
             email: "dee@example.com",
-            pointsBalance: 5_000,
+            walletBalanceNgn: 75_000, // ₦75,000 — the legacy 5,000-point seed at 15 naira/point
             createdAt: now,
           }),
         );
@@ -1035,7 +1035,7 @@ describe("a reversed transaction always records why", () => {
         ctx.db.insert("users", {
           name: "Dee",
           email: "dee@example.com",
-          pointsBalance: 5_000,
+          walletBalanceNgn: 75_000, // ₦75,000 — the legacy 5,000-point seed at 15 naira/point
           createdAt: now,
         }),
       );

@@ -793,7 +793,16 @@ export const finalizeDocument = mutation({
         description: `${doc.title ?? "Document"} render`,
         type: "document_generation",
         reference: "document",
-        referenceId: args.documentId,
+        // The reference PAIR must identify the same unit of work the
+        // idempotency key does: one attempt at this document.
+        //
+        // Pointing it at the document id made every render after the first read
+        // as a replay of the CREATION debit — `assertNoConflictingReplay` found
+        // a same-user, same-sign, same-amount row, returned it, and the render
+        // was reported as charged while no money moved. A cheaper re-render
+        // would instead have thrown REFERENCE_ALREADY_USED, and an unaffordable
+        // one slipped through the balance check entirely.
+        referenceId: idempotencyKey,
         idempotencyKey,
         metadata: { attemptId, pageCount: args.pageCount, costNgn: cost },
       });

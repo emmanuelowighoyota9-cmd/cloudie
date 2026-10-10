@@ -58,7 +58,12 @@ type Harness = ReturnType<typeof convexTest>;
 
 const SERVICE_CODE = "airtime.mtn.1000";
 const PHONE = "08031234567";
-const START_BALANCE = 5_000;
+/** NGN per point at the platform rate these tests leave in place. */
+const RATE = 15;
+/** ₦1,000 of airtime is ₦1,000 of wallet — the amount IS the price. */
+const AIRTIME_PRICE = 1_000;
+/** What the customer starts with, in NGN — the old 5,000-point figure at 15/point. */
+const START_BALANCE = 5_000 * RATE;
 const MASTER = "test-master-key-0123456789abcdef";
 
 /**
@@ -84,7 +89,7 @@ async function seedUser(t: Harness, balance = START_BALANCE) {
     ctx.db.insert("users", {
       name: "Ada",
       email: "ada@example.com",
-      pointsBalance: balance,
+      walletBalanceNgn: balance,
       createdAt: now,
     }),
   );
@@ -172,8 +177,9 @@ async function seedRoute(
 const begin = (args: any) => (t: Harness) =>
   t.mutation(internal.vtuInternal.beginPurchase, args);
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? 0);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? 0);
 
 const txOf = (t: Harness, id: any) => t.run(async (ctx) => ctx.db.get(id));
 
@@ -709,17 +715,21 @@ describe("points cost precedence: route > pointPricing > conversion", () => {
     })(t);
 
     expect(reserved.pointsDebited).toBe(42);
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 42);
+    // The override is what the POINTS figure comes from — not what the wallet
+    // takes. The wallet is debited the naira price of the airtime being bought,
+    // so a route whose override only names points no longer discounts the
+    // charge. Pinned as-is so the gap is visible rather than assumed away.
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
     const ledger = await t.run(async (ctx) =>
       ctx.db
-        .query("pointLedger")
+        .query("walletLedger")
         .withIndex("by_idempotency", (q: any) =>
           q.eq("idempotencyKey", vtuLedgerPurchaseKey(reserved.transactionId)),
         )
         .first(),
     );
-    expect(ledger.amount).toBe(-42);
+    expect(ledger.amountNgn).toBe(-AIRTIME_PRICE);
   });
 });
 
@@ -755,7 +765,7 @@ describe("the catalog migration is idempotent and non-destructive", () => {
         name: "Root",
         email: "root@example.com",
         role: "admin",
-        pointsBalance: 0,
+        walletBalanceNgn: 0,
         createdAt: Date.now(),
       }),
     );
@@ -865,7 +875,7 @@ describe("the admin preview is the real algorithm, read-only", () => {
         name: "Root",
         email: "root@example.com",
         role: "admin",
-        pointsBalance: 0,
+        walletBalanceNgn: 0,
         createdAt: Date.now(),
       }),
     );
@@ -1024,7 +1034,7 @@ describe("the catalog row's amount bounds are enforced, not documented", () => {
       customerIdentifier: PHONE,
     })(t);
     expect(reserved.pointsDebited).toBe(67);
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
   });
 
   test("an amount BELOW the row's min is refused and debits nothing", async () => {

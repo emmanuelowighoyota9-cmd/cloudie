@@ -49,6 +49,8 @@ type Harness = ReturnType<typeof convexTest>;
 const MASTER = "test-master-key-0123456789abcdef";
 const PHONE = "08031234567";
 const METER = "45012345678";
+/** NGN per point at the platform rate these tests leave in place. */
+const RATE = 15;
 
 async function withMasterKey<T>(fn: () => Promise<T>): Promise<T> {
   const previous = process.env.APP_MASTER_KEY;
@@ -67,12 +69,13 @@ async function withMasterKey<T>(fn: () => Promise<T>): Promise<T> {
  */
 async function seed(t: Harness) {
   const now = Date.now();
-  const balance = 10_000;
+  // The seeded WALLET balance in NGN — the old 10,000-point figure at 15/point.
+  const balance = 10_000 * RATE;
   const userId = await t.run(async (ctx) =>
     ctx.db.insert("users", {
       name: "Ada",
       email: "ada@example.com",
-      pointsBalance: balance,
+      walletBalanceNgn: balance,
       createdAt: now,
     }),
   );
@@ -177,8 +180,17 @@ const buy = (
 const firstTransaction = (t: Harness) =>
   t.run(async (ctx) => ctx.db.query("vtuTransactions").first());
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? -1);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? -1);
+
+const ledgerFor = (t: Harness, userId: any) =>
+  t.run(async (ctx) =>
+    ctx.db
+      .query("walletLedger")
+      .withIndex("by_user", (q: any) => q.eq("userId", userId))
+      .collect(),
+  );
 
 describe("bills are purchasable", () => {
   test("an electricity top-up sends the meter number and the amount, and no package", async () => {
@@ -217,7 +229,16 @@ describe("bills are purchasable", () => {
         // The charge is the conversion of the amount at the frozen rate — the
         // row's own rate, so this cannot pass against a different one.
         expect(row.pointsDebited).toBe(Math.ceil(5000 / row.ngnPerPoint));
-        expect(await balanceOf(t, userId)).toBe(balance - row.pointsDebited);
+        // The wallet is debited the NAIRA price — the amount bought. The
+        // expected balance is a LITERAL, not `row.walletDebitedNgn`: that field
+        // is written to the row whatever the ledger does, so comparing against
+        // it would pass even if the debit never landed. The debit row is
+        // asserted separately for the same reason.
+        expect(row.walletDebitedNgn).toBe(5000);
+        expect(await balanceOf(t, userId)).toBe(balance - 5_000);
+        expect(
+          (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_purchase"),
+        ).toHaveLength(1);
       } finally {
         registerAdapter(aidapayAdapter);
       }
@@ -256,7 +277,14 @@ describe("bills are purchasable", () => {
         expect(row.amountNgn).toBeUndefined();
         expect(row.nairaPrice).toBe(1000);
         expect(row.pointsDebited).toBe(Math.ceil(1000 / row.ngnPerPoint));
-        expect(await balanceOf(t, userId)).toBe(balance - row.pointsDebited);
+        // The plan carries the price; the wallet takes that catalog figure.
+        // Literal balance and a real debit row, for the reason spelled out in
+        // the electricity case above.
+        expect(row.walletDebitedNgn).toBe(1000);
+        expect(await balanceOf(t, userId)).toBe(balance - 1_000);
+        expect(
+          (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_purchase"),
+        ).toHaveLength(1);
       } finally {
         registerAdapter(aidapayAdapter);
       }

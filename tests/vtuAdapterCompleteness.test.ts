@@ -53,6 +53,8 @@ const modules = {
 type Harness = ReturnType<typeof convexTest>;
 
 const MASTER = "test-master-key-0123456789abcdef";
+/** NGN per point at the platform rate these tests leave in place. */
+const RATE = 15;
 
 async function withMasterKey<T>(fn: () => Promise<T>): Promise<T> {
   const previous = process.env.APP_MASTER_KEY;
@@ -129,12 +131,13 @@ const complete = () =>
 /** A user, a really-sealed provider row, and the route. */
 async function seedPurchase(t: Harness, extra: Record<string, unknown> = {}) {
   const now = Date.now();
-  const balance = 5_000;
+  // The seeded WALLET balance in NGN — the old 5,000-point figure at 15/point.
+  const balance = 5_000 * RATE;
   const userId = await t.run(async (ctx) =>
     ctx.db.insert("users", {
       name: "Ada",
       email: "ada@example.com",
-      pointsBalance: balance,
+      walletBalanceNgn: balance,
       createdAt: now,
     }),
   );
@@ -157,13 +160,14 @@ async function seedPurchase(t: Harness, extra: Record<string, unknown> = {}) {
   return { userId, balance };
 }
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? -1);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? -1);
 
 const ledgerFor = (t: Harness, userId: any) =>
   t.run(async (ctx) =>
     ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .collect(),
   );
@@ -296,11 +300,19 @@ describe("adapter completeness", () => {
 
         const row = await firstTransaction(t);
         expect(row.status).toBe("unknown");
-        // Honest: the request may have gone out before the throw, so the points
-        // stay debited and the row becomes pollable by reconciliation. A refund
+        // Honest: the request may have gone out before the throw, so the wallet
+        // stays debited and the row becomes pollable by reconciliation. A refund
         // here would hand back money for airtime that may have landed.
         expect(row.reversalLedgerId).toBeUndefined();
-        expect(await balanceOf(t, userId)).toBe(balance - row.pointsDebited);
+        // ₦1,000, read back from the WALLET. The expected balance is a literal
+        // rather than `row.walletDebitedNgn`, because that field is written to
+        // the row whether or not the ledger moved — comparing against it would
+        // pass against a debit that never landed. So the debit row is asserted
+        // as well.
+        expect(await balanceOf(t, userId)).toBe(balance - 1_000);
+        expect(
+          (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_purchase"),
+        ).toHaveLength(1);
         expect(
           (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
         ).toHaveLength(0);

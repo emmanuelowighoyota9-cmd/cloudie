@@ -13,7 +13,7 @@ import {
 // generated product code cannot be round-tripped by the live parser, the
 // product is unsellable and the customer sees a product that fails closed.
 import { canonicalProductCode } from "../src/convex/vtuServiceRouting";
-import { parseServiceCode, serviceCodeForProduct } from "../src/lib/vtu";
+import { AMOUNT_TOKEN, parseServiceCode, serviceCodeForProduct } from "../src/lib/vtu";
 
 /**
  * The AidaPay catalog sync, tested as PURE functions.
@@ -330,10 +330,30 @@ describe("every generated product is actually addressable", () => {
       ];
       const [draft] = buildDrafts(service.serviceType, service.label, providers, "aidapay").drafts;
       expect(draft).toBeDefined();
-      const serviceCode = serviceCodeForProduct(draft)!;
-      expect(canonicalProductCode(serviceCode)).toBe(draft.productCode);
-      expect(draft.requiresPackageCode).toBe(true);
-      expect(draft.requiresAmount).toBe(false);
+
+      // An amount-priced product is addressed by the amount the customer
+      // chooses at checkout, so the code the row yields ends in the
+      // `{amount}` placeholder — which `parseServiceCode` correctly REFUSES,
+      // because a placeholder is not a price. Instantiate it the way a
+      // purchase does before asking whether the product is addressable.
+      const template = serviceCodeForProduct(draft)!;
+      const addressable = draft.requiresAmount
+        ? template.replace(AMOUNT_TOKEN, String(draft.minAmount ?? 500))
+        : template;
+      expect(canonicalProductCode(addressable)).toBe(draft.productCode);
+
+      // Which shape a service uses is decided by the service TYPE, and the two
+      // are exclusive: electricity is priced by its meter amount and has no
+      // package list (AidaPay's `/packages/{provider}` returns nothing for a
+      // disco), while data, cable and exam pins are priced by their plan.
+      if (service.serviceType === "electricity") {
+        expect(draft.requiresAmount).toBe(true);
+        expect(draft.requiresPackageCode).toBe(false);
+        expect(addressable).toBe(`electricity.electricity-biller.${draft.minAmount}`);
+      } else {
+        expect(draft.requiresPackageCode).toBe(true);
+        expect(draft.requiresAmount).toBe(false);
+      }
     }
   });
 });

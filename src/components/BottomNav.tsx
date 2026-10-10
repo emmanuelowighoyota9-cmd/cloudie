@@ -1,12 +1,19 @@
 import { Link, useLocation } from "react-router";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Home, Grid2X2, ShoppingBag, ReceiptText, Wallet, MoreHorizontal } from "lucide-react";
+import { Home, Grid2X2, ShoppingBag, ReceiptText, Wallet, MoreHorizontal, Zap } from "lucide-react";
 
+/**
+ * The thumb bar is the only navigation most phone customers ever use, so the
+ * VTU shop has to be ON it rather than one tap deeper: the drawer had the entry
+ * and the bar did not, which left airtime, data and electricity unreachable for
+ * anyone who never opened the menu.
+ */
 const navItems = [
   { label: "Home", icon: Home, to: "/dashboard" },
   { label: "Services", icon: Grid2X2, to: "/services/my" },
   { label: "Market", icon: ShoppingBag, to: "/marketplace" },
+  { label: "Digital", icon: Zap, to: "/vtu" },
   { label: "Orders", icon: ReceiptText, to: "/orders" },
   { label: "Wallet", icon: Wallet, to: "/personal/wallet" },
   { label: "More", icon: MoreHorizontal, to: "/billing" },

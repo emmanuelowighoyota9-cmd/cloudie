@@ -32,7 +32,11 @@ const modules = {
   "src/convex/storage.ts": () => import("../src/convex/storage"),
 };
 
-const CREATE_COST = 40; // DEFAULT_RENDER_COST in docTemplates.ts
+const CREATE_COST = 40; // DEFAULT_RENDER_COST in docTemplates.ts, in points
+/** NGN per point at the platform rate these tests leave in place. */
+const RATE = 15;
+/** What a document actually costs: the wallet is debited in NGN. */
+const CREATE_COST_NGN = CREATE_COST * RATE;
 
 /** A minimal but valid template schema: one required text field. */
 const SCHEMA = {
@@ -49,7 +53,7 @@ async function seed(harness: Harness, opts: { balance: number; requiredCredits?:
     ctx.db.insert("users", {
       name: "Ada",
       email: "ada@example.com",
-      pointsBalance: opts.balance,
+      walletBalanceNgn: opts.balance,
       createdAt: now,
     }),
   );
@@ -93,13 +97,14 @@ async function seed(harness: Harness, opts: { balance: number; requiredCredits?:
   return { userId, templateId };
 }
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? 0);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? 0);
 
 const ledgerFor = (t: Harness, userId: any) =>
   t.run(async (ctx) =>
     ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect(),
   );
@@ -134,7 +139,7 @@ function as(t: Harness, userId: string, fn: (client: any) => Promise<any>) {
 describe("createDocument charges at creation", () => {
   test("debits the customer and records one creation ledger row", async () => {
     const t = convexTest(schema, modules);
-    const { userId, templateId } = await seed(t, { balance: 500 });
+    const { userId, templateId } = await seed(t, { balance: 500 * RATE });
 
     const result = await as(t, userId, (tt) =>
       tt.mutation(api.docTemplates.createDocument, {
@@ -143,20 +148,20 @@ describe("createDocument charges at creation", () => {
       }),
     );
 
-    expect(result.charged).toBe(CREATE_COST);
-    expect(await balanceOf(t, userId)).toBe(500 - CREATE_COST);
+    expect(result.charged).toBe(CREATE_COST_NGN);
+    expect(await balanceOf(t, userId)).toBe(500 * RATE - CREATE_COST_NGN);
 
     const ledger = await ledgerFor(t, userId);
     expect(ledger).toHaveLength(1);
-    expect(ledger[0].amount).toBe(-CREATE_COST);
-    expect(ledger[0].balanceAfter).toBe(500 - CREATE_COST);
+    expect(ledger[0].amountNgn).toBe(-CREATE_COST_NGN);
+    expect(ledger[0].balanceAfterNgn).toBe(500 * RATE - CREATE_COST_NGN);
     // Namespaced away from render keys so it can never be mistaken for one.
     expect(ledger[0].idempotencyKey).toBe(`docrender:create:${result.documentId}`);
   });
 
   test("persists the creation marker and the per-render price", async () => {
     const t = convexTest(schema, modules);
-    const { userId, templateId } = await seed(t, { balance: 500 });
+    const { userId, templateId } = await seed(t, { balance: 500 * RATE });
 
     const result = await as(t, userId, (tt) =>
       tt.mutation(api.docTemplates.createDocument, {
@@ -167,15 +172,15 @@ describe("createDocument charges at creation", () => {
 
     const doc = await docOf(t, result.documentId);
     expect(doc!.status).toBe("draft");
-    expect(doc!.pointsCost).toBe(CREATE_COST);
-    expect(doc!.renderPrice).toBe(CREATE_COST);
+    expect(doc!.pointsCost).toBe(CREATE_COST_NGN);
+    expect(doc!.renderPrice).toBe(CREATE_COST_NGN);
     // This marker is what stops finalizeDocument charging a second time.
-    expect((doc!.metadata as any).pointsChargedAtCreation).toBe(CREATE_COST);
+    expect((doc!.metadata as any).pointsChargedAtCreation).toBe(CREATE_COST_NGN);
   });
 
   test("an unaffordable creation leaves no orphan draft and no debit", async () => {
     const t = convexTest(schema, modules);
-    const { userId, templateId } = await seed(t, { balance: CREATE_COST - 1 });
+    const { userId, templateId } = await seed(t, { balance: CREATE_COST_NGN - 1 });
 
     await expect(
       as(t, userId, (tt) =>
@@ -184,11 +189,11 @@ describe("createDocument charges at creation", () => {
           values: { fullName: "Ada Lovelace" },
         }),
       ),
-    ).rejects.toThrow(/Insufficient points/);
+    ).rejects.toThrow(/Insufficient NGN wallet balance/);
 
     // The balance check runs before the insert, so a rejected request must not
-    // leave a document behind — and must not have moved any points.
-    expect(await balanceOf(t, userId)).toBe(CREATE_COST - 1);
+    // leave a document behind — and must not have moved any money.
+    expect(await balanceOf(t, userId)).toBe(CREATE_COST_NGN - 1);
     expect(await t.run((ctx) => ctx.db.query("renderedDocuments").collect())).toHaveLength(0);
     expect(await ledgerFor(t, userId)).toHaveLength(0);
   });
@@ -212,7 +217,7 @@ describe("finalizeDocument honours the creation charge", () => {
 
   test("the first render is free — it was paid for at creation", async () => {
     const { t, userId, documentId, attemptId } = await created({
-      balance: 500,
+      balance: 500 * RATE,
       attemptId: "attempt-1",
     });
     const storageId = await uploadedPdf(t);
@@ -229,19 +234,19 @@ describe("finalizeDocument honours the creation charge", () => {
 
     expect(outcome.charged).toBe(0);
     // Total spent stays at the creation charge — no second debit.
-    expect(await balanceOf(t, userId)).toBe(500 - CREATE_COST);
+    expect(await balanceOf(t, userId)).toBe(500 * RATE - CREATE_COST_NGN);
     expect(await ledgerFor(t, userId)).toHaveLength(1);
 
     const doc = await docOf(t, documentId);
     expect(doc!.status).toBe("completed");
-    expect(doc!.pointsCost).toBe(CREATE_COST);
+    expect(doc!.pointsCost).toBe(CREATE_COST_NGN);
     // Still quoted at the creation price, not the lifetime total.
-    expect(doc!.renderPrice).toBe(CREATE_COST);
+    expect(doc!.renderPrice).toBe(CREATE_COST_NGN);
     expect((doc!.metadata as any).lastAttemptId).toBe(attemptId);
   });
 
   test("a re-render with a new attemptId is billed as new work", async () => {
-    const { t, userId, documentId } = await created({ balance: 500, attemptId: "attempt-1" });
+    const { t, userId, documentId } = await created({ balance: 500 * RATE, attemptId: "attempt-1" });
     const first = await uploadedPdf(t);
     await as(t, userId, (tt) =>
       tt.mutation(api.docTemplates.finalizeDocument, {
@@ -265,20 +270,20 @@ describe("finalizeDocument honours the creation charge", () => {
       }),
     );
 
-    expect(outcome.charged).toBe(CREATE_COST);
-    expect(await balanceOf(t, userId)).toBe(500 - CREATE_COST * 2);
+    expect(outcome.charged).toBe(CREATE_COST_NGN);
+    expect(await balanceOf(t, userId)).toBe(500 * RATE - CREATE_COST_NGN * 2);
     expect(await ledgerFor(t, userId)).toHaveLength(2);
 
     const doc = await docOf(t, documentId);
     // pointsCost accumulates across renders...
-    expect(doc!.pointsCost).toBe(CREATE_COST * 2);
+    expect(doc!.pointsCost).toBe(CREATE_COST_NGN * 2);
     // ...but the displayed price stays the price of one render.
-    expect(doc!.renderPrice).toBe(CREATE_COST);
+    expect(doc!.renderPrice).toBe(CREATE_COST_NGN);
   });
 
   test("retrying the same attemptId never charges twice", async () => {
     const { t, userId, documentId, attemptId } = await created({
-      balance: 500,
+      balance: 500 * RATE,
       attemptId: "attempt-1",
     });
     const storageId = await uploadedPdf(t);
@@ -298,14 +303,14 @@ describe("finalizeDocument honours the creation charge", () => {
 
     expect(retry.alreadyCompleted).toBe(true);
     expect(retry.charged).toBe(0);
-    expect(await balanceOf(t, userId)).toBe(500 - CREATE_COST);
+    expect(await balanceOf(t, userId)).toBe(500 * RATE - CREATE_COST_NGN);
     expect(await ledgerFor(t, userId)).toHaveLength(1);
   });
 
   test("a re-render the customer cannot afford changes nothing", async () => {
     // Enough for creation only.
     const t = convexTest(schema, modules);
-    const { userId, templateId } = await seed(t, { balance: CREATE_COST });
+    const { userId, templateId } = await seed(t, { balance: CREATE_COST_NGN });
     const result = await as(t, userId, (tt) =>
       tt.mutation(api.docTemplates.createDocument, {
         templateId,
@@ -334,7 +339,7 @@ describe("finalizeDocument honours the creation charge", () => {
           sizeBytes: 1024,
         }),
       ),
-    ).rejects.toThrow(/Insufficient points/);
+    ).rejects.toThrow(/Insufficient NGN wallet balance/);
 
     // The failed charge must not have half-applied: the document stays on its
     // previous completed render and the balance is untouched.
@@ -342,7 +347,7 @@ describe("finalizeDocument honours the creation charge", () => {
     const doc = await docOf(t, result.documentId);
     expect(doc!.status).toBe("completed");
     expect((doc!.metadata as any).lastAttemptId).toBe("attempt-1");
-    expect(doc!.pointsCost).toBe(CREATE_COST);
+    expect(doc!.pointsCost).toBe(CREATE_COST_NGN);
   });
 });
 
@@ -351,7 +356,7 @@ describe("finalizeDocument honours the creation charge", () => {
 describe("renderPrice stays a price, not a running total", () => {
   test("renderPrice never exceeds the total actually charged", async () => {
     const t = convexTest(schema, modules);
-    const { userId, templateId } = await seed(t, { balance: 1000 });
+    const { userId, templateId } = await seed(t, { balance: 1000 * RATE });
 
     const result = await as(t, userId, (tt) =>
       tt.mutation(api.docTemplates.createDocument, {
@@ -377,10 +382,10 @@ describe("renderPrice stays a price, not a running total", () => {
     const doc = await docOf(t, result.documentId);
     // Three charges in total: the creation charge covers the FIRST render, and
     // the two later attempts are billed as new work.
-    expect(doc!.pointsCost).toBe(CREATE_COST * 3);
-    expect(await balanceOf(t, userId)).toBe(1000 - CREATE_COST * 3);
+    expect(doc!.pointsCost).toBe(CREATE_COST_NGN * 3);
+    expect(await balanceOf(t, userId)).toBe(1000 * RATE - CREATE_COST_NGN * 3);
     // ...but the badge still quotes one render.
-    expect(doc!.renderPrice).toBe(CREATE_COST);
+    expect(doc!.renderPrice).toBe(CREATE_COST_NGN);
     expect(doc!.renderPrice!).toBeLessThanOrEqual(doc!.pointsCost!);
   });
 });

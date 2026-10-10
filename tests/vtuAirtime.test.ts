@@ -10,9 +10,15 @@ import { vtuLedgerPurchaseKey, vtuPurchaseKey, vtuRefundKey } from "../src/lib/v
  *
  * The pure-function tests pin the arithmetic. They cannot catch what actually
  * breaks in a payments system: a debit that never lands, a refund that credits
- * a different number of points than were taken, a retry that charges twice, or
- * a transition that resurrects a rejected transaction. Those only appear when
+ * a different amount than was taken, a retry that charges twice, or a
+ * transition that resurrects a rejected transaction. Those only appear when
  * the handlers run against a database.
+ *
+ * Every balance below is the NGN WALLET — the authoritative monetary balance —
+ * read back from `users.walletBalanceNgn` and the credit/debit rows in
+ * `walletLedger`. The `pointsDebited` on a transaction row is still asserted
+ * where it appears, because it is what the UI quotes; it is a display
+ * derivation of the naira price, not a second balance.
  *
  * `convex-test` is normally driven by Vitest, which supplies the module map via
  * `import.meta.glob`. Bun has no `import.meta.glob`, so the map is passed
@@ -40,9 +46,20 @@ type Harness = ReturnType<typeof convexTest>;
 
 const SERVICE_CODE = "airtime.mtn.1000";
 const PHONE = "08031234567";
-const START_BALANCE = 5_000;
+/** NGN per point at the platform rate these tests leave in place. */
+const RATE = 15;
+/**
+ * ₦1,000 of airtime costs ₦1,000 of wallet.
+ *
+ * The amount IS the price, so the wallet is debited the NAIRA figure. The
+ * `pointsDebited` on the row stays the display derivation of it
+ * (₦1,000 at 15 naira/point = 66.67 → 67) and is asserted alongside.
+ */
+const AIRTIME_PRICE = 1_000;
+/** What the customer starts with, in NGN — the old 5,000-point figure at 15/point. */
+const START_BALANCE = 5_000 * RATE;
 
-/** Seed a user with a balance. `pointPricing` is left EMPTY, so the cost
+/** Seed a user with a wallet balance. `pointPricing` is left EMPTY, so the cost
  *  resolution exercises the nairaPrice / ngnPerPoint conversion branch. */
 async function seed(t: Harness, balance = START_BALANCE) {
   const now = Date.now();
@@ -50,7 +67,7 @@ async function seed(t: Harness, balance = START_BALANCE) {
     ctx.db.insert("users", {
       name: "Ada",
       email: "ada@example.com",
-      pointsBalance: balance,
+      walletBalanceNgn: balance,
       createdAt: now,
     }),
   );
@@ -105,13 +122,14 @@ async function seedRoute(t: Harness) {
 const begin = (args: any) => (t: Harness) =>
   t.mutation(internal.vtuInternal.beginPurchase, args);
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? 0);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? 0);
 
 const ledgerFor = (t: Harness, userId: any) =>
   t.run(async (ctx) =>
     ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .collect(),
   );
@@ -143,9 +161,11 @@ describe("failed transaction reversal", () => {
     const { userId } = await seed(t);
 
     const reserved = await toProcessing(t, userId, "vtu_reversal_case_one");
-    // ₦1,000 at the default 15 naira/point = 66.67 → 67.
+    // The wallet takes the NAIRA price; `pointsDebited` is the display
+    // derivation of it (₦1,000 at 15 naira/point = 66.67 → 67).
     expect(reserved.pointsDebited).toBe(67);
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(reserved.walletDebitedNgn).toBe(AIRTIME_PRICE);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
     // Provider definitively rejected it. ONE mutation settles the status AND
     // moves the ledger — there is no second call a caller can forget, which is
@@ -174,7 +194,8 @@ describe("failed transaction reversal", () => {
     const ledger = await ledgerFor(t, userId);
     expect(ledger).toHaveLength(2);
     const credit = ledger.find((l: any) => l.type === "vtu_refund");
-    expect(credit.amount).toBe(67);
+    // The refund is the exact NAIRA amount debited — not a re-derived one.
+    expect(credit.amountNgn).toBe(AIRTIME_PRICE);
     expect(credit.idempotencyKey).toBe(vtuRefundKey(String(reserved.transactionId)));
 
     const tx = await txOf(t, reserved.transactionId);
@@ -214,7 +235,7 @@ describe("failed transaction reversal", () => {
     // Charged once for the retry, so the balance is 67 below the start. This
     // is the assertion that proves the release works end to end: the
     // immutable ledger row from attempt one must NOT block attempt two.
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
     const debits = (await ledgerFor(t, userId)).filter(
       (l: any) => l.type === "vtu_purchase",
@@ -304,7 +325,9 @@ describe("failed transaction reversal", () => {
     // The snapshot keeps the balance exact.
     expect(await balanceOf(t, userId)).toBe(START_BALANCE);
     const credit = (await ledgerFor(t, userId)).find((l: any) => l.type === "vtu_refund");
-    expect(credit.amount).toBe(67);
+    // The credit is the FROZEN naira figure, so a later rate change cannot
+    // refund a different amount than was taken.
+    expect(credit.amountNgn).toBe(AIRTIME_PRICE);
   });
 });
 
@@ -331,7 +354,7 @@ describe("idempotency", () => {
     expect(second.pointsDebited).toBe(first.pointsDebited);
 
     // Charged once.
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
     const debits = (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_purchase");
     expect(debits).toHaveLength(1);
     // The LEDGER key is per attempt, so it must NOT be the client request id —
@@ -372,7 +395,7 @@ describe("idempotency", () => {
     const ids = new Set(results.map((r: any) => String(r.transactionId)));
     expect(ids.size).toBe(1);
 
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
     expect((await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_purchase")).toHaveLength(1);
   });
 
@@ -393,13 +416,14 @@ describe("idempotency", () => {
       customerIdentifier: PHONE,
     })(t);
 
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 134);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 2 * AIRTIME_PRICE);
     expect((await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_purchase")).toHaveLength(2);
   });
 
   test("an unaffordable purchase leaves no claim and no row", async () => {
     const t = convexTest(schema, modules);
-    const { userId } = await seed(t, 10);
+    // ₦150 in the wallet, well short of the ₦1,000 top-up.
+    const { userId } = await seed(t, 150);
 
     await expect(
       begin({
@@ -410,7 +434,7 @@ describe("idempotency", () => {
       })(t),
     ).rejects.toThrow();
 
-    expect(await balanceOf(t, userId)).toBe(10);
+    expect(await balanceOf(t, userId)).toBe(150);
     // The claim rolled back with the debit, so the customer can retry the
     // same id after topping up.
     expect(await claimsFor(t)).toHaveLength(0);
@@ -478,7 +502,7 @@ describe("status transitions", () => {
     expect(attempt.reason).toBe("already_terminal");
 
     // The debit stands on a delivered top-up.
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
   });
 
   test("unknown is a real status and keeps the points debited", async () => {
@@ -496,7 +520,7 @@ describe("status transitions", () => {
     const tx = await txOf(t, reserved.transactionId);
     expect(tx.status).toBe("unknown");
     // Not coerced to pending or failed, and no refund invented.
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
     // A late webhook can still resolve it.
     const resolved = await t.mutation(internal.vtuInternal.settleTransaction, {
@@ -529,7 +553,7 @@ describe("status transitions", () => {
     });
     expect(attempt.settled).toBe(false);
     expect(attempt.reason).toBe("illegal_transition");
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
   });
 
   test("pending must pass through markProcessing before a provider verdict", async () => {
@@ -582,7 +606,7 @@ describe("status transitions", () => {
       expect(refused.settled).toBe(false);
       expect(refused.reason).toBe("illegal_transition");
     }
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
     // The dispatch action knows nothing was sent, so it may reverse — and the
     // reversal is real, not reported-but-skipped.
@@ -639,7 +663,7 @@ describe("settleTransaction is the only writer of a terminal status", () => {
     // And the balance is consistent with whichever verdict won, never with
     // both: the debit stands on a confirmation, and is returned on a reversal.
     expect(await balanceOf(t, userId)).toBe(
-      fromWebhook.settled ? START_BALANCE - 67 : START_BALANCE,
+      fromWebhook.settled ? START_BALANCE - AIRTIME_PRICE : START_BALANCE,
     );
   });
 
@@ -676,7 +700,7 @@ describe("settleTransaction is the only writer of a terminal status", () => {
     // than merely correct.
     expect(tx.source).toBe("webhook");
     // A delivered top-up keeps the debit.
-    expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+    expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
   });
 
   test("the webhook ACTION reverses a failure in the same mutation it settles", async () => {
@@ -737,7 +761,9 @@ describe("settleTransaction is the only writer of a terminal status", () => {
     // produced and what this test exists to keep impossible.
     const refunds = (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund");
     expect(refunds).toHaveLength(webhook.applied ? 0 : 1);
-    expect(await balanceOf(t, userId)).toBe(webhook.applied ? START_BALANCE - 67 : START_BALANCE);
+    expect(await balanceOf(t, userId)).toBe(
+      webhook.applied ? START_BALANCE - AIRTIME_PRICE : START_BALANCE,
+    );
   });
 
   test("an unmatched webhook reference is audited, not settled", async () => {

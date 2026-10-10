@@ -32,6 +32,15 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      # The wallet, refund and idempotency invariants live in these tests. They
+      # ran nowhere for a long time, which is how 49 of them went red without
+      # anyone noticing — a suite nobody runs is not a safety net.
+      - name: Unit & integration tests
+        run: bun test
+
       - name: Convex validation
         run: CONVEX_AGENT_MODE=anonymous npx convex dev --once
 

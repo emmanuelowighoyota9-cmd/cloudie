@@ -66,7 +66,12 @@ async function withMasterKey<T>(fn: () => Promise<T>): Promise<T> {
 
 const SERVICE_CODE = "airtime.mtn.1000";
 const PHONE = "08031234567";
-const START_BALANCE = 5_000;
+/** NGN per point at the platform rate these tests leave in place. */
+const RATE = 15;
+/** ₦1,000 of airtime is ₦1,000 of wallet — the amount IS the price. */
+const AIRTIME_PRICE = 1_000;
+/** What the customer starts with, in NGN — the old 5,000-point figure at 15/point. */
+const START_BALANCE = 5_000 * RATE;
 
 async function seed(t: Harness, providerRow: Record<string, unknown> = {}) {
   const now = Date.now();
@@ -74,7 +79,7 @@ async function seed(t: Harness, providerRow: Record<string, unknown> = {}) {
     ctx.db.insert("users", {
       name: "Ada",
       email: "ada@example.com",
-      pointsBalance: START_BALANCE,
+      walletBalanceNgn: START_BALANCE,
       createdAt: now,
     }),
   );
@@ -116,15 +121,16 @@ async function seed(t: Harness, providerRow: Record<string, unknown> = {}) {
   return { userId };
 }
 
+/** The authoritative monetary balance: the NGN wallet, not the retired points field. */
 const balanceOf = (t: Harness, userId: any) =>
-  t.run(async (ctx) => (await ctx.db.get(userId))?.pointsBalance ?? 0);
+  t.run(async (ctx) => (await ctx.db.get(userId))?.walletBalanceNgn ?? 0);
 
 const txOf = (t: Harness, id: any) => t.run(async (ctx) => ctx.db.get(id));
 
 const ledgerFor = (t: Harness, userId: any) =>
   t.run(async (ctx) =>
     ctx.db
-      .query("pointLedger")
+      .query("walletLedger")
       .withIndex("by_user", (q: any) => q.eq("userId", userId))
       .collect(),
   );
@@ -200,7 +206,7 @@ async function seedAdmin(t: Harness) {
       name: "Root",
       email: "root@example.com",
       role: "admin",
-      pointsBalance: 0,
+      walletBalanceNgn: 0,
       createdAt: now,
     }),
   );
@@ -245,7 +251,7 @@ describe("reconciliation sweep", () => {
       const reserved = await toStuckUnknown(t, userId, "vtu_sweep_core");
 
       expect((await txOf(t, reserved.transactionId)).status).toBe("unknown");
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
       const seen: { providerReference: string }[] = [];
       registerAdapter(
@@ -331,7 +337,7 @@ describe("reconciliation sweep", () => {
       expect(tx.status).toBe("confirmed");
       expect(tx.reversalReason).toBeUndefined();
       // Delivered: the debit stands.
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
     });
   });
 
@@ -378,7 +384,7 @@ describe("reconciliation sweep", () => {
       expect(await balanceOf(t, userId)).toBe(START_BALANCE);
       const refunds = await t.run(async (ctx) =>
         ctx.db
-          .query("pointLedger")
+          .query("walletLedger")
           .withIndex("by_user", (q: any) => q.eq("userId", userId))
           .collect(),
       );
@@ -391,7 +397,7 @@ describe("reconciliation sweep", () => {
       expect(
         (await t.run(async (ctx) =>
           ctx.db
-            .query("pointLedger")
+            .query("walletLedger")
             .withIndex("by_user", (q: any) => q.eq("userId", userId))
             .collect(),
         )).filter((l: any) => l.type === "vtu_refund"),
@@ -523,7 +529,7 @@ describe("reconciliation sweep", () => {
       // Escalation never refunds: the provider was not asked, so nothing is
       // confirmed about the top-up either way.
       expect(tx.reversalLedgerId).toBeUndefined();
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
     });
   });
 });
@@ -563,7 +569,7 @@ describe("admin unresolved queue", () => {
       expect(row.status).toBe("confirmed");
       expect(row.source).toBe("admin");
       // Delivered: the debit stands, and no credit is issued.
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
       expect(
         (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
       ).toHaveLength(0);
@@ -639,7 +645,7 @@ describe("admin unresolved queue", () => {
       const row = await txOf(t, reserved.transactionId);
       expect(row.status).toBe("confirmed");
       expect(row.reversalLedgerId).toBeUndefined();
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
       expect(
         (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
       ).toHaveLength(0);
@@ -676,7 +682,7 @@ describe("admin unresolved queue", () => {
       // And the refusal left the money exactly where it was.
       const row = await txOf(t, reserved.transactionId);
       expect(row.status).toBe("unresolved");
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
 
       // The admin's own call still works, proving the failures above are the
       // guard rather than a broken fixture.
@@ -727,7 +733,7 @@ describe("reconciliation escalation", () => {
       expect(row.status).toBe("unresolved");
       expect(row.unresolvedReason).toBe("max_attempts_exceeded");
       expect(row.reversalLedgerId).toBeUndefined();
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
       expect(
         (await ledgerFor(t, userId)).filter((l: any) => l.type === "vtu_refund"),
       ).toHaveLength(0);
@@ -776,7 +782,7 @@ describe("reconciliation escalation", () => {
       // Escalated, not refunded: the points come back only when a human says
       // so, because the cause is a defect in our own dispatch path.
       expect(row.reversalLedgerId).toBeUndefined();
-      expect(await balanceOf(t, userId)).toBe(START_BALANCE - 67);
+      expect(await balanceOf(t, userId)).toBe(START_BALANCE - AIRTIME_PRICE);
     });
   });
 
@@ -890,7 +896,7 @@ describe("reconciliation escalation", () => {
       const refunds = ledger.filter((l: any) => l.type === "vtu_refund");
       expect(refunds).toHaveLength(row.status === "reversed" ? 1 : 0);
       expect(await balanceOf(t, userId)).toBe(
-        row.status === "reversed" ? START_BALANCE : START_BALANCE - 67,
+        row.status === "reversed" ? START_BALANCE : START_BALANCE - AIRTIME_PRICE,
       );
     });
   });

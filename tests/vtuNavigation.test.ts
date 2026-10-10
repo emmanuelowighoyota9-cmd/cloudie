@@ -38,8 +38,36 @@ const CUSTOMER_NAV_SURFACES = [
   "src/components/BottomNav.tsx",
 ];
 
-/** Every customer-facing VTU route the router serves. */
-const VTU_ROUTES = ["/vtu", "/vtu/airtime", "/vtu/bills", "/vtu/history"];
+/**
+ * Every customer-facing VTU route the router serves, and the nav lists all of
+ * them: a section per product family, plus the catalogue and the history.
+ */
+const VTU_ROUTES = [
+  "/vtu",
+  "/vtu/airtime",
+  "/vtu/data",
+  "/vtu/electricity",
+  "/vtu/exam-pins",
+  "/vtu/history",
+];
+
+/**
+ * The customer VTU route the nav deliberately does NOT list.
+ *
+ * `/vtu/bills` is the shared purchase screen for ONE product rather than a
+ * section of its own — data, electricity and exam pins each got a section tab,
+ * which is what replaced the old "Bills" catch-all. So the generic screen is
+ * reached from the catalogue tiles and the dashboard shortcut instead, and it
+ * is checked against those surfaces rather than disappearing from the guard.
+ */
+const DEEPLINKED_ROUTES = ["/vtu/bills"];
+
+/** Surfaces a signed-in customer can tap through to the generic screen from. */
+const DEEPLINK_SOURCES = [
+  "src/pages/VtuCatalog.tsx",
+  "src/pages/Dashboard.tsx",
+  "src/pages/MyServices.tsx",
+];
 
 /** Destinations the nav offers, read out of its source. */
 function navDestinations(): string[] {
@@ -83,6 +111,16 @@ describe("VTU nav destinations are real routes", () => {
     const destinations = navDestinations();
     for (const route of VTU_ROUTES) {
       expect(destinations).toContain(route);
+    }
+  });
+
+  test("a route the nav does not list is linked from a customer surface", () => {
+    // Reachability, not nav membership: `/vtu/bills` is the one route the nav
+    // leaves out, and leaving it out is only safe while something a customer
+    // can tap points at it.
+    const linked = DEEPLINK_SOURCES.map((surface) => readFileSync(surface, "utf8")).join("\n");
+    for (const route of DEEPLINKED_ROUTES) {
+      expect(linked).toContain("to: " + QUOTE + route + QUOTE);
     }
   });
 
@@ -146,9 +184,9 @@ describe("the nav sits in the same place on every page", () => {
     expect(containers).toHaveLength(1);
 
     // The vertical rhythm the four pages used to repeat, now in one place.
-    expect(containers[0]).toContain("py-6");
-    expect(containers[0]).toContain("sm:py-8");
-    expect(containers[0]).toContain("lg:py-10");
+    expect(containers[0]).toContain("py-4");
+    expect(containers[0]).toContain("sm:py-7");
+    expect(containers[0]).toContain("lg:py-9");
 
     // Full-bleed: the shell cancels the app shell's gutter at every breakpoint
     // it sets, or the shop would be a cream rectangle floating in a blue page.
@@ -163,9 +201,11 @@ describe("the sidebar agrees with the nav", () => {
     // Two entries for the same section ("Airtime & Data" and "VTU History")
     // disagreed with the in-page nav about where you are, which is why the
     // history entry was dropped: the nav is the source of truth.
-    expect(sidebar).toContain(
-      '{ label: ' + QUOTE + 'Airtime & Data' + QUOTE + ', icon: Zap, to: ' + QUOTE + '/vtu' + QUOTE + ' }',
-    );
+    //
+    // The SHAPE is pinned rather than the label: the display name of the
+    // section is copy and has been reworded before, but "one entry, the Zap
+    // icon, pointing at /vtu" is the structure that must not drift.
+    expect(sidebar).toMatch(/\{ label: "[^"]+", icon: Zap, to: "\/vtu" \}/);
     expect(sidebar).not.toContain("to: " + QUOTE + "/vtu/history" + QUOTE);
   });
 
@@ -205,7 +245,11 @@ describe("every customer navigation surface offers VTU", () => {
     // sidebar had.
     for (const surface of ["src/components/MobileNav.tsx", "src/components/BottomNav.tsx"]) {
       const source = readFileSync(surface, "utf8");
-      expect(source).toContain("startsWith(path)");
+      // Both prefix forms keep a sub-page highlighted — `startsWith(path)` and
+      // `startsWith(path + "/")` differ only in whether `/vtux` would match
+      // `/vtu`. What must not happen is EXACT matching, which the next line
+      // refuses for the VTU entry.
+      expect(source).toMatch(/location\.pathname\.startsWith\(path[)\s+]/);
       expect(source).not.toContain('path === ' + QUOTE + '/vtu' + QUOTE);
     }
   });
