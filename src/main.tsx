@@ -131,6 +131,25 @@ function RouteLoading() {
 }
 
 /**
+ * Scrolls to the top once the incoming route's wrapper has mounted.
+ *
+ * Rendered *inside* the keyed `motion.div` below, so it runs when the new page
+ * actually replaces the old one (`AnimatePresence mode="wait"` finishes the
+ * exit first). Without this, navigating from the bottom of a long page left the
+ * next page scrolled halfway down.
+ *
+ * Uses `behavior: "instant"` deliberately: `index.css` sets
+ * `scroll-behavior: smooth` globally, and animating the scroll on every
+ * navigation reads as lag rather than polish.
+ */
+function RouteScrollReset() {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, []);
+  return null;
+}
+
+/**
  * Replays the enter animation on every navigation.
  *
  * Keying on `pathname` remounts the subtree per route, so `PageTransition`
@@ -147,6 +166,7 @@ function RouteTransition({ children }: { children: React.ReactNode }) {
         exit={{ opacity: 0, y: -6 }}
         transition={{ duration: 0.28, ease: EASE_OUT_QUINT }}
       >
+        <RouteScrollReset />
         {children}
       </motion.div>
     </AnimatePresence>

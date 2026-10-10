@@ -30,7 +30,13 @@ export default function AdminNotifications() {
     setSending(true);
     try {
       const res = await send({ broadcast: true, title: title.trim(), message: message.trim(), type, link: link.trim() || undefined });
-      toast.success(`Announcement delivered to ${res.count} users`);
+      // A broadcast is fanned out in batches on the backend, so it is queued
+      // rather than delivered by the time this promise resolves.
+      toast.success(
+        res.queued
+          ? "Broadcast queued — delivering to every active user"
+          : `Announcement delivered to ${res.count} users`,
+      );
       setTitle("");
       setMessage("");
       setLink("");
@@ -61,6 +67,12 @@ export default function AdminNotifications() {
               Broadcast to all active users
             </Label>
           </div>
+          {!broadcast && (
+            <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200">
+              Picking individual recipients is not available yet, so announcements can only be sent to every active
+              user. Switch this back on to send.
+            </p>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label htmlFor="notif-type" className="text-xs font-medium text-slate-600 dark:text-slate-400">Type</Label>
@@ -86,7 +98,7 @@ export default function AdminNotifications() {
             <Label htmlFor="notif-message" className="text-xs font-medium text-slate-600 dark:text-slate-400">Message</Label>
             <Textarea id="notif-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={3} maxLength={800} placeholder="Shipment operations will be briefly paused…" />
           </div>
-          <Button onClick={submit} disabled={sending || title.trim().length < 3 || message.trim().length < 3} className="gap-1.5">
+          <Button onClick={submit} disabled={sending || !broadcast || title.trim().length < 3 || message.trim().length < 3} className="gap-1.5">
             <Send className="h-3.5 w-3.5" /> {sending ? "Sending…" : "Send announcement"}
           </Button>
         </CardContent>

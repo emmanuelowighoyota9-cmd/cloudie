@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { QueryCtx, MutationCtx, query, mutation } from "./_generated/server";
+import { QueryCtx, MutationCtx, query, mutation, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { debitWallet, creditWallet } from "./wallet";
@@ -881,6 +882,17 @@ export const reviewModerationFlag = mutation({
 
 // ─── Notification admin ─────────────────────────────────────────────────────
 
+/**
+ * Users handled per broadcast transaction.
+ *
+ * A broadcast writes one notification row per user, so doing it in a single
+ * mutation put the whole fan-out in one transaction: it grew with the user
+ * table and would eventually exceed Convex's per-transaction write limit,
+ * turning "broadcast" into a failure exactly when the audience got large.
+ * Batches are scheduled back-to-back, so the work still completes in seconds.
+ */
+const BROADCAST_BATCH_SIZE = 100;
+
 export const sendNotification = mutation({
   args: {
     userIds: v.optional(v.array(v.id("users"))),
@@ -895,44 +907,106 @@ export const sendNotification = mutation({
     if (!args.broadcast && (!args.userIds || args.userIds.length === 0)) {
       throw new Error("Provide userIds or set broadcast");
     }
-    let count = 0;
+
     if (args.broadcast) {
-      const users = await ctx.db.query("users").collect();
-      for (const u of users) {
-        if (u.isTerminated) continue;
-        await ctx.db.insert("notifications", {
-          userId: u._id,
-          title: args.title,
-          message: args.message,
-          type: args.type,
-          isRead: false,
-          link: args.link,
-          createdAt: Date.now(),
-        });
-        count++;
-      }
-    } else {
-      for (const uid of args.userIds!) {
-        const u = await ctx.db.get(uid);
-        if (!u) continue;
-        await ctx.db.insert("notifications", {
-          userId: uid,
-          title: args.title,
-          message: args.message,
-          type: args.type,
-          isRead: false,
-          link: args.link,
-          createdAt: Date.now(),
-        });
-        count++;
-      }
+      await ctx.scheduler.runAfter(0, internal.adminApi.broadcastNotificationBatch, {
+        adminId,
+        title: args.title,
+        message: args.message,
+        type: args.type,
+        link: args.link,
+        cursor: null,
+        sent: 0,
+      });
+      await auditLog(ctx, adminId, {
+        action: "NOTIFICATION_BROADCAST_QUEUED",
+        resource: "notification",
+        after: { title: args.title, type: args.type, batchSize: BROADCAST_BATCH_SIZE },
+      });
+      return { count: 0, queued: true };
+    }
+
+    let count = 0;
+    for (const uid of args.userIds!) {
+      const u = await ctx.db.get(uid);
+      if (!u) continue;
+      await ctx.db.insert("notifications", {
+        userId: uid,
+        title: args.title,
+        message: args.message,
+        type: args.type,
+        isRead: false,
+        link: args.link,
+        createdAt: Date.now(),
+      });
+      count++;
     }
     await auditLog(ctx, adminId, {
       action: "NOTIFICATION_SENT",
       resource: "notification",
-      after: { title: args.title, type: args.type, count, broadcast: !!args.broadcast },
+      after: { title: args.title, type: args.type, count, broadcast: false },
     });
-    return { count };
+    return { count, queued: false };
+  },
+});
+
+/**
+ * One batch of a broadcast, paging the user table forward by cursor.
+ *
+ * Reschedules itself while there are more users and writes the closing audit
+ * entry on the final batch, so the delivery total is recorded in one place.
+ */
+export const broadcastNotificationBatch = internalMutation({
+  args: {
+    adminId: v.id("users"),
+    title: v.string(),
+    message: v.string(),
+    type: v.string(),
+    link: v.optional(v.string()),
+    cursor: v.union(v.string(), v.null()),
+    sent: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const page = await ctx.db.query("users").paginate({
+      numItems: BROADCAST_BATCH_SIZE,
+      cursor: args.cursor,
+    });
+
+    const createdAt = Date.now();
+    let sent = args.sent;
+    for (const user of page.page) {
+      if (user.isTerminated) continue;
+      await ctx.db.insert("notifications", {
+        userId: user._id,
+        title: args.title,
+        message: args.message,
+        type: args.type,
+        isRead: false,
+        link: args.link,
+        createdAt,
+      });
+      sent++;
+    }
+
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(0, internal.adminApi.broadcastNotificationBatch, {
+        adminId: args.adminId,
+        title: args.title,
+        message: args.message,
+        type: args.type,
+        link: args.link,
+        cursor: page.continueCursor,
+        sent,
+      });
+      return { sent, done: false };
+    }
+
+    await auditLog(ctx, args.adminId, {
+      action: "NOTIFICATION_BROADCAST_DELIVERED",
+      resource: "notification",
+      after: { title: args.title, type: args.type, count: sent },
+    });
+    return { sent, done: true };
   },
 });
 
