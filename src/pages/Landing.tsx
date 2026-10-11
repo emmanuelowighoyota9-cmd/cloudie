@@ -203,6 +203,16 @@ export default function Landing() {
                 {section.label}
               </a>
             ))}
+            {/* Direct route into the signed-in workspace. Signed-out visitors
+                are bounced through RequireAuth, which preserves this path as
+                /auth?returnTo=/dashboard — so either way the click ends here. */}
+            <Link
+              to="/dashboard"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary transition-colors duration-200 hover:text-primary/80"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              Dashboard
+            </Link>
           </nav>
           <div className="flex items-center gap-2">
             <PwaInstallButton />
@@ -218,6 +228,13 @@ export default function Landing() {
         </div>
         {/* Same anchors, scrollable, where the desktop row is hidden. */}
         <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 pb-2 lg:hidden">
+          <Link
+            to="/dashboard"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition-colors duration-200 hover:bg-primary/20"
+          >
+            <LayoutDashboard className="h-3 w-3" />
+            Dashboard
+          </Link>
           {SECTIONS.map((section) => (
             <a
               key={section.id}
@@ -276,6 +293,11 @@ export default function Landing() {
               </Link>
               <Link to="/auth">
                 <Button variant="outline" size="lg" className="w-full sm:w-auto">Sign In</Button>
+              </Link>
+              <Link to="/dashboard">
+                <Button variant="outline" size="lg" className="w-full gap-2 sm:w-auto">
+                  <LayoutDashboard className="h-4 w-4" /> Open dashboard
+                </Button>
               </Link>
             </div>
             <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
@@ -812,6 +834,7 @@ export default function Landing() {
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground">Platform</p>
               <ul className="mt-4 space-y-2.5 text-sm">
                 {[
+                  { label: "Open dashboard", href: "/dashboard" },
                   { label: "Create an account", href: "/auth" },
                   { label: "Track a shipment", href: "/tracking" },
                   { label: "Document studio", href: "/auth?returnTo=/documents" },
