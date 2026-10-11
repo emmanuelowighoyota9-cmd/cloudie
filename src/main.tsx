@@ -225,6 +225,34 @@ function RouteSyncer() {
   return null;
 }
 
+/**
+ * Restores a deep link parked by `public/404.html`.
+ *
+ * Hosts that answer unknown paths with a static 404 page (instead of the SPA
+ * shell) send the browser to `/` with the intended path in sessionStorage.
+ * Replaying it here — before `BrowserRouter` reads `window.location` — means
+ * `/dashboard`, `/marketplace` and `/admin` deep links open the real route
+ * (and `RequireAuth` then preserves it in `/auth?returnTo=...`) rather than
+ * dumping the user on the landing page.
+ */
+function restoreDeepLink() {
+  try {
+    const intended = sessionStorage.getItem("cloudie:spa-redirect");
+    if (!intended) return;
+    sessionStorage.removeItem("cloudie:spa-redirect");
+    if (!intended.startsWith("/") || intended.startsWith("//")) return;
+    // Skip the write when the browser is already on the intended route.
+    const current =
+      window.location.pathname + window.location.search + window.location.hash;
+    if (intended === current) return;
+    window.history.replaceState(null, "", intended);
+  } catch {
+    /* Storage unavailable — the app still loads at `/`. */
+  }
+}
+
+restoreDeepLink();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>

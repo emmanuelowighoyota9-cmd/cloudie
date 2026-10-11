@@ -48,7 +48,14 @@ Do not put `CONVEX_DEPLOY_KEY` or `LOGSPANEL_API_KEY` into `VITE_*` variables.
 
 ### SPA hosting
 
-The generated Vite output is `dist/`. Freebuff must serve `dist/` as an SPA so direct routes such as `/dashboard`, `/marketplace`, and `/admin` fall back to `index.html`.
+The generated Vite output is `dist/`. Freebuff should serve `dist/` as an SPA so
+direct routes such as `/dashboard`, `/marketplace`, and `/admin` fall back to
+`index.html`.
+
+If a host answers unknown paths with a static 404 instead (no rewrite support),
+the build's `dist/404.html` still recovers: it parks the requested path in
+`sessionStorage`, sends the browser to `/`, and `src/main.tsx` replays it before
+the router mounts. Deep links therefore keep working with or without rewrites.
 
 ## Custom domain: cloudieexpress.duckdns.org
 
