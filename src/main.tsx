@@ -234,21 +234,46 @@ function RouteSyncer() {
  * `/dashboard`, `/marketplace` and `/admin` deep links open the real route
  * (and `RequireAuth` then preserves it in `/auth?returnTo=...`) rather than
  * dumping the user on the landing page.
+ *
+ * Storage is not always available (private browsing blocks it). The fallback
+ * page then carries the same target in `?cloudie-redirect=`, which is read here
+ * as a second source and consumed — it is never forwarded to the router.
  */
 function restoreDeepLink() {
+  const STORAGE_KEY = "cloudie:spa-redirect";
+  const QUERY_KEY = "cloudie-redirect";
+
+  // Read the parked path: sessionStorage first, then the query parameter the
+  // fallback page uses when nothing could be stored.
+  let intended = "";
   try {
-    const intended = sessionStorage.getItem("cloudie:spa-redirect");
-    if (!intended) return;
-    sessionStorage.removeItem("cloudie:spa-redirect");
-    if (!intended.startsWith("/") || intended.startsWith("//")) return;
-    // Skip the write when the browser is already on the intended route.
-    const current =
-      window.location.pathname + window.location.search + window.location.hash;
-    if (intended === current) return;
-    window.history.replaceState(null, "", intended);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
+    if (stored !== null) {
+      // Cleared before the check below, so a hostile value cannot linger.
+      sessionStorage.removeItem(STORAGE_KEY);
+      intended = stored;
+    }
   } catch {
-    /* Storage unavailable — the app still loads at `/`. */
+    /* Storage unavailable — the query parameter is the only source. */
   }
+
+  if (!intended) {
+    try {
+      intended =
+        new URLSearchParams(window.location.search).get(QUERY_KEY) ?? "";
+    } catch {
+      intended = "";
+    }
+  }
+
+  // Same-origin paths only: `//host` and `https://…` would be an open redirect.
+  if (!intended.startsWith("/") || intended.startsWith("//")) return;
+
+  // Skip the write when the browser is already on the intended route.
+  const current =
+    window.location.pathname + window.location.search + window.location.hash;
+  if (intended === current) return;
+  window.history.replaceState(null, "", intended);
 }
 
 restoreDeepLink();

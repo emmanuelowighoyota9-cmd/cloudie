@@ -11,6 +11,10 @@
       restores it with history.replaceState before the router mounts — so
       /dashboard, /marketplace and /admin still open the app.
 
+      Storage is not always available (private browsing blocks it). Then the
+      same target travels in `?cloudie-redirect=` instead, and `src/main.tsx`
+      consumes that parameter on landing.
+
       Hosts with a real rewrite (nginx, vercel.json) never reach this file.
     -->
     <style>
@@ -34,12 +38,16 @@
     <script>
       (function () {
         var target = location.pathname + location.search + location.hash;
+        var parked = false;
         try {
           sessionStorage.setItem("cloudie:spa-redirect", target);
+          parked = true;
         } catch (e) {
-          /* Storage blocked (strict privacy mode) — fall back to the landing page. */
+          /* Storage blocked (strict privacy mode) — carry the path in the URL. */
         }
-        location.replace("/");
+        location.replace(
+          parked ? "/" : "/?cloudie-redirect=" + encodeURIComponent(target),
+        );
       })();
     </script>
   </head>

@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "bun test",
+    "smoke:live": "node scripts/smoke-live.mjs",
     "format": "prettier --write .",
     "preview": "vite preview",
     "build:freebuff": "npx convex deploy --cmd \"npm run build\" --cmd-url-env-var-name VITE_CONVEX_URL",

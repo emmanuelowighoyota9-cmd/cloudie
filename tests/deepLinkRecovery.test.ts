@@ -15,6 +15,11 @@
  * test anywhere. These assertions run the REAL script and the REAL snippet
  * against fake globals, so they fail on behaviour, not on a copy of it.
  *
+ * Storage is not a given either: private browsing throws on every call, and a
+ * deep link that silently degrades to the landing page is the same bug with a
+ * quieter symptom. So the two halves also agree on a `?cloudie-redirect=`
+ * parameter used when nothing could be stored, and both directions are tested.
+ *
  * The host itself is left alone: a host that neither rewrites deep links nor
  * serves `404.html` cannot be repaired from this repository, and the deployment
  * configs that do rewrite (`vercel.json`, `deploy/nginx/`) are checked by eye.
@@ -53,6 +58,7 @@ const restoreSource = (() => {
 })();
 
 const STORAGE_KEY = "cloudie:spa-redirect";
+const QUERY_KEY = "cloudie-redirect";
 
 type FakeEnv = {
   store: Record<string, string>;
@@ -146,8 +152,19 @@ describe("deep-link recovery", () => {
 
   test("both halves agree on the storage key", () => {
     expect(fallbackHtml).toContain(`setItem("${STORAGE_KEY}"`);
-    expect(entrySource).toContain(`getItem("${STORAGE_KEY}"`);
-    expect(entrySource).toContain(`removeItem("${STORAGE_KEY}"`);
+    // The entry reads the same key through a constant, so the literal appears
+    // once — pin the constant AND that it is the thing read and cleared.
+    expect(entrySource).toContain(`const STORAGE_KEY = "${STORAGE_KEY}"`);
+    expect(entrySource).toContain("getItem(STORAGE_KEY)");
+    expect(entrySource).toContain("removeItem(STORAGE_KEY)");
+  });
+
+  test("both halves agree on the URL fallback", () => {
+    // The 404 page has to build the parameter; the entry has to read it.
+    expect(fallbackHtml).toContain(`${QUERY_KEY}=`);
+    expect(fallbackHtml).toContain("encodeURIComponent(target)");
+    expect(entrySource).toContain(`"${QUERY_KEY}"`);
+    expect(entrySource).toContain("URLSearchParams");
   });
 
   test("the replay happens before the router renders", () => {
@@ -204,7 +221,7 @@ describe("deep-link recovery", () => {
     }
   });
 
-  test("blocked storage still loads the app", () => {
+  test("blocked storage still recovers the deep link, through the URL", () => {
     const env = makeEnv("/dashboard");
     const blocked = {
       getItem: () => {
@@ -219,8 +236,29 @@ describe("deep-link recovery", () => {
     };
 
     expect(() => runFallback(env, blocked)).not.toThrow();
-    expect(env.location.replaced).toEqual(["/"]);
+    expect(env.location.replaced).toHaveLength(1);
+
+    // Follow the redirect the page actually emitted: nothing was stored, so the
+    // target has to be arriving as the query parameter.
+    const landing = env.location.replaced[0];
+    expect(landing.startsWith(`/?${QUERY_KEY}=`)).toBe(true);
+
+    env.location.pathname = "/";
+    env.location.search = landing.slice(1);
+    env.location.hash = "";
+
     expect(() => runRestore(env, blocked)).not.toThrow();
-    expect(env.writes).toHaveLength(0);
+    expect(env.writes).toEqual([[null, "", "/dashboard"]]);
+  });
+
+  test("a hostile URL fallback is refused", () => {
+    for (const hostile of [
+      "https://evil.example.com/steal",
+      "//evil.example.com",
+    ]) {
+      const env = makeEnv(`/?${QUERY_KEY}=${encodeURIComponent(hostile)}`);
+      runRestore(env);
+      expect(env.writes).toHaveLength(0);
+    }
   });
 });
