@@ -25,6 +25,7 @@ import {
 
 const mainNav = [
   { label: "Overview", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "Personal Workspace", icon: Wallet, to: "/personal" },
   { label: "My Services", icon: Layers, to: "/services/my" },
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
@@ -206,6 +207,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </div>
         )}
       </ScrollArea>
+
+      {/* Simulation status */}
+      {!collapsed && (
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2">
+          <span className="size-2 shrink-0 rounded-full bg-amber-500" />
+          <span className="text-[11px] font-medium text-muted-foreground">Simulation environment</span>
+        </div>
+      )}
 
       {/* Logout */}
       <div className="border-t border-border p-2">
