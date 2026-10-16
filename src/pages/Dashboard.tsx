@@ -117,7 +117,11 @@ export default function Dashboard() {
 
   return (
     <div className="cloudie-dashboard space-y-6 sm:space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.12] via-card to-card">
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm">
+        <Sparkles className="mt-0.5 size-4 shrink-0 text-amber-600" />
+        <p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Simulation workspace.</span> Shipments, generated documents, customer sites and balances here are fictional records for training and demonstration.</p>
+      </div>
+      <section className="overflow-hidden rounded-3xl border border-border bg-card">
         <CardContent className="p-5 sm:p-7">
           {" "}
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
@@ -134,8 +138,7 @@ export default function Dashboard() {
                 Welcome back, {user?.name ?? "friend"}
               </h1>
               <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
-                Everything important about your wallet, services and orders is
-                right here.
+                Your personal workspace connects points activity, orders, notifications and tools. Switch into shipments, ticketing, Business Suite or services whenever you need them.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
