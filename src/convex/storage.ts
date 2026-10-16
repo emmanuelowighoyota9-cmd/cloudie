@@ -132,8 +132,9 @@ export const registerFile = mutation({
 // ─── Authorized retrieval ─────────────────────────────────────────────────────
 
 /**
- * Returns a short-lived signed URL ONLY to the file's owner, a same-tenant
- * member, or an admin. Private by default — this is the single access gate.
+ * Checks ownership before issuing a Convex Storage URL to the file owner or an
+ * admin. Treat the returned URL as a bearer link: anyone who receives it may be
+ * able to open the file, so do not publish or share URLs for sensitive files.
  */
 export const getFileUrl = mutation({
   args: { fileId: v.id("storageFiles") },
