@@ -39,33 +39,6 @@ import {
 import { formatCurrency } from "@/lib/docTemplateEngine";
 import { PageHeader } from "@/components/documents/ui";
 
-const EXAMPLES = [
-  "Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, 2 x Oak veneer panels 1920.00, 3 x Brushed brass handles 1440.00, tax 252.00, delivery 180.00, order total 3792.00 USD.",
-  "Quotation QT-2026-1187 issued by Northfold Trading for Lakeview Interiors dated 2026-09-24, valid until 2026-10-24, 24 x Oak veneer panels 1920.00, 60 x Brushed brass handles 1440.00, tax 252.00, quoted total 3612.00 USD.",
-  "Packing list ref CRL-88213-7Q for Meridian Supply Co. shipping Rotterdam to Nairobi, 3 packages, gross weight 12.4 kg, contents 24 x Oak veneer panels 6.2 kg.",
-  "Statement of account SOA-2026-0091 from Northfold Trading for Lakeview Interiors dated 2026-09-30, period from 2026-09-01 to 2026-09-30, balance due 2500.50 USD.",
-  // Invoices settled: the pasted amounts add up to the total being remitted.
-  [
-    "Remittance advice REM-2026-0338 issued 2026-09-24 by Lakeview Interiors settling beneficiary Northfold Trading, bank transfer, total remitted 6964.50 USD.",
-    "Invoice,Amount",
-    "INV-2026-0774,4824.00",
-    "INV-2026-0781,1260.50",
-    "INV-2026-0790,880.00",
-  ].join("\n"),
-  "Delivery note DN-2026-2291 for order PO-2026-4471, delivered on 2026-09-26 by Coriolis Freight, received by Priya Ramanathan, 3 packages, condition: Good condition.",
-  "Expense claim EXP-2026-0512 submitted by Maya Thompson dated 2026-09-24, purpose: Client site visit — Nairobi, category Travel, 1 x Flights — return 612.40, 1 x Hotel — 2 nights 392.20, tax 66.50, total 1071.10 USD, reimburse 771.10 USD.",
-  // Paste-a-list example: the prose line names the document, the block below it
-  // fills every row slot the item schedule renders.
-  [
-    "Item schedule SCH-2026-0714 issued by Northfold Trading for Lakeview Interiors dated 2026-09-25, currency USD, total 3766.00.",
-    "Item,Qty,Amount",
-    "Oak veneer panels,24,1920.00",
-    '"Brackets, galvanised",18,214.00',
-    "Brushed brass handles,60,1440.00",
-    "Sealant cartridges,12,192.00",
-  ].join("\n"),
-];
-
 const CONFIDENCE_STYLE: Record<BriefConfidence, { label: string; className: string }> = {
   high: { label: "exact", className: "border-primary/40 bg-primary/10 text-primary" },
   medium: { label: "likely", className: "border-border bg-muted text-muted-foreground" },
@@ -278,7 +251,7 @@ export default function DocumentGenerator() {
               id="brief"
               value={brief}
               onChange={(event) => setBrief(event.target.value)}
-              placeholder={"Example: Purchase order PO-2026-4471 from Northfold Trading to supplier Meridian Supply Co., required by 2026-10-06, Net 30, total 4824.00 USD.\n\nPaste a list or CSV of items underneath and every row is filled:\nItem,Qty,Amount\nOak veneer panels,24,1920.00"}
+              placeholder={"Enter your actual document details here. Include parties, dates, reference numbers, line items, quantities, amounts, taxes, charges and the final total where applicable. You can paste a CSV list of items on separate lines."}
               rows={7}
               className="mt-3 min-h-[160px] resize-y text-sm"
             />
@@ -304,17 +277,7 @@ export default function DocumentGenerator() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {EXAMPLES.map((example, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => setBrief(example)}
-                className="min-h-11 rounded-full border border-border px-4 text-left text-[11px] leading-snug text-muted-foreground transition-colors hover:border-primary/40 hover:bg-muted sm:min-h-0 sm:max-w-[320px] sm:px-3 sm:py-1.5"
-              >                  {example.replace(/\s+/g, " ").slice(0, 82)}…
-              </button>
-            ))}
-          </div>
+          <p className="text-xs text-muted-foreground">Use your own source details. Review every extracted field and reconcile totals before generating a document.</p>
 
           <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -414,7 +377,7 @@ export default function DocumentGenerator() {
                   {!ownExtraction || ownExtraction.recognized.length === 0 ? (
                     <p className="mt-2 text-[11px] text-muted-foreground">
                       Nothing matched yet — open it in the builder and fill it manually, or name the fields in the brief
-                      (for example “Site: Lakeview Interiors”).
+                      (for example, enter the site name).
                     </p>
                   ) : (
                     <ul className="mt-3 space-y-2">
