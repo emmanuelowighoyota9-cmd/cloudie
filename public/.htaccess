@@ -1,0 +1,8 @@
+Options -Indexes
+DirectoryIndex index.html
+RewriteEngine On
+
+# Let real files and directories load normally; send app routes to the SPA shell.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
