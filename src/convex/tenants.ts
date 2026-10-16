@@ -386,7 +386,10 @@ export const createAccount = mutation({
     if (!acctNum) throw new Error("Account number collision");
     const routingNum = `${Math.floor(100000000 + Math.random() * 900000000)}`;
     const currency = (tenant as any).currency ?? "USD";
-    const openingMinor = Math.max(0, Math.round((args.initialBalance ?? 0) * 100));
+    const requestedOpening = args.initialBalance ?? 0;
+    if (!Number.isFinite(requestedOpening) || requestedOpening < 0) throw new Error("Opening balance cannot be negative");
+    const openingMinor = Math.round(requestedOpening * 100);
+    if (!Number.isSafeInteger(openingMinor)) throw new Error("Opening balance is outside the supported range");
     const now = Date.now();
 
     const id = await ctx.db.insert("tenantAccounts", {
@@ -452,14 +455,15 @@ export const depositToAccount = mutation({
     const acctStatus = (account as any).status ?? (account.isActive ? "active" : "closed");
     if (["frozen", "suspended", "closed"].includes(acctStatus)) throw new Error("Account is " + acctStatus);
 
-    const depositAmount = Math.abs(args.amount);
-    const amountMinor = Math.round(depositAmount * 100);
-    if (amountMinor <= 0) throw new Error("Invalid amount");
+    const amountMinor = amountToMinor(args.amount);
+    const depositAmount = amountMinor / 100;
+    const description = validateReason(args.description, `Deposit to ${account.name}`);
     const currency = (account as any).currency ?? (tenant as any).currency ?? "USD";
     const prev = (account as any).balanceMinor ?? Math.round((account.balance ?? 0) * 100);
+    if (!Number.isSafeInteger(prev) || prev < 0 || !Number.isSafeInteger(prev + amountMinor)) throw new Error("Account balance is outside the supported range");
     const newMinor = prev + amountMinor;
     const now = Date.now();
-    const groupId = `admin-deposit-${args.accountId}-${now}`;
+    const groupId = `admin-deposit-${args.accountId}-${now}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Same double-entry ledger as every other money path (balanced group, never a bare balance write).
     await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: args.description || `Deposit to ${account.name}`, createdAt: now } as any);
@@ -481,7 +485,7 @@ export const depositToAccount = mutation({
     await ctx.db.insert("notifications", {
       userId: account.userId,
       title: "Deposit received",
-      message: `${fmtCurrency(depositAmount)} deposited to ${account.name}. New balance: ${fmtCurrency(newMinor / 100)}.`,
+      message: `${fmtCurrency(depositAmount, currency)} deposited to ${account.name}. New balance: ${fmtCurrency(newMinor / 100, currency)}.`,
       type: "wallet",
       isRead: false,
       link: "/business",
@@ -510,17 +514,18 @@ export const withdrawFromAccount = mutation({
     const acctStatus = (account as any).status ?? (account.isActive ? "active" : "closed");
     if (["frozen", "suspended", "closed"].includes(acctStatus)) throw new Error("Account is " + acctStatus);
 
-    const withdrawAmount = Math.abs(args.amount);
-    const amountMinor = Math.round(withdrawAmount * 100);
-    if (amountMinor <= 0) throw new Error("Invalid amount");
+    const amountMinor = amountToMinor(args.amount);
+    const withdrawAmount = amountMinor / 100;
+    const description = validateReason(args.description, `Withdrawal from ${account.name}`);
     const currency = (account as any).currency ?? (tenant as any).currency ?? "USD";
     const prev = (account as any).balanceMinor ?? Math.round((account.balance ?? 0) * 100);
     if (account.accountType !== "credit" && prev < amountMinor) {
       throw new Error("Insufficient funds");
     }
+    if (!Number.isSafeInteger(prev) || !Number.isSafeInteger(prev - amountMinor)) throw new Error("Account balance is outside the supported range");
     const newMinor = prev - amountMinor;
     const now = Date.now();
-    const groupId = `admin-withdrawal-${args.accountId}-${now}`;
+    const groupId = `admin-withdrawal-${args.accountId}-${now}-${Math.random().toString(36).slice(2, 8)}`;
 
     await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description: args.description || `Withdrawal from ${account.name}`, createdAt: now } as any);
     await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: `${args.description || `Withdrawal from ${account.name}`} (contra)`, createdAt: now } as any);
@@ -541,7 +546,7 @@ export const withdrawFromAccount = mutation({
     await ctx.db.insert("notifications", {
       userId: account.userId,
       title: "Withdrawal processed",
-      message: `${fmtCurrency(withdrawAmount)} withdrawn from ${account.name}. New balance: ${fmtCurrency(newMinor / 100)}.`,
+      message: `${fmtCurrency(withdrawAmount, currency)} withdrawn from ${account.name}. New balance: ${fmtCurrency(newMinor / 100, currency)}.`,
       type: "wallet",
       isRead: false,
       link: "/business",
@@ -552,8 +557,20 @@ export const withdrawFromAccount = mutation({
   },
 });
 
-function fmtCurrency(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+function fmtCurrency(n: number, currency = "USD") {
+  const supported = /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: supported }).format(n);
+}
+function amountToMinor(amount: number): number {
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter an amount greater than zero");
+  const minor = Math.round(amount * 100);
+  if (!Number.isSafeInteger(minor) || minor <= 0) throw new Error("Amount is outside the supported range");
+  return minor;
+}
+function validateReason(description: string | undefined, fallback: string): string {
+  const reason = (description ?? fallback).trim();
+  if (!reason || reason.length > 240) throw new Error("Transaction description must be 1–240 characters");
+  return reason;
 }
 
 // ─── Tenant Users ──────────────────────────────────────────────────────────
@@ -651,15 +668,17 @@ export const addLedgerEntry = mutation({
     if (!ownerId) throw new Error("Unauthorized");
     const tenant = await ctx.db.get(args.tenantId);
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    const targetUser = await ctx.db.get(args.userId);
+    if (!targetUser) throw new Error("Customer not found");
+    if (!Number.isFinite(args.amount) || !Number.isSafeInteger(Math.round(args.amount * 100))) throw new Error("Invalid ledger amount");
+    const description = args.description.trim();
+    const type = args.type.trim();
+    if (!description || description.length > 240) throw new Error("Description must be 1–240 characters");
+    if (!type || type.length > 40) throw new Error("Ledger type must be 1–40 characters");
     const now = Date.now();
-    return await ctx.db.insert("tenantLedger", {
-      tenantId: args.tenantId,
-      userId: args.userId,
-      amount: args.amount,
-      description: args.description,
-      type: args.type,
-      createdAt: now,
-    });
+    const entryId = await ctx.db.insert("tenantLedger", { tenantId: args.tenantId, userId: args.userId, amount: args.amount, description, type, createdAt: now });
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "TENANT_LEDGER_ENTRY_CREATED", resource: "tenantLedger", resourceId: entryId, after: { tenantId: args.tenantId, userId: args.userId, amount: args.amount, type }, reason: description, createdAt: now } as any);
+    return entryId;
   },
 });
 
@@ -675,25 +694,24 @@ export const creditDemoAccount = mutation({
     if (!ownerId) throw new Error("Unauthorized");
     const tenant = await ctx.db.get(args.tenantId);
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    if (!tenant.isActive) throw new Error("Site is locked");
+    if (!(await ctx.db.get(args.userId))) throw new Error("Customer not found");
+    const amountMinor = amountToMinor(args.amount);
+    const amount = amountMinor / 100;
+    const description = validateReason(args.description, "Account credit");
     const now = Date.now();
-    await ctx.db.insert("tenantLedger", {
-      tenantId: args.tenantId,
-      userId: args.userId,
-      amount: Math.abs(args.amount),
-      description: args.description || "Account credit",
-      type: "credit",
-      createdAt: now,
-    });
+    const entryId = await ctx.db.insert("tenantLedger", { tenantId: args.tenantId, userId: args.userId, amount, description, type: "credit", createdAt: now });
     // Notify the target user.
     await ctx.db.insert("notifications", {
       userId: args.userId,
       title: "Account credited",
-      message: `Your ${tenant.siteType} account at ${tenant.siteName} was credited with ${Math.abs(args.amount)}.`,
+      message: `A credit ledger entry of ${fmtCurrency(amount, (tenant as any).currency ?? "USD")} was recorded for your ${tenant.siteType} account at ${tenant.siteName}. This entry alone does not confirm an account balance change.`,
       type: "wallet",
       isRead: false,
       link: "/business",
       createdAt: now,
     });
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "TENANT_CREDIT_LEDGER_ENTRY", resource: "tenantLedger", resourceId: entryId, after: { userId: args.userId, amountMinor, tenantId: args.tenantId }, reason: description, createdAt: now } as any);
     return { success: true };
   },
 });
@@ -710,24 +728,23 @@ export const debitDemoAccount = mutation({
     if (!ownerId) throw new Error("Unauthorized");
     const tenant = await ctx.db.get(args.tenantId);
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    if (!tenant.isActive) throw new Error("Site is locked");
+    if (!(await ctx.db.get(args.userId))) throw new Error("Customer not found");
+    const amountMinor = amountToMinor(args.amount);
+    const amount = amountMinor / 100;
+    const description = validateReason(args.description, "Account debit");
     const now = Date.now();
-    await ctx.db.insert("tenantLedger", {
-      tenantId: args.tenantId,
-      userId: args.userId,
-      amount: -Math.abs(args.amount),
-      description: args.description || "Account debit",
-      type: "debit",
-      createdAt: now,
-    });
+    const entryId = await ctx.db.insert("tenantLedger", { tenantId: args.tenantId, userId: args.userId, amount: -amount, description, type: "debit", createdAt: now });
     await ctx.db.insert("notifications", {
       userId: args.userId,
       title: "Account debited",
-      message: `Your ${tenant.siteType} account at ${tenant.siteName} was debited with ${Math.abs(args.amount)}.`,
+      message: `A debit ledger entry of ${fmtCurrency(amount, (tenant as any).currency ?? "USD")} was recorded for your ${tenant.siteType} account at ${tenant.siteName}. This entry alone does not confirm an account balance change.`,
       type: "wallet",
       isRead: false,
       link: "/business",
       createdAt: now,
     });
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "TENANT_DEBIT_LEDGER_ENTRY", resource: "tenantLedger", resourceId: entryId, after: { userId: args.userId, amountMinor, tenantId: args.tenantId }, reason: description, createdAt: now } as any);
     return { success: true };
   },
 });
