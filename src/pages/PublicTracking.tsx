@@ -292,6 +292,7 @@ export default function PublicTracking() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
+        <div role="note" className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Demonstration tracking page.</span> Shipment records and delivery events on this platform may be simulated and are not proof of carrier custody or delivery. Confirm real shipments directly with the carrier.</div>
         {!trackingNumber ? (
           <div className="py-10 sm:py-16">
             <TrackingSearch />
