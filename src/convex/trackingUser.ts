@@ -354,7 +354,7 @@ export const customerUpdateShipment = mutation({
 
     return {
       success: true,
-      pointsCost: UPDATE_COST_POINTS,
+      pointsCost: updateCost,
       newBalance,
       changes: changed,
     };
@@ -370,7 +370,6 @@ export const customerAddShipmentEvent = mutation({
     shipmentId: v.id("trackingShipments"),
     title: v.string(),
     description: v.string(),
-    isPublic: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -436,7 +435,7 @@ export const customerAddShipmentEvent = mutation({
 
     return {
       success: true,
-      pointsCost: EVENT_COST_POINTS,
+      pointsCost: eventCost,
       newBalance,
     };
   },
