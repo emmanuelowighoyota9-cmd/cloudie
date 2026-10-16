@@ -50,7 +50,7 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
         </div>
         <div className="min-w-0">
           <p className="truncate text-base font-bold tracking-tight text-foreground">Cloudie Operations</p>
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Connected workspaces · Demo</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Connected workspaces</p>
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3" aria-label="Mobile navigation">
