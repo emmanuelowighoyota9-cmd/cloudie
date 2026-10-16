@@ -64,6 +64,8 @@ export default function FlightDocument() {
 
   return (
     <div className="space-y-8">
+      <div role="note" className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Sample itinerary only.</span> This tool creates a fictional document for demonstration. It does not book a flight, issue a ticket, or verify an airline reservation.</div>
+
       <div className="flex items-center gap-4">
         <Link to="/ticketing"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div>
