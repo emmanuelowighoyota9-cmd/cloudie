@@ -59,7 +59,7 @@ export default function NewShipment() {
         notes: pkg.notes || undefined,
       });
       toast.success("Shipment created!", {
-        description: `Tracking: ${result.trackingNumber} · 100 points debited`,
+        description: `Tracking: ${result.trackingNumber} · ${result.pointsCost} points debited. New balance: ${result.newBalance} points.`,
       });
       navigate(`/shipments/${result.shipmentId}`);
     } catch (error) {
@@ -93,7 +93,7 @@ export default function NewShipment() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">New Shipment</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create a new tracked shipment. Cost: 100 points.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Create a new tracked shipment. Cost: {shipmentPrice.points} points.</p>
         </div>
       </div>
 
