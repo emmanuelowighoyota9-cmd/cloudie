@@ -171,6 +171,38 @@ export const getFileUrl = mutation({
   },
 });
 
+export const listMyFiles = query({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(v.object({
+    fileId: v.id("storageFiles"),
+    name: v.string(),
+    mimeType: v.string(),
+    sizeBytes: v.number(),
+    kind: v.union(v.literal("kyc_document"), v.literal("pdf_document"), v.literal("image"), v.literal("generic")),
+    createdAt: v.number(),
+  })),
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    const limit = Math.max(1, Math.min(Math.floor(args.limit ?? 50), 100));
+    const rows = await ctx.db
+      .query("storageFiles")
+      .withIndex("by_owner", (q) => q.eq("ownerId", userId))
+      .order("desc")
+      .take(limit);
+    return rows
+      .filter((file) => !file.isDeleted)
+      .map((file) => ({
+        fileId: file._id,
+        name: file.originalName,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        kind: file.kind,
+        createdAt: file.createdAt,
+      }));
+  },
+});
+
 export const getMetadata = query({
   args: { fileId: v.id("storageFiles") },
   handler: async (ctx, args) => {
