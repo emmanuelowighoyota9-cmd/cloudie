@@ -102,13 +102,12 @@ export default function DocumentBuilder() {
           neutralDefaults[field.id] = raw;
         } else if (field.type === "checkbox") {
           neutralDefaults[field.id] = false;
-        } else if (
-          typeof raw === "string" &&
-          /not proof|not government issued|not a real|not official|not valid|does not confirm|verification required|fictional|illustrative|sample itinerary/i.test(raw)
-        ) {
-          neutralDefaults[field.id] = raw
-            .replace(/DEMO PROFILE\s*[—-]\s*/i, "")
-            .replace(/Sample itinerary document\s*[—-]\s*/i, "");
+        } else if (typeof raw === "string" && /not government issued|demo profile/i.test(raw)) {
+          neutralDefaults[field.id] = "This is not a government-issued document.";
+        } else if (typeof raw === "string" && /sample itinerary|not proof of ticket issuance|sample details/i.test(raw)) {
+          neutralDefaults[field.id] = "This generated itinerary does not confirm a booking or ticket issuance. Verify details with the provider.";
+        } else if (typeof raw === "string" && /not proof|not a real|not official|not valid|does not confirm|verification required|fictional|illustrative/i.test(raw)) {
+          neutralDefaults[field.id] = "Verify these details against the original source records. This document does not independently confirm the underlying transaction.";
         } else {
           neutralDefaults[field.id] = "";
         }
