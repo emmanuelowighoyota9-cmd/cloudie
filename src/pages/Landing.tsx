@@ -106,24 +106,24 @@ const testimonials = [
 /** Used only when the platform has no admin-configured FAQs yet. */
 const FALLBACK_FAQ = [
   {
-    question: "Do I need an account to track a shipment?",
+    question: "Is anything on the platform real?",
     answer:
-      "No. The public tracking page takes a tracking number and returns milestones, current location and the estimated delivery date — no sign-in required.",
+      "No. Cloudie is a simulation and training environment. Shipment records, tracking pages, travel documents, invoices, receipts, customer-facing bank and investment sites, and balances are fictional. Nothing is really shipped, booked, or banked.",
   },
   {
-    question: "Where do shipments, documents and points meet?",
+    question: "Do I have to use every workspace?",
     answer:
-      "One ledger. Booking a shipment, rendering a document or buying a service all draw from the same live points balance, so there is never a second set of books to reconcile.",
+      "No. Use the workspace that fits your task. Personal tools, Shipments, Ticketing, Business Suite and Services are connected under one sign-in.",
   },
   {
-    question: "Can we run this for our own customers?",
+    question: "What exactly is a point?",
     answer:
-      "Yes. The business suite lets you publish a branded customer portal and issue banking-style accounts to the customers you serve, all from the same workspace.",
+      "Points are internal credits for using simulated tools. They are not money, an investment or a currency that can be cashed out. The cost is shown before a tool action is confirmed.",
   },
   {
-    question: "What happens when a carrier update goes wrong?",
+    question: "What are ticketing documents for?",
     answer:
-      "Every status change is written to an audit trail and can be corrected from the shipment timeline, so the history stays accurate rather than overwritten.",
+      "They are fictional examples for education, demonstration and testing. They do not confirm a real flight, hotel stay, sale or booking and must never be presented as genuine documents.",
   },
 ];
 
@@ -144,10 +144,10 @@ const stats = [
 ];
 
 const proofPoints = [
-  { icon: LayoutDashboard, value: "One workspace", label: "Operations, documents and points in a single sign-in" },
-  { icon: ScrollText, value: "Audit-ready", label: "Every status change and render is recorded" },
-  { icon: Shield, value: "Role aware", label: "Admins, customers and partners see only their slice" },
-  { icon: LifeBuoy, value: "Human support", label: "Support for your workspace" },
+  { icon: LayoutDashboard, value: "One sign-in", label: "Switch between five connected workspaces" },
+  { icon: ScrollText, value: "Print-ready", label: "Generate sample documents for demonstration" },
+  { icon: Shield, value: "Simulation first", label: "Records and balances are fictional, not real services" },
+  { icon: LifeBuoy, value: "Built-in support", label: "Find help for your workspace when you need it" },
 ];
 
 export default function Landing() {
@@ -486,10 +486,10 @@ export default function Landing() {
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">Unified Points Economy</h2>
               <p className="mt-4 leading-relaxed text-muted-foreground">
-                Every shipment in {brand.name} is powered by a transparent, immutable points ledger. Booking, documents, and partner services draw from the same clear balance.
+                One shared points balance covers access to the simulated tools across Personal, Shipments, Ticketing, Business Suite and Services. Review the ledger to see how credits are used.
               </p>
               <ul className="mt-6 space-y-3">
-                {["Immutable ledger records", "Idempotent transactions", "Real-time balance updates", "Admin adjustment tools"].map((item) => (
+                {["One shared balance across workspaces", "A visible transaction history", "Costs shown before tool actions", "Admin-managed points configuration"].map((item) => (
                   <li key={item} className="flex items-center gap-2 text-sm">
                     <Check className="h-4 w-4 shrink-0 text-chart-2" />
                     <span className="text-foreground">{item}</span>
@@ -499,12 +499,13 @@ export default function Landing() {
             </div>
             <div className="rounded-xl border border-border bg-background p-6 font-mono text-sm">
               <div className="space-y-2">
-                <div className="flex justify-between text-chart-2"><span>Deposit</span><span>+5,000</span></div>
-                <div className="flex justify-between text-destructive"><span>Shipment</span><span>-100</span></div>
-                <div className="flex justify-between text-destructive"><span>Document</span><span>-150</span></div>
-                <div className="flex justify-between text-destructive"><span>Email Campaign</span><span>-50</span></div>
-                <div className="flex justify-between text-chart-2"><span>Referral Reward</span><span>+50</span></div>
-                <div className="flex justify-between border-t border-border pt-2 font-bold text-foreground"><span>Balance</span><span>4,750</span></div>
+                <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Illustrative points activity · not cash</div>
+                <div className="flex justify-between text-chart-2"><span>Demo credit</span><span>+500 pts</span></div>
+                <div className="flex justify-between text-destructive"><span>Shipment example</span><span>-10 pts</span></div>
+                <div className="flex justify-between text-destructive"><span>Document example</span><span>-15 pts</span></div>
+                <div className="flex justify-between text-destructive"><span>Studio example</span><span>-5 pts</span></div>
+                <div className="flex justify-between text-chart-2"><span>Referral example</span><span>+5 pts</span></div>
+                <div className="flex justify-between border-t border-border pt-2 font-bold text-foreground"><span>Illustrative balance</span><span>475 pts</span></div>
               </div>
             </div>
           </div>
@@ -613,8 +614,8 @@ export default function Landing() {
             <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking</p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">TRK-nGkx2V20260210</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Demo tracking · fictional</p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">DEMO-CLD-40192</p>
                 </div>
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">In transit</span>
               </div>
@@ -785,7 +786,7 @@ export default function Landing() {
             Ready to get started?
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Join {brand.name} and start moving shipments smarter today.
+            Explore every workspace with one account. Start with the tools you need and switch when you are ready.
           </p>
           <Link to="/auth" className="mt-8 inline-block">
             <Button size="lg" className="gap-2 px-8">
