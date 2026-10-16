@@ -307,9 +307,9 @@ export default function Landing() {
             </div>
             <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
               {[
-                { icon: Route, label: "Active lanes", value: "24" },
-                { icon: Shield, label: "On-time rate", value: "98%" },
-                { icon: Wallet, label: "Updates", value: "Live" },
+                { icon: Layers, label: "Workspaces", value: "5" },
+                { icon: Shield, label: "Access", value: "One login" },
+                { icon: Wallet, label: "Credits", value: "Points" },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border border-border bg-background p-3">
                   <item.icon className="h-4 w-4 text-primary" />
