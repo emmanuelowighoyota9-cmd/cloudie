@@ -2,8 +2,9 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-function fmtCurrency(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+function fmtCurrency(n: number, currency = "USD") {
+  const supported = /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: supported }).format(n);
 }
 
 /**
@@ -27,6 +28,7 @@ export const transferBetweenAccounts = mutation({
     if (!ownerId) throw new Error("Unauthorized");
     const tenant = await ctx.db.get(args.tenantId);
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
+    if (!tenant.isActive || ["disabled", "suspended", "archived", "draft"].includes((tenant as any).lifecycleStatus)) throw new Error("Site is not active");
     if (args.fromAccountId === args.toAccountId) throw new Error("Choose two different accounts");
 
     const source = await ctx.db.get(args.fromAccountId);
@@ -40,19 +42,25 @@ export const transferBetweenAccounts = mutation({
       if (["frozen", "suspended", "closed"].includes(status)) throw new Error(`${account.name} is ${status}`);
     }
 
-    const transferAmount = Math.abs(args.amount);
-    const amountMinor = Math.round(transferAmount * 100);
-    if (amountMinor <= 0) throw new Error("Invalid amount");
+    if (!Number.isFinite(args.amount) || args.amount <= 0) throw new Error("Enter an amount greater than zero");
+    const amountMinor = Math.round(args.amount * 100);
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) throw new Error("Amount is outside the supported range");
+    const transferAmount = amountMinor / 100;
     const currency = (source as any).currency ?? (tenant as any).currency ?? "USD";
+    const destinationCurrency = (destination as any).currency ?? (tenant as any).currency ?? "USD";
+    if (currency !== destinationCurrency) throw new Error("Transfers require accounts in the same currency");
+    const note = args.description?.trim();
+    if (note && note.length > 240) throw new Error("Description must be 240 characters or fewer");
 
     const prevSource = (source as any).balanceMinor ?? Math.round((source.balance ?? 0) * 100);
     if (source.accountType !== "credit" && prevSource < amountMinor) throw new Error("Insufficient funds");
     const prevDest = (destination as any).balanceMinor ?? Math.round((destination.balance ?? 0) * 100);
+    if (!Number.isSafeInteger(prevSource) || !Number.isSafeInteger(prevDest) || prevSource < 0 || prevDest < 0) throw new Error("Account balance is outside the supported range");
     const nextSource = prevSource - amountMinor;
     const nextDest = prevDest + amountMinor;
+    if (!Number.isSafeInteger(nextSource) || !Number.isSafeInteger(nextDest)) throw new Error("Account balance is outside the supported range");
     const now = Date.now();
-    const groupId = `transfer-${args.fromAccountId}-${now}`;
-    const note = args.description?.trim();
+    const groupId = `transfer-${args.fromAccountId}-${now}-${Math.random().toString(36).slice(2, 8)}`;
     const label = note || `${source.name} to ${destination.name}`;
 
     // Balanced group: one debit and one credit for the same amount.
@@ -79,12 +87,12 @@ export const transferBetweenAccounts = mutation({
       createdAt: now,
     });
 
-    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "TRANSFER_RECORDED", resource: "tenantAccount", resourceId: args.fromAccountId, before: { balanceMinor: prevSource }, after: { balanceMinor: nextSource, amountMinor, currency, groupId, toAccountId: args.toAccountId }, createdAt: now } as any);
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "TRANSFER_RECORDED", resource: "tenantAccount", resourceId: args.fromAccountId, before: { balanceMinor: prevSource }, after: { balanceMinor: nextSource, amountMinor, currency, groupId, toAccountId: args.toAccountId }, reason: label, createdAt: now } as any);
 
     await ctx.db.insert("notifications", {
       userId: destination.userId,
       title: "Transfer received",
-      message: `${fmtCurrency(transferAmount)} moved into ${destination.name} from ${source.name}. New balance: ${fmtCurrency(nextDest / 100)}.`,
+      message: `${fmtCurrency(transferAmount, currency)} moved into ${destination.name} from ${source.name}. New balance: ${fmtCurrency(nextDest / 100, currency)}.`,
       type: "wallet",
       isRead: false,
       link: "/business",
