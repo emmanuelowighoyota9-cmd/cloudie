@@ -231,7 +231,7 @@ export default function DocumentGenerator() {
     <div className="space-y-6">
       <PageHeader
         title="Brief generator"
-        description="Describe the document you need. Crestline identifies the matching template, extracts the fields it can and shows what is still missing."
+        description="Describe the document you need. Cloudie identifies the matching template, extracts the fields it can and shows what is still missing."
         actions={
           <Button variant="outline" asChild>
             <Link to="/documents/templates" className="gap-1.5">
@@ -377,7 +377,7 @@ export default function DocumentGenerator() {
                   {!ownExtraction || ownExtraction.recognized.length === 0 ? (
                     <p className="mt-2 text-[11px] text-muted-foreground">
                       Nothing matched yet — open it in the builder and fill it manually, or name the fields in the brief
-                      (for example, enter the site name).
+                      Enter the site name in the site-specific field.
                     </p>
                   ) : (
                     <ul className="mt-3 space-y-2">
