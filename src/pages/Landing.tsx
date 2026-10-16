@@ -521,7 +521,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Crestline document studio */}
+      {/* Cloudie document studio */}
       <section id="studio" className="scroll-mt-24 border-y border-border bg-card py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-6xl page-gutter">
           <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1fr]">
