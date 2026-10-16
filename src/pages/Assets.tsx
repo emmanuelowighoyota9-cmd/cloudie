@@ -63,7 +63,7 @@ export default function Assets() {
         });
         uploaded += 1;
       }
-      if (uploaded) toast.success(`${uploaded} file${uploaded === 1 ? "" : "s"} uploaded securely.`);
+      if (uploaded) toast.success(`${uploaded} file${uploaded === 1 ? "" : "s"} uploaded.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Upload failed. Please try again.");
     } finally {
@@ -103,7 +103,7 @@ export default function Assets() {
         <Link to="/services"><Button variant="ghost" size="icon" aria-label="Back to services"><ArrowLeft className="h-4 w-4" /></Button></Link>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Asset Manager</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Upload, organize, preview and securely retrieve your files.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Upload, organize, and retrieve files with owner-checked access.</p>
         </div>
         <Button onClick={() => inputRef.current?.click()} disabled={uploading} className="gap-2">
           {uploading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
