@@ -25,7 +25,7 @@ export default function Personal() {
 
   return (
     <div className="space-y-8">
-      <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Demo wallet.</span> Displayed balances and ledger entries are simulated platform records, not a bank account or withdrawable funds.</p></div>
+      <div className="mb-5 flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Wallet information.</span> Funding is credited only after payment verification and recorded in the platform ledger. This is not a bank account, and balances are not withdrawable unless a supported withdrawal feature is explicitly available.</p></div>
       <div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Personal Workspace</h1>
