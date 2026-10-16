@@ -89,7 +89,31 @@ export default function DocumentBuilder() {
     setTitle((current) => current || template.name);
     setValues((current) => {
       if (Object.keys(current).length > 0) return current;
-      const seeded = { ...template.defaults, ...(briefValues ?? {}) };
+      // Never prefill a new customer document with fabricated names, dates,
+      // references, balances, bookings or transaction values. Keep visual color
+      // choices and required hidden fields, and retain explicit authenticity
+      // notices where a template needs them.
+      const neutralDefaults: Record<string, unknown> = {};
+      for (const field of template.schema.fields) {
+        const raw = template.defaults[field.id] ?? field.default ?? "";
+        if (field.hidden) {
+          neutralDefaults[field.id] = raw;
+        } else if (field.type === "color") {
+          neutralDefaults[field.id] = raw;
+        } else if (field.type === "checkbox") {
+          neutralDefaults[field.id] = false;
+        } else if (
+          typeof raw === "string" &&
+          /not proof|not government issued|not a real|not official|not valid|does not confirm|verification required|fictional|illustrative|sample itinerary/i.test(raw)
+        ) {
+          neutralDefaults[field.id] = raw
+            .replace(/DEMO PROFILE\s*[—-]\s*/i, "")
+            .replace(/Sample itinerary document\s*[—-]\s*/i, "");
+        } else {
+          neutralDefaults[field.id] = "";
+        }
+      }
+      const seeded = { ...neutralDefaults, ...(briefValues ?? {}) };
       return briefValues ? pruneBriefRowDefaults(template.schema, seeded, briefValues) : seeded;
     });
   }, [template, briefValues]);
