@@ -119,7 +119,7 @@ export default function Dashboard() {
     <div className="cloudie-dashboard space-y-6 sm:space-y-8">
       <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm">
         <Sparkles className="mt-0.5 size-4 shrink-0 text-amber-600" />
-        <p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Simulation workspace.</span> Shipments, generated documents, customer sites and balances here are fictional records for training and demonstration.</p>
+        <p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Demo workspace.</span> Shipment and document examples and customer-site previews may be simulated. Wallet funding and balance entries are handled separately through verified payment and ledger flows; review Wallet for transaction details.</p>
       </div>
       <section className="overflow-hidden rounded-3xl border border-border bg-card">
         <CardContent className="p-5 sm:p-7">
