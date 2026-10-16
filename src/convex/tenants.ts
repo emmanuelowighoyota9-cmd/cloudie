@@ -373,6 +373,10 @@ export const createAccount = mutation({
     const tenant = await ctx.db.get(args.tenantId);
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
     if (!tenant.isActive) throw new Error("Site is locked");
+    const holder = await ctx.db.get(args.userId);
+    if (!holder) throw new Error("Account holder not found");
+    const accountName = args.name.trim();
+    if (!accountName || accountName.length > 80) throw new Error("Account name must be 1–80 characters");
     const lifecycle = (tenant as any).lifecycleStatus ?? (tenant.isActive ? "active" : "disabled");
     if (["disabled", "suspended", "archived", "draft"].includes(lifecycle)) throw new Error(`Site is ${lifecycle}`);
 
@@ -396,7 +400,7 @@ export const createAccount = mutation({
       tenantId: args.tenantId,
       userId: args.userId,
       accountType: args.accountType,
-      name: args.name,
+      name: accountName,
       balance: openingMinor / 100,
       accountNumber: acctNum,
       routingNumber: routingNum,
@@ -466,8 +470,8 @@ export const depositToAccount = mutation({
     const groupId = `admin-deposit-${args.accountId}-${now}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Same double-entry ledger as every other money path (balanced group, never a bare balance write).
-    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: args.description || `Deposit to ${account.name}`, createdAt: now } as any);
-    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description: `${args.description || `Deposit to ${account.name}`} (contra)`, createdAt: now } as any);
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description, createdAt: now } as any);
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "deposit", relatedId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description: `${description} (contra)`, createdAt: now } as any);
 
     await ctx.db.patch(args.accountId, { balanceMinor: newMinor, availableBalanceMinor: newMinor, ledgerBalanceMinor: newMinor, balance: newMinor / 100 } as any);
 
@@ -475,12 +479,12 @@ export const depositToAccount = mutation({
       tenantId: args.tenantId,
       userId: account.userId,
       amount: depositAmount,
-      description: args.description || `Deposit to ${account.name}`,
+      description,
       type: "deposit",
       createdAt: now,
     });
 
-    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "DEPOSIT_RECORDED", resource: "tenantAccount", resourceId: args.accountId, before: { balanceMinor: prev }, after: { balanceMinor: newMinor, amountMinor, currency, groupId }, createdAt: now } as any);
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "DEPOSIT_RECORDED", resource: "tenantAccount", resourceId: args.accountId, before: { balanceMinor: prev }, after: { balanceMinor: newMinor, amountMinor, currency, groupId }, reason: description, createdAt: now } as any);
 
     await ctx.db.insert("notifications", {
       userId: account.userId,
@@ -527,8 +531,8 @@ export const withdrawFromAccount = mutation({
     const now = Date.now();
     const groupId = `admin-withdrawal-${args.accountId}-${now}-${Math.random().toString(36).slice(2, 8)}`;
 
-    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description: args.description || `Withdrawal from ${account.name}`, createdAt: now } as any);
-    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: `${args.description || `Withdrawal from ${account.name}`} (contra)`, createdAt: now } as any);
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, accountId: args.accountId, userId: account.userId, debitMinor: amountMinor, creditMinor: 0, currency, description, createdAt: now } as any);
+    await ctx.db.insert("bankingLedgerEntries", { tenantId: args.tenantId, groupId, relatedKind: "withdrawal", relatedId: args.accountId, userId: account.userId, debitMinor: 0, creditMinor: amountMinor, currency, description: `${description} (contra)`, createdAt: now } as any);
 
     await ctx.db.patch(args.accountId, { balanceMinor: newMinor, availableBalanceMinor: newMinor, ledgerBalanceMinor: newMinor, balance: newMinor / 100 } as any);
 
@@ -536,12 +540,12 @@ export const withdrawFromAccount = mutation({
       tenantId: args.tenantId,
       userId: account.userId,
       amount: -withdrawAmount,
-      description: args.description || `Withdrawal from ${account.name}`,
+      description,
       type: "withdrawal",
       createdAt: now,
     });
 
-    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "WITHDRAWAL_RECORDED", resource: "tenantAccount", resourceId: args.accountId, before: { balanceMinor: prev }, after: { balanceMinor: newMinor, amountMinor, currency, groupId }, createdAt: now } as any);
+    await ctx.db.insert("auditLogs", { actorId: ownerId, action: "WITHDRAWAL_RECORDED", resource: "tenantAccount", resourceId: args.accountId, before: { balanceMinor: prev }, after: { balanceMinor: newMinor, amountMinor, currency, groupId }, reason: description, createdAt: now } as any);
 
     await ctx.db.insert("notifications", {
       userId: account.userId,
