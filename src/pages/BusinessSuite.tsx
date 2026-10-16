@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import { ShieldCheck } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ export default function BusinessSuite() {
 
   return (
     <div className="space-y-8">
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Business demo studio.</span> Customer-facing banking and investment-style sites created here are simulations, not licensed financial services.</p></div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Business Suite</h1>
