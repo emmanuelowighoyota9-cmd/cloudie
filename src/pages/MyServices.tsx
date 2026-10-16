@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck } from "lucide-react";
 import { Link } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -50,7 +49,7 @@ export default function MyServices() {
 
   return (
     <div className="space-y-7 sm:space-y-9">
-      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Connected demo tools.</span> Services may use fictional data or simulated providers. Review the action and points cost before confirming.</p></div>
+      <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">Provider availability and fulfillment times can vary. Review the service details, total cost, and terms before confirming an order.</div>
       <section className="overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.11] via-card to-card">
         <CardContent className="p-5 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
