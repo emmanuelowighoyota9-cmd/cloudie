@@ -375,6 +375,10 @@ export const createAccount = mutation({
     if (!tenant.isActive) throw new Error("Site is locked");
     const holder = await ctx.db.get(args.userId);
     if (!holder) throw new Error("Account holder not found");
+    if (args.userId !== ownerId) {
+      const membership = await ctx.db.query("tenantUsers").withIndex("by_tenant_and_user", (q) => q.eq("tenantId", args.tenantId).eq("userId", args.userId)).first();
+      if (!membership) throw new Error("Account holder must be a member of this site");
+    }
     const accountName = args.name.trim();
     if (!accountName || accountName.length > 80) throw new Error("Account name must be 1–80 characters");
     const lifecycle = (tenant as any).lifecycleStatus ?? (tenant.isActive ? "active" : "disabled");
@@ -436,7 +440,17 @@ export const closeAccount = mutation({
     if (!tenant || tenant.ownerId !== ownerId) throw new Error("Not found");
     const account = await ctx.db.get(args.accountId);
     if (!account || account.tenantId !== args.tenantId) throw new Error("Account not found");
-    await ctx.db.patch(args.accountId, { isActive: false });
+    const now = Date.now();
+    await ctx.db.patch(args.accountId, { isActive: false, status: "closed" });
+    await ctx.db.insert("auditLogs", {
+      actorId: ownerId,
+      action: "ACCOUNT_CLOSED_BY_ADMIN",
+      resource: "tenantAccount",
+      resourceId: args.accountId,
+      before: { isActive: account.isActive, status: (account as any).status ?? "active" },
+      after: { isActive: false, status: "closed" },
+      createdAt: now,
+    } as any);
     return { success: true };
   },
 });
