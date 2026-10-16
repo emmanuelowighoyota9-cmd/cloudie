@@ -64,18 +64,18 @@ const SECTIONS = [
 const steps = [
   {
     icon: ClipboardList,
-    title: "Book the shipment",
-    desc: "Capture sender, receiver and package details once. A tracking number is minted on save — no third-party service involved.",
+    title: "Create your account",
+    desc: "Open one account and enter your personal workspace. You can explore the simulated tools before choosing what to use.",
   },
   {
-    icon: Link2,
-    title: "Share one tracking link",
-    desc: "Send a privacy-filtered link your customer can open without an account. Milestones, scans and ETAs update as your team works.",
+    icon: Wallet,
+    title: "Manage your points",
+    desc: "Review the shared points balance and ledger. Points are internal credits for using simulated tools, not money or an investment.",
   },
   {
-    icon: FileCheck2,
-    title: "Produce the paperwork",
-    desc: "Turn the same shipment into customs packets, invoices or delivery notes — preview, export and share from one studio.",
+    icon: Layers,
+    title: "Choose a workspace",
+    desc: "Switch between shipments, ticketing, Business Suite, personal tools and services without juggling separate logins.",
   },
 ];
 
@@ -128,19 +128,19 @@ const FALLBACK_FAQ = [
 ];
 
 const features = [
-  { icon: Package, title: "Shipment control", desc: "Book, organize, and update every shipment from one calm command center." },
-  { icon: RadioTower, title: "Live tracking", desc: "Share a privacy-safe tracking link with real-time milestones and ETAs." },
-  { icon: Route, title: "Route intelligence", desc: "See every handoff, facility scan, and delivery signal in a clear timeline." },
-  { icon: FileStack, title: "Customs-ready documents", desc: "Create polished commercial invoices and shipping documents without leaving the flow." },
-  { icon: Wallet, title: "Simple points ledger", desc: "Transparent, real-time credits for shipments, documents, and partner services." },
-  { icon: Users, title: "Built for teams", desc: "Give customers, operations teams, and partners a shared source of shipment truth." },
+  { icon: Users, title: "Personal workspace", desc: "Keep your points balance, ledger, marketplace orders, conversations and referral rewards together." },
+  { icon: Package, title: "Shipments", desc: "Create fictional parcel records, share public tracking links and follow status milestones." },
+  { icon: Plane, title: "Ticketing & documents", desc: "Generate printable flight and hotel document examples, invoices, receipts and other templates." },
+  { icon: Building2, title: "Business Suite", desc: "Build and manage demo customer-facing banking or investment sites with their own settings and dashboards." },
+  { icon: Mail, title: "Services studio", desc: "Compose email campaigns, render images and keep generated assets in a reusable library." },
+  { icon: Wallet, title: "One points ledger", desc: "Review point credits and usage across tools. Points are internal platform credits and cannot be cashed out." },
 ];
 
 const stats = [
-  { label: "Shipment visibility", value: "Live" },
-  { label: "Carrier updates", value: "Real-time" },
-  { label: "Document flows", value: "Ready" },
-  { label: "Platform security", value: "Enterprise" },
+  { label: "Login for every workspace", value: "One" },
+  { label: "Connected workspaces", value: "Five" },
+  { label: "Shared internal credits", value: "Points" },
+  { label: "Operating mode", value: "Simulation" },
 ];
 
 const proofPoints = [
@@ -372,12 +372,12 @@ export default function Landing() {
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground">Delivered this month</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">1,284</p>
+                  <p className="text-xs text-muted-foreground">Workspace preview</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">Demo</p>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground">On-time rate</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">98.4%</p>
+                  <p className="text-xs text-muted-foreground">Records shown</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">Fictional</p>
                 </div>
               </div>
             </div>
@@ -408,11 +408,11 @@ export default function Landing() {
               How it works
             </p>
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Three steps from booking to proof of delivery
+              Five workspaces, one sign-in
             </h2>
             <p className="mt-4 leading-relaxed text-muted-foreground">
-              No integration project, no migration weekend. Start with the shipment you already have and grow into
-              the rest of the platform when the volume justifies it.
+              Move between personal tools, shipments, ticketing, Business Suite and services from one account.
+              Each workspace has its own dashboard and navigation, with shared points and account context.
             </p>
           </div>
           <div className="relative">
@@ -452,9 +452,9 @@ export default function Landing() {
       <section className="bg-background py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-6xl page-gutter">
           <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-foreground">A better way to ship</h2>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">Everything in its own workspace</h2>
             <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-              Everything your team needs to turn a booking into a delivered experience.
+              A connected set of simulated tools for operations, documents, customer-facing sites and everyday work.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
