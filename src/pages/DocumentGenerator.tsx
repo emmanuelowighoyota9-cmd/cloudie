@@ -135,7 +135,7 @@ export default function DocumentGenerator() {
       fromLayout: totalOverride === null && documentTotal === undefined,
       agrees: Math.abs(difference) < 0.01,
     };
-  }, [result, totalOverride, templateTotal]);
+  }, [result, totalOverride]);
 
   /** Owner-authored layouts whose name or description matches the brief. */
   const ownMatches = useMemo(() => {
