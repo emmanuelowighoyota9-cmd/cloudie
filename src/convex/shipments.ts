@@ -157,7 +157,15 @@ export const publicTracking = query({
 export const updateStatus = mutation({
   args: {
     shipmentId: v.id("shipments"),
-    status: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("picked_up"),
+      v.literal("in_transit"),
+      v.literal("out_for_delivery"),
+      v.literal("delivered"),
+      v.literal("failed"),
+      v.literal("cancelled"),
+    ),
     location: v.optional(v.string()),
     description: v.string(),
   },
@@ -165,17 +173,23 @@ export const updateStatus = mutation({
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
+    const user = await ctx.db.get(userId);
+    if (user?.role !== "admin" || user.isSuspended) {
+      throw new Error("FORBIDDEN: only an active administrator may update carrier shipment status");
+    }
+
     const shipment = await ctx.db.get(args.shipmentId);
     if (!shipment) throw new Error("Shipment not found");
-
-    const user = await ctx.db.get(userId);
-    if (shipment.userId !== userId && user?.role !== "admin") {
-      throw new Error("Unauthorized");
+    if (!args.description.trim() || args.description.trim().length > 1000) {
+      throw new Error("Status description must be between 1 and 1,000 characters");
+    }
+    if (args.location && args.location.trim().length > 200) {
+      throw new Error("Location must be 200 characters or fewer");
     }
 
     const now = Date.now();
     await ctx.db.patch(args.shipmentId, {
-      status: args.status as ShipmentStatus,
+      status: args.status,
       updatedAt: now,
     });
 
@@ -183,14 +197,14 @@ export const updateStatus = mutation({
       shipmentId: args.shipmentId,
       status: args.status,
       location: args.location,
-      description: args.description,
+      description: args.description.trim(),
       timestamp: now,
     });
 
     await ctx.db.insert("notifications", {
       userId: shipment.userId,
       title: "Shipment status update",
-      message: `${args.description}${args.location ? ` at ${args.location}` : ""}`,
+      message: `${args.description.trim()}${args.location ? ` at ${args.location.trim()}` : ""}`,
       type: "shipment_update",
       isRead: false,
       link: `/shipments/${args.shipmentId}`,
