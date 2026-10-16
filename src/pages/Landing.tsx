@@ -74,12 +74,12 @@ const steps = [
   {
     icon: ClipboardList,
     title: "Create your account",
-    desc: "Open one account and enter your personal workspace. You can explore the simulated tools before choosing what to use.",
+    desc: "Open one account and enter your personal workspace to manage tools and service activity.",
   },
   {
     icon: Wallet,
     title: "Manage your points",
-    desc: "Review the shared points balance and ledger. Points are internal credits for using simulated tools, not money or an investment.",
+    desc: "Review the shared points balance and ledger. Points are internal service credits, not a bank deposit or investment.",
   },
   {
     icon: Layers,
@@ -117,7 +117,7 @@ const FALLBACK_FAQ = [
   {
     question: "Is anything on the platform real?",
     answer:
-      "No. Cloudie is a simulation and training environment. Shipment records, tracking pages, travel documents, invoices, receipts, customer-facing bank and investment sites, and balances are fictional. Nothing is really shipped, booked, or banked.",
+      "Cloudie brings workspace tools together in one account. Shipment status and generated documents are records entered or created by users; they do not independently verify carrier activity, bookings, payments, or financial services.",
   },
   {
     question: "Do I have to use every workspace?",
@@ -127,20 +127,20 @@ const FALLBACK_FAQ = [
   {
     question: "What exactly is a point?",
     answer:
-      "Points are internal credits for using simulated tools. They are not money, an investment or a currency that can be cashed out. The cost is shown before a tool action is confirmed.",
+      "Points are internal platform credits. They are not a bank deposit, investment or cash balance. The applicable service cost is shown before a paid action is confirmed.",
   },
   {
     question: "What are ticketing documents for?",
     answer:
-      "They are fictional examples for education, demonstration and testing. They do not confirm a real flight, hotel stay, sale or booking and must never be presented as genuine documents.",
+      "Generated files use the information supplied by the user and do not independently confirm a flight, hotel stay, sale or booking. Verify details with the relevant provider before relying on a document.",
   },
 ];
 
 const features = [
   { icon: Users, title: "Personal workspace", desc: "Keep your points balance, ledger, marketplace orders, conversations and referral rewards together." },
-  { icon: Package, title: "Shipments", desc: "Create fictional parcel records, share public tracking links and follow status milestones." },
+  { icon: Package, title: "Shipments", desc: "Create parcel records, share tracking links and manage status milestones." },
   { icon: Plane, title: "Ticketing & documents", desc: "Generate printable flight and hotel document examples, invoices, receipts and other templates." },
-  { icon: Building2, title: "Business Suite", desc: "Build and manage demo customer-facing banking or investment sites with their own settings and dashboards." },
+  { icon: Building2, title: "Business Suite", desc: "Configure customer-facing banking or investment-style portal layouts and their settings and dashboards. Authorization and compliance remain your responsibility." },
   { icon: Mail, title: "Services studio", desc: "Compose email campaigns, render images and keep generated assets in a reusable library." },
   { icon: Wallet, title: "One points ledger", desc: "Review point credits and usage across tools. Points are internal platform credits and cannot be cashed out." },
 ];
@@ -149,13 +149,13 @@ const stats = [
   { label: "Login for every workspace", value: "One" },
   { label: "Connected workspaces", value: "Five" },
   { label: "Shared internal credits", value: "Points" },
-  { label: "Operating mode", value: "Simulation" },
+  { label: "Workspace", value: "Connected" },
 ];
 
 const proofPoints = [
   { icon: LayoutDashboard, value: "One sign-in", label: "Switch between five connected workspaces" },
-  { icon: ScrollText, value: "Print-ready", label: "Generate sample documents for demonstration" },
-  { icon: Shield, value: "Simulation first", label: "Records and balances are fictional, not real services" },
+  { icon: ScrollText, value: "Print-ready", label: "Generate and export document layouts" },
+  { icon: Shield, value: "Clear records", label: "Verify bookings, deliveries and payments with the responsible provider" },
   { icon: LifeBuoy, value: "Built-in support", label: "Find help for your workspace when you need it" },
 ];
 
@@ -256,11 +256,11 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Clear simulation notice, visible before visitors enter any workspace. */}
+      {/* Workspace notice, visible before visitors enter any workspace. */}
       <div className="border-b border-amber-500/25 bg-amber-500/[0.07]">
         <div className="mx-auto flex max-w-6xl items-start gap-2 px-4 py-2.5 text-xs leading-relaxed text-muted-foreground sm:items-center">
           <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 sm:mt-0" />
-          <span><strong className="text-foreground">Simulation only.</strong> Documents, bookings, shipment records, sites, and balances are fictional and intended for training, demonstration, and testing.</span>
+          <span><strong className="text-foreground">Important:</strong> Workspace records and generated documents are based on user input. They do not independently book, ship, bank, or verify transactions.</span>
         </div>
       </div>
 
@@ -280,7 +280,7 @@ export default function Landing() {
               Everything your business runs on, <span className="text-primary">in one workspace</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              {brand.name} brings shipments, travel documents, invoices, customer-facing banking and investment sites, and everyday tools together behind one sign-in. This is a simulation and training environment: nothing is really shipped, booked, or banked.
+              {brand.name} brings shipments, travel documents, invoices, customer-facing portal layouts, and everyday tools together behind one sign-in. The workspace organizes records and generates documents; it does not by itself book travel, dispatch parcels, or provide regulated financial services.
             </p>
             <form onSubmit={handleTrack} className="mt-8 flex max-w-md flex-col gap-2 sm:flex-row">
               <Input
@@ -382,11 +382,11 @@ export default function Landing() {
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-border bg-card p-4">
                   <p className="text-xs text-muted-foreground">Workspace preview</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">Demo</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">Workspace</p>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-4">
                   <p className="text-xs text-muted-foreground">Records shown</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">Fictional</p>
+                  <p className="mt-2 text-2xl font-bold text-foreground">User-entered</p>
                 </div>
               </div>
             </div>
@@ -463,7 +463,7 @@ export default function Landing() {
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground">Everything in its own workspace</h2>
             <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
-              A connected set of simulated tools for operations, documents, customer-facing sites and everyday work.
+              A connected set of workspace tools for operations, documents, customer-facing sites and everyday work.
             </p>
           </div>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -495,7 +495,7 @@ export default function Landing() {
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-foreground">Unified Points Economy</h2>
               <p className="mt-4 leading-relaxed text-muted-foreground">
-                One shared points balance covers access to the simulated tools across Personal, Shipments, Ticketing, Business Suite and Services. Review the ledger to see how credits are used.
+                One shared points balance covers eligible platform services across Personal, Shipments, Ticketing, Business Suite and Services. Review the ledger to see how credits are used.
               </p>
               <ul className="mt-6 space-y-3">
                 {["One shared balance across workspaces", "A visible transaction history", "Costs shown before tool actions", "Admin-managed points configuration"].map((item) => (
@@ -509,7 +509,7 @@ export default function Landing() {
             <div className="rounded-xl border border-border bg-background p-6 font-mono text-sm">
               <div className="space-y-2">
                 <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Illustrative points activity · not cash</div>
-                <div className="flex justify-between text-chart-2"><span>Demo credit</span><span>+500 pts</span></div>
+                <div className="flex justify-between text-chart-2"><span>Example ledger entry</span><span>+500 pts</span></div>
                 <div className="flex justify-between text-destructive"><span>Shipment example</span><span>-10 pts</span></div>
                 <div className="flex justify-between text-destructive"><span>Document example</span><span>-15 pts</span></div>
                 <div className="flex justify-between text-destructive"><span>Studio example</span><span>-5 pts</span></div>
@@ -623,8 +623,8 @@ export default function Landing() {
             <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Demo tracking · fictional</p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">DEMO-CLD-40192</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking example</p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">CLD-40192</p>
                 </div>
                 <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">In transit</span>
               </div>
@@ -694,7 +694,7 @@ export default function Landing() {
               The tools you need, already connected
             </h2>
             <p className="mt-4 leading-relaxed text-muted-foreground">
-              A responsive workspace designed for phones and desktops, with clear records and controls throughout the demo experience.
+              A responsive workspace designed for phones and desktops, with clear records and controls throughout.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -702,9 +702,9 @@ export default function Landing() {
               { icon: Smartphone, title: "Works on mobile", desc: "Responsive screens, touch-friendly controls and a navigation drawer built for smaller displays." },
               { icon: Bell, title: "Notifications", desc: "Keep track of updates, marketplace activity and messages from the workspace." },
               { icon: Activity, title: "Live workspace updates", desc: "Connected views refresh as platform records change, without relying on static screenshots." },
-              { icon: FileText, title: "Documents that print", desc: "Preview and export sample tickets, invoices and receipts in print-friendly layouts." },
+              { icon: FileText, title: "Documents that print", desc: "Preview and export tickets, invoices and receipts in print-friendly layouts." },
               { icon: Sun, title: "Light and dark themes", desc: "Choose a comfortable appearance for your work environment." },
-              { icon: ShieldCheck, title: "Simulation-first", desc: "Clear notices explain that shipment, travel, bank and investment records are fictional." },
+              { icon: ShieldCheck, title: "Clear records", desc: "Notices explain which details require confirmation with a carrier, travel provider or financial institution." },
             ].map((item, i) => (
               <motion.div
                 key={item.title}
