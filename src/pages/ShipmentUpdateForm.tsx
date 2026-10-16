@@ -431,7 +431,7 @@ export default function ShipmentUpdateForm() {
                   </p>
                   <Button
                     type="submit"
-                    disabled={loading || !canUpdate || currentBalance < UPDATE_COST}
+                    disabled={loading || !canUpdate || currentBalance < updatePrice.points}
                     className="gap-2"
                   >
                     {loading ? (
@@ -455,7 +455,7 @@ export default function ShipmentUpdateForm() {
                   Add Private Shipment Note
                 </CardTitle>
                 <CardDescription>
-                  Add a private account note to your shipment record. Costs {eventPrice} points.
+                  Add a private account note to your shipment record. Costs {eventPrice.points} points.
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleAddEvent}>
@@ -487,11 +487,11 @@ export default function ShipmentUpdateForm() {
                 </CardContent>
                 <div className="flex items-center justify-between border-t border-border px-6 py-4">
                   <p className="text-xs text-muted-foreground">
-                    Cost: <strong className="text-foreground">{eventPrice} points</strong>
+                    Cost: <strong className="text-foreground">{eventPrice.points} points</strong>
                   </p>
                   <Button
                     type="submit"
-                    disabled={loading || !canAddEvent || currentBalance < eventPrice}
+                    disabled={loading || !canAddEvent || currentBalance < eventPrice.points}
                     className="gap-2"
                   >
                     {loading ? (
