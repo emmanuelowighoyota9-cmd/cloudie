@@ -1,0 +1,51 @@
+name: Build Cloudie for InfinityFree
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-static-site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build production frontend
+        env:
+          VITE_CONVEX_URL: https://avid-raccoon-932.convex.cloud
+        run: npm run build
+
+      - name: Verify static output
+        run: |
+          test -f dist/index.html
+          test -f dist/404.html
+          test -f dist/.htaccess
+          echo "Production files verified:"
+          find dist -maxdepth 2 -type f | sort
+
+      - name: Package site for InfinityFree
+        run: zip -r cloudie-infinityfree-site.zip dist
+
+      - name: Upload deployable site
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudie-infinityfree-site
+          path: |
+            cloudie-infinityfree-site.zip
+            dist/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
