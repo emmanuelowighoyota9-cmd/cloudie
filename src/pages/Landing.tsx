@@ -42,6 +42,15 @@ import {
   ScrollText,
   LifeBuoy,
   Clock,
+  Layers,
+  Building2,
+  Mail,
+  Smartphone,
+  Bell,
+  Activity,
+  FileText,
+  Sun,
+  ShieldCheck,
 } from "lucide-react";
 
 /** Template previews shown on the landing page, in the order listed here. */
@@ -676,51 +685,41 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="bg-background py-16 sm:py-20 lg:py-28">
+      {/* Built-in capabilities */}
+      <section className="border-y border-border bg-background py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-6xl page-gutter">
-          <div className="mb-12 max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              Teams already running on {brand.name}
-            </p>
+          <div className="mb-10 max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Built in</p>
             <h2 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Calmer desks, faster answers
+              The tools you need, already connected
             </h2>
+            <p className="mt-4 leading-relaxed text-muted-foreground">
+              A responsive workspace designed for phones and desktops, with clear records and controls throughout the demo experience.
+            </p>
           </div>
-          <div className="grid gap-6 md:grid-cols-3">
-            {testimonials.map((item, i) => (
-              <motion.figure
-                key={item.name}
-                initial={{ opacity: 0, y: 20 }}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { icon: Smartphone, title: "Works on mobile", desc: "Responsive screens, touch-friendly controls and a navigation drawer built for smaller displays." },
+              { icon: Bell, title: "Notifications", desc: "Keep track of updates, marketplace activity and messages from the workspace." },
+              { icon: Activity, title: "Live workspace updates", desc: "Connected views refresh as platform records change, without relying on static screenshots." },
+              { icon: FileText, title: "Documents that print", desc: "Preview and export sample tickets, invoices and receipts in print-friendly layouts." },
+              { icon: Sun, title: "Light and dark themes", desc: "Choose a comfortable appearance for your work environment." },
+              { icon: ShieldCheck, title: "Simulation-first", desc: "Clear notices explain that shipment, travel, bank and investment records are fictional." },
+            ].map((item, i) => (
+              <motion.div
+                key={item.title}
+                initial={{ opacity: 0, y: 16 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.35 }}
-                transition={{ delay: 0.08 * i, duration: 0.45 }}
-                className="interactive-card flex h-full flex-col rounded-2xl border border-border bg-card p-6 elev-1"
+                viewport={{ once: true, amount: 0.25 }}
+                transition={{ delay: 0.05 * i, duration: 0.35 }}
+                className="rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/30 sm:p-6"
               >
-                <Quote className="h-5 w-5 text-primary" />
-                <blockquote className="mt-4 flex-1 text-sm leading-relaxed text-foreground">
-                  {item.quote}
-                </blockquote>
-                <div className="mt-4 flex items-center gap-1 text-accent" aria-label="Five out of five">
-                  {[0, 1, 2, 3, 4].map((star) => (
-                    <Star key={star} className="h-3.5 w-3.5 fill-current" />
-                  ))}
-                </div>
-                <figcaption className="mt-5 flex items-center gap-3 border-t border-border pt-4">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-secondary font-display text-xs font-bold text-primary">
-                    {item.name
-                      .split(" ")
-                      .map((part) => part[0])
-                      .join("")}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-foreground">{item.name}</span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {item.role} · {item.company}
-                    </span>
-                  </span>
-                </figcaption>
-              </motion.figure>
+                <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <item.icon className="size-5" />
+                </span>
+                <h3 className="mt-4 font-semibold text-foreground">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
+              </motion.div>
             ))}
           </div>
         </div>
