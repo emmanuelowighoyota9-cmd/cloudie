@@ -1,7 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import type { ShipmentStatus } from "./schema";
 
 function generateTrackingNumber(): string {
   const prefix = "CLD";
