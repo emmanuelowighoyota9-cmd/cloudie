@@ -88,3 +88,19 @@ Check:
 8. Logspanel test purchase with a non-production/test product
 9. Pending-order refresh
 10. Logout and protected-route redirects
+
+
+## InfinityFree deployment (cloudie.wuaze.com)
+
+InfinityFree serves the static frontend only; Convex remains the application backend.
+
+1. Build the production frontend with the production Convex URL available at build time:
+   `VITE_CONVEX_URL=https://avid-raccoon-932.convex.cloud npm run build`
+   (On Windows PowerShell, set the variable first with `$env:VITE_CONVEX_URL="https://avid-raccoon-932.convex.cloud"`, then run `npm run build`.)
+2. Upload the **contents** of the generated `dist/` folder to the InfinityFree website document root (usually `htdocs/`). Do not upload the source folder in place of the built files.
+3. Ensure the included `404.html` and `.htaccess` are uploaded alongside `index.html`.
+4. Open `https://cloudie.wuaze.com` and test the landing page, sign-in, dashboard, admin routes, and any integrations that rely on production Convex functions.
+
+The Convex URL is public frontend configuration, not a deploy key. Never put `CONVEX_DEPLOY_KEY`, provider API keys, passwords, or other secrets in `VITE_*` variables or uploaded frontend files. If authentication redirects or external integrations reject the new domain, update the relevant allowlists/configuration in the Convex deployment and provider dashboards.
+
+This repository change does not itself upload files or prove the production build succeeds. Build and runtime testing are still required before launch.
