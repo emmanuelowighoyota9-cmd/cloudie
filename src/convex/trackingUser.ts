@@ -415,10 +415,11 @@ export const customerAddShipmentEvent = mutation({
     await ctx.db.insert("trackingEvents", {
       shipmentId: args.shipmentId,
       status: shipment.status,
-      title: args.title,
-      description: `${actorName}: ${args.description}`,
+      title: `Customer note: ${title}`,
+      description: `${actorName}: ${description}`,
       eventTimestamp: Date.now(),
-      isPublic: args.isPublic ?? true,
+      // Customer-submitted notes are private and must not look like carrier updates.
+      isPublic: false,
       createdBy: userId,
       createdAt: Date.now(),
     });
