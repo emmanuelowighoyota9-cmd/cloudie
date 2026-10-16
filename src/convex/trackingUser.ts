@@ -215,7 +215,7 @@ export const createMyShipment = mutation({
       createdAt: Date.now(),
     });
 
-    return { shipmentId, trackingNumber };
+    return { shipmentId, trackingNumber, pointsCost: shipmentCost, newBalance };
   },
 });
 
