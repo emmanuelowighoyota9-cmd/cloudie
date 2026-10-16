@@ -1,5 +1,4 @@
 import { useQuery } from "convex/react";
-import { ShieldCheck } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,7 @@ export default function Shipments() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Shipment simulation.</span> Tracking numbers, parcel records and delivery milestones are fictional demo data and do not represent a real carrier booking.</p></div>
+      <div className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">Tracking details reflect records entered into this workspace. Confirm carrier custody, delivery status, and shipment charges directly with the carrier.</div>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Shipments</h1>
