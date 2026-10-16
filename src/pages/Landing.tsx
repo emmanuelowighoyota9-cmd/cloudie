@@ -139,7 +139,7 @@ const FALLBACK_FAQ = [
 const features = [
   { icon: Users, title: "Personal workspace", desc: "Keep your points balance, ledger, marketplace orders, conversations and referral rewards together." },
   { icon: Package, title: "Shipments", desc: "Create parcel records, share tracking links and manage status milestones." },
-  { icon: Plane, title: "Ticketing & documents", desc: "Generate printable flight and hotel document examples, invoices, receipts and other templates." },
+  { icon: Plane, title: "Ticketing & documents", desc: "Create printable flight and hotel itineraries, invoices, receipts and other document templates." },
   { icon: Building2, title: "Business Suite", desc: "Configure customer-facing banking or investment-style portal layouts and their settings and dashboards. Authorization and compliance remain your responsibility." },
   { icon: Mail, title: "Services studio", desc: "Compose email campaigns, render images and keep generated assets in a reusable library." },
   { icon: Wallet, title: "One points ledger", desc: "Review point credits and usage across tools. Points are internal platform credits and cannot be cashed out." },
@@ -626,7 +626,7 @@ export default function Landing() {
                   <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking workflow</p>
                   <p className="mt-1 font-mono text-sm font-semibold text-foreground">Shipment status</p>
                 </div>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary" >Status updates</span>
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">Status updates</span>
               </div>
               <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                 <div className="h-full w-1/2 rounded-full bg-primary" />
