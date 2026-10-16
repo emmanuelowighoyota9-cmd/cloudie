@@ -508,13 +508,13 @@ export default function Landing() {
             </div>
             <div className="rounded-xl border border-border bg-background p-6 font-mono text-sm">
               <div className="space-y-2">
-                <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Illustrative points activity · not cash</div>
-                <div className="flex justify-between text-chart-2"><span>Example ledger entry</span><span>+500 pts</span></div>
-                <div className="flex justify-between text-destructive"><span>Shipment example</span><span>-10 pts</span></div>
-                <div className="flex justify-between text-destructive"><span>Document example</span><span>-15 pts</span></div>
-                <div className="flex justify-between text-destructive"><span>Studio example</span><span>-5 pts</span></div>
-                <div className="flex justify-between text-chart-2"><span>Referral example</span><span>+5 pts</span></div>
-                <div className="flex justify-between border-t border-border pt-2 font-bold text-foreground"><span>Illustrative balance</span><span>475 pts</span></div>
+                <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Points ledger categories</div>
+                <div className="flex justify-between text-chart-2"><span>Service credits</span><span>Ledger entry</span></div>
+                <div className="flex justify-between text-destructive"><span>Shipment services</span><span>Ledger entry</span></div>
+                <div className="flex justify-between text-destructive"><span>Document generation</span><span>Ledger entry</span></div>
+                <div className="flex justify-between text-destructive"><span>Creative studio</span><span>Ledger entry</span></div>
+                <div className="flex justify-between text-chart-2"><span>Referral rewards</span><span>Ledger entry</span></div>
+                <div className="flex justify-between border-t border-border pt-2 font-bold text-foreground"><span>Shared points balance</span><span>Shown in your account</span></div>
               </div>
             </div>
           </div>
@@ -623,19 +623,19 @@ export default function Landing() {
             <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking example</p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">CLD-40192</p>
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tracking workflow</p>
+                  <p className="mt-1 font-mono text-sm font-semibold text-foreground">Shipment status</p>
                 </div>
-                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">In transit</span>
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary" >Status updates</span>
               </div>
               <div className="mt-5 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
                 <div className="h-full w-1/2 rounded-full bg-primary" />
               </div>
               <div className="mt-6 space-y-4">
                 {[
-                  { icon: MapPin, title: "Damascus, Syria", meta: "Departed origin facility" },
-                  { icon: Truck, title: "Aberdeen, United Kingdom", meta: "Current location" },
-                  { icon: Package, title: "Houston, United States", meta: "Destination · ETA Feb 12" },
+                  { icon: Package, title: "Shipment record", meta: "Review the details entered" },
+                  { icon: Truck, title: "Carrier status", meta: "Confirm updates with the carrier" },
+                  { icon: MapPin, title: "Delivery confirmation", meta: "Verify delivery directly with the carrier" },
                 ].map((stop) => (
                   <div key={stop.title} className="flex items-center gap-3">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
