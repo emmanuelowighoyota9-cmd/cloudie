@@ -452,10 +452,10 @@ export default function ShipmentUpdateForm() {
             <Card className="border-border">
               <CardHeader>
                 <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                  Add Tracking Event
+                  Add Private Shipment Note
                 </CardTitle>
                 <CardDescription>
-                  Add a note or event to the shipment timeline. Costs {EVENT_COST} points.
+                  Add a private account note to your shipment record. Costs {eventPrice} points.
                 </CardDescription>
               </CardHeader>
               <form onSubmit={handleAddEvent}>
@@ -466,7 +466,7 @@ export default function ShipmentUpdateForm() {
                       required
                       value={eventTitle}
                       onChange={(e) => setEventTitle(e.target.value)}
-                      placeholder="e.g. Package handed to courier"
+                      placeholder="e.g. Recipient requested a delivery change"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -481,17 +481,17 @@ export default function ShipmentUpdateForm() {
                   </div>
                   <div className="rounded-lg bg-muted/50 p-3">
                     <p className="text-xs text-muted-foreground">
-                      This event will be visible on the public tracking page and added to the shipment timeline.
+                      This note is visible in your account only. Carrier status and delivery events must be confirmed by the carrier.
                     </p>
                   </div>
                 </CardContent>
                 <div className="flex items-center justify-between border-t border-border px-6 py-4">
                   <p className="text-xs text-muted-foreground">
-                    Cost: <strong className="text-foreground">{EVENT_COST} points</strong>
+                    Cost: <strong className="text-foreground">{eventPrice} points</strong>
                   </p>
                   <Button
                     type="submit"
-                    disabled={loading || !canAddEvent || currentBalance < EVENT_COST}
+                    disabled={loading || !canAddEvent || currentBalance < eventPrice}
                     className="gap-2"
                   >
                     {loading ? (
