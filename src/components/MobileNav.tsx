@@ -8,16 +8,15 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "Overview", icon: LayoutDashboard, to: "/dashboard" },
+  { label: "My Services", icon: Layers, to: "/services/my" },
+  { label: "Personal Workspace", icon: Wallet, to: "/personal" },
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
+  { label: "My Orders", icon: Receipt, to: "/orders" },
+  { label: "Points & Billing", icon: CreditCard, to: "/buy-points" },
+  { label: "Digital Services", icon: Zap, to: "/vtu" },
   { label: "Numbers", icon: Phone, to: "/marketplace/numbers" },
   { label: "Social Boost", icon: TrendingUp, to: "/marketplace/boost" },
-  { label: "My Orders", icon: Receipt, to: "/orders" },
-  { label: "Fund Wallet", icon: CreditCard, to: "/buy-points" },
-  { label: "Airtime & Data", icon: Zap, to: "/vtu" },
-  { label: "Data", icon: Wifi, to: "/vtu/data" },
-  { label: "Electricity", icon: Lightbulb, to: "/vtu/electricity" },
-  { label: "Exam Pins", icon: GraduationCap, to: "/vtu/exam-pins" },
   { label: "Transactions", icon: Wallet, to: "/transactions" },
   { label: "Become Vendor", icon: Store, to: "/vendor" },
   { label: "Referrals", icon: Users, to: "/referrals" },
@@ -41,7 +40,7 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
   const isActive = (path: string) =>
     path === "/dashboard"
       ? location.pathname === "/dashboard"
-      : location.pathname === path || location.pathname.startsWith(path + "/");
+      : path === "/personal" || path === "/services" ? location.pathname === path || location.pathname.startsWith(path + "/") : location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -50,8 +49,8 @@ export function MobileNav({ onNavigate }: MobileNavProps) {
           <CloudieMark />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-base font-bold tracking-tight text-foreground">Cloudie</p>
-          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Workspace</p>
+          <p className="truncate text-base font-bold tracking-tight text-foreground">Cloudie Operations</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">Connected workspaces · Demo</p>
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto overscroll-contain p-3" aria-label="Mobile navigation">
