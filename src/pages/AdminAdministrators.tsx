@@ -89,7 +89,7 @@ export default function AdminAdministrators() {
         actions={
           <Button
             onClick={() => setOpen(true)}
-            className="gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
+            className="gap-2"
           >
             <UserPlus className="h-4 w-4" />
             Add administrator
@@ -241,7 +241,7 @@ export default function AdminAdministrators() {
             <Button
               onClick={handleCreate}
               disabled={busy}
-              className="gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
+              className="gap-2"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               Create administrator

@@ -210,7 +210,7 @@ export default function Vendor() {
         </Card>
 
         <div className="flex justify-end">
-          <Button type="submit" size="lg" disabled={loading || !form.agreeToTerms} className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+          <Button type="submit" size="lg" disabled={loading || !form.agreeToTerms} className="gap-2">
             <Store className="h-4 w-4" />
             {loading ? "Submitting..." : "Submit Application"}
           </Button>

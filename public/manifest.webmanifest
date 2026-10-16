@@ -1,15 +1,15 @@
 {
-  "name": "Crestline Express",
-  "short_name": "Crestline",
-  "description": "Crestline Express is a modern shipment platform for booking, tracking, documents, and delivery operations.",
+  "name": "Cloudie Operations",
+  "short_name": "Cloudie",
+  "description": "Cloudie Operations is a unified operations platform for shipments, tracking, documents, payments and airtime.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "background_color": "#f5f3ee",
-  "theme_color": "#0f766e",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "categories": ["business", "productivity", "utilities"],
   "lang": "en",
   "dir": "ltr",
@@ -38,7 +38,7 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "url": "/dashboard",
-      "description": "Open the Crestline Express dashboard"
+      "description": "Open the Cloudie Operations dashboard"
     },
     {
       "name": "Create shipment",

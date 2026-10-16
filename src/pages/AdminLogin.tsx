@@ -276,7 +276,7 @@ function AdminLoginForm() {
               </div>
 
               {error && (
-                <p className="text-sm text-red-400" role="alert">
+                <p className="text-sm text-error" role="alert">
                   {error}
                 </p>
               )}
@@ -284,7 +284,7 @@ function AdminLoginForm() {
               <Button
                 type="submit"
                 disabled={isLoading || isAuthenticated}
-                className="w-full gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
+                className="w-full gap-2"
               >
                 {isLoading ? (
                   <>
@@ -341,7 +341,7 @@ function AdminLoginForm() {
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-400" role="alert">
+                  <p className="text-sm text-error" role="alert">
                     {error}
                   </p>
                 )}
@@ -349,7 +349,7 @@ function AdminLoginForm() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
+                  className="w-full gap-2"
                 >
                   {isLoading ? (
                     <>
@@ -409,7 +409,7 @@ function AdminLoginForm() {
                 </div>
 
                 {error && (
-                  <p className="text-sm text-red-400" role="alert">
+                  <p className="text-sm text-error" role="alert">
                     {error}
                   </p>
                 )}
@@ -417,7 +417,7 @@ function AdminLoginForm() {
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full gap-2 bg-gradient-to-r from-red-600 to-orange-600 text-white hover:from-red-700 hover:to-orange-700"
+                  className="w-full gap-2"
                 >
                   {isLoading ? (
                     <>

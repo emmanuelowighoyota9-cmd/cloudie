@@ -19,7 +19,6 @@ import {
   Receipt,
   LifeBuoy,
   Search,
-  CreditCard,
   Sparkles,
   Smartphone,
   Wifi,
@@ -66,7 +65,8 @@ function MetricCard({
   color,
 }: {
   title: string;
-  value: string | number;
+  /** `undefined` means the subscription has not answered yet. */
+  value: string | number | undefined;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
 }) {
@@ -78,7 +78,16 @@ function MetricCard({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {title}
             </p>
-            <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+            {value === undefined ? (
+              /* Still loading: a placeholder, never a zero. Showing 0 while the
+                 subscription is in flight reads as a real balance of nothing. */
+              <span
+                aria-hidden
+                className="mt-2 block h-7 w-14 animate-pulse rounded bg-surface-2"
+              />
+            ) : (
+              <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
+            )}
           </div>
           <div
             className={`flex size-10 items-center justify-center rounded-xl ${color}`}
@@ -145,7 +154,7 @@ export default function Dashboard() {
               >
                 <Bell className="size-5" />
                 {(unreadNotifications ?? 0) > 0 && (
-                  <span className="absolute -right-1 -top-1 flex min-w-5 h-5 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-foreground">
                     {unreadNotifications}
                   </span>
                 )}
@@ -199,9 +208,18 @@ export default function Dashboard() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Available wallet
                 </p>
-                <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                  ₦{(balance ?? 0).toLocaleString("en-NG")}
-                </p>
+                {/* `undefined` = still loading; `null` = no wallet row yet, which
+                    is a real zero rather than an unknown. */}
+                {balance === undefined ? (
+                  <span
+                    aria-hidden
+                    className="mt-2 block h-9 w-40 animate-pulse rounded-lg bg-surface-2"
+                  />
+                ) : (
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                    ₦{(balance ?? 0).toLocaleString("en-NG")}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Ready for Cloudie services
                 </p>
@@ -225,7 +243,9 @@ export default function Dashboard() {
                   Activity
                 </p>
                 <p className="text-xs font-bold">
-                  {monthlyTransactions} this month
+                  {ledger === undefined
+                    ? "Loading…"
+                    : `${monthlyTransactions} this month`}
                 </p>
               </Link>
               <Link
@@ -234,7 +254,9 @@ export default function Dashboard() {
               >
                 <Receipt className="size-4 text-primary" />
                 <p className="mt-2 text-[10px] text-muted-foreground">Orders</p>
-                <p className="text-xs font-bold">{activeOrders} active</p>
+                <p className="text-xs font-bold">
+                  {orders === undefined ? "Loading…" : `${activeOrders} active`}
+                </p>
               </Link>
             </div>
           </div>
@@ -287,7 +309,7 @@ export default function Dashboard() {
         <StaggerItem>
           <MetricCard
             title="Shipments"
-            value={shipments?.length ?? 0}
+            value={shipments?.length}
             icon={Package}
             color="bg-primary/10 text-primary"
           />
@@ -295,7 +317,7 @@ export default function Dashboard() {
         <StaggerItem>
           <MetricCard
             title="Referrals"
-            value={referrals?.length ?? 0}
+            value={referrals?.length}
             icon={Users}
             color="bg-primary/10 text-primary"
           />
@@ -303,7 +325,7 @@ export default function Dashboard() {
         <StaggerItem>
           <MetricCard
             title="Transactions this month"
-            value={monthlyTransactions}
+            value={ledger === undefined ? undefined : monthlyTransactions}
             icon={TrendingUp}
             color="bg-primary/10 text-primary"
           />

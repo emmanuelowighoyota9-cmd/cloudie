@@ -103,7 +103,7 @@ export function ShipmentReceipt({ shipment }: { shipment: ReceiptShipment }) {
 
       <div
         ref={ref}
-        className="mx-auto w-full max-w-[750px] bg-white text-gray-900 rounded-xl overflow-hidden shadow-lg shadow-black/5"
+        className="paper-surface mx-auto w-full max-w-[750px] bg-white text-gray-900 rounded-xl overflow-hidden shadow-lg shadow-black/5"
         style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}
       >
         {/* ── Branded Header ── */}

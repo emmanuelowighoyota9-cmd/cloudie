@@ -25,9 +25,9 @@ export function AdminPageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-[0_12px_40px_-32px_hsl(var(--shadow-color)/0.5)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+    <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{title}</h1>
+        <h1 className="page-title text-foreground">{title}</h1>
         {description && <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">{actions}</div>}
@@ -35,13 +35,21 @@ export function AdminPageHeader({
   );
 }
 
+/**
+ * Stat tile tones.
+ *
+ * Every tile is a tinted emerald/status chip on the card surface — the icon
+ * colour reinforces the label, it never carries the meaning on its own. The old
+ * version paired a `bg-*-50` light tint with a `dark:` override, which is how a
+ * panel ends up with pale blue squares on a black page.
+ */
 const STAT_COLORS = {
-  blue: "bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400",
-  green: "bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400",
-  amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400",
-  red: "bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400",
-  purple: "bg-purple-50 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400",
-  indigo: "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400",
+  blue: "bg-info/12 text-info",
+  green: "bg-primary/12 text-primary",
+  amber: "bg-warning/12 text-warning",
+  red: "bg-error/12 text-error",
+  purple: "bg-surface-2 text-foreground",
+  indigo: "bg-info/12 text-info",
 } as const;
 
 export function StatCard({
@@ -58,24 +66,27 @@ export function StatCard({
   hint?: string;
 }) {
   return (
-    <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+    <Card className="interactive-card h-full border-border">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {title}
             </p>
             {value === undefined ? (
-              <div className="mt-2 h-7 w-16 animate-pulse rounded bg-slate-100 dark:bg-slate-700" />
+              <div
+                className="mt-2 h-7 w-16 animate-pulse rounded bg-surface-2"
+                aria-hidden
+              />
             ) : (
-              <p className="mt-1 truncate text-2xl font-bold text-slate-900 dark:text-white">
+              <p className="mt-1 truncate text-2xl font-bold tracking-tight text-foreground">
                 {typeof value === "number" ? value.toLocaleString() : value}
               </p>
             )}
-            {hint && <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p>}
+            {hint && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{hint}</p>}
           </div>
-          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${STAT_COLORS[color]}`}>
-            <Icon className="h-4 w-4" />
+          <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${STAT_COLORS[color]}`}>
+            <Icon className="size-4" />
           </div>
         </div>
       </CardContent>
@@ -83,38 +94,61 @@ export function StatCard({
   );
 }
 
+/**
+ * Status tones on the enterprise palette.
+ *
+ * Four tones carry every record state: settled (green), in progress (amber),
+ * blocked (red), moving (blue), and inert (grey). Each is a tinted chip with a
+ * hairline of the same hue, so it reads on the black card surface without
+ * shouting.
+ */
+const TONE = {
+  settled: "border-success/30 bg-success/12 text-success",
+  progress: "border-warning/30 bg-warning/12 text-warning",
+  blocked: "border-error/30 bg-error/12 text-error",
+  moving: "border-info/30 bg-info/12 text-info",
+  inert: "border-border bg-surface-2 text-muted-foreground",
+} as const;
+
 const BADGE_STYLES: Record<string, string> = {
-  active: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  approved: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  verified: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  completed: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  delivered: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  resolved: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-  dismissed: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  closed: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
-  pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  under_review: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  reviewing: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  processing: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  escrow: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  more_information_required: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300",
-  out_for_delivery: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300",
-  in_transit: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
-  picked_up: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300",
-  open: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  rejected: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  suspended: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  refunded: "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
-  disputed: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  failed: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-  cancelled: "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400",
-  draft: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+  active: TONE.settled,
+  approved: TONE.settled,
+  verified: TONE.settled,
+  completed: TONE.settled,
+  delivered: TONE.settled,
+  resolved: TONE.settled,
+  dismissed: TONE.inert,
+  closed: TONE.inert,
+  pending: TONE.progress,
+  under_review: TONE.progress,
+  reviewing: TONE.progress,
+  processing: TONE.progress,
+  escrow: TONE.progress,
+  more_information_required: TONE.progress,
+  out_for_delivery: TONE.moving,
+  in_transit: TONE.moving,
+  picked_up: TONE.moving,
+  open: TONE.blocked,
+  rejected: TONE.blocked,
+  suspended: TONE.blocked,
+  refunded: TONE.progress,
+  disputed: TONE.blocked,
+  failed: TONE.blocked,
+  cancelled: TONE.inert,
+  draft: TONE.inert,
 };
 
+/**
+ * A status pill.
+ *
+ * The status NAME is always printed — colour is never the only signal, so the
+ * badge still means something in greyscale, in a screenshot, and to a
+ * colour-blind reader.
+ */
 export function StatusBadge({ status }: { status: string }) {
-  const style = BADGE_STYLES[status] ?? "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300";
+  const style = BADGE_STYLES[status] ?? TONE.inert;
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium capitalize ${style}`}>
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${style}`}>
       {status.replace(/_/g, " ")}
     </span>
   );

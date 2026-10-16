@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { buildPreviewSvg, categoryDef, defaultValues, svgToDataUrl } from "@/lib/docTemplateEngine";
 import { PLATFORM_TEMPLATES } from "@/lib/platformTemplates";
 import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPrompt";
@@ -22,20 +23,15 @@ import {
   ArrowRight,
   Check,
   Sparkles,
-  RadioTower,
-  Route,
   Plane,
-  ReceiptText,
   Search,
   MapPin,
   QrCode,
   Truck,
   FileStack,
   ClipboardList,
-  Link2,
   FileCheck2,
-  Quote,
-  Star,
+  Palette,
   Phone,
   LayoutDashboard,
   ScrollText,
@@ -48,7 +44,6 @@ import {
   Bell,
   Activity,
   FileText,
-  Sun,
   ShieldCheck,
 } from "lucide-react";
 
@@ -87,30 +82,6 @@ const steps = [
   },
 ];
 
-const testimonials = [
-  {
-    quote:
-      "We used to reconcile four spreadsheets before answering a customer. Now one screen answers it, and the tracking link speaks for us.",
-    name: "Adaeze Okonkwo",
-    role: "Head of Operations",
-    company: "Northfold Trading",
-  },
-  {
-    quote:
-      "The document studio replaced a folder of templates. Customs packets come out of the same record we already booked.",
-    name: "Marcus Reyes",
-    role: "Customs Lead",
-    company: "Lakeview Interiors",
-  },
-  {
-    quote:
-      "Our desk stopped fielding \"where is my parcel?\" calls. Customers track it themselves and we get the credit.",
-    name: "Priya Ramanathan",
-    role: "Customer Care Manager",
-    company: "Harbour Works Logistics",
-  },
-];
-
 /** Used only when the platform has no admin-configured FAQs yet. */
 const FALLBACK_FAQ = [
   {
@@ -144,11 +115,18 @@ const features = [
   { icon: Wallet, title: "One points ledger", desc: "Review point credits and usage across tools. Points are internal platform credits and cannot be cashed out." },
 ];
 
+/**
+ * Facts about the platform itself.
+ *
+ * Every entry has to be checkable in this repository — no adoption numbers, no
+ * customer counts, no performance claims. A landing page that inflates what the
+ * product does is a liability the moment someone signs in.
+ */
 const stats = [
-  { label: "Login for every workspace", value: "One" },
-  { label: "Connected workspaces", value: "Five" },
-  { label: "Shared internal credits", value: "Points" },
-  { label: "Workspace", value: "Connected" },
+  { label: "Workspaces under one sign-in", value: "5" },
+  { label: "Shared credits across tools", value: "One ledger" },
+  { label: "Public tracking", value: "No account" },
+  { label: "Document export", value: "PDF + PNG" },
 ];
 
 const proofPoints = [
@@ -313,32 +291,24 @@ export default function Landing() {
                 </Button>
               </Link>
             </div>
-            <div className="mt-8 grid max-w-xl grid-cols-3 gap-3">
+            {/* Capabilities, not metrics. The previous version of this block
+                showed numbers like "12 shipments need review" — invented
+                operational data on a page nobody can sign into yet, which is
+                both dishonest and the first thing a real customer would spot. */}
+            <div className="mt-8 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
               {[
-                { icon: Layers, label: "Workspaces", value: "5" },
-                { icon: Shield, label: "Access", value: "One login" },
-                { icon: Wallet, label: "Credits", value: "Points" },
+                { icon: Layers, value: "5", label: "Workspaces" },
+                { icon: Wallet, value: "One", label: "Credits ledger" },
+                { icon: Truck, value: "Live", label: "Tracking page" },
+                { icon: FileStack, value: "PDF", label: "Document export" },
               ].map((item) => (
-                <div key={item.label} className="rounded-lg border border-border bg-background p-3">
-                  <item.icon className="h-4 w-4 text-primary" />
-                  <p className="mt-3 text-base font-semibold text-foreground">{item.value}</p>
-                  <p className="text-xs text-muted-foreground">{item.label}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 grid max-w-xl gap-3 sm:grid-cols-2">
-              {[
-                { icon: Plane, label: "Priority desk", value: "12 shipments need review" },
-                { icon: ReceiptText, label: "Document ops", value: "Customs packets ready to send" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center gap-3 rounded-lg border border-border bg-accent/55 p-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-card text-primary">
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.value}</p>
-                  </div>
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-border bg-card/70 p-3 transition-colors duration-200 hover:border-primary/30"
+                >
+                  <item.icon className="size-4 text-primary" />
+                  <p className="mt-2.5 text-sm font-semibold text-foreground">{item.value}</p>
+                  <p className="text-[11px] leading-tight text-muted-foreground">{item.label}</p>
                 </div>
               ))}
             </div>
@@ -350,42 +320,42 @@ export default function Landing() {
             transition={{ delay: 0.15, duration: 0.55 }}
             className="relative"
           >
-            <div className="surface-lift rounded-2xl border border-border bg-background/95 p-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-border pb-4">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Shipment control</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">Priority delivery queue</p>
+            {/* A real artefact rather than a mocked-up dashboard: this preview
+                is produced by the same template engine that renders exports, so
+                nothing in the hero is a promise the product cannot keep. */}
+            <div className="surface-lift sheen rounded-2xl border border-border bg-card p-4">
+              <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Rendering live in your browser
+                  </p>
+                  <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                    {documentShowcase[0]?.name ?? "Document preview"}
+                  </p>
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <RadioTower className="h-5 w-5" />
-                </div>
+                <Badge variant="success" className="shrink-0 gap-1.5">
+                  <FileCheck2 className="size-3" />
+                  Template engine
+                </Badge>
               </div>
-              <div className="mt-4 space-y-3">
-                {[
-                  { label: "CLX-8241 · Rotterdam", meta: "Customs packet attached", value: "On time", icon: Package },
-                  { label: "CLX-8238 · Singapore", meta: "Departed origin facility", value: "In transit", icon: RadioTower },
-                  { label: "CLX-8229 · New York", meta: "Delivery window confirmed", value: "Today", icon: Truck },
-                ].map((item) => (
-                  <div key={item.label} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
-                      <item.icon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-foreground">{item.label}</p>
-                      <p className="truncate text-xs text-muted-foreground">{item.meta}</p>
-                    </div>
-                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">{item.value}</span>
-                  </div>
-                ))}
-              </div>
+
+              {documentShowcase[0] ? (
+                <img
+                  src={documentShowcase[0].src}
+                  alt={`${documentShowcase[0].name} — preview rendered by the Cloudie template engine`}
+                  className="mx-auto mt-4 h-auto w-full rounded-lg border border-border bg-surface"
+                  style={{ maxHeight: 400, objectFit: "contain" }}
+                />
+              ) : null}
+
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground">Workspace preview</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">Workspace</p>
+                <div className="rounded-xl border border-border bg-surface p-3">
+                  <p className="text-[11px] text-muted-foreground">Preview and export</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">One render engine</p>
                 </div>
-                <div className="rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs text-muted-foreground">Records shown</p>
-                  <p className="mt-2 text-2xl font-bold text-foreground">User-entered</p>
+                <div className="rounded-xl border border-border bg-surface p-3">
+                  <p className="text-[11px] text-muted-foreground">Share links</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">Expiry and revocation</p>
                 </div>
               </div>
             </div>
@@ -702,7 +672,7 @@ export default function Landing() {
               { icon: Bell, title: "Notifications", desc: "Keep track of updates, marketplace activity and messages from the workspace." },
               { icon: Activity, title: "Live workspace updates", desc: "Connected views refresh as platform records change, without relying on static screenshots." },
               { icon: FileText, title: "Documents that print", desc: "Preview and export tickets, invoices and receipts in print-friendly layouts." },
-              { icon: Sun, title: "Light and dark themes", desc: "Choose a comfortable appearance for your work environment." },
+              { icon: Palette, title: "One consistent interface", desc: "The same black surface, white type scale and emerald accent on every screen, so a record looks identical wherever it is opened." },
               { icon: ShieldCheck, title: "Clear records", desc: "Notices explain which details require confirmation with a carrier, travel provider or financial institution." },
             ].map((item, i) => (
               <motion.div

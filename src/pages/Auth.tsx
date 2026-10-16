@@ -262,7 +262,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </div>
 
                     {error && (
-                      <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                      <p className="text-sm text-error" role="alert">
                         {error}
                       </p>
                     )}
@@ -270,7 +270,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <Button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+                      className="w-full gap-2"
                     >
                       {isLoading ? (
                         <>
@@ -332,7 +332,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </div>
 
                     {error && (
-                      <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                      <p className="text-sm text-error" role="alert">
                         {error}
                       </p>
                     )}
@@ -340,7 +340,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <Button
                       type="submit"
                       disabled={isLoading}
-                      className="w-full gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+                      className="w-full gap-2"
                     >
                       {isLoading ? (
                         <>
@@ -504,7 +504,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   </div>
 
                   {error && (
-                    <p className="text-sm text-red-600 dark:text-red-400" role="alert">
+                    <p className="text-sm text-error" role="alert">
                       {error}
                     </p>
                   )}
@@ -512,7 +512,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
+                    className="w-full gap-2"
                   >
                     {isLoading ? (
                       <>

@@ -3,27 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f766e" />
-    <title>Crestline Express · Offline</title>
+    <meta name="theme-color" content="#000000" />
+    <title>Cloudie Operations · Offline</title>
     <style>
+      /* Mirrors the app's design tokens (see src/index.css) so going offline
+         does not drop the customer into a different-looking product. */
       :root {
-        color-scheme: light dark;
-        --bg: #f5f3ee;
-        --fg: #192320;
-        --muted: #6e746d;
-        --card: #fffcf6;
-        --border: #ded5c4;
-        --primary: #0f766e;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #10201d;
-          --fg: #eef5f1;
-          --muted: #9db0a8;
-          --card: #16302b;
-          --border: #23423b;
-          --primary: #5fbfae;
-        }
+        color-scheme: dark;
+        --bg: #000000;
+        --fg: #ffffff;
+        --muted: #a1a1aa;
+        --card: #111111;
+        --border: #27272a;
+        --primary: #10b981;
+        --primary-ink: #04120c;
       }
       * { box-sizing: border-box; }
       body {
@@ -70,7 +63,12 @@
       a.primary {
         background: var(--primary);
         border-color: var(--primary);
-        color: #f7fffb;
+        color: var(--primary-ink);
+        font-weight: 600;
+      }
+      a.primary:hover {
+        background: #059669;
+        border-color: #059669;
       }
     </style>
   </head>
@@ -80,14 +78,14 @@
         <svg width="30" height="30" viewBox="0 0 512 512" fill="none">
           <path
             d="M360 296H168a48 48 0 0 1-6-95.6 76 76 0 0 1 145-18.4A58 58 0 0 1 360 296Z"
-            fill="#f7fffb"
+            fill="#04120c"
           />
         </svg>
       </div>
       <h1>You're offline</h1>
       <p>
-        Crestline Express couldn't reach the network. Your data is safe — reconnect and
-        everything will sync automatically.
+        Cloudie Operations couldn't reach the network. Nothing you entered has been
+        lost — reconnect and the workspace syncs automatically.
       </p>
       <div class="actions">
         <button onclick="location.reload()">Try again</button>

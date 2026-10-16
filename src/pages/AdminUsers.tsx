@@ -131,7 +131,7 @@ export default function AdminUsers() {
           {filtered.map((u) => (
             <Card key={u._id} className="rounded-xl border-slate-200 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700">
               <CardContent className="flex flex-wrap items-center gap-3 p-4">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-sm font-bold text-white">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">
                   {(u.name || u.email || "U")[0]?.toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">

@@ -1,18 +1,44 @@
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { RequireAdmin } from "@/components/RequireAdmin";
+import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePendingChanges } from "@/lib/pendingChanges";
-import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
-  Activity, BadgeDollarSign, BarChart3, Bell, Boxes, Brain, Building2,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Activity, BadgeDollarSign, BarChart3, Bell, Boxes, Brain, Building2, ChevronRight,
   ClipboardCheck, CreditCard, FileText, Gavel, Inbox, Layers, LayoutDashboard,
-  LogOut, Mail, MapPin, Menu, Package, Palette, Search, Settings, ShieldAlert,
-  ShieldCheck, ShoppingCart, Sun, Moon, Tags, Truck, Users, X, Zap, Waypoints, Wrench,
+  LogOut, Mail, MapPin, Menu, Package, Palette, Settings, ShieldAlert,
+  ShieldCheck, ShoppingCart, Tags, Truck, Users, Zap, Waypoints, Wrench,
+  PanelLeftClose, PanelLeftOpen,
   type LucideIcon,
 } from "lucide-react";
+import { AppSearch } from "@/components/AppSearch";
 
 type AdminItem = { to: string; label: string; icon: LucideIcon; exact?: boolean; badge?: "openFlags" | "pendingKyc" | "pendingVendors" | "openDisputes"; pendingScope?: "pricing" | "catalog" };
 type AdminGroup = { label: GroupLabel; items: AdminItem[] };
@@ -71,25 +97,40 @@ const ADMIN_GROUPS: AdminGroup[] = [
   ]},
 ] as const;
 
+/** The group + item the current path belongs to, for the breadcrumb trail. */
+function trail(pathname: string): { group: AdminGroup; item: AdminItem } | null {
+  for (const group of ADMIN_GROUPS) {
+    for (const item of group.items) {
+      if (pathname === item.to || (!item.exact && pathname.startsWith(item.to + "/"))) {
+        return { group, item };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Which sidebar group is open.
+ *
+ * `null` = "no manual choice yet", so the open group is derived from the current
+ * route; `false` = the administrator collapsed everything. Deriving instead of
+ * mirroring the route into state inside an effect is what keeps a navigation
+ * from triggering a second render pass on every route change.
+ */
+type GroupChoice = GroupLabel | null | false;
+
 function AdminShell() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [expandedGroup, setExpandedGroup] = useState<GroupLabel | null>(null);
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const [collapsed, setCollapsed] = useState(false);
+  const [expandedGroup, setExpandedGroup] = useState<GroupChoice>(null);
   const badgeCounts = useQuery(api.adminApi.adminBadgeCounts) ?? {
     pendingVendors: 0, pendingKyc: 0, openDisputes: 0, openFlags: 0,
   };
   const pendingPricing = usePendingChanges("pricing");
   const pendingCatalog = usePendingChanges("catalog");
-
-  useEffect(() => {
-    setMobileOpen(false);
-    const active = ADMIN_GROUPS.find((group) =>
-      group.items.some((item) => location.pathname === item.to || location.pathname.startsWith(item.to + "/")),
-    );
-    if (active) setExpandedGroup(active.label);
-  }, [location.pathname]);
 
   const pendingCountFor = (scope: "pricing" | "catalog" | undefined) =>
     scope === "pricing" ? pendingPricing : scope === "catalog" ? pendingCatalog : 0;
@@ -97,47 +138,111 @@ function AdminShell() {
   const badgeFor = (badge: keyof typeof badgeCounts | undefined) =>
     badge ? badgeCounts[badge] : 0;
 
-  const toggleTheme = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try { localStorage.setItem("cloudie-theme", next ? "dark" : "light"); } catch {}
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/admin/login");
   };
 
-  const navList = (
-    <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-3" aria-label="Admin navigation">
+  const pendingBadge = (count: number) =>
+    count > 0 ? (
+      <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-bold text-warning">
+        {count > 99 ? "99+" : count}
+      </span>
+    ) : null;
+
+  const alertBadge = (count: number) =>
+    count > 0 ? (
+      <span className="rounded-full bg-error/15 px-1.5 py-0.5 text-[10px] font-bold text-error">
+        {count > 99 ? "99+" : count}
+      </span>
+    ) : null;
+
+  const current = trail(location.pathname);
+
+  const navList = (options: { collapsed: boolean }) => (
+    <nav
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-4"
+      aria-label="Admin navigation"
+    >
       {ADMIN_GROUPS.map((group) => {
         const hasActive = group.items.some((item) =>
           location.pathname === item.to || (!item.exact && location.pathname.startsWith(item.to + "/")),
         );
-        const expanded = expandedGroup === group.label || hasActive;
+        const expanded = options.collapsed
+          ? true
+          : expandedGroup === null
+            ? hasActive
+            : expandedGroup !== false && expandedGroup === group.label;
         return (
-          <div key={group.label} className="mb-1">
-            <button type="button" onClick={() => setExpandedGroup(expandedGroup === group.label ? null : group.label)}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/80 hover:bg-muted/60"
-              aria-expanded={expanded}>
-              <span className="flex-1 text-left">{group.label}</span>
-              <span className={cn("transition-transform", expanded && "rotate-90")}>›</span>
+          <div key={group.label} className="mb-0.5">
+            <button
+              type="button"
+              onClick={() =>
+                setExpandedGroup((previous) => {
+                  const open = previous === null ? hasActive : previous;
+                  return open === group.label ? false : group.label;
+                })
+              }
+              aria-expanded={expanded}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground",
+                options.collapsed && "justify-center px-0",
+              )}
+            >
+              <span className={cn("flex-1 text-left", options.collapsed && "sr-only")}>
+                {group.label}
+              </span>
+              {!options.collapsed && (
+                <ChevronRight className={cn("size-3.5 transition-transform", expanded && "rotate-90")} />
+              )}
             </button>
-            {expanded && <div className="space-y-0.5 pb-1">
-              {group.items.map((item) => {
-                const count = badgeFor(item.badge);
-                const pendingCount = pendingCountFor(item.pendingScope);
-                return (
-                  <NavLink key={item.to} to={item.to} end={item.exact} onClick={() => setMobileOpen(false)}
-                    className={({ isActive }) => cn(
-                      "flex min-h-10 items-center gap-3 rounded-xl border px-3 text-sm font-semibold transition-all active:scale-[0.98]",
-                      isActive ? "border-primary/15 bg-primary/10 text-primary shadow-sm" :
-                        "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}>
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    <span className="flex-1 truncate">{item.label}</span>
-                    {count > 0 && <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:bg-red-900/60 dark:text-red-300">{count}</span>}
-                    {pendingCount > 0 && <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700 dark:bg-amber-900/60 dark:text-amber-300">{pendingCount}</span>}
-                  </NavLink>
-                );
-              })}
-            </div>}
+            {expanded && (
+              <div className="space-y-0.5 pb-1">
+                {group.items.map((item) => {
+                  const count = badgeFor(item.badge);
+                  const pendingCount = pendingCountFor(item.pendingScope);
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.exact}
+                      onClick={() => setMobileOpen(false)}
+                      title={options.collapsed ? item.label : undefined}
+                      aria-label={options.collapsed ? item.label : undefined}
+                      className={({ isActive }) =>
+                        cn(
+                          "relative flex min-h-10 items-center rounded-xl text-sm font-medium transition-colors duration-200",
+                          options.collapsed ? "justify-center px-0" : "gap-3 px-3",
+                          isActive
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          <span
+                            aria-hidden
+                            className={cn(
+                              "absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-opacity",
+                              isActive ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          <item.icon className="size-4 shrink-0" />
+                          {!options.collapsed && (
+                            <>
+                              <span className="flex-1 truncate">{item.label}</span>
+                              {alertBadge(count)}
+                              {pendingBadge(pendingCount)}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       })}
@@ -145,54 +250,200 @@ function AdminShell() {
   );
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
-        <div className="flex h-16 items-center gap-3 px-4 lg:px-6">
-          <button className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open admin menu"><Menu className="h-5 w-5" /></button>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Cloudie Command Center</p>
-            <h1 className="truncate text-sm font-semibold">Master Super Admin</h1>
-          </div>
-          <div className="hidden max-w-sm flex-1 md:flex">
-            <div className="flex w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <input className="w-full bg-transparent text-sm outline-none" placeholder="Search admin workspace…" aria-label="Search admin workspace" />
-            </div>
-          </div>
-          <button onClick={toggleTheme} className="hidden h-10 w-10 items-center justify-center rounded-xl border border-border sm:flex" aria-label="Toggle theme">
-            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-          <button onClick={() => navigate("/admin/settings")} className="hidden h-10 w-10 items-center justify-center rounded-xl border border-border sm:flex" aria-label="Settings"><Settings className="h-4 w-4" /></button>
+    <div className="flex min-h-screen bg-background text-foreground">
+      {/* Desktop sidebar */}
+      <aside
+        aria-label="Administration"
+        className={cn(
+          "hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex lg:h-screen lg:sticky lg:top-0",
+          collapsed ? "w-[68px]" : "w-72",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-14 shrink-0 items-center border-b border-sidebar-border",
+            collapsed ? "justify-center px-2" : "gap-2.5 px-3",
+          )}
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <ShieldCheck className="size-4" />
+          </span>
+          {!collapsed && (
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] font-bold leading-tight tracking-tight">
+                Command Center
+              </span>
+              <span className="block truncate text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                {user?.name || user?.email || "Administrator"}
+              </span>
+            </span>
+          )}
         </div>
-      </header>
+        {navList({ collapsed })}
+        <div className="shrink-0 space-y-0.5 border-t border-sidebar-border p-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            aria-label={collapsed ? "Expand admin sidebar" : "Collapse admin sidebar"}
+            className={cn(
+              "flex min-h-10 w-full items-center rounded-xl text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+              collapsed ? "justify-center px-0" : "gap-3 px-3",
+            )}
+          >
+            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            {!collapsed && <span>Collapse</span>}
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className={cn(
+              "flex min-h-10 w-full items-center rounded-xl text-sm font-medium text-muted-foreground transition-colors hover:bg-error/10 hover:text-error",
+              collapsed ? "justify-center px-0" : "gap-3 px-3",
+            )}
+          >
+            <LogOut className="size-4 shrink-0" />
+            {!collapsed && <span>Sign out</span>}
+          </button>
+        </div>
+      </aside>
 
-      <div className="flex min-h-[calc(100vh-4rem)]">
-        <aside className="hidden w-64 shrink-0 border-r border-border bg-card/50 lg:flex lg:flex-col">
-          <div className="border-b border-border px-4 py-4">
-            <p className="text-xs font-semibold">LIVE CONTROL PLANE</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">Privileged platform operations</p>
-          </div>
-          {navList}
-          <div className="border-t border-border p-3">
-            <button onClick={() => { toast.info("Use the administrator sign-out flow from your account session."); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"><LogOut className="h-4 w-4" />Sign out</button>
-          </div>
-        </aside>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface/85 px-3 backdrop-blur-xl sm:px-5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-11 shrink-0 lg:hidden"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open admin menu"
+          >
+            <Menu className="size-5" />
+          </Button>
 
-        {mobileOpen && <div className="fixed inset-0 z-50 lg:hidden">
-          <button className="absolute inset-0 bg-black/40" aria-label="Close menu" onClick={() => setMobileOpen(false)} />
-          <aside className="relative flex h-full w-[86vw] max-w-sm flex-col bg-card shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-4 py-4">
-              <div><p className="text-xs font-bold">Cloudie Command Center</p><p className="text-[10px] text-muted-foreground">Master Super Admin</p></div>
-              <button onClick={() => setMobileOpen(false)} className="h-9 w-9 rounded-lg border border-border" aria-label="Close menu"><X className="mx-auto h-4 w-4" /></button>
+          <div className="hidden min-w-0 flex-1 lg:block">
+            <Breadcrumb>
+              <BreadcrumbList className="text-xs sm:text-sm">
+                <BreadcrumbItem>
+                  <BreadcrumbLink asChild>
+                    <NavLink to="/admin">Admin</NavLink>
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                {current && (
+                  <>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem className="hidden sm:block">
+                      {current.group.label}
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator className="hidden sm:block" />
+                    <BreadcrumbItem>
+                      <BreadcrumbPage className="font-semibold text-foreground">
+                        {current.item.label}
+                      </BreadcrumbPage>
+                    </BreadcrumbItem>
+                  </>
+                )}
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 lg:flex-none">
+            <span className="truncate text-sm font-semibold lg:hidden">
+              {current?.item.label ?? "Command Center"}
+            </span>
+            <div className="hidden sm:block">
+              <AppSearch />
             </div>
-            {navList}
-          </aside>
-        </div>}
+          </div>
 
-        <main className="min-w-0 flex-1 overflow-x-hidden">
-          <div className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8"><Outlet /></div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative size-11 sm:size-9"
+            onClick={() => navigate("/admin/notifications")}
+            aria-label="Admin notifications"
+          >
+            <Bell className="size-4" />
+            {badgeCounts.openDisputes + badgeCounts.pendingKyc + badgeCounts.pendingVendors > 0 && (
+              <span
+                aria-hidden
+                className="absolute right-0.5 top-0.5 size-2 rounded-full bg-error"
+              />
+            )}
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="size-11 gap-2 px-1 sm:h-9 sm:w-auto sm:px-2" aria-label="Administrator menu">
+                <span className="flex size-7 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                  {(user?.name || user?.email || "A").charAt(0).toUpperCase()}
+                </span>
+                <span className="hidden max-w-[140px] truncate text-sm font-medium md:inline">
+                  {user?.name || user?.email || "Administrator"}
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel className="truncate">{user?.email || "Signed in"}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate("/admin/settings")}>
+                <Settings className="mr-2 size-4" /> Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/dashboard")}>
+                <LayoutDashboard className="mr-2 size-4" /> Customer view
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="text-error focus:text-error">
+                <LogOut className="mr-2 size-4" /> Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
+
+        <main className="min-w-0 flex-1">
+          <div className="mx-auto w-full max-w-[1500px] p-4 sm:p-6 lg:p-8">
+            <Outlet />
+          </div>
         </main>
       </div>
+
+      {/* Mobile drawer */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="w-[88vw] max-w-80 border-sidebar-border bg-sidebar p-0">
+          <SheetTitle className="sr-only">Administration navigation</SheetTitle>
+          <SheetDescription className="sr-only">
+            Every administrative section of the Cloudie platform.
+          </SheetDescription>
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-sidebar-border px-4">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                <ShieldCheck className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-bold leading-tight">
+                  Command Center
+                </span>
+                <span className="block truncate text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  {user?.email || "Administrator"}
+                </span>
+              </span>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="flex min-h-full flex-col">
+                {navList({ collapsed: false })}
+              </div>
+            </ScrollArea>
+            <div className="shrink-0 border-t border-sidebar-border p-2">
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-error/10 hover:text-error"
+              >
+                <LogOut className="size-4" />
+                Sign out
+              </button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

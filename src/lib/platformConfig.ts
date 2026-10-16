@@ -77,13 +77,15 @@ export const QUICK_ACTION_CATALOG: QuickActionCatalogItem[] = [
 ];
 
 export const DEFAULT_BRAND: BrandConfig = {
-  name: "Crestline Express",
-  tagline: "Shipment intelligence, in motion",
-  accent: "#0f766e",
-  accentDark: "#5eead4",
+  name: "Cloudie Operations",
+  tagline: "Shipment, document & payments workspace",
+  // Both modes carry the enterprise emerald. The product ships dark-only, so
+  // `accent` and `accentDark` are kept in step rather than drifting apart.
+  accent: "#10b981",
+  accentDark: "#10b981",
   footerNote: "Move every shipment with confidence.",
   logoUrl: "",
-  defaultMode: "system",
+  defaultMode: "dark",
 };
 
 export const DEFAULT_QUICK_ACTIONS: QuickActionConfig[] = [
@@ -236,14 +238,19 @@ function accentBlock(accent: string, foreground: string): string {
   ].join(";");
 }
 
-/** CSS injected at runtime so admin-chosen accents win over the design tokens. */
+/**
+ * CSS injected at runtime so an admin-chosen accent wins over the design
+ * tokens.
+ *
+ * Cloudie is a dark-only product: one black surface, one accent. So this emits
+ * a single block applied to both `:root` and `.dark` instead of two competing
+ * palettes. The accent lives on `accentDark` because every surface an accent
+ * is drawn against is a dark one.
+ */
 export function brandCssVars(brand: BrandConfig): string {
-  const lightFg = isLight(brand.accent) ? "#0b1f1d" : "#f3fffc";
-  const darkFg = isLight(brand.accentDark) ? "#08211e" : "#052521";
-  return [
-    `:root{${accentBlock(brand.accent, lightFg)}}`,
-    `.dark{${accentBlock(brand.accentDark, darkFg)}}`,
-  ].join("\n");
+  const accent = brand.accentDark;
+  const foreground = isLight(accent) ? "#04120c" : "#ffffff";
+  return `:root,.dark{${accentBlock(accent, foreground)}}`;
 }
 
 export function supportHasContact(support: SupportConfig): boolean {

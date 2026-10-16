@@ -41,13 +41,13 @@ function ClaimAdminPanel() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
-      <Card className="w-full max-w-md rounded-2xl border-slate-200 shadow-sm dark:border-slate-700">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <Card className="w-full max-w-md rounded-2xl border-border bg-card">
         <CardHeader>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-950/50">
-            <ShieldCheck className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+            <ShieldCheck className="size-6" />
           </div>
-          <CardTitle className="mt-3 text-center text-lg font-bold text-slate-900 dark:text-white">
+          <CardTitle className="mt-3 text-center text-lg font-bold text-foreground">
             No administrator yet
           </CardTitle>
           <CardDescription className="text-center">
@@ -60,7 +60,7 @@ function ClaimAdminPanel() {
           <div className="space-y-1.5">
             <Label htmlFor="setup-code">
               Setup code{" "}
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-muted-foreground">
                 (only if ADMIN_SETUP_CODE is configured)
               </span>
             </Label>
@@ -72,17 +72,13 @@ function ClaimAdminPanel() {
               disabled={busy}
             />
           </div>
-          <Button
-            onClick={handleClaim}
-            disabled={busy}
-            className="w-full gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button onClick={handleClaim} disabled={busy} className="w-full gap-2">
+            {busy && <Loader2 className="size-4 animate-spin" />}
             Claim administrator role
           </Button>
           <Link
             to="/dashboard"
-            className="block text-center text-sm text-slate-500 hover:text-slate-700 hover:underline dark:text-slate-400"
+            className="block text-center text-sm text-muted-foreground transition-colors hover:text-foreground hover:underline"
           >
             Back to dashboard
           </Link>
@@ -129,57 +125,51 @@ function NonAdminNotice() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 dark:bg-slate-950">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/50">
-          <ShieldAlert className="h-6 w-6 text-red-600 dark:text-red-400" />
+    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-center sm:p-8">
+        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-error/12 text-error">
+          <ShieldAlert className="size-6" />
         </div>
-        <h1 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
+        <h1 className="mt-4 text-lg font-bold text-foreground">
           Access restricted
         </h1>
-        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-          You are signed in as <span className="font-medium">{user?.email ?? "another account"}</span>,
+        <p className="mt-2 text-sm text-muted-foreground">
+          You are signed in as <span className="font-medium text-foreground">{user?.email ?? "another account"}</span>,
           which does not have administrator access.
         </p>
         <div className="mt-6 flex flex-col gap-2">
-          <button
-            onClick={handleSignOut}
-            disabled={busy}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 disabled:opacity-60"
-          >
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            <LogOut className="h-4 w-4" />
+          <Button onClick={handleSignOut} disabled={busy} className="w-full gap-2">
+            {busy && <Loader2 className="size-4 animate-spin" />}
+            <LogOut className="size-4" />
             Sign out and use admin login
-          </button>
-          <Link
-            to="/dashboard"
-            className="inline-flex items-center justify-center rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            Back to dashboard
-          </Link>
+          </Button>
+          <Button asChild variant="outline" className="w-full">
+            <Link to="/dashboard">Back to dashboard</Link>
+          </Button>
         </div>
 
         {/* Recovery: only succeeds when the platform's existing administrators
             are locked out, or when the operator supplies ADMIN_SETUP_CODE. */}
-        <div className="mt-5 border-t border-slate-200 pt-4 text-left dark:border-slate-700">
+        <div className="mt-5 border-t border-border pt-4 text-left">
           <button
             type="button"
             onClick={() => setShowRecovery((v) => !v)}
-            className="w-full text-center text-xs font-medium text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-200"
+            aria-expanded={showRecovery}
+            className="w-full text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             {showRecovery ? "Hide administrator recovery" : "Platform locked out? Administrator recovery"}
           </button>
 
           {showRecovery && (
             <div className="mt-3 space-y-3">
-              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              <p className="text-xs leading-relaxed text-muted-foreground">
                 Grants administrator access to this signed-in account. It is only
                 allowed when no existing administrator can be reached, or when you
                 enter the platform recovery code. Every attempt is audited.
               </p>
               <div className="space-y-1.5 text-left">
                 <Label htmlFor="recovery-code" className="text-xs">
-                  Recovery code <span className="text-slate-400">(if configured)</span>
+                  Recovery code <span className="text-muted-foreground">(if configured)</span>
                 </Label>
                 <Input
                   id="recovery-code"
@@ -230,8 +220,9 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (isLoading || (isAuthenticated && me === undefined)) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <Loader2 className="size-6 animate-spin text-slate-400" />
+      <main className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <span className="sr-only">Checking administrator access…</span>
       </main>
     );
   }

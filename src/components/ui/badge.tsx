@@ -10,13 +10,22 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default:
-          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary/90",
+          "border-transparent bg-primary text-primary-foreground [a&]:hover:bg-primary-hover",
         secondary:
-          "border-transparent bg-secondary text-secondary-foreground [a&]:hover:bg-secondary/90",
+          "border-transparent bg-surface-2 text-foreground [a&]:hover:bg-elevated",
         destructive:
-          "border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "border-error/30 bg-error/15 text-error [a&]:hover:bg-error/25 focus-visible:ring-error/30",
         outline:
-          "text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+          "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        // Status tones. Each is a tinted chip with a coloured label — the text
+        // carries the meaning, so the badge is still readable in greyscale and
+        // to anyone who cannot separate the four hues.
+        success: "border-success/30 bg-success/15 text-success [a&]:hover:bg-success/25",
+        warning: "border-warning/30 bg-warning/15 text-warning [a&]:hover:bg-warning/25",
+        info: "border-info/30 bg-info/15 text-info [a&]:hover:bg-info/25",
+        danger: "border-error/30 bg-error/15 text-error [a&]:hover:bg-error/25",
+        // Alias kept for the many call sites that already pass `error`.
+        error: "border-error/30 bg-error/15 text-error [a&]:hover:bg-error/25",
       },
     },
     defaultVariants: {

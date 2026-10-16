@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
-import { Building2, Loader2, Moon, Sun, User, Shield, CheckCircle2, Mail, Wallet, Bell, ArrowRight, LockKeyhole } from "lucide-react";
+import { Building2, Loader2, Moon, User, Shield, CheckCircle2, Mail, Wallet, Bell, ArrowRight, LockKeyhole } from "lucide-react";
 import { Link } from "react-router";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
-import { useTheme } from "@/components/ThemeProvider";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +47,6 @@ function OrganizationCard() {
 
 export default function Settings() {
   const { user } = useAuth();
-  const { theme, toggle } = useTheme();
   const emailVerified = Boolean(user?.emailVerificationTime);
 
   return <div className="space-y-6 sm:space-y-8">
@@ -81,8 +79,8 @@ export default function Settings() {
     <OrganizationCard />
 
     <Card>
-      <CardHeader><div className="flex items-center gap-2"><Sun className="size-4 text-primary"/><CardTitle className="text-sm">Appearance</CardTitle></div><CardDescription>Choose the Cloudie interface theme for this device.</CardDescription></CardHeader>
-      <CardContent><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium">{theme === "light" ? "Light mode" : "Dark mode"}</p><p className="text-xs text-muted-foreground">Currently using {theme} theme.</p></div><Button variant="outline" onClick={toggle} className="h-11 gap-2 sm:h-9">{theme === "light" ? <Moon className="size-4"/> : <Sun className="size-4"/>}{theme === "light" ? "Switch to dark" : "Switch to light"}</Button></div></CardContent>
+      <CardHeader><div className="flex items-center gap-2"><Moon className="size-4 text-primary"/><CardTitle className="text-sm">Appearance</CardTitle></div><CardDescription>Cloudie uses one interface theme — a black surface with a white text scale and a single emerald accent — so records look identical on every screen and in every screenshot.</CardDescription></CardHeader>
+      <CardContent><div className="flex items-center gap-3 rounded-2xl border border-border bg-surface p-4"><div className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Moon className="size-4"/></div><div><p className="text-sm font-medium">Dark interface</p><p className="text-xs text-muted-foreground">Applied to every workspace automatically.</p></div></div></CardContent>
     </Card>
 
     <Card className="border-primary/15 bg-primary/[0.025]">

@@ -23,26 +23,29 @@ export function PlatformBranding() {
     el.textContent = brandCssVars(brand);
   }, [brand]);
 
-  // Apply the admin-configured default colour scheme for first-time visitors.
-  // Deferred to a macrotask so it lands after ThemeProvider's mount effect, and
-  // skipped entirely once the visitor has stored their own preference.
+  // Cloudie is dark-only, so the colour scheme is pinned here rather than read
+  // from the stored brand config. A configured "light" default would strip the
+  // `dark` class and silently strand every `dark:` utility in the app on
+  // colours this design system no longer defines.
   useEffect(() => {
-    if (brand.defaultMode === "system") return;
-    if (localStorage.getItem("cloudie-theme")) return;
-    const timer = window.setTimeout(() => {
-      if (localStorage.getItem("cloudie-theme")) return;
-      const root = document.documentElement;
-      root.classList.remove("light", "dark");
-      root.classList.add(brand.defaultMode);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [brand.defaultMode]);
+    const root = document.documentElement;
+    root.classList.remove("light");
+    root.classList.add("dark");
+    root.style.colorScheme = "dark";
+  }, []);
 
   useEffect(() => {
     document.title = `${brand.name} · ${brand.tagline}`;
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", brand.accent);
-  }, [brand.name, brand.tagline, brand.accent]);
+    if (!meta) return;
+    // Browser chrome frames a black page, so it takes the background token
+    // rather than the accent — an emerald status bar around black content reads
+    // as a rendering glitch.
+    const background = getComputedStyle(document.documentElement)
+      .getPropertyValue("--background")
+      .trim();
+    meta.setAttribute("content", background || "#000000");
+  }, [brand.name, brand.tagline]);
 
   return null;
 }

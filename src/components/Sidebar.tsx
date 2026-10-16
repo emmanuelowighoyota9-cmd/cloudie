@@ -21,9 +21,22 @@ import {
   Cloud,
   Receipt,
   Zap,
+  LogOut,
+  type LucideIcon,
 } from "lucide-react";
 
-const mainNav = [
+/**
+ * The signed-in navigation index.
+ *
+ * Exported because the command palette (`AppSearch`) offers the same
+ * destinations: one list, so a page can never be reachable from the sidebar but
+ * invisible to search (or the reverse).
+ */
+/* eslint-disable react-refresh/only-export-components -- these two arrays are
+   the navigation contract: `AppSearch` offers exactly the destinations the
+   sidebar renders, and the navigation tests assert on this file's literal
+   entries. Splitting them into a second module would duplicate the contract. */
+export const mainNav = [
   { label: "Overview", icon: LayoutDashboard, to: "/dashboard" },
   { label: "Personal Workspace", icon: Wallet, to: "/personal" },
   { label: "My Services", icon: Layers, to: "/services/my" },
@@ -42,7 +55,7 @@ const mainNav = [
   { label: "Settings", icon: Settings, to: "/settings" },
 ];
 
-const adminNav = [
+export const adminNav = [
   { label: "Admin Overview", icon: Shield, to: "/admin" },
   { label: "Users", icon: Users, to: "/admin/users" },
   { label: "Vendors", icon: ShoppingBag, to: "/admin/vendors" },
@@ -74,13 +87,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     if (path === "/dashboard") {
       return location.pathname === path;
     }
-    if (path === "/marketplace") {
+    // `/services` is also a prefix of `/services/my`, so it matches exactly too
+    // — otherwise two sidebar entries claim the same page.
+    if (path === "/services") {
       return location.pathname === path;
     }
     // `/vtu` is the PARENT of `/vtu/airtime` and `/vtu/bills`, so it matches by
     // prefix — matching exactly would leave those two child pages with no
     // highlighted entry at all. The pages themselves carry their own nav, so
-    // the sidebar needs to agree that they are still inside "Airtime & Data",
+    // the sidebar needs to agree that they are still inside "Digital Services",
     // not stand in for it.
     return location.pathname.startsWith(path);
   };
@@ -89,139 +104,159 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : user?.email?.[0]?.toUpperCase() || "U";
 
-  return (
-    <aside
+  /** One nav row. Collapsed, the label becomes a tooltip rather than being cut. */
+  const navItem = (item: { label: string; icon: LucideIcon; to: string }) => {
+    const active = isActive(item.to);
+    return (
+      <Link
+        key={item.to}
+        to={item.to}
+        title={collapsed ? item.label : undefined}
+        aria-label={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "group relative flex min-h-11 items-center rounded-xl text-sm font-medium",
+          "transition-[background-color,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          collapsed ? "justify-center px-0" : "gap-3 px-3",
+          active
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        )}
+      >
+        {/* The active indicator is a shape, not just a colour, so the current
+            page is still obvious without relying on hue alone. */}
+        <span
+          aria-hidden
+          className={cn(
+            "absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-primary transition-opacity duration-200",
+            active ? "opacity-100" : "opacity-0",
+          )}
+        />
+        <item.icon className={cn("size-4 shrink-0", active && "text-primary")} />
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  };
+
+  const groupLabel = (label: string) => (
+    <p
       className={cn(
-        "flex h-screen flex-col border-r border-border/70 bg-card/95 shadow-[8px_0_30px_-28px_hsl(var(--shadow-color)/0.6)] backdrop-blur-xl transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-        collapsed ? "w-16" : "w-60",
-        "dark:border-border dark:bg-card",
+        "px-3 pb-1.5 pt-4 text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground/70",
+        collapsed && "text-center text-[9px] tracking-normal",
       )}
     >
-      {/* Logo */}
-      <div className="flex h-16 items-center border-b border-border/70 px-4">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-sm">
-            <Cloud className="h-4 w-4 text-primary-foreground" />
-          </div>
+      {collapsed ? "•••" : label}
+    </p>
+  );
+
+  return (
+    <aside
+      aria-label="Workspace"
+      className={cn(
+        "flex h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar",
+        "transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+        collapsed ? "w-[68px]" : "w-64",
+      )}
+    >
+      {/* Brand + collapse control */}
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center border-b border-sidebar-border",
+          collapsed ? "justify-center px-2" : "gap-2.5 px-3",
+        )}
+      >
+        <Link
+          to="/dashboard"
+          className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${brand.name} home`}
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Cloud className="size-4" />
+          </span>
           {!collapsed && (
-            <span className="text-lg font-bold tracking-tight text-foreground">
-              {brand.name}
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-bold leading-tight tracking-tight text-foreground">
+                {brand.name}
+              </span>
+              <span className="block truncate text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                Operations
+              </span>
             </span>
           )}
         </Link>
-        <button
-          onClick={onToggle}
-          className="ml-auto hidden lg:flex h-6 w-6 items-center justify-center rounded hover:bg-muted"
-        >
-          <ChevronLeft
-            className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              collapsed && "rotate-180",
-            )}
-          />
-        </button>
+        {!collapsed && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Collapse sidebar"
+            aria-pressed={false}
+            className="ml-auto hidden size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:flex"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+        )}
       </div>
 
-      {/* User Profile */}
+      {/* Account */}
       {!collapsed && (
-        <div className="border-b border-border px-4 py-3">
+        <div className="shrink-0 border-b border-sidebar-border px-3 py-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[11px] font-semibold text-foreground">
               {initials}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] font-semibold text-foreground">
                 {user?.name || user?.email || "User"}
-              </p>
-              <p className="text-[11px] text-muted-foreground truncate">
+              </span>
+              <span className="block truncate text-[11px] text-muted-foreground">
                 {user?.email || ""}
-              </p>
-            </div>
+              </span>
+            </span>
           </div>
         </div>
       )}
 
-      <ScrollArea className="flex-1 py-2">
-        <nav className="space-y-0.5 px-2">
-          {mainNav.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={cn(
-                "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium " +
-                "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] " +
-                "hover:translate-x-0.5 active:scale-[0.98]",
-                isActive(item.to)
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-opacity duration-200",
-                  isActive(item.to) ? "opacity-100" : "opacity-0",
-                )}
-              />
-              <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </Link>
-          ))}
-        </nav>
+      <ScrollArea className="min-h-0 flex-1">
+        <nav className="px-2 pb-3" aria-label="Main">
+          {groupLabel("Workspace")}
+          <div className="space-y-0.5">{mainNav.map(navItem)}</div>
 
-        {isAdmin && (
-          <div className="mt-4 px-2">
-            <div className={cn(
-              "mb-1 text-[10px] font-semibold uppercase tracking-widest",
-              collapsed ? "text-center" : "px-3",
-              "text-muted-foreground",
-            )}>
-              {collapsed ? "•" : "Admin"}
-            </div>
-            <nav className="space-y-0.5">
-              {adminNav.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={cn(
-                    "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium " +
-                "transition-[background-color,color,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] " +
-                "hover:translate-x-0.5 active:scale-[0.98]",
-                    isActive(item.to)
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-primary transition-opacity duration-200",
-                      isActive(item.to) ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && <span>{item.label}</span>}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        )}
+          {isAdmin && (
+            <>
+              {groupLabel("Administration")}
+              <div className="space-y-0.5">{adminNav.map(navItem)}</div>
+            </>
+          )}
+        </nav>
       </ScrollArea>
 
-      {/* Logout */}
-      <div className="border-t border-border p-2">
+      {/* Sign out stays pinned to the bottom: it must never need a scroll to
+          reach, on a short laptop viewport especially. */}
+      <div className="shrink-0 border-t border-sidebar-border p-2">
         <button
+          type="button"
           onClick={() => signOut()}
+          title={collapsed ? "Sign out" : undefined}
+          aria-label="Sign out"
           className={cn(
-            "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-            "text-muted-foreground hover:bg-destructive/10 hover:text-destructive",
+            "flex min-h-11 w-full items-center rounded-xl text-sm font-medium text-muted-foreground",
+            "transition-colors duration-200 hover:bg-error/10 hover:text-error",
+            collapsed ? "justify-center px-0" : "gap-3 px-3",
           )}
         >
-          <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-          </svg>
+          <LogOut className="size-4 shrink-0" />
           {!collapsed && <span>Sign out</span>}
         </button>
+        {collapsed && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label="Expand sidebar"
+            className="mt-1 hidden min-h-11 w-full items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground lg:flex"
+          >
+            <ChevronLeft className="size-4 rotate-180" />
+          </button>
+        )}
       </div>
     </aside>
   );

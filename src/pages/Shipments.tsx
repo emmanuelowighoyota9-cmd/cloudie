@@ -31,7 +31,7 @@ export default function Shipments() {
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Track and manage your shipments.</p>
         </div>
         <Link to="/shipments/new">
-          <Button className="gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
+          <Button className="gap-2">
             <Plus className="h-4 w-4" /> New Shipment
           </Button>
         </Link>

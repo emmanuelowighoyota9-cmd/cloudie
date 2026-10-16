@@ -18,6 +18,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
@@ -43,6 +44,11 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-elevated: var(--elevated);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-info: var(--info);
   /* VTU: the customer's airtime & bills surface, themed separately. */
   --color-vtu-canvas: var(--vtu-canvas);
   --color-vtu-card: var(--vtu-card);
@@ -67,129 +73,108 @@
   --duration-slow: 380ms;
 }
 
-/* Cloudie base design tokens — legacy token values are overridden by the global dark system below. */
-:root {
-  --radius: 0.75rem;
-  --background: #f4f7fb;
-  --foreground: #10233f;
-  --card: #ffffff;
-  --card-foreground: #10233f;
-  --popover: #ffffff;
-  --popover-foreground: #10233f;
-  --primary: #0f766e;
-  --primary-foreground: #f0fffb;
-  --secondary: #dceff0;
-  --secondary-foreground: #164e54;
-  --muted: #e8eef5;
-  --muted-foreground: #5d6f84;
-  --accent: #f59e0b;
-  --accent-foreground: #3b2504;
-  --destructive: #bd554e;
-  --border: #d4dfea;
-  --input: #c2d1df;
-  --ring: #0f766e;
-  --chart-1: #0f766e;
-  --chart-2: #d88a06;
-  --chart-3: #2b8e9a;
-  --chart-4: #718aa5;
-  --chart-5: #bd554e;
-  --sidebar: #10233f;
-  --sidebar-foreground: #eef7ff;
-  --sidebar-primary: #5eead4;
-  --sidebar-primary-foreground: #09201d;
-  --sidebar-accent: #1c3b5b;
-  --sidebar-accent-foreground: #eef7ff;
-  --sidebar-border: #294967;
-  --sidebar-ring: #5eead4;
-  --nb-bg: var(--background);
-  --nb-surface: var(--card);
-  --nb-ink: var(--foreground);
-  --nb-rule: var(--border);
-  --surface: #ffffff;
-  --surface-2: #f8fbfe;
-  --shadow-color: 220 45% 30%;
+/* ════════════════════════════════════════════════════════════════════
+   CLOUDIE DESIGN SYSTEM — the single source of truth for colour.
 
-  /* ── VTU SUB-BRAND ──
-     Airtime and bills is its own surface, and it reads the way a top-up app
-     reads: a warm cream canvas, deep plum ink, and a signal-yellow selection.
-     Kept as separate tokens rather than folded into `--primary` so the
-     customer's shop can be restyled without moving the rest of Crestline off
-     its ocean-teal identity. */
-  --vtu-canvas: #f7f4ed;
-  --vtu-card: #ffffff;
-  --vtu-text: #241338;
-  --vtu-muted: #6f6584;
-  --vtu-line: #e7dfd2;
-  --vtu-chip: #f2ede3;
-  --vtu-band: #241338;
-  --vtu-band-fg: #fbf8f2;
-  --vtu-accent: #f5d24b;
-  --vtu-accent-ink: #3f2f05;
-  /* Network brands. Content, not chrome — but tokens all the same, so a
-     rebrand is one edit and no component carries a hex. */
+   Pure-black enterprise surface, white ink, one emerald accent. Pages and
+   components read the semantic tokens only (`bg-background`, `bg-card`,
+   `text-muted-foreground`, `text-success`, `border-border`, …) — no page
+   declares its own palette, so one edit here restyles the whole platform.
+
+   `.dark` is aliased to the same values on purpose: the product is
+   dark-only, and every `dark:` utility written before this system existed
+   must keep resolving to exactly what `:root` resolves to.
+   ════════════════════════════════════════════════════════════════════ */
+:root,
+.dark {
+  color-scheme: dark;
+  --radius: 0.75rem;
+
+  /* Surfaces — black page, panels lifted in three deliberate steps. */
+  --background: #000000; /* primary background */
+  --surface: #080808; /* secondary background */
+  --sidebar: #0a0a0a; /* sidebar background */
+  --card: #111111; /* card background */
+  --surface-2: #181818; /* elevated surface */
+  --elevated: #181818;
+  --popover: #111111;
+
+  /* Ink */
+  --foreground: #ffffff; /* primary text */
+  --muted-foreground: #a1a1aa; /* secondary text */
+  --card-foreground: #ffffff;
+  --popover-foreground: #ffffff;
+
+  /* Lines */
+  --border: #27272a; /* borders and dividers */
+  --input: #27272a;
+
+  /* Brand accent — emerald */
+  --primary: #10b981;
+  --primary-hover: #059669;
+  --primary-foreground: #04120c;
+  --ring: #10b981;
+
+  /* Interaction fills. `accent` is the hover/selected surface, not a brand
+     colour — that is what `primary` is for. */
+  --accent: #181818;
+  --accent-foreground: #ffffff;
+  --secondary: #111111;
+  --secondary-foreground: #ffffff;
+  --muted: #181818;
+
+  /* Status. These four carry meaning and must never be the only signal —
+     every status surface also prints a word (see `StatusBadge`). */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --info: #3b82f6;
+  --destructive: #ef4444;
+
+  /* Sidebar */
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #04120c;
+  --sidebar-accent: #181818;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #27272a;
+  --sidebar-ring: #10b981;
+
+  /* Data visualisation */
+  --chart-1: #10b981;
+  --chart-2: #3b82f6;
+  --chart-3: #22c55e;
+  --chart-4: #a1a1aa;
+  --chart-5: #f59e0b;
+
+  /* Elevation on black reads through contrast, not grey haze. */
+  --shadow-color: 0 0% 0%;
+
+  /* VTU (airtime, data, bills) runs on the same system — a customer-facing
+     shop is not a licence for a second brand. */
+  --vtu-canvas: #000000;
+  --vtu-card: #111111;
+  --vtu-text: #ffffff;
+  --vtu-muted: #a1a1aa;
+  --vtu-line: #27272a;
+  --vtu-chip: #181818;
+  --vtu-band: #0a0a0a;
+  --vtu-band-fg: #ffffff;
+  --vtu-accent: #10b981;
+  --vtu-accent-ink: #04120c;
+  /* Network brands are content, not chrome — they stay recognisable. */
   --vtu-brand-mtn: #e8c31c;
   --vtu-brand-airtel: #d62828;
   --vtu-brand-glo: #2f8b40;
-  --vtu-brand-9mobile: #0e7c66;
-}
+  --vtu-brand-9mobile: #10b981;
 
-.dark {
-  --background: #081525;
-  --foreground: #eef7ff;
-  --card: #10233f;
-  --card-foreground: #eef7ff;
-  --popover: #10233f;
-  --popover-foreground: #eef7ff;
-  --primary: #5eead4;
-  --primary-foreground: #09201d;
-  --secondary: #1c3b5b;
-  --secondary-foreground: #d9f3f4;
-  --muted: #172f4b;
-  --muted-foreground: #a5b9ca;
-  --accent: #9a6508;
-  --accent-foreground: #ffe5a6;
-  --destructive: #ee8478;
-  --border: #294967;
-  --input: #365b79;
-  --ring: #5eead4;
-  --chart-1: #5eead4;
-  --chart-2: #f2b94b;
-  --chart-3: #67c2c5;
-  --chart-4: #a5b9ca;
-  --chart-5: #ee8478;
-  --sidebar: #081525;
-  --sidebar-foreground: #eef7ff;
-  --sidebar-primary: #5eead4;
-  --sidebar-primary-foreground: #09201d;
-  --sidebar-accent: #1c3b5b;
-  --sidebar-accent-foreground: #eef7ff;
-  --sidebar-border: #294967;
-  --sidebar-ring: #5eead4;
+  /* Aliases older surfaces still read. */
   --nb-bg: var(--background);
   --nb-surface: var(--card);
   --nb-ink: var(--foreground);
   --nb-rule: var(--border);
-  --surface: #14294a;
-  --surface-2: #0d1f38;
-  --shadow-color: 215 60% 3%;
-
-  /* VTU in the dark: the cream becomes plum-black, and the band LIFTS instead
-     of sinking, because a header darker than its own page has nowhere to go. */
-  --vtu-canvas: #120e1c;
-  --vtu-card: #1d1730;
-  --vtu-text: #efe9fb;
-  --vtu-muted: #a89ec6;
-  --vtu-line: #302847;
-  --vtu-chip: #201a33;
-  --vtu-band: #2a2142;
-  --vtu-band-fg: #f6f2ff;
-  --vtu-accent: #f5d24b;
-  --vtu-accent-ink: #2b2200;
-  --vtu-brand-mtn: #e8c31c;
-  --vtu-brand-airtel: #e14b4b;
-  --vtu-brand-glo: #43a556;
-  --vtu-brand-9mobile: #1aa387;
 }
+
 
 @layer base {
   * {
@@ -218,6 +203,14 @@
       [type="file"]
     ) {
     min-height: 2.75rem;
+  }
+
+  /* A field sits slightly darker than the card it lives on, so it reads as an
+     inset control on both the black page and a lifted panel. */
+  select,
+  textarea,
+  input {
+    accent-color: var(--primary);
   }
 
   @media (min-width: 640px) {
@@ -250,7 +243,7 @@
   }
 
   ::selection {
-    background: color-mix(in srgb, var(--accent) 55%, transparent);
+    background: color-mix(in srgb, var(--primary) 45%, transparent);
     color: var(--foreground);
   }
 
@@ -627,7 +620,9 @@
   textarea {
     border-color: var(--input);
     border-radius: 0.75rem;
-    background-color: var(--card);
+    /* A field is one step DARKER than the card it sits on, so it reads as an
+       inset control instead of dissolving into the panel. */
+    background-color: var(--surface);
     color: var(--foreground);
     transition:
       border-color var(--duration-fast) var(--ease-out-quint),
@@ -657,166 +652,14 @@
   }
 }
 
-/* CLOUDIE GLOBAL BLACK / DARK THEME */
-:root {
-  color-scheme: dark;
-  --background: #050706;
-  --foreground: #f4f8f6;
-  --card: #0b100e;
-  --card-foreground: #f4f8f6;
-  --popover: #0b100e;
-  --popover-foreground: #f4f8f6;
-  --primary: #24c995;
-  --primary-foreground: #03130d;
-  --secondary: #10221b;
-  --secondary-foreground: #d8eee6;
-  --muted: #111a17;
-  --muted-foreground: #8ea79e;
-  --accent: #7ed957;
-  --accent-foreground: #071006;
-  --destructive: #ff6b6b;
-  --border: #20352d;
-  --input: #29453a;
-  --ring: #24c995;
-  --chart-1: #24c995;
-  --chart-2: #7ed957;
-  --chart-3: #46b8a0;
-  --chart-4: #91aaa2;
-  --chart-5: #ff6b6b;
-  --sidebar: #070b09;
-  --sidebar-foreground: #edf7f3;
-  --sidebar-primary: #24c995;
-  --sidebar-primary-foreground: #03130d;
-  --sidebar-accent: #10221b;
-  --sidebar-accent-foreground: #e5f7f0;
-  --sidebar-border: #1d332b;
-  --sidebar-ring: #24c995;
-  --surface: #0b100e;
-  --surface-2: #0f1714;
-  --shadow-color: 150 35% 2%;
-  --vtu-canvas: #050706;
-  --vtu-card: #0b100e;
-  --vtu-text: #f2f8f5;
-  --vtu-muted: #91aaa1;
-  --vtu-line: #20352d;
-  --vtu-chip: #0f1714;
-  --vtu-band: #071b14;
-  --vtu-band-fg: #f2fbf7;
-  --vtu-accent: #7ed957;
-  --vtu-accent-ink: #071006;
-}
-html,
-body {
-  background: #050706 !important;
-  color: #f4f8f6 !important;
-}
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(
-      circle at 8% -10%,
-      rgba(36, 201, 149, 0.1),
-      transparent 30rem
-    ),
-    radial-gradient(
-      circle at 92% 0%,
-      rgba(126, 217, 87, 0.045),
-      transparent 26rem
-    ),
-    #050706 !important;
-}
-input,
-textarea,
-select {
-  background-color: #0b100e !important;
-  color: #f4f8f6 !important;
-  border-color: #29453a;
-}
-input::placeholder,
-textarea::placeholder {
-  color: #6f8880 !important;
-}
-.bg-white {
-  background-color: #0b100e !important;
-}
-.text-black {
-  color: #f4f8f6 !important;
-}
-.border-gray-100,
-.border-gray-200,
-.border-gray-300 {
-  border-color: #20352d !important;
-}
+/* Native controls follow the same palette as the shadcn inputs, so a plain
+   `<select>` inside an older form does not fall out of the theme. */
 option {
-  background: #0b100e;
-  color: #f4f8f6;
+  background: var(--card);
+  color: var(--foreground);
 }
 * {
-  scrollbar-color: #29453a #050706;
-}
-.dark {
-  color-scheme: dark;
-  --background: #050706;
-  --foreground: #f4f8f6;
-  --card: #0b100e;
-  --card-foreground: #f4f8f6;
-  --popover: #0b100e;
-  --popover-foreground: #f4f8f6;
-  --primary: #24c995;
-  --primary-foreground: #03130d;
-  --secondary: #10221b;
-  --secondary-foreground: #d8eee6;
-  --muted: #111a17;
-  --muted-foreground: #8ea79e;
-  --accent: #7ed957;
-  --accent-foreground: #071006;
-  --destructive: #ff6b6b;
-  --border: #20352d;
-  --input: #29453a;
-  --ring: #24c995;
-  --sidebar: #070b09;
-  --sidebar-foreground: #edf7f3;
-  --sidebar-primary: #24c995;
-  --sidebar-primary-foreground: #03130d;
-  --sidebar-accent: #10221b;
-  --sidebar-accent-foreground: #e5f7f0;
-  --sidebar-border: #1d332b;
-  --sidebar-ring: #24c995;
-  --surface: #0b100e;
-  --surface-2: #0f1714;
-  --vtu-canvas: #050706;
-  --vtu-card: #0b100e;
-  --vtu-text: #f2f8f5;
-  --vtu-muted: #91aaa1;
-  --vtu-line: #20352d;
-  --vtu-chip: #0f1714;
-  --vtu-band: #071b14;
-  --vtu-band-fg: #f2fbf7;
-  --vtu-accent: #7ed957;
-  --vtu-accent-ink: #071006;
-}
-[data-slot="card"],
-[data-slot="dialog-content"],
-[data-slot="sheet-content"],
-[data-slot="popover-content"],
-[data-slot="dropdown-menu-content"],
-[data-slot="select-content"] {
-  background-color: #0b100e !important;
-  color: #f4f8f6 !important;
-  border-color: #20352d !important;
-}
-[data-slot="sidebar-wrapper"],
-[data-slot="sidebar"],
-[data-slot="sidebar-inner"],
-header,
-nav,
-footer {
-  color: #f4f8f6;
-}
-.hub-service-card,
-.marketplace-product-card {
-  background-color: #0b100e;
-  border-color: #20352d;
+  scrollbar-color: var(--input) var(--background);
 }
 
 /* ================================================================
@@ -840,16 +683,12 @@ footer {
   [role="button"] {
     -webkit-touch-callout: none;
   }
-  .page-gutter {
-    padding-inline: 1rem;
-  }
+  /* NOTE: `.page-gutter` deliberately has ONE definition (above, outside this
+     media query). `VtuShell` cancels it with fixed negative margins to go
+     full-bleed, so re-declaring the gutter here at a different value would push
+     the VTU shop past the viewport edge on that breakpoint only. */
 }
 @media (max-width: 639px) {
-  .page-gutter {
-    padding-inline: 0.875rem;
-    padding-top: 1rem;
-    padding-bottom: 1.25rem;
-  }
   [data-slot="card"] {
     border-radius: 1.1rem;
   }
@@ -1070,12 +909,6 @@ footer {
   .cloudie-page [class*="sm:flex-row"] {
     flex-direction: column;
   }
-  .cloudie-page [class*="sm:w-auto"] {
-    width: 100%;
-  }
-  .cloudie-page [class*="sm:w-"] {
-    width: 100%;
-  }
   .cloudie-page .data-row {
     min-height: 3.5rem;
     padding: 0.65rem;
@@ -1111,29 +944,8 @@ footer {
   }
 }
 @media (max-width: 380px) {
-  .cloudie-page {
-    padding-inline: 0.75rem;
-  }
   .cloudie-page [class*="text-2xl"] {
     font-size: 1.3rem;
-  }
-}
-@media (max-width: 639px) {
-  header {
-    height: 3.75rem !important;
-    padding-inline: 0.625rem !important;
-  }
-  header a[href="/dashboard"] span:last-child {
-    max-width: 8.5rem;
-  }
-  header a[href="/buy-points"] [data-slot="badge"] {
-    padding-inline: 0.6rem !important;
-    min-height: 2.5rem;
-  }
-  header a[href="/notifications"] button,
-  header button[aria-label="Open profile menu"] {
-    width: 2.75rem;
-    height: 2.75rem;
   }
 }
 
@@ -1327,73 +1139,16 @@ footer {
   }
 }
 
-/* CLOUDIE DOCUMENTATION DESIGN SYSTEM */
-@layer base {
-  :root {
-    color-scheme: light;
-    --background: #f8fafc;
-    --foreground: #0f172a;
-    --card: #ffffff;
-    --card-foreground: #0f172a;
-    --popover: #ffffff;
-    --popover-foreground: #0f172a;
-    --primary: #2563eb;
-    --primary-foreground: #ffffff;
-    --secondary: #eff6ff;
-    --secondary-foreground: #1e3a8a;
-    --muted: #f1f5f9;
-    --muted-foreground: #64748b;
-    --accent: #1e6091;
-    --accent-foreground: #ffffff;
-    --border: #e2e8f0;
-    --input: #cbd5e1;
-    --ring: #2563eb;
-    --sidebar: #ffffff;
-    --sidebar-foreground: #0f172a;
-    --sidebar-primary: #2563eb;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #eff6ff;
-    --sidebar-accent-foreground: #1e3a8a;
-    --sidebar-border: #e2e8f0;
-    --surface: #ffffff;
-    --surface-2: #f8fafc;
-    --shadow-color: 215 25% 25%;
-  }
-  .dark {
-    color-scheme: dark;
-    --background: #08111f;
-    --foreground: #f8fafc;
-    --card: #0f1b2d;
-    --card-foreground: #f8fafc;
-    --popover: #0f1b2d;
-    --popover-foreground: #f8fafc;
-    --primary: #3b82f6;
-    --primary-foreground: #ffffff;
-    --secondary: #12233d;
-    --secondary-foreground: #dbeafe;
-    --muted: #132238;
-    --muted-foreground: #94a3b8;
-    --accent: #2563eb;
-    --accent-foreground: #ffffff;
-    --border: #24364f;
-    --input: #334963;
-    --ring: #60a5fa;
-    --sidebar: #0a1423;
-    --sidebar-foreground: #f8fafc;
-    --sidebar-primary: #3b82f6;
-    --sidebar-primary-foreground: #ffffff;
-    --sidebar-accent: #12233d;
-    --sidebar-accent-foreground: #dbeafe;
-    --sidebar-border: #24364f;
-    --surface: #0f1b2d;
-    --surface-2: #0b1626;
-    --shadow-color: 215 45% 3%;
-  }
-}
-
+/* Document surfaces sit inside the same palette as the rest of the app. */
 @layer components {
   .cloudie-doc-shell {
     min-height: 100%;
+  }
+  /* Printed artefacts (labels, receipts, generated documents) are rendered on a
+     white sheet on purpose. `paper-surface` marks those subtrees so the legacy
+     utility bridge below cannot repaint paper as app chrome. */
+  .paper-surface {
+    color-scheme: light;
   }
   .cloudie-doc-shell .interactive-card {
     border-color: var(--border);
@@ -1404,14 +1159,16 @@ footer {
     box-shadow: 0 20px 42px -30px hsl(var(--primary) / 0.25);
   }
   .cloudie-doc-hero {
-    background: linear-gradient(135deg, #1e6091 0%, #2563eb 55%, #3b82f6 100%);
-    color: white;
-    box-shadow: 0 28px 60px -38px rgb(37 99 235 / 0.5);
+    background: var(--card);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    box-shadow: 0 28px 60px -40px hsl(var(--shadow-color) / 0.9);
   }
   .cloudie-doc-balance {
-    background: linear-gradient(135deg, #1e6091, #2563eb);
-    color: white;
-    box-shadow: 0 26px 58px -34px rgb(37 99 235 / 0.48);
+    background: var(--surface-2);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    box-shadow: 0 26px 58px -38px hsl(var(--shadow-color) / 0.9);
   }
   .cloudie-doc-bottom-dock {
     background: color-mix(in srgb, var(--card) 94%, transparent);
@@ -1426,5 +1183,191 @@ footer {
     .cloudie-doc-balance {
       border-radius: 1.25rem;
     }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   LEGACY LIGHT-MODE UTILITY BRIDGE
+
+   Every page in this product was written against a light theme, so a great many
+   elements carry classes like `text-slate-900 border-slate-200 bg-slate-50`.
+   Most of them are paired with a `dark:` variant, but ~800 individual utilities
+   across ~58 files are not — and on a pure-black page `text-slate-900` is
+   invisible ink.
+
+   Rather than rewrite two thousand class strings (and risk changing the ones
+   that were deliberate), this block re-points the legacy grey and status ramps
+   at the design tokens. It works by SPECIFICITY, which is what makes it safe:
+
+     • these selectors are (0,1,0) — exactly a Tailwind utility's weight, and
+       they sit later in the `utilities` layer, so they win;
+     • a `dark:` variant compiles to `:is(.dark *)`, i.e. (0,2,0), so any element
+       that ALREADY has a dark counterpart keeps it untouched.
+
+   Therefore: pages with a proper dark pairing are unaffected, and elements that
+   only ever had a light-mode colour now inherit the palette.
+
+   Paper is excluded. `:not(:where(.paper-surface *))` contributes zero
+   specificity, so the exclusion costs nothing and printed sheets, labels and
+   generated documents keep their white background and dark ink.
+
+   This is a migration shim: it is deleted once the last page has been ported to
+   semantic tokens.
+   ════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+  /* Grey ink: strong greys were "body text", softer ones "secondary text". */
+  [class*="text-slate-9"]:not(:where(.paper-surface *)),
+  [class*="text-slate-8"]:not(:where(.paper-surface *)),
+  [class*="text-slate-7"]:not(:where(.paper-surface *)),
+  [class*="text-gray-9"]:not(:where(.paper-surface *)),
+  [class*="text-gray-8"]:not(:where(.paper-surface *)),
+  [class*="text-gray-7"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-9"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-8"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-7"]:not(:where(.paper-surface *)),
+  [class*="text-neutral-9"]:not(:where(.paper-surface *)),
+  [class*="text-neutral-8"]:not(:where(.paper-surface *)) {
+    color: var(--foreground);
+  }
+
+  [class*="text-slate-6"]:not(:where(.paper-surface *)),
+  [class*="text-slate-5"]:not(:where(.paper-surface *)),
+  [class*="text-slate-4"]:not(:where(.paper-surface *)),
+  [class*="text-slate-3"]:not(:where(.paper-surface *)),
+  [class*="text-slate-2"]:not(:where(.paper-surface *)),
+  [class*="text-slate-1"]:not(:where(.paper-surface *)),
+  [class*="text-gray-6"]:not(:where(.paper-surface *)),
+  [class*="text-gray-5"]:not(:where(.paper-surface *)),
+  [class*="text-gray-4"]:not(:where(.paper-surface *)),
+  [class*="text-gray-3"]:not(:where(.paper-surface *)),
+  [class*="text-gray-2"]:not(:where(.paper-surface *)),
+  [class*="text-gray-1"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-6"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-5"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-4"]:not(:where(.paper-surface *)),
+  [class*="text-zinc-3"]:not(:where(.paper-surface *)),
+  [class*="text-neutral-6"]:not(:where(.paper-surface *)),
+  [class*="text-neutral-5"]:not(:where(.paper-surface *)),
+  [class*="text-neutral-4"]:not(:where(.paper-surface *)) {
+    color: var(--muted-foreground);
+  }
+
+  /* Grey fills and hairlines. */
+  [class*="bg-slate-1"]:not(:where(.paper-surface *)),
+  [class*="bg-slate-2"]:not(:where(.paper-surface *)),
+  [class*="bg-slate-3"]:not(:where(.paper-surface *)),
+  [class*="bg-slate-7"]:not(:where(.paper-surface *)),
+  [class*="bg-slate-8"]:not(:where(.paper-surface *)),
+  [class*="bg-slate-9"]:not(:where(.paper-surface *)),
+  [class*="bg-gray-1"]:not(:where(.paper-surface *)),
+  [class*="bg-gray-2"]:not(:where(.paper-surface *)),
+  [class*="bg-gray-3"]:not(:where(.paper-surface *)),
+  [class*="bg-gray-7"]:not(:where(.paper-surface *)),
+  [class*="bg-gray-8"]:not(:where(.paper-surface *)),
+  [class*="bg-gray-9"]:not(:where(.paper-surface *)),
+  [class*="bg-zinc-1"]:not(:where(.paper-surface *)),
+  [class*="bg-zinc-2"]:not(:where(.paper-surface *)),
+  [class*="bg-zinc-3"]:not(:where(.paper-surface *)),
+  [class*="bg-zinc-8"]:not(:where(.paper-surface *)),
+  [class*="bg-zinc-9"]:not(:where(.paper-surface *)) {
+    background-color: var(--surface-2);
+  }
+
+  [class*="border-slate-"]:not(:where(.paper-surface *)),
+  [class*="border-gray-"]:not(:where(.paper-surface *)),
+  [class*="border-zinc-"]:not(:where(.paper-surface *)),
+  [class*="divide-slate-"]:not(:where(.paper-surface *)),
+  [class*="divide-gray-"]:not(:where(.paper-surface *)) {
+    border-color: var(--border);
+  }
+
+  /* Status ink: the hue is the meaning, so it maps to the status token. */
+  [class*="text-emerald-"]:not(:where(.paper-surface *)),
+  [class*="text-green-"]:not(:where(.paper-surface *)) {
+    color: var(--success);
+  }
+  [class*="text-amber-"]:not(:where(.paper-surface *)),
+  [class*="text-orange-"]:not(:where(.paper-surface *)),
+  [class*="text-yellow-"]:not(:where(.paper-surface *)) {
+    color: var(--warning);
+  }
+  [class*="text-red-"]:not(:where(.paper-surface *)),
+  [class*="text-rose-"]:not(:where(.paper-surface *)) {
+    color: var(--error);
+  }
+  [class*="text-blue-"]:not(:where(.paper-surface *)),
+  [class*="text-sky-"]:not(:where(.paper-surface *)),
+  [class*="text-indigo-"]:not(:where(.paper-surface *)),
+  [class*="text-cyan-"]:not(:where(.paper-surface *)),
+  [class*="text-teal-"]:not(:where(.paper-surface *)) {
+    color: var(--info);
+  }
+
+  /* Tinted status chips (the pale 50/100/200 fills) become the token tint, so
+     the matching text token above keeps its contrast. Saturated 400-600 `bg-*`
+     fills are deliberately left alone: `bg-red-500/10` and `bg-red-500` share a
+     prefix, and flattening an alpha wash into a solid block would be worse than
+     leaving it. */
+  [class*="bg-emerald-50"]:not(:where(.paper-surface *)),
+  [class*="bg-emerald-1"]:not(:where(.paper-surface *)),
+  [class*="bg-emerald-2"]:not(:where(.paper-surface *)),
+  [class*="bg-green-50"]:not(:where(.paper-surface *)),
+  [class*="bg-green-1"]:not(:where(.paper-surface *)),
+  [class*="bg-green-2"]:not(:where(.paper-surface *)) {
+    background-color: color-mix(in srgb, var(--success) 12%, transparent);
+  }
+  [class*="bg-amber-50"]:not(:where(.paper-surface *)),
+  [class*="bg-amber-1"]:not(:where(.paper-surface *)),
+  [class*="bg-amber-2"]:not(:where(.paper-surface *)),
+  [class*="bg-orange-50"]:not(:where(.paper-surface *)),
+  [class*="bg-orange-1"]:not(:where(.paper-surface *)),
+  [class*="bg-orange-2"]:not(:where(.paper-surface *)),
+  [class*="bg-yellow-50"]:not(:where(.paper-surface *)),
+  [class*="bg-yellow-1"]:not(:where(.paper-surface *)),
+  [class*="bg-yellow-2"]:not(:where(.paper-surface *)) {
+    background-color: color-mix(in srgb, var(--warning) 12%, transparent);
+  }
+  [class*="bg-red-50"]:not(:where(.paper-surface *)),
+  [class*="bg-red-1"]:not(:where(.paper-surface *)),
+  [class*="bg-red-2"]:not(:where(.paper-surface *)),
+  [class*="bg-rose-50"]:not(:where(.paper-surface *)),
+  [class*="bg-rose-1"]:not(:where(.paper-surface *)),
+  [class*="bg-rose-2"]:not(:where(.paper-surface *)) {
+    background-color: color-mix(in srgb, var(--error) 12%, transparent);
+  }
+  [class*="bg-blue-50"]:not(:where(.paper-surface *)),
+  [class*="bg-blue-1"]:not(:where(.paper-surface *)),
+  [class*="bg-blue-2"]:not(:where(.paper-surface *)),
+  [class*="bg-indigo-1"]:not(:where(.paper-surface *)),
+  [class*="bg-indigo-2"]:not(:where(.paper-surface *)),
+  [class*="bg-sky-50"]:not(:where(.paper-surface *)),
+  [class*="bg-sky-1"]:not(:where(.paper-surface *)),
+  [class*="bg-sky-2"]:not(:where(.paper-surface *)) {
+    background-color: color-mix(in srgb, var(--info) 12%, transparent);
+  }
+
+  /* Hairlines around status chips. */
+  [class*="border-emerald-2"]:not(:where(.paper-surface *)),
+  [class*="border-emerald-3"]:not(:where(.paper-surface *)),
+  [class*="border-green-2"]:not(:where(.paper-surface *)),
+  [class*="border-green-3"]:not(:where(.paper-surface *)) {
+    border-color: color-mix(in srgb, var(--success) 30%, transparent);
+  }
+  [class*="border-amber-2"]:not(:where(.paper-surface *)),
+  [class*="border-amber-50"]:not(:where(.paper-surface *)),
+  [class*="border-amber-3"]:not(:where(.paper-surface *)),
+  [class*="border-amber-5"]:not(:where(.paper-surface *)),
+  [class*="border-orange-2"]:not(:where(.paper-surface *)) {
+    border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  }
+  [class*="border-red-2"]:not(:where(.paper-surface *)),
+  [class*="border-red-3"]:not(:where(.paper-surface *)),
+  [class*="border-red-5"]:not(:where(.paper-surface *)) {
+    border-color: color-mix(in srgb, var(--error) 30%, transparent);
+  }
+  [class*="border-blue-2"]:not(:where(.paper-surface *)),
+  [class*="border-blue-3"]:not(:where(.paper-surface *)),
+  [class*="border-blue-5"]:not(:where(.paper-surface *)) {
+    border-color: color-mix(in srgb, var(--info) 30%, transparent);
   }
 }

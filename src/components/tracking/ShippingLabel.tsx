@@ -92,7 +92,7 @@ export function ShippingLabel({
       <div
         ref={labelRef}
         id="shipping-label"
-        className="mx-auto w-full max-w-[420px] bg-white rounded-xl overflow-hidden shadow-lg shadow-black/5 text-gray-900"
+        className="paper-surface mx-auto w-full max-w-[420px] bg-white rounded-xl overflow-hidden shadow-lg shadow-black/5 text-gray-900"
         style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}
       >
         {/* ── Header ── */}

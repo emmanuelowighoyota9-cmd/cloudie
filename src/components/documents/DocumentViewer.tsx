@@ -76,7 +76,7 @@ function FlightDocumentLayout({ data, title }: { data: Record<string, unknown>; 
   const seqNo = String(Math.floor(Math.random() * 900) + 100);
 
   return (
-    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="paper-surface bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       {/* ── Branded Header Bar ── */}
       <div className="relative bg-[#0c4a6e] text-white px-8 py-5 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -294,7 +294,7 @@ function HotelDocumentLayout({ data, title }: { data: Record<string, unknown>; t
   const now = new Date();
 
   return (
-    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="paper-surface bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       {/* ── Elegant Header ── */}
       <div className="relative bg-gradient-to-r from-[#0c4a6e] via-[#075985] to-[#0c4a6e] text-white px-8 py-7">
         <div className="flex items-start justify-between">
@@ -462,7 +462,7 @@ function InvoiceDocumentLayout({ data, title }: { data: Record<string, unknown>;
   const dueDate = new Date(now.getTime() + 30 * 86400000);
 
   return (
-    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="paper-surface bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       {/* ── Header ── */}
       <div className="flex items-stretch">
         <div className="flex-1 bg-[#0c4a6e] text-white px-8 py-6">
@@ -614,7 +614,7 @@ function CustomsDocumentLayout({ data, title }: { data: Record<string, unknown>;
   const declNo = "CD-" + now.getFullYear() + "-" + String(Math.floor(Math.random() * 90000) + 10000);
 
   return (
-    <div className="bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="paper-surface bg-white text-gray-900 max-w-[820px] mx-auto" style={{ fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif" }}>
       {/* ── Official Header ── */}
       <div className="bg-gray-900 text-white px-8 py-5">
         <div className="flex items-center justify-between">

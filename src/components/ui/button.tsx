@@ -9,16 +9,19 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        // The emerald call to action. Hover steps to the darker emerald in the
+        // token layer (`--primary-hover`) rather than fading opacity, so the
+        // label keeps full contrast on every surface.
         default:
-          "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:shadow-md active:shadow-sm",
+          "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-md active:shadow-sm",
         destructive:
-          "bg-destructive text-white shadow-sm hover:bg-destructive/90 hover:shadow-md focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive text-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md focus-visible:ring-destructive/30",
         outline:
-          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground hover:border-primary/40 dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+          "border border-border bg-surface text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground hover:border-primary/50",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
+          "bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-accent-foreground",
         ghost:
-          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+          "text-muted-foreground hover:bg-accent hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         // The VTU shop's own call to action. It runs on the VTU tokens so the
         // customer's shop keeps its plum-and-cream identity, while the rest of

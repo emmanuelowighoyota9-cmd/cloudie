@@ -13,13 +13,11 @@ import {
   Factory,
   Landmark,
   MapPin,
-  Moon,
   Package,
   PackageCheck,
   PackageSearch,
   Plane,
   ShieldCheck,
-  Sun,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -27,7 +25,6 @@ import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import { RouteMap, type RouteMapStop } from "@/components/tracking/RouteMap";
 import { QrCodeSvg } from "@/components/tracking/Codes";
-import { useTheme } from "@/components/ThemeProvider";
 import { statusBadgeClass, statusLabel, trackingUrl } from "@/lib/trackingUi";
 
 // ─── Milestones ──────────────────────────────────────────────────────────────
@@ -90,27 +87,6 @@ function fmtDay(ts: number) {
   return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 }
 
-// ─── Theme toggle ────────────────────────────────────────────────────────────
-
-/**
- * Public pages are reachable signed-out, so the toggle reads/writes the same
- * `cloudie-theme` preference as the rest of the app via ThemeProvider.
- */
-function ThemeToggle() {
-  const { theme, toggle } = useTheme();
-  const next = theme === "light" ? "Dark" : "Light";
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={toggle}
-      aria-label={`Switch to ${next.toLowerCase()} theme`}
-      title={`Switch to ${next.toLowerCase()} theme`}
-    >
-      {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-    </Button>
-  );
-}
 
 // ─── Search screen ───────────────────────────────────────────────────────────
 
@@ -286,7 +262,6 @@ export default function PublicTracking() {
             ) : (
               <span className="hidden text-xs text-muted-foreground sm:inline">Live shipment visibility</span>
             )}
-            <ThemeToggle />
           </div>
         </div>
       </header>
