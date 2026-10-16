@@ -109,17 +109,6 @@ export default function DocumentGenerator() {
    * The layout's own total, used when the brief never states one — a pasted
    * list still has to add up against the figure the document will carry.
    */
-  const templateTotal = useMemo(() => {
-    const fieldId = result && result.status === "matched" ? result.lineItems?.totalFieldId : undefined;
-    if (!fieldId) return undefined;
-    const fields = (templateDetail?.schema as { fields?: { id: string; default?: string }[] } | undefined)
-      ?.fields;
-    const raw = fields?.find((field) => field.id === fieldId)?.default;
-    if (!raw) return undefined;
-    const parsed = Number(String(raw).replace(/[^0-9.-]/g, ""));
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }, [result, templateDetail?.schema]);
-
   /**
    * The running total against the document's own total field — the figure the
    * brief states, or the layout's own until the brief overrides it. Anything
@@ -129,7 +118,7 @@ export default function DocumentGenerator() {
     if (!result || result.status !== "matched" || !result.lineItems) return null;
     const { totalFieldId, totalFieldLabel, documentTotal, total, additions = 0, amounts } = result.lineItems;
     if (!totalFieldId || amounts === 0) return null;
-    const stated = totalOverride !== null ? Number(totalOverride) : (documentTotal ?? templateTotal);
+    const stated = totalOverride !== null ? Number(totalOverride) : documentTotal;
     if (stated === undefined || !Number.isFinite(stated)) return null;
     const expected = Math.round((total + additions) * 100) / 100;
     const difference = Math.round((stated - expected) * 100) / 100;
