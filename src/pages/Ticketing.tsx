@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +50,7 @@ export default function Ticketing() {
 
   return (
     <div className="cloudie-ticketing-page space-y-6 sm:space-y-8">
+      <div className="flex items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm"><ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-600" /><p className="leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Sample documents only.</span> Generated tickets, itineraries, invoices and receipts are fictional examples. They do not confirm a real booking, payment or reservation.</p></div>
       <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-[#1e6091] via-[#2563eb] to-[#3b82f6] p-5 text-white shadow-[0_28px_60px_-38px_rgba(37,99,235,.55)] sm:rounded-3xl sm:p-8">
         <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
         <div className="relative max-w-3xl">
