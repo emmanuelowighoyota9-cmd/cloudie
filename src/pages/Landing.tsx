@@ -55,8 +55,8 @@ const SHOWCASE_SLUGS = [
 
 /** In-page anchors, shared by the desktop nav row and the mobile chip strip. */
 const SECTIONS = [
-  { id: "platform", label: "Platform" },
-  { id: "studio", label: "Document studio" },
+  { id: "platform", label: "Workspaces" },
+  { id: "studio", label: "Documents" },
   { id: "tracking", label: "Tracking" },
   { id: "faq", label: "FAQ" },
 ];
@@ -147,7 +147,7 @@ const proofPoints = [
   { icon: LayoutDashboard, value: "One workspace", label: "Operations, documents and points in a single sign-in" },
   { icon: ScrollText, value: "Audit-ready", label: "Every status change and render is recorded" },
   { icon: Shield, value: "Role aware", label: "Admins, customers and partners see only their slice" },
-  { icon: LifeBuoy, value: "Human support", label: "A real operations desk, not a ticket void" },
+  { icon: LifeBuoy, value: "Human support", label: "Support for your workspace" },
 ];
 
 export default function Landing() {
@@ -247,6 +247,14 @@ export default function Landing() {
         </div>
       </header>
 
+      {/* Clear simulation notice, visible before visitors enter any workspace. */}
+      <div className="border-b border-amber-500/25 bg-amber-500/[0.07]">
+        <div className="mx-auto flex max-w-6xl items-start gap-2 px-4 py-2.5 text-xs leading-relaxed text-muted-foreground sm:items-center">
+          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 sm:mt-0" />
+          <span><strong className="text-foreground">Simulation only.</strong> Documents, bookings, shipment records, sites, and balances are fictional and intended for training, demonstration, and testing.</span>
+        </div>
+      </div>
+
       {/* Hero */}
       <section className="landing-hero relative overflow-hidden border-b border-border">
         <div className="mx-auto grid min-h-[82vh] max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-[1fr_0.9fr] md:py-24">
@@ -257,16 +265,13 @@ export default function Landing() {
           >
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs font-medium text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
-              A sharper way to move every shipment
+              One account. Five workspaces. All connected.
             </div>
             <h1 className="max-w-3xl font-display text-5xl font-semibold leading-[1.02] tracking-[-0.055em] text-foreground md:text-7xl">
-              Move every
-              <br />
-              shipment with <span className="text-primary">clarity</span>
+              Everything your business runs on, <span className="text-primary">in one workspace</span>
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
-              {brand.name} brings booking, tracking, customs documents, and customer updates into one focused
-              workspace built for modern delivery teams.
+              {brand.name} brings shipments, travel documents, invoices, customer-facing banking and investment sites, and everyday tools together behind one sign-in. This is a simulation and training environment: nothing is really shipped, booked, or banked.
             </p>
             <form onSubmit={handleTrack} className="mt-8 flex max-w-md flex-col gap-2 sm:flex-row">
               <Input
