@@ -65,9 +65,9 @@ const SHOWCASE_SLUGS = [
 /** In-page anchors, shared by the desktop nav row and the mobile chip strip. */
 const SECTIONS = [
   { id: "platform", label: "Workspaces" },
-  { id: "studio", label: "Documents" },
-  { id: "tracking", label: "Tracking" },
-  { id: "faq", label: "FAQ" },
+  { id: "points", label: "Points" },
+  { id: "how-it-works", label: "How it works" },
+  { id: "faq", label: "Questions" },
 ];
 
 const steps = [
@@ -410,7 +410,7 @@ export default function Landing() {
       </section>
 
       {/* How it works */}
-      <section id="platform" className="scroll-mt-24 bg-background py-16 sm:py-20 lg:py-28">
+      <section id="how-it-works" className="scroll-mt-24 bg-background py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-6xl page-gutter">
           <div className="mb-12 max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
@@ -458,7 +458,7 @@ export default function Landing() {
       </section>
 
       {/* Features */}
-      <section className="bg-background py-16 sm:py-20 lg:py-28">
+      <section id="platform" className="scroll-mt-24 bg-background py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-6xl page-gutter">
           <div className="mb-12 text-center">
             <h2 className="text-3xl font-bold tracking-tight text-foreground">Everything in its own workspace</h2>
@@ -489,7 +489,7 @@ export default function Landing() {
       </section>
 
       {/* Points Economy */}
-      <section className="border-y border-border bg-card py-16 sm:py-20 lg:py-28">
+      <section id="points" className="scroll-mt-24 border-y border-border bg-card py-16 sm:py-20 lg:py-28">
         <div className="mx-auto max-w-6xl page-gutter">
           <div className="grid items-center gap-12 lg:grid-cols-2">
             <div>
