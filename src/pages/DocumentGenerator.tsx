@@ -48,7 +48,7 @@ const CONFIDENCE_STYLE: Record<BriefConfidence, { label: string; className: stri
 /**
  * Document brief generator.
  *
- * Reads a plain-language brief, identifies the matching Crestline business
+ * Reads a plain-language brief, identifies the matching Cloudie business
  * document, extracts the fields it can — including repeatable table rows — and
  * reports what is still needed. Everything runs locally against the platform's
  * own schema: no model call, and no identity or payment artifacts.
@@ -281,7 +281,7 @@ export default function DocumentGenerator() {
 
           <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 p-3 text-[11px] leading-relaxed text-muted-foreground">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            Supported: {BRIEF_INTENTS.map((intent) => intent.label).join(" · ")}. Crestline declines identity documents,
+            Supported: {BRIEF_INTENTS.map((intent) => intent.label).join(" · ")}. Cloudie does not generate identity documents,
             government credentials, payment confirmations, bank instruments and credential certificates.
           </p>
 
