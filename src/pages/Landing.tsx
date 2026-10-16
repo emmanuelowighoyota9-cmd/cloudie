@@ -36,7 +36,6 @@ import {
   FileCheck2,
   Quote,
   Star,
-  Mail,
   Phone,
   LayoutDashboard,
   ScrollText,
