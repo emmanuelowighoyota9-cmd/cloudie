@@ -128,7 +128,7 @@ export const myShipmentDetail = query({
         })),
       },
       events: events
-        .filter((e) => e.isPublic)
+        .filter((e) => e.isPublic || e.createdBy === userId)
         .map((e) => ({
           _id: e._id,
           status: e.status,
@@ -335,7 +335,8 @@ export const customerUpdateShipment = mutation({
       title: "Shipment updated by sender",
       description: `Updated: ${changeSummary}. ${updateCost} points charged.`,
       eventTimestamp: Date.now(),
-      isPublic: true,
+      // Customer-edited shipment details are private account activity, not carrier events.
+      isPublic: false,
       createdBy: userId,
       createdAt: Date.now(),
     });
@@ -384,6 +385,10 @@ export const customerAddShipmentEvent = mutation({
     }
     if (shipment.status === "DELIVERED") throw new Error("Cannot add events to a delivered shipment");
     if (shipment.status === "CANCELLED") throw new Error("Cannot add events to a cancelled shipment");
+    const title = args.title.trim();
+    const description = args.description.trim();
+    if (!title || title.length > 100) throw new Error("Title must be between 1 and 100 characters");
+    if (!description || description.length > 1000) throw new Error("Description must be between 1 and 1,000 characters");
 
     // Points check + debit (per-service price wins when configured)
     const eventCost = await effectivePointsCost(ctx, "shipment_event_add", EVENT_COST_POINTS);
