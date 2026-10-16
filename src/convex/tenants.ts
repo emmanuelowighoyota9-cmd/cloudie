@@ -722,7 +722,7 @@ export const creditDemoAccount = mutation({
     // Notify the target user.
     await ctx.db.insert("notifications", {
       userId: args.userId,
-      title: "Account credited",
+      title: "Credit ledger entry recorded",
       message: `A credit ledger entry of ${fmtCurrency(amount, (tenant as any).currency ?? "USD")} was recorded for your ${tenant.siteType} account at ${tenant.siteName}. This entry alone does not confirm an account balance change.`,
       type: "wallet",
       isRead: false,
@@ -755,7 +755,7 @@ export const debitDemoAccount = mutation({
     const entryId = await ctx.db.insert("tenantLedger", { tenantId: args.tenantId, userId: args.userId, amount: -amount, description, type: "debit", createdAt: now });
     await ctx.db.insert("notifications", {
       userId: args.userId,
-      title: "Account debited",
+      title: "Debit ledger entry recorded",
       message: `A debit ledger entry of ${fmtCurrency(amount, (tenant as any).currency ?? "USD")} was recorded for your ${tenant.siteType} account at ${tenant.siteName}. This entry alone does not confirm an account balance change.`,
       type: "wallet",
       isRead: false,
