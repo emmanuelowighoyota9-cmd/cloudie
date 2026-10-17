@@ -1,0 +1,81 @@
+name: Deploy Cloudie Convex Backend + InfinityFree Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudie-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy production Convex backend and build site
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify production deploy key is configured
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: |
+          if [ -z "$CONVEX_DEPLOY_KEY" ]; then
+            echo "::error::Add CONVEX_DEPLOY_KEY in GitHub repository Settings > Secrets and variables > Actions. Use the production deploy key from the correct Convex deployment."
+            exit 1
+          fi
+
+      - name: Deploy Convex schema and functions, then build frontend with its generated URL
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: npx convex deploy --cmd "npm run build" --cmd-url-env-var-name VITE_CONVEX_URL
+
+      - name: Verify SPA output and prepare InfinityFree package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          if [ ! -f dist/404.html ]; then
+            cat > dist/404.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cloudie</title></head>
+          <body><p>Page not found. <a href="/">Return to Cloudie</a></p></body>
+          </html>
+          HTML
+          fi
+          if [ ! -f dist/.htaccess ]; then
+            cat > dist/.htaccess <<'HTACCESS'
+          Options -Indexes
+          DirectoryIndex index.html
+          RewriteEngine On
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteRule ^ index.html [L]
+          HTACCESS
+          fi
+          rm -f cloudie-infinityfree-site.zip
+          (cd dist && zip -qr ../cloudie-infinityfree-site.zip .)
+          unzip -Z1 cloudie-infinityfree-site.zip | grep -qx 'index.html'
+          unzip -Z1 cloudie-infinityfree-site.zip | grep -qx '.htaccess'
+          unzip -Z1 cloudie-infinityfree-site.zip | grep -qx '404.html'
+
+      - name: Upload deployable InfinityFree site
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudie-infinityfree-site
+          path: cloudie-infinityfree-site.zip
+          if-no-files-found: error
+          retention-days: 7
