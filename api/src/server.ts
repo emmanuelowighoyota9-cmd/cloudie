@@ -15,7 +15,7 @@ const jwtSecretValue = process.env.JWT_SECRET;
 if (!databaseUrl) throw new Error("DATABASE_URL is required");
 if (!jwtSecretValue || Buffer.byteLength(jwtSecretValue) < 32) throw new Error("JWT_SECRET must be at least 32 bytes");
 const jwtSecret = new TextEncoder().encode(jwtSecretValue);
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: databaseUrl,
   max: Number(process.env.PG_POOL_MAX ?? 10),
   idleTimeoutMillis: 30_000,
@@ -26,7 +26,7 @@ pool.on("error", (error) => console.error("Unexpected idle PostgreSQL client err
 
 type User = { id: string; email: string; name: string | null; role: "admin" | "user" | "vendor"; is_suspended: boolean; is_terminated: boolean };
 type Variables = { user: User };
-const app = new Hono<{ Variables: Variables }>();
+export const app = new Hono<{ Variables: Variables }>();
 const origins = (process.env.CORS_ORIGINS ?? "http://localhost:5173").split(",").map((x) => x.trim()).filter(Boolean);
 
 app.use("*", cors({
@@ -36,14 +36,25 @@ app.use("*", cors({
   allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   maxAge: 600,
 }));
-// Reject cross-origin unsafe requests. This complements SameSite cookies and the
-// exact CORS allowlist; browser clients must send Origin on cookie-authenticated writes.
+// Protect cookie-authenticated state changes with origin validation and a
+// double-submit CSRF token. Bearer clients remain supported during migration.
 app.use("*", async (c, next) => {
   if (["POST", "PUT", "PATCH", "DELETE"].includes(c.req.method)) {
     const origin = c.req.header("origin");
     const hasCookie = Boolean(getCookie(c, "cloudie_session"));
+    const usesBearer = c.req.header("authorization")?.startsWith("Bearer ") ?? false;
     if ((origin && !origins.includes(origin)) || (hasCookie && !origin)) {
       return c.json({ error: "Cross-origin request rejected" }, 403);
+    }
+    if (hasCookie && !usesBearer) {
+      const cookieToken = getCookie(c, "cloudie_csrf");
+      const headerToken = c.req.header("x-csrf-token");
+      const cookieBytes = cookieToken ? Buffer.from(cookieToken, "utf8") : null;
+      const headerBytes = headerToken ? Buffer.from(headerToken, "utf8") : null;
+      if (!cookieBytes || !headerBytes || cookieBytes.length !== headerBytes.length ||
+          !timingSafeEqual(cookieBytes, headerBytes)) {
+        return c.json({ error: "CSRF validation failed" }, 403);
+      }
     }
   }
   await next();
@@ -55,6 +66,13 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header("Cache-Control", "no-store");
 });
+
+function setCsrfCookie(c: Context) {
+  setCookie(c, "cloudie_csrf", randomBytes(32).toString("hex"), {
+    httpOnly: false, secure: process.env.NODE_ENV === "production", sameSite: "Lax",
+    path: "/", maxAge: 8 * 60 * 60,
+  });
+}
 
 function fail(c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 500, message: string) {
   return c.json({ error: message }, status);
@@ -147,6 +165,11 @@ async function readJson<T>(c: Context, schema: z.ZodType<T>) {
   return parsed.success ? { data: parsed.data } : { error: parsed.error.flatten() };
 }
 
+app.get("/api/auth/csrf", (c) => {
+  setCsrfCookie(c);
+  return c.json({ ok: true });
+});
+
 app.get("/health", async (c) => {
   try {
     const result = await pool.query("SELECT 1 AS ok");
@@ -186,6 +209,7 @@ app.post("/api/auth/register", async (c) => {
       httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "Lax",
       path: "/", maxAge: 8 * 60 * 60,
     });
+    setCsrfCookie(c);
     return c.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token }, 201);
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
@@ -210,6 +234,7 @@ app.post("/api/auth/login", async (c) => {
     return fail(c, 401, "Invalid email or password");
   }
   const token = await setSession(c, user);
+  setCsrfCookie(c);
   return c.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token });
 });
 app.post("/api/auth/logout", async (c) => {
@@ -223,6 +248,7 @@ app.post("/api/auth/logout", async (c) => {
     }
   }
   deleteCookie(c, "cloudie_session", { path: "/" });
+  deleteCookie(c, "cloudie_csrf", { path: "/" });
   return c.json({ ok: true });
 });
 app.get("/api/me", auth, (c) => {
@@ -312,14 +338,16 @@ app.onError((error, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-const server = serve({ fetch: app.fetch, port }, (info) => {
+// Export the Hono app for isolated HTTP-level tests. Tests set NODE_ENV=test before
+// importing this module so they never bind a port or require a live database.
+const server = process.env.NODE_ENV === "test" ? undefined : serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Cloudie Neon API listening on ${info.port}`);
 });
 let shuttingDown = false;
 const shutdown = async () => {
   if (shuttingDown) return;
   shuttingDown = true;
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
   await pool.end();
   process.exit(0);
 };
