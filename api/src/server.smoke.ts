@@ -249,3 +249,26 @@ test("rejects revoked or expired server-side sessions", async () => {
     mutablePool.query = originalQuery;
   }
 });
+
+test("returns public platform configuration without authentication", async () => {
+  const response = await app.request("/api/public-config");
+  assert.equal(response.status, 200);
+  const data = await response.json() as { brand?: { name?: string }, support?: { widgetEnabled?: boolean } };
+  assert.ok(data.brand);
+  assert.equal(typeof data.brand?.name, "string");
+  assert.ok(data.support);
+});
+
+test("returns 404 for nonexistent tracking number", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => ({ rows: [], rowCount: 0 });
+  try {
+    const response = await app.request("/api/tracking/TRK-NONEXISTENT");
+    assert.equal(response.status, 404);
+    const data = await response.json() as { error?: string };
+    assert.equal(data.error, "Tracking number not found");
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});

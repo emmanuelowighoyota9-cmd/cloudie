@@ -1,0 +1,8 @@
+{
+  "name": "Cloudie Operations Platform",
+  "description": "Unified operations platform for shipments, tracking, documents, payments, and airtime.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

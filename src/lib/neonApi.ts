@@ -1,4 +1,5 @@
-const API_BASE_URL = (import.meta.env.VITE_NEON_API_URL as string | undefined)?.replace(/\/$/, "");
+const DEFAULT_API_URL = "https://cloudie-operations-api-stage.onrender.com";
+const API_BASE_URL = (import.meta.env.VITE_NEON_API_URL as string | undefined)?.replace(/\/$/, "") || DEFAULT_API_URL;
 const SAME_ORIGIN_API = import.meta.env.VITE_NEON_API_SAME_ORIGIN === "true";
 
 const TOKEN_KEY = "cloudie_api_token";
@@ -9,6 +10,11 @@ export type NeonUser = {
   email: string;
   name: string | null;
   role: "admin" | "user" | "vendor";
+  emailVerificationTime?: number | null;
+  email_verified_at?: string | null;
+  organization_name?: string | null;
+  wallet_balance_ngn?: number;
+  points_balance?: number;
 };
 
 export type NeonSession = { user: NeonUser; token?: string };
@@ -26,9 +32,8 @@ export class NeonApiError extends Error {
 }
 
 function baseUrl() {
-  if (API_BASE_URL) return API_BASE_URL;
   if (SAME_ORIGIN_API) return "";
-  throw new Error("Neon API is not configured. Set VITE_NEON_API_URL or enable VITE_NEON_API_SAME_ORIGIN after configuring the same-origin API gateway.");
+  return API_BASE_URL;
 }
 
 function readCsrfCookie() {
@@ -105,28 +110,90 @@ export const neonApi = {
     try { await request<{ ok: boolean }>("/api/auth/logout", { method: "POST", body: "{}" }); }
     finally { clearNeonSession(); }
   },
+  async publicConfig() {
+    return request<{
+      brand: { name: string; tagline: string; accentColor: string; footerNote: string };
+      support: { email: string; phone: string; hours: string; widgetEnabled: boolean; widgetTitle: string; widgetMessage: string; faqs: Array<{ question: string; answer: string }> };
+      quickActions: Array<{ label: string; href: string }>;
+      hasCustomBrand: boolean;
+    }>("/api/public-config", {}, false);
+  },
   async tenants() {
     return request<{ tenants: Array<Record<string, unknown>> }>("/api/tenants");
-  },
-  async adminUsers(limit = 50) {
-    return request<{ users: Array<Record<string, unknown>> }>(`/api/admin/users?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
-  },
-  async walletLedger(limit = 50) {
-    return request<{ entries: Array<Record<string, unknown>> }>(`/api/wallet/ledger?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
   },
   async profile() {
     return request<{ profile: Record<string, unknown> }>("/api/profile");
   },
-  async notifications(limit = 50) {
-    return request<{ notifications: Array<Record<string, unknown>> }>(`/api/notifications?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  async updateProfile(input: { name?: string; organization_name?: string }) {
+    return request<{ profile: Record<string, unknown> }>("/api/profile", { method: "PATCH", body: JSON.stringify(input) });
   },
-  async orders(limit = 50) {
-    return request<{ orders: Array<Record<string, unknown>> }>(`/api/orders?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  async walletSummary() {
+    return request<{ wallet_balance_ngn: number; points_balance: number; currency: string }>("/api/wallet/summary");
+  },
+  async walletLedger(limit = 50) {
+    return request<{ entries: Array<Record<string, unknown>> }>(`/api/wallet/ledger?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  },
+  async shipments(options: { all?: boolean; limit?: number } = {}) {
+    const query = new URLSearchParams();
+    if (options.all) query.set("all", "true");
+    if (options.limit) query.set("limit", String(options.limit));
+    return request<{ shipments: Array<Record<string, unknown>> }>(`/api/shipments?${query.toString()}`);
+  },
+  async shipment(id: string) {
+    return request<{ shipment: Record<string, unknown>; events: Array<Record<string, unknown>> }>(`/api/shipments/${encodeURIComponent(id)}`);
+  },
+  async createShipment(input: Record<string, unknown>) {
+    return request<{ shipment: Record<string, unknown> }>("/api/shipments", { method: "POST", body: JSON.stringify(input) });
+  },
+  async updateShipment(id: string, input: Record<string, unknown>) {
+    return request<{ shipment: Record<string, unknown> }>(`/api/shipments/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  async track(trackingNumber: string) {
+    return request<{ shipment: Record<string, unknown>; events: Array<Record<string, unknown>> }>(`/api/tracking/${encodeURIComponent(trackingNumber)}`, {}, false);
   },
   async catalog(input: { tenantId?: string; limit?: number } = {}) {
     const query = new URLSearchParams();
     query.set("limit", String(Math.min(100, Math.max(1, Math.floor(input.limit ?? 50)))));
     if (input.tenantId) query.set("tenantId", input.tenantId);
-    return request<{ products: Array<Record<string, unknown>> }>(`/api/catalog?${query.toString()}`);
+    return request<{ products: Array<Record<string, unknown>> }>(`/api/catalog?${query.toString()}`, {}, false);
+  },
+  async orders(limit = 50) {
+    return request<{ orders: Array<Record<string, unknown>> }>(`/api/orders?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  },
+  async createOrder(input: { items: Array<{ productId: string; quantity: number }>; currency?: string }) {
+    return request<{ order: Record<string, unknown>; items: Array<Record<string, unknown>> }>("/api/orders", { method: "POST", body: JSON.stringify(input) });
+  },
+  async notifications(limit = 50) {
+    return request<{ notifications: Array<Record<string, unknown>> }>(`/api/notifications?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  },
+  async markNotificationRead(id: string) {
+    return request<{ ok: boolean }>(`/api/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH", body: "{}" });
+  },
+  async adminUsers(limit = 50) {
+    return request<{ users: Array<Record<string, unknown>> }>(`/api/admin/users?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  },
+  async updateUser(id: string, input: { role?: "admin" | "user" | "vendor"; is_suspended?: boolean; is_terminated?: boolean }) {
+    return request<{ user: Record<string, unknown> }>(`/api/admin/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  async adminShipments(limit = 50) {
+    return request<{ shipments: Array<Record<string, unknown>> }>(`/api/admin/shipments?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
+  },
+  async adminReports() {
+    return request<{ totalUsers: number; totalShipments: number; totalOrders: number; pendingShipments: number }>("/api/admin/reports");
+  },
+  async adminSettings() {
+    return request<{ settings: Array<{ key: string; value: unknown; updated_at: string }> }>("/api/admin/settings");
+  },
+  async updateAdminSetting(key: string, value: unknown) {
+    return request<{ ok: boolean }>("/api/admin/settings", { method: "POST", body: JSON.stringify({ key, value }) });
+  },
+  async createCatalogProduct(input: Record<string, unknown>) {
+    return request<{ product: Record<string, unknown> }>("/api/admin/catalog", { method: "POST", body: JSON.stringify(input) });
+  },
+  async updateCatalogProduct(id: string, input: Record<string, unknown>) {
+    return request<{ product: Record<string, unknown> }>(`/api/admin/catalog/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(input) });
+  },
+  async deleteCatalogProduct(id: string) {
+    return request<{ ok: boolean }>(`/api/admin/catalog/${encodeURIComponent(id)}`, { method: "DELETE" });
   },
 };

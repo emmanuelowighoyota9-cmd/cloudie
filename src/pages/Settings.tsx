@@ -47,7 +47,7 @@ function OrganizationCard() {
 
 export default function Settings() {
   const { user } = useAuth();
-  const emailVerified = Boolean(user?.emailVerificationTime);
+  const emailVerified = Boolean(user?.emailVerificationTime ?? user?.email_verified_at);
 
   return <div className="space-y-6 sm:space-y-8">
     <section className="rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.10] via-card to-card p-5 sm:p-7">

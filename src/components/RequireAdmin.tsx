@@ -206,19 +206,10 @@ function NonAdminNotice() {
  * (`requireAdmin` in adminApi.ts), so spoofing this component grants nothing.
  */
 export function RequireAdmin({ children }: { children: ReactNode }) {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, user } = useAuth();
   const location = useLocation();
 
-  // Same auth gate semantics as RequireAuth (returnTo preserved).
-  const me = useQuery(
-    api.users.currentUser,
-    isAuthenticated ? {} : "skip",
-  );
-
-  // Whether any admin exists — enables the one-time first-admin claim flow.
-  const anyAdmin = useQuery(api.admin.adminExists, isAuthenticated ? {} : "skip");
-
-  if (isLoading || (isAuthenticated && me === undefined)) {
+  if (isLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -229,8 +220,6 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}`;
-    // Dedicated admin sign-in: keep the requested path so the admin login
-    // page can return the administrator to where they were headed.
     return (
       <Navigate
         to={`/admin/login?returnTo=${encodeURIComponent(returnTo)}`}
@@ -239,13 +228,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     );
   }
 
-  // Bootstrap window: no admin exists anywhere → allow a signed-in user to
-  // claim the role once. Server enforces this is only possible pre-bootstrap.
-  if (me?.role !== "admin") {
-    if (anyAdmin === false) {
-      return <ClaimAdminPanel />;
-    }
-    // Signed-in non-admin: clear escape (sign out → /admin/login), not a dead end.
+  if (user?.role !== "admin") {
     return <NonAdminNotice />;
   }
 

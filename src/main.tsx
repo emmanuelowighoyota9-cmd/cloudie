@@ -206,7 +206,8 @@ class RootErrorBoundary extends React.Component<
   }
 }
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+const convexUrl = (import.meta.env.VITE_CONVEX_URL as string) || "https://placeholder-convex.cloud";
+const convex = new ConvexReactClient(convexUrl);
 
 // Register the Cloudie service worker (offline fallback + static asset caching).
 // Production only: in development the managed dev server serves assets directly
