@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: infinityfree-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-static-site:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -19,33 +24,65 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install locked dependencies
+        run: npm ci
 
       - name: Build production frontend
         env:
           VITE_CONVEX_URL: https://avid-raccoon-932.convex.cloud
         run: npm run build
 
-      - name: Verify static output
+      - name: Prepare and verify static output
+        shell: bash
         run: |
-          test -f dist/index.html
-          test -f dist/404.html
-          test -f dist/.htaccess
-          echo "Production files verified:"
-          find dist -maxdepth 2 -type f | sort
+          set -euo pipefail
+          test -s dist/index.html
 
-      - name: Package site for InfinityFree
-        run: zip -r cloudie-infinityfree-site.zip dist
+          # Keep the host's SPA fallback files in the final deployable output.
+          if [ ! -f dist/404.html ]; then
+            cat > dist/404.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Cloudie</title></head>
+          <body><p>Page not found. <a href="/">Return to Cloudie</a></p></body>
+          </html>
+          HTML
+          fi
+
+          if [ ! -f dist/.htaccess ]; then
+            cat > dist/.htaccess <<'HTACCESS'
+          Options -Indexes
+          DirectoryIndex index.html
+          RewriteEngine On
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteRule ^ index.html [L]
+          HTACCESS
+          fi
+
+          test -s dist/index.html
+          test -s dist/404.html
+          test -s dist/.htaccess
+          echo "Verified deployable files:"
+          find dist -maxdepth 3 -type f -print | sort
+
+      - name: Package site with files at ZIP root
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f cloudie-infinityfree-site.zip
+          (cd dist && zip -qr ../cloudie-infinityfree-site.zip .)
+          unzip -l cloudie-infinityfree-site.zip
+          unzip -Z1 cloudie-infinityfree-site.zip | grep -qx 'index.html'
+          unzip -Z1 cloudie-infinityfree-site.zip | grep -qx '.htaccess'
+          unzip -Z1 cloudie-infinityfree-site.zip | grep -qx '404.html'
 
       - name: Upload deployable site
         uses: actions/upload-artifact@v4
         with:
           name: cloudie-infinityfree-site
-          path: |
-            cloudie-infinityfree-site.zip
-            dist/
-          include-hidden-files: true
+          path: cloudie-infinityfree-site.zip
           if-no-files-found: error
           retention-days: 7
