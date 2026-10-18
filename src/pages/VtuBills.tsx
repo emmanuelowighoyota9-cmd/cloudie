@@ -403,7 +403,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold">
-                              {product.displayName}
+                              {product.displayName || product.productCode || "Service"}
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-vtu-muted">
                               {product.requiresAmount
@@ -465,7 +465,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">
-                      {detail.displayName}
+                      {detail.displayName || detail.productCode || "Service"}
                     </p>
                     <p className="text-[11px] text-vtu-muted">
                       {vtuServiceTypeLabel(detail.serviceType)}
@@ -486,7 +486,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                         <div className="grid grid-cols-4 gap-2">
                           {["mtn", "airtel", "glo", "9mobile"].map((provider) => {
                             const providerProduct = activeGroup?.products.find((p) =>
-                              p.displayName.toLowerCase().includes(provider),
+                              (typeof p.displayName === "string" ? p.displayName : p.productCode ?? "").toLowerCase().includes(provider),
                             );
                             const active = Boolean(
                               providerProduct &&
@@ -533,7 +533,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                         >
                           {(activeGroup?.products ?? []).map((product) => (
                             <option key={product.productCode} value={product.productCode}>
-                              {product.displayName}
+                              {product.displayName || product.productCode || "Service"}
                             </option>
                           ))}
                         </select>
@@ -556,7 +556,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                         >
                           {(activeGroup?.products ?? []).map((product) => (
                             <option key={product.productCode} value={product.productCode}>
-                              {product.displayName}
+                              {product.displayName || product.productCode || "Service"}
                             </option>
                           ))}
                         </select>
