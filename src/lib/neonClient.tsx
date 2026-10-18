@@ -287,7 +287,7 @@ export function useMutation(mutationFn: unknown): (...args: any[]) => Promise<an
           triggerQueryUpdate("admin");
           return res;
         } else {
-          return { ok: true };
+          throw new Error("Unsupported Neon migration mutation: " + (fnName || "(unknown function)") + ". No write was performed.");
         }
       } catch (err) {
         console.error(`[NeonClient] mutation error for ${fnName}:`, err);
@@ -320,7 +320,13 @@ export function useConvex() {
       if (fnName.includes("publicConfig")) return neonApi.publicConfig();
       return null;
     },
-    mutation: async () => ({ ok: true }),
-    action: async () => ({ ok: true }),
+    mutation: async (fn: unknown) => {
+      const fnName = resolveFunctionName(fn);
+      throw new Error("Unsupported Neon migration mutation: " + (fnName || "(unknown function)") + ". No write was performed.");
+    },
+    action: async (fn: unknown) => {
+      const fnName = resolveFunctionName(fn);
+      throw new Error("Unsupported Neon migration action: " + (fnName || "(unknown function)") + ". No action was performed.");
+    },
   };
 }
