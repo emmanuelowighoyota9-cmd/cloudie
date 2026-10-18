@@ -199,7 +199,8 @@ export function useQuery(queryFn: unknown, args?: unknown): any {
           }
         }
       } else if (fnName.includes("adminExists")) {
-        if (mountedRef.current) setData(true);
+        // No verified Neon endpoint exists for this check yet; never claim an admin exists without proof.
+        if (mountedRef.current) setData(null);
       } else if (fnName.includes("admin:users") || fnName.includes("adminUsers")) {
         const res = await neonApi.adminUsers();
         if (mountedRef.current) setData(res.users);
