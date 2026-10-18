@@ -143,3 +143,15 @@ The current `api/src/server.ts` contains routes for health, auth/session, public
 4. Migrate and reconcile production Convex data into the confirmed Neon production branch before switching reads/writes.
 5. Remove Convex packages, generated modules, source modules, configuration and workflow references only after no runtime imports remain and CI/build passes.
 6. Do not merge PR #17 or deploy this branch as a full migration while any of these gates are incomplete.
+
+
+## Full-removal branch update (2026-10-18): automated dependency inventory
+
+Added `scripts/audit-convex-removal.mjs` and the `npm run audit:convex-removal` command. CI now runs the audit in inventory mode so each migration PR records remaining Convex references in its logs without making the in-progress migration fail merely because it is incomplete.
+
+- Run `npm run audit:convex-removal` to print remaining references during the migration.
+- Run `npm run audit:convex-removal -- --strict` for the final removal gate. Strict mode fails while any matching references remain in audited frontend/API/scripts/workflow files or package manifests.
+- This is a reference inventory, not proof of functional parity. Matches in docs/comments or generated files may require review; do not blindly delete them.
+- The CI workflow still runs the Convex validation step and the package still contains Convex dependencies and deployment scripts. Those are intentionally retained until all source imports, auth/provider dependencies, endpoint parity, tests, and data cutover are complete.
+
+Current source check confirms `src/main.tsx` still imports `ConvexAuthProvider` and `ConvexReactClient`, while `src/lib/neonClient.tsx` still imports `getFunctionName` from `convex/server`. Removing the provider or uninstalling Convex now would break unresolved route and admin flows. Keep PR #17 in draft until the API parity and data/auth gates above are satisfied.
