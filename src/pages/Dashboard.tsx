@@ -260,7 +260,9 @@ export default function Dashboard() {
                   />
                 ) : (
                   <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    {formatNgn(balance)}
+                    {walletAmount === null && balance != null
+                      ? "—"
+                      : formatNgn(walletAmount ?? 0)}
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
