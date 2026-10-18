@@ -52,20 +52,43 @@ jobs:
           HTML
           fi
 
-          if [ ! -f dist/.htaccess ]; then
-            cat > dist/.htaccess <<'HTACCESS'
+          # Missing JS/CSS/assets must return 404, not the SPA HTML shell.
+          # Returning index.html for a missing module triggers browser errors such
+          # as "'text/html' is not a valid JavaScript MIME type".
+          cat > dist/.htaccess <<'HTACCESS'
           Options -Indexes
           DirectoryIndex index.html
           RewriteEngine On
+
+          # Never rewrite missing static assets to index.html.
+          RewriteCond %{REQUEST_URI} ^/assets/ [OR]
+          RewriteCond %{REQUEST_URI} \.(?:js|mjs|css|map|json|wasm|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot)$ [NC]
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteRule ^ - [R=404,L]
+
+          # Client-side routes fall back to the SPA shell only when no file exists.
           RewriteCond %{REQUEST_FILENAME} !-f
           RewriteCond %{REQUEST_FILENAME} !-d
           RewriteRule ^ index.html [L]
           HTACCESS
-          fi
 
           test -s dist/index.html
           test -s dist/404.html
           test -s dist/.htaccess
+          # Every JS/CSS URL emitted by the built HTML must exist in the artifact.
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html = fs.readFileSync('dist/index.html', 'utf8');
+          const refs = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
+          if (!refs.length) throw new Error('Built index.html contains no /assets references; refusing to package source HTML.');
+          for (const ref of refs) {
+            const file = 'dist' + decodeURIComponent(ref.split('?')[0]);
+            if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+              throw new Error('Built asset referenced by index.html is missing: ' + ref);
+            }
+          }
+          console.log('Verified ' + refs.length + ' built asset references.');
+          NODE
           echo "Verified deployable files:"
           find dist -maxdepth 3 -type f -print | sort
 
