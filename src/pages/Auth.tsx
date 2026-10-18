@@ -101,8 +101,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       setIsLoading(false);
       return;
     }
-    if (mode === "signUp" && password.length < 8) {
-      setError("Password must be at least 8 characters.");
+    if (mode === "signUp" && password.length < 12) {
+      setError("Password must be at least 12 characters.");
       setIsLoading(false);
       return;
     }
@@ -137,67 +137,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
   const handleRequestReset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    const email = forgotEmail.trim().toLowerCase();
-    if (!email) {
-      setError("Enter your email address.");
-      setIsLoading(false);
-      return;
-    }
-    try {
-      await signIn("password", { flow: "reset", email });
-      setForgotStage("confirm");
-      toast.success(`Reset code sent to ${email}. It expires in 15 minutes.`);
-    } catch (err) {
-      const combined = `${err instanceof Error ? err.message : ""} ${extractCauseText(err)}`;
-      if (/rate|too many|attempts/i.test(combined)) {
-        setError("Too many attempts. Please wait a while and try again.");
-        setIsLoading(false);
-        return;
-      }
-      // Keep messaging identical for unknown accounts (no enumeration).
-      setForgotStage("confirm");
-      toast.success(`Reset code sent to ${email}. It expires in 15 minutes.`);
-    } finally {
-      setIsLoading(false);
-    }
+    setError("Password reset is not available yet because the API does not have a verified email-reset flow. Please contact support for account recovery.");
   };
 
   const handleConfirmReset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    const email = forgotEmail.trim().toLowerCase();
-    const code = forgotCode.trim();
-    if (!email || code.length === 0 || forgotPassword.length < 8) {
-      setError("Enter the code and a new password of at least 8 characters.");
-      setIsLoading(false);
-      return;
-    }
-    try {
-      await signIn("password", {
-        flow: "reset-verification",
-        email,
-        code,
-        newPassword: forgotPassword,
-      });
-      toast.success("Password updated. Sign in with your new password.");
-      setMode("signIn");
-      setForgotStage("request");
-      setForgotCode("");
-      setForgotPassword("");
-      setError(null);
-    } catch (err) {
-      const combined = `${err instanceof Error ? err.message : ""} ${extractCauseText(err)}`;
-      setError(
-        /invalid code|expired/i.test(combined)
-          ? "That code is invalid or has expired. Request a new one."
-          : "Password reset failed. Please try again.",
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    setError("Password reset is not available yet because the API does not have a verified email-reset flow. Please contact support for account recovery.");
   };
 
   const switchMode = (next: Mode) => {
