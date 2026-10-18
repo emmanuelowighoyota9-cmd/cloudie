@@ -10,8 +10,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 import logo from "@/assets/logo.svg";
 import {
   ArrowLeft,
@@ -42,7 +40,7 @@ function resolveRedirectAfterAuth(
   return fallback;
 }
 
-/** Convex Auth wraps provider errors in cause chains — flatten them. */
+/** Flatten nested authentication errors without exposing internal details. */
 function extractCauseText(err: unknown): string {
   const parts: string[] = [];
   let cause = (err as { cause?: unknown })?.cause;
@@ -59,7 +57,6 @@ type Mode = "signIn" | "signUp" | "forgot";
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
-  const initializeUser = useMutation(api.admin.initializeUser);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(
@@ -117,14 +114,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         password,
         ...(mode === "signUp" ? { name } : {}),
       });
-      // Record the login event and run one-time profile setup (role,
-      // createdAt, referral code, welcome bonus). Failures must not block
-      // navigation, so they are logged rather than surfaced.
-      try {
-        await initializeUser({});
-      } catch (e) {
-        console.warn("initializeUser failed", e);
-      }
       navigate(redirect, { replace: true });
     } catch (err) {
       const raw = err instanceof Error ? err.message : "";
