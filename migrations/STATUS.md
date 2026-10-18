@@ -20,6 +20,14 @@ The initial schema was applied to a **separate Neon test branch** named `cloudie
 
 Migrations 001–004 and migration 005's DDL have been applied to the isolated Neon test branch. The test branch was reconfigured to use a draft default for ledger groups and to reject inserts, updates, or deletes on posted ledger groups. The rollback-only SQL behavior test passed, including balanced posting, unbalanced rejection, mismatched group currency, and posted-entry update/insert rejection. The API TypeScript build has passed on the latest code; repository CI is running. This is not a substitute for full application-level transaction and concurrency tests. The API HTTP smoke script has not been run against a deployed service; authentication parity, financial correctness, and data migration remain unverified.
 
+## Current deployment audit addendum (2026-10-18)
+
+- The root frontend has no committed `package-lock.json`, `bun.lock`, or `bun.lockb` in the audited `main` tree. Root CI and the InfinityFree artifact workflow therefore still resolve frontend dependencies at run time with `npm install --legacy-peer-deps`; dependency installation is not yet fully reproducible. Do not change these to `npm ci` until a reviewed lockfile is committed.
+- The Neon API has a committed `api/package-lock.json`; API CI and the Render Blueprint use `npm ci`. The API setup instructions now also use `npm ci`.
+- `scripts/smoke-live.mjs` defaults to `https://cloudie.wuaze.com` and checks public routes/assets, but it has not been confirmed against the live host during this audit. The InfinityFree workflow creates a ZIP artifact only; a successful artifact does not prove upload to `htdocs`.
+- GitHub repository file inspection confirms the frontend still imports the Convex auth provider/client and retains Convex dependencies. The Neon API remains incomplete for full customer/admin, VTU/provider, wallet-write, and banking feature parity. No production database change or live traffic cutover is authorized by these findings.
+- The latest available commit-status query returned no status records, which is not evidence of a passing CI run. Build/test results and live deployment state must be verified from the actual workflow run and host before claiming success.
+
 ## API scope and safety
 - Public registration can create only normal `user` accounts; role assignment is not accepted from the client.
 - Passwords use Node scrypt; eight-hour JWT cookies are backed by persistent Neon sessions and logout revocation. Registration creates the user and session in one transaction; login performs scrypt verification for unknown accounts and uses generic failures for disabled accounts.
