@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "preview": "vite preview",
     "build:freebuff": "npx convex deploy --cmd \"npm run build\" --cmd-url-env-var-name VITE_CONVEX_URL",
-    "deploy:convex": "npx convex deploy"
+    "deploy:convex": "npx convex deploy",
+    "audit:convex-removal": "node scripts/audit-convex-removal.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
