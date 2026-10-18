@@ -68,8 +68,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install API dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install API dependencies from lockfile
+        run: npm ci --no-audit --no-fund
 
       - name: TypeScript build
         run: npm run build
