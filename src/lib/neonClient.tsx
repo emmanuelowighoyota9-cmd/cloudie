@@ -307,11 +307,14 @@ export function useAction(actionFn: unknown): (...args: any[]) => Promise<any> {
 
 export function usePaginatedQuery(queryFn: unknown, args: unknown, _options: unknown) {
   const data = useQuery(queryFn, args);
+  const isLoading = data === undefined;
   return {
+    // This adapter does not implement cursor pagination yet. Never claim that
+    // another page can be loaded when loadMore is intentionally a no-op.
     results: Array.isArray(data) ? data : [],
-    status: "CanLoadMore" as const,
+    status: isLoading ? ("LoadingFirstPage" as const) : ("Exhausted" as const),
     loadMore: () => {},
-    isLoading: data === undefined,
+    isLoading,
   };
 }
 
