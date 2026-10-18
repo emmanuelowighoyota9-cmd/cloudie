@@ -104,68 +104,16 @@ function AdminLoginForm() {
 
   const handleRequestReset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    const email = forgotEmail.trim().toLowerCase();
-    if (!email) {
-      setError("Enter the administrator email.");
-      setIsLoading(false);
-      return;
-    }
-    try {
-      await signIn("password", { flow: "reset", email });
-      setForgotStage("confirm");
-      toast.success(`Reset code sent to ${email}. It expires in 15 minutes.`);
-    } catch (err) {
-      // Convex Auth throws generic errors for unknown accounts; keep the
-      // messaging identical so the form can't be used to enumerate accounts.
-      toast.error(
-        err instanceof Error && /rate|too many|attempts/i.test(err.message)
-          ? "Too many attempts. Please wait a while and try again."
-          : "If that email has an account, a reset code has been sent.",
-      );
-      // Still advance so a legitimate user who hit a transient error can retry
-      // code entry; unknown emails simply never verify.
-      setForgotStage("confirm");
-    } finally {
-      setIsLoading(false);
-    }
+    setError(
+      "Administrator password reset is not available through the Neon API yet. Contact platform support for account recovery.",
+    );
   };
 
   const handleConfirmReset = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setIsLoading(true);
-    setError(null);
-    const email = forgotEmail.trim().toLowerCase();
-    const code = forgotCode.trim();
-    if (!email || code.length === 0 || forgotPassword.length < 8) {
-      setError("Enter the code and a new password of at least 8 characters.");
-      setIsLoading(false);
-      return;
-    }
-    try {
-      await signIn("password", {
-        flow: "reset-verification",
-        email,
-        code,
-        newPassword: forgotPassword,
-      });
-      toast.success("Password updated. Sign in with your new password.");
-      setMode("signIn");
-      setForgotStage("request");
-      setForgotCode("");
-      setForgotPassword("");
-    } catch (err) {
-      const raw = err instanceof Error ? err.message : "";
-      const combined = `${raw} ${extractCauseText(err)}`;
-      setError(
-        /invalid code|expired|Invalid code/i.test(combined)
-          ? "That code is invalid or has expired. Request a new one."
-          : describeSignInError(combined),
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    setError(
+      "Administrator password reset is not available through the Neon API yet. Contact platform support for account recovery.",
+    );
   };
 
   return (
