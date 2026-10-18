@@ -3,16 +3,16 @@
  * Published-site smoke test.
  *
  * WHY THIS EXISTS. `/dashboard` and its siblings are client-side routes: they
- * only work because the host hands unknown paths to the app shell (`vercel.json`
- * rewrites, nginx `try_files`) or because `dist/404.html` parks the path and
+ * only work because the host hands unknown paths to the app shell (Apache
+ * rewrite rules in `public/.htaccess`) or because `dist/404.html` parks the path and
  * `src/main.tsx` replays it. Break either half and `/` keeps working while every
  * deep link answers with the host's own 404 — which is exactly how the outage
  * looked in production. Nothing in the repo could catch it, because the repo was
  * correct and the *deployment* was stale.
  *
  * Run it after publishing:
- *   bun run smoke:live                        # default production URL
- *   bun run smoke:live https://example.com    # any host
+ *   npm run smoke:live                        # default production URL
+ *   npm run smoke:live -- https://example.com # any host
  *
  * Read-only GETs. No credentials, no writes, nothing that mutates data.
  */
