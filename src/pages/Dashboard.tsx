@@ -39,18 +39,52 @@ import {
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { formatNgn } from "@/lib/pricing";
 import {
   QUICK_ACTION_CATALOG,
   type QuickActionKind,
 } from "@/lib/platformConfig";
 
 function numericAmount(value: unknown): number | null {
+  if (value == null) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string" && value.trim() !== "") { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
-  if (value && typeof value === "object") { const record = value as Record<string, unknown>; for (const key of ["wallet_balance_ngn", "ngnEquivalent", "amount", "balance"]) { const candidate = record[key]; if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate; if (typeof candidate === "string" && candidate.trim() !== "" && Number.isFinite(Number(candidate))) return Number(candidate); } }
+  if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const candidates = [
+      "wallet_balance_ngn",
+      "amountNgn",
+      "ngnEquivalent",
+      "amount",
+      "balance",
+      "walletAmount",
+      "ngn",
+      "amount_ngn",
+    ];
+    for (const key of candidates) {
+      const candidate = record[key];
+      if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate as number;
+      if (typeof candidate === "string") {
+        const parsed = Number(candidate.trim());
+        if (Number.isFinite(parsed)) return parsed;
+      }
+    }
+  }
   return null;
 }
-function displayName(value: string | null | undefined) { const clean = value?.trim().replace(/\s+/g, " "); if (!clean) return "friend"; return clean.toLocaleLowerCase().replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase()); }
+
+function displayName(value?: string | null) {
+  const clean = value?.trim().replace(/\s+/g, " ") ?? "";
+  if (!clean) return "friend";
+  return clean
+    .split(" ")
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
 
 const QUICK_ACTION_ICONS: Record<
   QuickActionKind,
@@ -226,7 +260,7 @@ export default function Dashboard() {
                   />
                 ) : (
                   <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    ₦{walletAmount?.toLocaleString("en-NG") ?? "—"}
+                    {formatNgn(balance)}
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
@@ -301,7 +335,7 @@ export default function Dashboard() {
             <Link
               key={item.label}
               to={item.to}
-              className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30"
+              className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
               <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <item.icon className="size-4" />
@@ -383,15 +417,13 @@ export default function Dashboard() {
                       {tx.description}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {typeLabel(tx.type)} ·{" "}
-                      {new Date(tx.createdAt).toLocaleDateString()}
+                      {typeLabel(tx.type)} · {new Date(tx.createdAt).toLocaleDateString()}
                     </p>
                   </div>
                   <span
                     className={`text-sm font-bold ${tx.amountNgn >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-foreground"}`}
                   >
-                    {tx.amountNgn >= 0 ? "+" : ""}₦
-                    {Math.abs(tx.amountNgn).toLocaleString("en-NG")}
+                    {tx.amountNgn >= 0 ? "+" : ""}₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
                   </span>
                 </div>
               ))
@@ -418,9 +450,7 @@ export default function Dashboard() {
                 className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
               >
                 <CircleCheck className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">
-                  VTU history
-                </span>
+                <span className="flex-1 text-xs font-semibold">VTU history</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </Link>
               <Link
@@ -428,9 +458,7 @@ export default function Dashboard() {
                 className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
               >
                 <Clock3 className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">
-                  Track orders
-                </span>
+                <span className="flex-1 text-xs font-semibold">Track orders</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </Link>
               <Link
@@ -438,9 +466,7 @@ export default function Dashboard() {
                 className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
               >
                 <Sparkles className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">
-                  Manage services
-                </span>
+                <span className="flex-1 text-xs font-semibold">Manage services</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </Link>
               <Link
@@ -448,9 +474,7 @@ export default function Dashboard() {
                 className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
               >
                 <Bell className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">
-                  Notifications
-                </span>
+                <span className="flex-1 text-xs font-semibold">Notifications</span>
                 <ChevronRight className="size-4 text-muted-foreground" />
               </Link>
             </div>
@@ -466,9 +490,7 @@ export default function Dashboard() {
                 <Package className="size-5 text-primary" />
                 <div>
                   <p className="font-medium">New Shipment</p>
-                  <p className="text-xs text-muted-foreground">
-                    {shipmentPrice.label}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{shipmentPrice.label}</p>
                 </div>
               </CardContent>
             </Card>
@@ -481,9 +503,7 @@ export default function Dashboard() {
                 <FileText className="size-5 text-primary" />
                 <div>
                   <p className="font-medium">Generate Document</p>
-                  <p className="text-xs text-muted-foreground">
-                    From {invoicePrice.label}
-                  </p>
+                  <p className="text-xs text-muted-foreground">From {invoicePrice.label}</p>
                 </div>
               </CardContent>
             </Card>
@@ -496,9 +516,7 @@ export default function Dashboard() {
                 <Layers className="size-5 text-primary" />
                 <div>
                   <p className="font-medium">Marketplace</p>
-                  <p className="text-xs text-muted-foreground">
-                    Browse products
-                  </p>
+                  <p className="text-xs text-muted-foreground">Browse products</p>
                 </div>
               </CardContent>
             </Card>
@@ -511,9 +529,7 @@ export default function Dashboard() {
                 <Building2 className="size-5 text-primary" />
                 <div>
                   <p className="font-medium">Create Site</p>
-                  <p className="text-xs text-muted-foreground">
-                    Business Suite
-                  </p>
+                  <p className="text-xs text-muted-foreground">Business Suite</p>
                 </div>
               </CardContent>
             </Card>
@@ -524,9 +540,7 @@ export default function Dashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="section-label">Your Workspaces</CardTitle>
-          <p className="text-xs text-muted-foreground">
-            Everything else lives in one of these.
-          </p>
+          <p className="text-xs text-muted-foreground">Everything else lives in one of these.</p>
         </CardHeader>
         <CardContent>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -573,9 +587,7 @@ export default function Dashboard() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-semibold text-foreground">{w.title}</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      {w.desc}
-                    </p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{w.desc}</p>
                   </div>
                 </div>
               </Link>
@@ -587,19 +599,13 @@ export default function Dashboard() {
       <section className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Recent orders
-            </CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent orders</CardTitle>
           </CardHeader>
           <CardContent>
             {!orders ? (
-              <p className="py-8 text-center text-sm text-muted-foreground animate-pulse">
-                Loading...
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground animate-pulse">Loading...</p>
             ) : orders.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No orders yet.
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">No orders yet.</p>
             ) : (
               <div className="space-y-2">
                 {orders.slice(0, 5).map((o) => (
@@ -609,25 +615,12 @@ export default function Dashboard() {
                     className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-muted/50"
                   >
                     <div>
-                      <p className="text-sm font-medium">
-                        Order #{o._id.slice(-8)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(o.createdAt).toLocaleDateString()}
-                      </p>
+                      <p className="text-sm font-medium">Order #{o._id.slice(-8)}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold text-foreground">
-                        {(o.totalNgn ?? o.totalPoints * 15).toLocaleString(
-                          "en-NG",
-                        )}{" "}
-                        NGN
-                      </p>
-                      <Badge
-                        className={`mt-1 ${statusColor(o.status)} border-0 text-[10px] capitalize`}
-                      >
-                        {o.status}
-                      </Badge>
+                      <p className="text-sm font-bold text-foreground">{(o.totalNgn ?? o.totalPoints * 15).toLocaleString("en-NG")} NGN</p>
+                      <Badge className={`mt-1 ${statusColor(o.status)} border-0 text-[10px] capitalize`}>{o.status}</Badge>
                     </div>
                   </Link>
                 ))}
@@ -637,18 +630,14 @@ export default function Dashboard() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Need help?
-            </CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Need help?</CardTitle>
           </CardHeader>
           <CardContent className="p-5">
             <div className="flex items-center gap-3">
               <LifeBuoy className="size-5 text-primary" />
               <div>
                 <p className="font-semibold">Cloudie Support</p>
-                <p className="text-xs text-muted-foreground">
-                  Get help with payments, orders or services.
-                </p>
+                <p className="text-xs text-muted-foreground">Get help with payments, orders or services.</p>
               </div>
             </div>
             <Button asChild variant="outline" className="mt-4 w-full">
