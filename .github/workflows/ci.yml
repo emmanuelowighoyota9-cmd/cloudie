@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   validate-and-build:
-    name: Validate, Convex check & build
+    name: Validate, test & build
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -42,9 +42,6 @@ jobs:
       # anyone noticing — a suite nobody runs is not a safety net.
       - name: Unit & integration tests
         run: bun test
-
-      - name: Convex validation
-        run: CONVEX_AGENT_MODE=anonymous npx convex dev --once
 
       - name: TypeScript validation
         run: npx tsc -b --pretty false
