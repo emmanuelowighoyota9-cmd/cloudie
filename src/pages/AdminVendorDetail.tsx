@@ -9,7 +9,8 @@ import { ArrowLeft, Ban, Check, RotateCcw, X } from "lucide-react";
 import { AdminPageHeader, StatusBadge, ConfirmDialog, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 
 export default function AdminVendorDetail() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params.id ?? params.vendorId;
   const vendor = useQuery(api.adminApi.getVendorAdmin, id ? { vendorId: id as never } : "skip");
   const products = useQuery(
     api.adminApi.listVendorProducts,

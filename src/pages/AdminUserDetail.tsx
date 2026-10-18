@@ -20,7 +20,8 @@ import { usePricing, formatNgn } from "@/lib/pricing";
 
 export default function AdminUserDetail() {
   const { ngnPerPoint } = usePricing();
-  const { id } = useParams();
+  const params = useParams();
+  const id = params.id ?? params.userId;
   const detail = useQuery(
     api.adminApi.adminUserDetail,
     id ? { userId: id as never } : "skip",

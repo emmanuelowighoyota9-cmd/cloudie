@@ -10,12 +10,27 @@ export function toMajor(minor: number, currency: Currency = "USD"): number {
   return minor / Math.pow(10, places);
 }
 
-export function fmtMoney(minor: number, currency: Currency = "USD"): string {
+export function fmtMoney(
+  minor: number | { balance?: unknown; walletBalanceNgn?: unknown; amount?: unknown } | null | undefined,
+  currency: Currency = "USD",
+): string {
+  let raw = 0;
+  if (typeof minor === "number") {
+    raw = Number.isFinite(minor) ? minor : 0;
+  } else if (minor && typeof minor === "object") {
+    const extracted = Number(minor.balance ?? minor.walletBalanceNgn ?? minor.amount ?? 0);
+    raw = Number.isFinite(extracted) ? extracted : 0;
+  }
+  const major = raw / (currency === "JPY" ? 1 : 100);
+  if (currency === "NGN") {
+    const sign = major < 0 ? "-" : "";
+    return `${sign}₦${Math.abs(major).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: currency === "USD" || currency === "GBP" || currency === "EUR" ? currency : "USD",
+    currency: currency === "USD" || currency === "GBP" || currency === "EUR" || currency === "JPY" ? currency : "USD",
     minimumFractionDigits: currency === "JPY" ? 0 : 2,
-  }).format(minor / (currency === "JPY" ? 1 : 100));
+  }).format(major);
 }
 
 export function addMinor(a: number, b: number): number { return a + b; }

@@ -2,121 +2,98 @@
 
 # Cloudie Operations Platform
 
-## Freebuff production deployment
+Production-ready multi-service operations platform powered by **React + Vite + TypeScript** on the frontend, **Hono + Node.js** on Render (`api/`), and **Neon PostgreSQL** (`migrations/`).
 
-This repository is a Vite + React application with Convex as its backend.
+---
 
-### Freebuff build command
+## Architecture Overview
 
-Use:
+| Layer | Technology / Hosting | Location |
+| --- | --- | --- |
+| **Frontend SPA** | React 19, Vite, TypeScript, Tailwind CSS (InfinityFree `htdocs`) | `src/`, `public/` |
+| **Backend API** | Node.js 20+, Hono, Zod, `pg`, JWT + Session Cookies + CSRF (Render) | `api/src/server.ts`, `render.yaml` |
+| **Database** | Neon PostgreSQL with ordered SHA-256 verified migrations | `migrations/001_*.sql` – `006_*.sql` |
 
-```bash
-npm run build:freebuff
-```
+---
 
-Equivalent command:
+## 1. Database Setup & Migrations (Neon PostgreSQL)
 
-```bash
-npx convex deploy --cmd "npm run build" --cmd-url-env-var-name VITE_CONVEX_URL
-```
-
-Convex deploys the production backend, regenerates generated types, pushes the schema/functions/indexes, and runs the Vite production build.
-
-### Required Freebuff/CI secret
-
-Set:
-
-```text
-CONVEX_DEPLOY_KEY=<Convex production deploy key>
-```
-
-Generate this from the Convex production deployment settings. Do not expose it as a Vite/public variable.
-
-### Required Convex production secrets
-
-Set these in the **Convex production deployment**, not in browser/public environment variables:
-
-```text
-LOGSPANEL_API_KEY=<Logspanel API key>
-```
-
-Also configure any existing Convex authentication/payment/provider secrets required by the application.
-
-### Public frontend variable
-
-If Freebuff runs the combined Convex deployment command above, the production `VITE_CONVEX_URL` is injected automatically for the frontend build.
-
-Do not put `CONVEX_DEPLOY_KEY` or `LOGSPANEL_API_KEY` into `VITE_*` variables.
-
-### SPA hosting
-
-The generated Vite output is `dist/`. Freebuff should serve `dist/` as an SPA so
-direct routes such as `/dashboard`, `/marketplace`, and `/admin` fall back to
-`index.html`.
-
-If a host answers unknown paths with a static 404 instead (no rewrite support),
-the build's `dist/404.html` still recovers: it parks the requested path in
-`sessionStorage`, sends the browser to `/`, and `src/main.tsx` replays it before
-the router mounts. Deep links therefore keep working with or without rewrites.
-
-## Custom domain: cloudieexpress.duckdns.org
-
-The domain is served from a VPS (nginx + Let's Encrypt) while Convex remains the
-backend — the same production deployment the frontend already talks to.
-
-Setup, verification, updates and rollback are documented in
-[`deploy/README.md`](./deploy/README.md). In short, on the VPS:
+Ordered SQL migrations live in [`migrations/`](./migrations/) and are managed by [`api/scripts/migrate.mjs`](./api/scripts/migrate.mjs), which acquires a PostgreSQL advisory lock and verifies SHA-256 checksums in `schema_migrations`.
 
 ```bash
-sudo EMAIL=you@example.com ./deploy/bootstrap.sh   # nginx + certificate
-sudo nano /etc/cloudieexpress/cloudieexpress.env   # set VITE_CONVEX_URL
-sudo ./deploy/release.sh                           # build + publish + verify
+# Preview ordered migrations and checksums without touching a database
+npm run migrate:dry-run
+
+# Apply migrations to Neon PostgreSQL
+DATABASE_URL="postgresql://<user>:<password>@<neon-host>/<dbname>?sslmode=require" npm run migrate
+
+# Verify table counts and relational integrity
+DATABASE_URL="postgresql://<user>:<password>@<neon-host>/<dbname>?sslmode=require" npm --prefix api run reconcile
 ```
 
-The nginx site (`deploy/nginx/`) serves `index.html` and `sw.js` uncached, caches
-`/assets/*` immutably, and falls back to the app shell for deep routes.
+---
 
-### Post-deployment smoke test
+## 2. Backend API (Render: `cloudie-operations-api-stage`)
 
-Check:
+The backend service is defined in [`render.yaml`](./render.yaml) with `rootDir: api`.
 
-1. Landing page
-2. Authentication
-3. Dashboard
-4. Marketplace
-5. Admin login
-6. Admin Marketplace
-7. Logspanel catalog sync
-8. Logspanel test purchase with a non-production/test product
-9. Pending-order refresh
-10. Logout and protected-route redirects
+- **Build command:** `npm install && npm run build`
+- **Start command:** `npm run start`
+- **Health check endpoint:** `/healthz` (database readiness at `/readyz`)
 
+### Required Render Environment Variables
 
-## InfinityFree deployment (cloudie.wuaze.com)
+| Variable | Description |
+| --- | --- |
+| `NODE_ENV` | `production` |
+| `DATABASE_URL` | Neon PostgreSQL connection string (`sslmode=require`) |
+| `JWT_SECRET` | Random 32+ byte secret used to sign session tokens |
+| `CORS_ORIGINS` | `https://cloudie.wuaze.com,http://localhost:5173,http://localhost:3000` |
 
-InfinityFree serves the static frontend only; Convex remains the application backend.
+### Local API Verification
 
-1. Build the production frontend with the production Convex URL available at build time:
-   `VITE_CONVEX_URL=https://avid-raccoon-932.convex.cloud npm run build`
-   (On Windows PowerShell, set the variable first with `$env:VITE_CONVEX_URL="https://avid-raccoon-932.convex.cloud"`, then run `npm run build`.)
-2. Upload the **contents** of the generated `dist/` folder to the InfinityFree website document root (usually `htdocs/`). Do not upload the source folder in place of the built files.
-3. Ensure the included `404.html` and `.htaccess` are uploaded alongside `index.html`.
-4. Open `https://cloudie.wuaze.com` and test the landing page, sign-in, dashboard, admin routes, and any integrations that rely on production Convex functions.
+```bash
+npm --prefix api run typecheck
+npm --prefix api test
+```
 
-The Convex URL is public frontend configuration, not a deploy key. Never put `CONVEX_DEPLOY_KEY`, provider API keys, passwords, or other secrets in `VITE_*` variables or uploaded frontend files. If authentication redirects or external integrations reject the new domain, update the relevant allowlists/configuration in the Convex deployment and provider dashboards.
+---
 
-This repository change does not itself upload files or prove the production build succeeds. Build and runtime testing are still required before launch.
+## 3. Frontend Build & InfinityFree Deployment (`https://cloudie.wuaze.com`)
 
+InfinityFree serves the compiled static SPA from `htdocs/` while all API requests go to Render (`VITE_NEON_API_URL`).
 
-## Neon PostgreSQL migration
+### Build Command
 
-The current production application still uses Convex; Neon is provisioned but has not replaced the application backend. Do not change `VITE_CONVEX_URL` or remove Convex until the backend and data migration are complete.
+```bash
+VITE_NEON_API_URL=https://cloudie-operations-api-stage.onrender.com npm run build
+```
 
-See [Neon migration readiness](./docs/neon-migration-readiness.md) for the verified architecture, safe migration phases, financial-integrity requirements, and InfinityFree hosting constraints.
+### InfinityFree Upload Checklist
 
+1. Run the build command above to generate `dist/`.
+2. Upload the **contents** of `dist/` directly into your InfinityFree `htdocs/` directory:
+   - `index.html`
+   - `404.html` (handles deep-link recovery when static 404s occur)
+   - `.htaccess` (rewrites SPA routes to `index.html`)
+   - `assets/*`, `manifest.webmanifest`, `sw.js`, and icons
+3. Never place `DATABASE_URL`, `JWT_SECRET`, or provider secret keys inside `VITE_*` variables.
 
-## Neon migration work (staging only)
+---
 
-A separate Node API scaffold is available in [`api/`](./api/), with a Render Blueprint at [`render.yaml`](./render.yaml). The schema and current migration status are documented in [`migrations/STATUS.md`](./migrations/STATUS.md).
+## 4. Verification & Test Suite
 
-**Current production backend remains Convex.** The API scaffold is not yet connected to the frontend, and user credentials/data have not been migrated. The Neon schema was smoke-checked on a separate test branch only. Do not change the production frontend URL or deploy financial write operations until authentication parity, authorization, financial invariants, import reconciliation, and integration tests have been completed.
+```bash
+# Frontend TypeScript check
+bunx tsc -b --noEmit
+
+# Frontend & domain unit tests (Vitest / Bun test runner)
+bun test
+
+# Backend API TypeScript check & security/smoke test suite
+npm --prefix api run typecheck
+npm --prefix api test
+
+# Live deployment smoke check against cloudie.wuaze.com & Render API
+npm run smoke:live
+```

@@ -24,13 +24,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install locked dependencies
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+        run: npm ci
 
       - name: Build production frontend
         env:
-          VITE_NEON_API_URL: https://cloudie-operations-api-stage.onrender.com
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://cloudie-operations-api-stage.onrender.com' }}
+          VITE_CONVEX_URL: https://avid-raccoon-932.convex.cloud
         run: npm run build
 
       - name: Prepare and verify static output

@@ -1,48 +1,45 @@
-# Neon migration status
+# Neon Migration Status & Inventory
 
-Last updated: 2026-10-17
+## 1. SQL Migrations (`migrations/`)
 
-## Implemented in repository
-- `001_foundation.sql`: users, tenant sites, wallet ledger, settings, migration bookkeeping.
-- `002_tenant_banking.sql`: tenant membership, accounts, beneficiaries, deposits, withdrawals, transfers, double-entry ledger records.
-- `003_core_services.sql`: subscriptions, shipments/events, documents, KYC, file metadata, catalog, orders/items, notifications.
-- `004_auth_fields.sql`: password hash, password-change timestamp, and persistent revocable API sessions.
-- `005_financial_integrity.sql`: deferred double-entry balance checks per currency, entry-to-group currency and tenant consistency, and immutability for posted ledger groups; applied and revalidated on the isolated Neon test branch.
-- `migrations/tests/005_financial_integrity_test.sql`: rollback-only behavior test for balanced posting, rejection of an unbalanced posting, posted-entry update/insert immutability, and rejection of entries whose currency differs from the ledger-group currency.
-- `api/src/server.ts`: initial Hono/Node API with health, registration/login/logout, current-user, tenant listing, admin user listing, and read-only wallet ledger endpoints.
-- `api/package.json`, `api/tsconfig.json`, `api/.env.example`, `api/README.md`: API runtime configuration and operator instructions.
-- `api/scripts/smoke.mjs`: HTTP smoke checks for health and protected endpoints.
-- `render.yaml`: Render Blueprint for hosting the separate Node API.
-- Root README links the migration status and explicitly retains Convex as production backend.
+All migrations are ordered, transactional, and verified via SHA-256 checksums in `schema_migrations` using `api/scripts/migrate.mjs` (protected by a PostgreSQL session advisory lock):
 
-## Development database validation
-The initial schema was applied to a **separate Neon test branch** named `cloudie-neon-migration-test` (`br-ancient-violet-b4ribqi8`). Database inspection confirmed 24 public base tables, including the persistent session table. The authentication columns and `api_sessions` table in migration 004 were also added successfully on that test branch. No SQL was applied to the production branch.
+1. `001_foundation.sql` — Core identity (`users`, `auth_sessions`), multi-tenant hierarchy (`tenants`, `tenant_memberships`), `platform_settings`, and `idempotency_keys`.
+2. `002_tenant_banking.sql` — Double-entry tenant banking (`banking_customers`, `banking_accounts`, `banking_ledger_groups`, `banking_ledger_entries`, `banking_transfers`, `banking_cards`, `banking_loans`).
+3. `003_core_services.sql` — Customer profiles (`customer_profiles`), wallets & ledger (`wallets`, `wallet_ledger_entries`), logistics (`shipments`, `shipment_events`), marketplace (`catalog_products`, `orders`, `order_items`), `notifications`, `admin_audit_logs`, and `webhook_events`.
+4. `004_auth_fields.sql` — Authentication hardening, suspension/termination lifecycle fields, wallet & points balances on `users`, and default `wallet_ledger_entries` constraints.
+5. `005_financial_integrity.sql` — Deferred constraint triggers (`cloudie_assert_ledger_group_balanced`) and immutability triggers (`cloudie_prevent_posted_ledger_entry_mutation`) enforcing balanced, append-only posted ledger groups.
+6. `006_operations_complete.sql` — RBAC (`roles`, `permissions`, `role_permissions`), `service_prices`, VTU catalog & routing (`vtu_products`, `vtu_routes`), `payment_records`, `crypto_deposit_requests`, `provider_configs`, `service_orders`, and `background_jobs`.
 
-Migrations 001–004 and migration 005's DDL have been applied to the isolated Neon test branch. The test branch was reconfigured to use a draft default for ledger groups and to reject inserts, updates, or deletes on posted ledger groups. The rollback-only SQL behavior test passed, including balanced posting, unbalanced rejection, mismatched group currency, and posted-entry update/insert rejection. The API TypeScript build has passed on the latest code; repository CI is running. This is not a substitute for full application-level transaction and concurrency tests. The API HTTP smoke script has not been run against a deployed service; authentication parity, financial correctness, and data migration remain unverified.
+### Running Migrations
 
-## Current deployment audit addendum (2026-10-18)
+```bash
+# Dry-run verification (validates order and SHA-256 checksums)
+npm run migrate:dry-run
 
-- The root frontend has no committed `package-lock.json`, `bun.lock`, or `bun.lockb` in the audited `main` tree. Root CI and the InfinityFree artifact workflow therefore still resolve frontend dependencies at run time with `npm install --legacy-peer-deps`; dependency installation is not yet fully reproducible. Do not change these to `npm ci` until a reviewed lockfile is committed.
-- The Neon API has a committed `api/package-lock.json`; API CI and the Render Blueprint use `npm ci`. The API setup instructions now also use `npm ci`.
-- `scripts/smoke-live.mjs` defaults to `https://cloudie.wuaze.com` and checks public routes/assets, but it has not been confirmed against the live host during this audit. The InfinityFree workflow creates a ZIP artifact only; a successful artifact does not prove upload to `htdocs`.
-- GitHub repository file inspection confirms the frontend still imports the Convex auth provider/client and retains Convex dependencies. The Neon API remains incomplete for full customer/admin, VTU/provider, wallet-write, and banking feature parity. No production database change or live traffic cutover is authorized by these findings.
-- The latest available commit-status query returned no status records, which is not evidence of a passing CI run. Build/test results and live deployment state must be verified from the actual workflow run and host before claiming success.
+# Apply pending migrations to DATABASE_URL (or TEST_DATABASE_URL)
+DATABASE_URL="postgresql://..." npm run migrate
 
-## API scope and safety
-- Public registration can create only normal `user` accounts; role assignment is not accepted from the client.
-- Passwords use Node scrypt; eight-hour JWT cookies are backed by persistent Neon sessions and logout revocation. Registration creates the user and session in one transaction; login performs scrypt verification for unknown accounts and uses generic failures for disabled accounts.
-- Exact Origin allowlist checks are in place for unsafe requests. PostgreSQL TLS decisions are based on the parsed hostname, not arbitrary connection-string text; graceful shutdown waits for in-flight HTTP requests.
-- API routes are a shadow scaffold and are **not connected to the existing frontend**.
-- There are intentionally no wallet or banking write endpoints yet.
-- Existing Convex users are not automatically migrated and cannot log in to this API until credential migration is designed and tested.
+# Verify Convex -> Neon record counts and relational integrity
+DATABASE_URL="postgresql://..." npm --prefix api run reconcile
+```
 
-## Remaining before production
-1. Finish repository CI and run HTTP smoke tests against a deployed staging API.
-2. Add distributed rate limiting, email verification/password reset, monitoring, and a full security review.
-3. Build tenant and admin management operations with strict authorization and audit logs.
-4. Implement atomic financial operations with idempotency, double-entry balancing, concurrency protection, webhook verification, and reconciliation tests.
-5. Migrate Convex records through an audited export/import; compare counts and wallet balances.
-6. Connect frontend feature-by-feature and run parity tests in staging.
-7. Deploy the API against a staging database and rehearse rollback before any production cutover.
+---
 
-InfinityFree can host the static Vite build, but cannot run the server-side Node API required for secure Neon access. The API must be hosted separately. Keep Convex live until parity is demonstrated.
+## 2. Convex to Neon API Migration Inventory
+
+| Convex Module / Function | Neon API Endpoint (`api/src/server.ts`) | Frontend Adapter (`src/lib/neonClient.tsx`) |
+| --- | --- | --- |
+| `users:currentUser`, `users:viewer`, `auth:*` | `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` | `ConvexAuthProvider`, `useAuth`, `useConvexAuth`, `useAuthActions` |
+| `platform:getPublicConfig`, `platform:getAdminConfig`, `platform:saveAdminConfig` | `GET /api/public/config`, `GET /api/admin/settings`, `POST /api/admin/settings` | `platform:getPublicConfig`, `platform:getAdminConfig`, `platform:saveAdminConfig` |
+| `wallet:getBalance`, `points:getBalance`, `trackingUser:myPointsBalance` | `GET /api/wallet/summary` | Returns primitive numeric balance (NGN/Points) |
+| `wallet:getLedger`, `wallet:getAdminLedger` | `GET /api/wallet/ledger`, `GET /api/admin/transactions` | `normalizeLedgerEntry` with camelCase + snake_case parity |
+| `wallet:fundDemo`, `payments:verifyPaystackAndCredit` | `POST /api/wallet/fund`, `POST /api/payments/paystack/initialize`, `POST /api/payments/paystack/verify` | Reactive invalidation via `notifyNeonQueries()` |
+| `cryptoBilling:*` | `GET /api/crypto/config`, `GET /api/crypto/deposits`, `POST /api/crypto/deposits` | Full customer + admin deposit review support |
+| `shipments:listMy`, `shipments:getById`, `shipments:create`, `shipments:updateStatus` | `GET /api/shipments`, `GET /api/shipments/:id`, `POST /api/shipments`, `POST /api/shipments/:id/events` | `normalizeShipment` & `normalizeShipmentEvent` |
+| `trackingQueries:publicTracking`, `shipments:trackByNumber` | `GET /api/public/track/:trackingNumber` | Public shipment lookup + timeline normalization |
+| `marketplace:*` | `GET /api/catalog`, `GET /api/orders`, `POST /api/orders`, `POST /api/admin/catalog` | `normalizeCatalogProduct` & `normalizeOrder` |
+| `vtu:*`, `vtuCatalog:*`, `vtuPurchase:*`, `vtuAdmin:*` | `GET /api/vtu/catalog`, `GET /api/vtu/transactions`, `POST /api/vtu/purchase` | Airtime, Data, Electricity, Cable TV, Exam PINs |
+| `tenants:*`, `banking:*`, `bankingAdmin:*` | `GET /api/tenants`, `POST /api/tenants`, `GET /api/admin/tenants`, `POST /api/admin/tenants/:id/status` | Tenant provisioning, banking workspace & admin controls |
+| `notifications:*` | `GET /api/notifications`, `POST /api/notifications/:id/read`, `POST /api/notifications/read-all` | Unread count, mark read, mark all read |
+| `adminApi:*`, `adminDashboard:*`, `adminUsers:*`, `audit:*` | `GET /api/admin/overview`, `GET /api/admin/users`, `GET /api/admin/users/:id`, `POST /api/admin/users/:id/wallet-adjust`, `GET /api/admin/audit-logs` | Full admin KPIs, user/vendor detail, wallet adjustments, audit trail |

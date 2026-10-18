@@ -11,54 +11,46 @@ export type PointPackage = {
   popular: boolean;
 };
 
-/** Naira, no decimals — the customer-facing price unit. */
-export function formatNgn(value: unknown): string {
-  if (value == null) return "—";
-
-  let amount: number | null = null;
-
-  if (typeof value === "number") {
-    amount = Number.isFinite(value) ? value : null;
-  } else if (typeof value === "string") {
+function toFiniteNumber(
+  value:
+    | number
+    | string
+    | { balance?: unknown; walletBalanceNgn?: unknown; ngnEquivalent?: unknown; amount?: unknown; amountNgn?: unknown }
+    | null
+    | undefined,
+): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value === "string") {
     const parsed = Number(value.trim());
-    amount = Number.isFinite(parsed) ? parsed : null;
-  } else if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const candidates = [
-      "wallet_balance_ngn",
-      "ngnEquivalent",
-      "amount",
-      "balance",
-      "amountNgn",
-      "walletAmount",
-      "ngn",
-    ];
-    for (const key of candidates) {
-      const candidate = record[key];
-      if (typeof candidate === "number" && Number.isFinite(candidate)) {
-        amount = candidate as number;
-        break;
-      }
-      if (typeof candidate === "string") {
-        const parsed = Number(candidate.trim());
-        if (Number.isFinite(parsed)) {
-          amount = parsed;
-          break;
-        }
-      }
-    }
+    return Number.isFinite(parsed) ? parsed : 0;
   }
+  if (value && typeof value === "object") {
+    const raw =
+      (value as Record<string, unknown>).walletBalanceNgn ??
+      (value as Record<string, unknown>).balance ??
+      (value as Record<string, unknown>).ngnEquivalent ??
+      (value as Record<string, unknown>).amountNgn ??
+      (value as Record<string, unknown>).amount ??
+      0;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
 
-  if (amount == null) return "—";
-  const rounded = Math.round(amount);
+/** Naira, no decimals — the customer-facing price unit. */
+export function formatNgn(amount: number | unknown): string {
+  const safe = toFiniteNumber(amount as number);
+  const rounded = Math.round(safe);
   const sign = rounded < 0 ? "-" : "";
   return `${sign}₦${Math.abs(rounded).toLocaleString("en-NG")}`;
 }
 
 /** Dollars with cents, used as the secondary price. */
-export function formatUsd(amount: number): string {
-  const sign = amount < 0 ? "-" : "";
-  return `${sign}$${Math.abs(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+export function formatUsd(amount: number | unknown): string {
+  const safe = toFiniteNumber(amount as number);
+  const sign = safe < 0 ? "-" : "";
+  return `${sign}$${Math.abs(safe).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export type ServicePrice = {
@@ -70,6 +62,12 @@ export type ServicePrice = {
 
 const FALLBACK_RATE = { ngnPerPoint: 15, usdPerPoint: 0.01 };
 
+export const DEFAULT_POINT_PACKAGES: PointPackage[] = [
+  { id: "starter", name: "Starter Pack", points: 100, priceNgn: 1500, priceUsd: 1.0, popular: false },
+  { id: "growth", name: "Growth Pack", points: 500, priceNgn: 7500, priceUsd: 5.0, popular: true },
+  { id: "business", name: "Business Pack", points: 2000, priceNgn: 30000, priceUsd: 20.0, popular: false },
+];
+
 /**
  * Central pricing hook: every surface that renders a point cost or a package
  * price reads the admin-configured conversion rate from here so NGN shows up
@@ -78,12 +76,15 @@ const FALLBACK_RATE = { ngnPerPoint: 15, usdPerPoint: 0.01 };
 export function usePricing() {
   const config = useQuery(api.pricing.getBillingConfig);
   const services = useQuery(api.pricing.getServicePrices);
-  const ngnPerPoint = config?.ngnPerPoint ?? FALLBACK_RATE.ngnPerPoint;
-  const usdPerPoint = config?.usdPerPoint ?? FALLBACK_RATE.usdPerPoint;
+  const ngnPerPoint = Number(config?.ngnPerPoint) > 0 ? Number(config?.ngnPerPoint) : FALLBACK_RATE.ngnPerPoint;
+  const usdPerPoint = Number(config?.usdPerPoint) > 0 ? Number(config?.usdPerPoint) : FALLBACK_RATE.usdPerPoint;
 
   const servicesByKey = useMemo(() => {
     const map = new Map<string, ServicePrice>();
-    for (const s of (services ?? []) as ServicePrice[]) map.set(s.service, s);
+    const list = Array.isArray(services) ? (services as ServicePrice[]) : [];
+    for (const s of list) {
+      if (s && typeof s.service === "string") map.set(s.service, s);
+    }
     return map;
   }, [services]);
 
@@ -110,11 +111,15 @@ export function usePricing() {
     };
   };
 
+  const rawPackages = Array.isArray(config?.packages) && config.packages.length > 0
+    ? (config.packages as PointPackage[])
+    : DEFAULT_POINT_PACKAGES;
+
   return {
     loading: config === undefined,
     ngnPerPoint,
     usdPerPoint,
-    packages: (config?.packages ?? []) as PointPackage[],
+    packages: rawPackages,
     price,
     ngnFor: (points: number) => points * ngnPerPoint,
     usdFor: (points: number) => points * usdPerPoint,

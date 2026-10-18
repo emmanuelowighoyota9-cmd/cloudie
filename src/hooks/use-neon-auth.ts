@@ -29,7 +29,16 @@ export function useNeonAuth() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+    const handleAuthChange = () => {
+      const cached = getCachedNeonUser();
+      setUser(cached);
+      if (!getNeonToken()) setIsLoading(false);
+    };
+    window.addEventListener("cloudie-auth-change", handleAuthChange);
+    return () => window.removeEventListener("cloudie-auth-change", handleAuthChange);
+  }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {
     const next = await neonApi.login({ email, password });
@@ -49,3 +58,4 @@ export function useNeonAuth() {
 
   return { user, isAuthenticated: Boolean(user), isLoading, login, register, logout, refresh };
 }
+

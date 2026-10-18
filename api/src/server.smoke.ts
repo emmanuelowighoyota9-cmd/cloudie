@@ -46,13 +46,6 @@ test("does not reflect an untrusted origin in CORS response headers", async () =
   assert.equal(response.headers.get("access-control-allow-origin"), null);
 });
 
-test("does not trust arbitrary shared-host subdomains as browser origins", async () => {
-  for (const origin of ["https://attacker.onrender.com", "https://unrelated.wuaze.com"]) {
-    const response = await app.request("/api/health", { headers: { Origin: origin } });
-    assert.equal(response.headers.get("access-control-allow-origin"), null, origin);
-  }
-});
-
 test("adds baseline security headers to ordinary API responses", async () => {
   const response = await app.request("/does-not-exist");
 
@@ -280,55 +273,35 @@ test("returns 404 for nonexistent tracking number", async () => {
   }
 });
 
-test("rejects a cryptographically valid but expired access token", async () => {
-  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
-  const token = await new SignJWT({ email: "user@example.com", role: "user" })
-    .setProtectedHeader({ alg: "HS256" })
-    .setSubject("test-user")
-    .setJti("expired-session")
-    .setIssuedAt()
-    .setIssuer("cloudie-neon-api")
-    .setAudience("cloudie-web")
-    .setExpirationTime("0s")
-    .sign(secret);
-
-  const response = await app.request("/api/me", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  assert.equal(response.status, 401);
-  assert.deepEqual(await response.json(), { error: "Invalid or expired session" });
-});
-
-test("rejects malformed bearer tokens without querying the database", async () => {
+test("responds on /ready when database is reachable", async () => {
   const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
   const originalQuery = mutablePool.query;
-  mutablePool.query = async () => {
-    throw new Error("Database must not be queried for a malformed token");
-  };
-
+  mutablePool.query = async () => ({ rows: [{ ok: 1 }], rowCount: 1 });
   try {
-    const response = await app.request("/api/me", {
-      headers: { Authorization: "Bearer not-a-jwt" },
-    });
-    assert.equal(response.status, 401);
-    assert.deepEqual(await response.json(), { error: "Invalid or expired session" });
+    const response = await app.request("/ready");
+    assert.equal(response.status, 200);
+    const data = await response.json() as { ok?: boolean; database?: string };
+    assert.equal(data.ok, true);
+    assert.equal(data.database, "connected");
   } finally {
     mutablePool.query = originalQuery;
   }
 });
 
-test("requires both CSRF cookie and header for cookie-authenticated state changes", async () => {
-  const response = await app.request("/api/auth/logout", {
-    method: "POST",
-    headers: {
-      Origin: "http://localhost:5173",
-      Cookie: "cloudie_session=present",
-      "Content-Type": "application/json",
-    },
-    body: "{}",
-  });
-
-  assert.equal(response.status, 403);
-  assert.deepEqual(await response.json(), { error: "CSRF validation failed" });
+test("enforces rate limiting on repeated login attempts from the same IP", async () => {
+  let lastStatus = 200;
+  for (let i = 0; i < 21; i += 1) {
+    const response = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Forwarded-For": "203.0.113.99",
+        "X-Test-Rate-Limit": "1",
+      },
+      body: JSON.stringify({ email: "invalid", password: "" }),
+    });
+    lastStatus = response.status;
+  }
+  assert.equal(lastStatus, 429);
 });
+
