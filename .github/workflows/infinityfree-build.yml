@@ -24,15 +24,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
-      - name: Install locked dependencies
-        run: npm ci
+      # The repository currently has no root package-lock.json, so npm ci and
+      # setup-node's root npm cache cannot work until a root lockfile is committed.
+      - name: Install frontend dependencies
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Build production frontend
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://cloudie-operations-api-stage.onrender.com' }}
-          VITE_CONVEX_URL: https://avid-raccoon-932.convex.cloud
+          VITE_NEON_API_URL: ${{ vars.VITE_NEON_API_URL || 'https://cloudie-operations-api-stage.onrender.com' }}
         run: npm run build
 
       - name: Prepare and verify static output
