@@ -44,6 +44,14 @@ import {
   type QuickActionKind,
 } from "@/lib/platformConfig";
 
+function numericAmount(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
+  if (value && typeof value === "object") { const record = value as Record<string, unknown>; for (const key of ["wallet_balance_ngn", "ngnEquivalent", "amount", "balance"]) { const candidate = record[key]; if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate; if (typeof candidate === "string" && candidate.trim() !== "" && Number.isFinite(Number(candidate))) return Number(candidate); } }
+  return null;
+}
+function displayName(value: string | null | undefined) { const clean = value?.trim().replace(/\s+/g, " "); if (!clean) return "friend"; return clean.toLocaleLowerCase().replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase()); }
+
 const QUICK_ACTION_ICONS: Record<
   QuickActionKind,
   React.ComponentType<{ className?: string }>
@@ -107,6 +115,7 @@ export default function Dashboard() {
   const invoicePrice = price("commercial_invoice", 80);
   const { user } = useAuth();
   const balance = useQuery(api.wallet.getBalance);
+  const walletAmount = numericAmount(balance);
   const ledger = useQuery(api.wallet.getLedger, { limit: 100 });
   const shipments = useQuery(api.trackingUser.myShipments, {});
   const referrals = useQuery(api.referrals.getMyReferrals);
@@ -140,7 +149,7 @@ export default function Dashboard() {
                 </p>
               </div>
               <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Welcome back, {user?.name ?? "friend"}
+                Welcome back, {displayName(user?.name)}
               </h1>
               <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
                 Your personal workspace connects points activity, orders, notifications and tools. Switch into shipments, ticketing, Business Suite or services whenever you need them.
@@ -217,7 +226,7 @@ export default function Dashboard() {
                   />
                 ) : (
                   <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    ₦{(balance ?? 0).toLocaleString("en-NG")}
+                    ₦{walletAmount?.toLocaleString("en-NG") ?? "—"}
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
