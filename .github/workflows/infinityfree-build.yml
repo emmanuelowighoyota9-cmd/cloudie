@@ -30,7 +30,7 @@ jobs:
 
       - name: Build production frontend
         env:
-          VITE_CONVEX_URL: https://avid-raccoon-932.convex.cloud
+          VITE_NEON_API_URL: https://cloudie-operations-api-stage.onrender.com
         run: npm run build
 
       - name: Prepare and verify static output
