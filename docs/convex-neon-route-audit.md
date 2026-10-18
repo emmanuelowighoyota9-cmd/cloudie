@@ -116,3 +116,42 @@ This is evidence that the deployed staging API returned healthy and could reach 
 6. Record the staged health response, deployed commit SHA, API build/typecheck output, browser E2E output, and rollback evidence before claiming the migration is verified.
 
 The health URL was not independently fetched through the inspection path (the request returned a tooling `DisabledError`, not an HTTP status from the service). The owner-supplied response above is recorded as external staging evidence; it should not be described as independently reproduced by this audit.
+
+
+## Full-removal branch update (2026-10-18)
+
+Branch: `migration/full-convex-removal`  
+Tracking PR: [#17](https://github.com/owighoyotaemmanuel424-byte/cloudie-operations-platform/pull/17)
+
+### Safety hardening committed
+
+- The compatibility adapter no longer reports `{ ok: true }` for an unsupported `useMutation` call. It throws a named error stating that no write was performed.
+- The imperative `useConvex().mutation()` and `useConvex().action()` fallbacks now throw explicit errors rather than fabricating success.
+- The `adminExists` compatibility query no longer hardcodes `true`; it returns `null` until a verified Neon endpoint is implemented.
+
+These are migration-safety improvements only. They do not remove the Convex dependency or establish Neon feature parity. Unsupported pages may now surface errors where they previously received a false success, which is intentional to avoid silently losing writes.
+
+### Confirmed API surface from current source
+
+The current `api/src/server.ts` contains routes for health, auth/session, public configuration, profile, wallet summary/ledger, shipments/tracking, catalog/orders, notifications, tenants, admin users/shipments/catalog/settings/reports. This is still only a partial replacement for the much larger Convex function set.
+
+### Next implementation gates
+
+1. Trace actual hook calls for each routed page and label each query/mutation/action as implemented, missing, or intentionally disabled.
+2. Replace the bootstrap-level Convex provider and auth path only after cookie-only same-origin sessions and browser tests pass.
+3. Implement missing Neon endpoints with server-side validation, authentication, ownership/tenant checks, audit logging, and tests.
+4. Migrate and reconcile production Convex data into the confirmed Neon production branch before switching reads/writes.
+5. Remove Convex packages, generated modules, source modules, configuration and workflow references only after no runtime imports remain and CI/build passes.
+6. Do not merge PR #17 or deploy this branch as a full migration while any of these gates are incomplete.
+
+
+## Full-removal branch update (2026-10-18): automated dependency inventory
+
+Added `scripts/audit-convex-removal.mjs` and the `npm run audit:convex-removal` command. CI now runs the audit in inventory mode so each migration PR records remaining Convex references in its logs without making the in-progress migration fail merely because it is incomplete.
+
+- Run `npm run audit:convex-removal` to print remaining references during the migration.
+- Run `npm run audit:convex-removal -- --strict` for the final removal gate. Strict mode fails while any matching references remain in audited frontend/API/scripts/workflow files or package manifests.
+- This is a reference inventory, not proof of functional parity. Matches in docs/comments or generated files may require review; do not blindly delete them.
+- The CI workflow still runs the Convex validation step and the package still contains Convex dependencies and deployment scripts. Those are intentionally retained until all source imports, auth/provider dependencies, endpoint parity, tests, and data cutover are complete.
+
+Current source check confirms `src/main.tsx` still imports `ConvexAuthProvider` and `ConvexReactClient`, while `src/lib/neonClient.tsx` still imports `getFunctionName` from `convex/server`. Removing the provider or uninstalling Convex now would break unresolved route and admin flows. Keep PR #17 in draft until the API parity and data/auth gates above are satisfied.
