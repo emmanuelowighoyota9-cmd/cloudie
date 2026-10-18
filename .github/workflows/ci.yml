@@ -34,9 +34,8 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
-      - name: Audit remaining Convex dependencies
-        run: npm run audit:convex-removal
-
+      # Do not call a missing npm script here. Convex-removal verification must
+      # be added only once the migration audit script exists in package.json.
       # The wallet, refund and idempotency invariants live in these tests. They
       # ran nowhere for a long time, which is how 49 of them went red without
       # anyone noticing — a suite nobody runs is not a safety net.
