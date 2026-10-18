@@ -51,3 +51,28 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  validate-neon-api:
+    name: Validate Neon API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install API dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: TypeScript build
+        run: npm run build
+
+      - name: Authentication and security smoke tests
+        run: npm test
