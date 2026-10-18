@@ -6,9 +6,9 @@
 
 - PR #8 merged: authenticated Neon read APIs for profile, notifications, orders, and catalog.
 - PR #9 merged: API smoke coverage and API documentation. On its latest checked head `08a5c29105bc7d082668231c74207e6213ba8eff`, the GitHub CI workflow completed successfully, Neon API CI completed successfully, and CodeRabbit and Vercel status checks were successful.
-- Existing app entry point still wraps the app in `ConvexAuthProvider`; `src/hooks/use-auth.ts` uses Convex Auth and `api.users.currentUser`; `src/pages/Auth.tsx` uses Convex sign-in and the `api.admin.initializeUser` mutation.
-- `src/lib/neonApi.ts` and `src/hooks/use-neon-auth.ts` are separate incremental migration scaffolding. They are not wired into the existing route tree.
-- API routes currently include health, register/login/logout, current user, tenant list, admin user list, wallet ledger, profile, notifications, orders, and catalog. This is not parity with the full Convex app.
+- `src/main.tsx` still wraps the app in `ConvexAuthProvider` and constructs `ConvexReactClient`; the app entry point therefore still requires Convex configuration at runtime. `src/hooks/use-auth.ts` now delegates to `useNeonAuth`, and the earlier direct Convex sign-in/admin-initialization calls were removed from the auth page in prior commits. This is a mixed, incomplete migration—not a Convex-free app.
+- `src/lib/neonApi.ts` and `src/hooks/use-neon-auth.ts` now back the compatibility auth hook, but most data screens and the root provider still have Convex dependencies. Do not infer full feature parity from the auth wrapper change.
+- The API has health, register/login/logout, current-user/profile, and selected customer/admin endpoints. It is not parity with the full app; verify `api/src/server.ts` and its tests before relying on any particular route.
 - The API is deployed as a staging service and must be checked live before any production cutover. Do not assume a GitHub build proves the deployed service or database schema is current.
 
 ## Session transport decision — production cutover blocked
@@ -78,4 +78,4 @@ Migration 005 provides ledger integrity constraints for posted groups; it is nec
 
 The full migration cannot safely be completed by wiring the current Neon hook into the app: the existing identity/password format is unverified, the static frontend's same-origin proxy capability is not established, and the Neon API lacks feature parity for most screens and writes. Those are concrete security and data-integrity constraints, not permission to make a speculative cutover.
 
-Next: verify whether the chosen hosting can proxy `/api/*` same-origin; otherwise select/deploy a proxy-capable frontend host. In parallel, perform a read-only Convex identity/data inventory and implement the first end-to-end-tested, read-only customer group (profile, notifications, orders, catalog) against staged Neon data. Keep existing Convex authentication and all financial writes unchanged until that cohort passes its migration and rollback gates.
+Next: map remaining Convex imports and each screen's query/mutation dependencies, then migrate one read-only screen group at a time with server-side authorization and tests. The auth wrapper and admin guard have changed, but `src/main.tsx` still initializes Convex, so do not remove the provider or dependencies yet. First-admin provisioning/recovery is not available in the UI; no account roles were changed as part of this migration. Keep production data and all financial-write behavior unchanged until the migration and rollback gates pass.
