@@ -279,3 +279,56 @@ test("returns 404 for nonexistent tracking number", async () => {
     mutablePool.query = originalQuery;
   }
 });
+
+test("rejects a cryptographically valid but expired access token", async () => {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  const token = await new SignJWT({ email: "user@example.com", role: "user" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("test-user")
+    .setJti("expired-session")
+    .setIssuedAt()
+    .setIssuer("cloudie-neon-api")
+    .setAudience("cloudie-web")
+    .setExpirationTime("0s")
+    .sign(secret);
+
+  const response = await app.request("/api/me", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: "Invalid or expired session" });
+});
+
+test("rejects malformed bearer tokens without querying the database", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => {
+    throw new Error("Database must not be queried for a malformed token");
+  };
+
+  try {
+    const response = await app.request("/api/me", {
+      headers: { Authorization: "Bearer not-a-jwt" },
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "Invalid or expired session" });
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("requires both CSRF cookie and header for cookie-authenticated state changes", async () => {
+  const response = await app.request("/api/auth/logout", {
+    method: "POST",
+    headers: {
+      Origin: "http://localhost:5173",
+      Cookie: "cloudie_session=present",
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { error: "CSRF validation failed" });
+});
