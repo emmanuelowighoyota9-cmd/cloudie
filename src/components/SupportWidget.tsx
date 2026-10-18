@@ -56,7 +56,7 @@ export function SupportWidget() {
   ].filter(Boolean) as { key: string; icon: typeof Mail; label: string; value: string; href: string }[];
 
   return (
-    <div className="pointer-events-none fixed bottom-20 right-4 z-40 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6 print:hidden">
+    <div className="pointer-events-none fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-3 z-30 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6 print:hidden">
       <AnimatePresence>
         {open && (
           <motion.div
