@@ -28,9 +28,11 @@ export function useAuth() {
 
       if (flow === "signUp") {
         return await register(name, email, password);
-      } else {
+      }
+      if (flow === "signIn" || flow === "signIn" || flow === "password") {
         return await login(email, password);
       }
+      throw new Error("This authentication flow is not supported by the configured API.");
     },
     [login, register],
   );
