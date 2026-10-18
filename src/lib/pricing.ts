@@ -12,7 +12,11 @@ export type PointPackage = {
 };
 
 /** Naira, no decimals — the customer-facing price unit. */
-export function formatNgn(amount: number): string {
+export function formatNgn(value: number | Record<string, unknown>): string {
+  let amount: number;
+  if (typeof value === "number") amount = value;
+  else { const candidates = [value.wallet_balance_ngn, value.ngnEquivalent, value.amount, value.balance]; const found = candidates.find((candidate) => (typeof candidate === "number" && Number.isFinite(candidate)) || (typeof candidate === "string" && candidate.trim() !== "" && Number.isFinite(Number(candidate)))); amount = typeof found === "number" ? found : typeof found === "string" ? Number(found) : Number.NaN; }
+  if (!Number.isFinite(amount)) return "—";
   const rounded = Math.round(amount);
   const sign = rounded < 0 ? "-" : "";
   return `${sign}₦${Math.abs(rounded).toLocaleString("en-NG")}`;
