@@ -12,11 +12,44 @@ export type PointPackage = {
 };
 
 /** Naira, no decimals — the customer-facing price unit. */
-export function formatNgn(value: number | Record<string, unknown>): string {
-  let amount: number;
-  if (typeof value === "number") amount = value;
-  else { const candidates = [value.wallet_balance_ngn, value.ngnEquivalent, value.amount, value.balance]; const found = candidates.find((candidate) => (typeof candidate === "number" && Number.isFinite(candidate)) || (typeof candidate === "string" && candidate.trim() !== "" && Number.isFinite(Number(candidate)))); amount = typeof found === "number" ? found : typeof found === "string" ? Number(found) : Number.NaN; }
-  if (!Number.isFinite(amount)) return "—";
+export function formatNgn(value: unknown): string {
+  if (value == null) return "—";
+
+  let amount: number | null = null;
+
+  if (typeof value === "number") {
+    amount = Number.isFinite(value) ? value : null;
+  } else if (typeof value === "string") {
+    const parsed = Number(value.trim());
+    amount = Number.isFinite(parsed) ? parsed : null;
+  } else if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const candidates = [
+      "wallet_balance_ngn",
+      "ngnEquivalent",
+      "amount",
+      "balance",
+      "amountNgn",
+      "walletAmount",
+      "ngn",
+    ];
+    for (const key of candidates) {
+      const candidate = record[key];
+      if (typeof candidate === "number" && Number.isFinite(candidate)) {
+        amount = candidate as number;
+        break;
+      }
+      if (typeof candidate === "string") {
+        const parsed = Number(candidate.trim());
+        if (Number.isFinite(parsed)) {
+          amount = parsed;
+          break;
+        }
+      }
+    }
+  }
+
+  if (amount == null) return "—";
   const rounded = Math.round(amount);
   const sign = rounded < 0 ? "-" : "";
   return `${sign}₦${Math.abs(rounded).toLocaleString("en-NG")}`;
