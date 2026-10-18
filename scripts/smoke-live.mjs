@@ -18,7 +18,7 @@
  */
 import { pathToFileURL } from "node:url";
 
-const DEFAULT_BASE = "https://v0-cloudie-d.vercel.app";
+const DEFAULT_BASE = "https://cloudie.wuaze.com";
 const TIMEOUT_MS = 20_000;
 const SHELL_MARKER = '<div id="root">';
 const RECOVERY_MARKER = "cloudie:spa-redirect";
