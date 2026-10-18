@@ -2,8 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import { api } from "@/convex/_generated/api";
-import { useMutation } from "convex/react";
 import logo from "@/assets/logo.svg";
 import {
   ArrowLeft,
@@ -24,18 +22,13 @@ import { toast } from "sonner";
 /**
  * Dedicated administrator sign-in for Cloudie.
  *
- * Authenticates against the same Convex Auth Password provider as the regular
- * auth page (identical hashing), then runs the shared post-login
- * initialization and routes to the admin console. The admin console itself
- * re-verifies the role server-side on every request.
- *
- * Also includes a code-based password reset (Convex Auth "reset" /
- * "reset-verification" flows backed by the email OTP service), so a lost
- * administrator password can always be recovered without support.
+ * Authenticates through the Neon API used by the regular auth page. The API
+ * supplies the role, and privileged API routes must re-verify it server-side.
+ * Password recovery is not implemented by the Neon API yet; the UI must not
+ * pretend that the legacy Convex email-code flow still works.
  */
 function AdminLoginForm() {
   const { isLoading: authLoading, isAuthenticated, user, signIn, signOut } = useAuth();
-  const initializeUser = useMutation(api.admin.initializeUser);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = searchParams.get("returnTo");
@@ -94,11 +87,6 @@ function AdminLoginForm() {
 
     try {
       await signIn("password", { flow: "signIn", email, password });
-      try {
-        await initializeUser({});
-      } catch (e) {
-        console.warn("initializeUser failed", e);
-      }
       // Route to the console. RequireAdmin re-verifies the role server-side:
       // admins land on the dashboard; non-admins get a clear "sign out and
       // switch" escape instead of a silent dead end.
