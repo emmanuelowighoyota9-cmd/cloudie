@@ -171,7 +171,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   Reset your password
                 </CardTitle>
                 <CardDescription className="text-slate-500 dark:text-slate-400">
-                  We&apos;ll email you a 6-digit code to set a new password.
+                  Email-based password recovery is not available yet. Contact support to recover your account.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -212,7 +212,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                           Sending code...
                         </>
                       ) : (
-                        "Send reset code"
+                        "Contact support for recovery"
                       )}
                     </Button>
                   </form>
