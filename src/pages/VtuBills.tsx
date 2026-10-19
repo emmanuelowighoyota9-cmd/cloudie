@@ -412,7 +412,7 @@ export default function VtuBills({ initialCategory }: { initialCategory?: "data"
                             </span>
                           </span>
                           <span className="shrink-0 text-xs font-semibold tabular-nums text-vtu-text">
-                            {product.fixedPoints !== null
+                            {typeof product.fixedPoints === "number" && !isNaN(product.fixedPoints)
                               ? `${product.fixedPoints.toLocaleString()} pts`
                               : "Select"}
                           </span>
@@ -862,8 +862,10 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = {
  * reconciling a charge against their wallet statement sees the minute they
  * remember rather than a raw timestamp.
  */
-function fmtWhen(ts: number): string {
+function fmtWhen(ts?: number | null): string {
+  if (!ts || typeof ts !== "number" || isNaN(ts)) return "—";
   const date = new Date(ts);
+  if (isNaN(date.getTime())) return "—";
   const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleString(
     "en-NG",

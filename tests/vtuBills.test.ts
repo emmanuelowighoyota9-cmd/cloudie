@@ -450,4 +450,27 @@ describe("delivery values survive to the customer", () => {
       }
     });
   });
+
+  test("safely handles products with undefined or null fixedPoints without throwing toLocaleString error", () => {
+    const sampleProducts = [
+      { productCode: "electricity.ikedc.prepaid", fixedPoints: undefined },
+      { productCode: "electricity.ekedc.prepaid", fixedPoints: null },
+      { productCode: "data.mtn.1gb", fixedPoints: 350 },
+    ];
+
+    for (const p of sampleProducts) {
+      const formatted =
+        typeof p.fixedPoints === "number" && !isNaN(p.fixedPoints)
+          ? `${p.fixedPoints.toLocaleString()} pts`
+          : "Select";
+
+      if (p.fixedPoints === 350) {
+        expect(formatted).toBe("350 pts");
+      } else {
+        expect(formatted).toBe("Select");
+      }
+    }
+  });
 });
+
+

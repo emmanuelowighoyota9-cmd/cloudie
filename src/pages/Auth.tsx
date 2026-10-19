@@ -25,6 +25,7 @@ import {
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -57,6 +58,7 @@ type Mode = "signIn" | "signUp" | "forgot";
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const { brand } = usePlatformConfig();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(
@@ -315,12 +317,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           ) : (
             <>
               <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">
+                <CardTitle className="text-2xl font-bold text-foreground">
                   {mode === "signIn" ? "Welcome back" : "Create your account"}
                 </CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400">
+                <CardDescription className="text-muted-foreground">
                   {mode === "signIn"
-                    ? "Sign in to your Crestline Express workspace"
+                    ? `Sign in to your ${brand.name} workspace`
                     : "Sign up with your name, email and a password"}
                 </CardDescription>
               </CardHeader>
@@ -329,17 +331,17 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <div
                   role="tablist"
                   aria-label="Authentication mode"
-                  className="mb-6 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-800"
+                  className="mb-6 grid grid-cols-2 rounded-2xl border border-border bg-muted/60 p-1"
                 >
                   <button
                     type="button"
                     role="tab"
                     aria-selected={mode === "signIn"}
                     onClick={() => switchMode("signIn")}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`min-h-10 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 ${
                       mode === "signIn"
-                        ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
-                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     Sign In
@@ -349,10 +351,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     role="tab"
                     aria-selected={mode === "signUp"}
                     onClick={() => switchMode("signUp")}
-                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    className={`min-h-10 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 ${
                       mode === "signUp"
-                        ? "bg-white text-slate-900 shadow-sm dark:bg-slate-700 dark:text-white"
-                        : "text-slate-500 hover:text-slate-700 dark:text-slate-400"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     Sign Up
@@ -403,7 +405,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         <button
                           type="button"
                           onClick={() => switchMode("forgot")}
-                          className="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline dark:text-blue-400"
+                          className="text-xs font-semibold text-primary transition-colors hover:text-primary/80 hover:underline"
                         >
                           Forgot password?
                         </button>
@@ -417,7 +419,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         type={showPassword ? "text" : "password"}
                         autoComplete={mode === "signUp" ? "new-password" : "current-password"}
                         placeholder={mode === "signUp" ? "At least 8 characters" : "Your password"}
-                        className="pl-9 pr-10"
+                        className="h-11 sm:h-12 rounded-xl pl-9 pr-10"
                         disabled={isLoading}
                         minLength={mode === "signUp" ? 8 : undefined}
                         required
@@ -446,7 +448,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full gap-2"
+                    className="h-11 sm:h-12 w-full gap-2 rounded-2xl font-semibold active:scale-95"
                   >
                     {isLoading ? (
                       <>

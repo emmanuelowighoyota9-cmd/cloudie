@@ -21,7 +21,7 @@ import {
   Truck,
   Warehouse,
 } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { RouteMap, type RouteMapStop } from "@/components/tracking/RouteMap";
 import { QrCodeSvg } from "@/components/tracking/Codes";
@@ -91,20 +91,21 @@ function fmtDay(ts: number) {
 // ─── Search screen ───────────────────────────────────────────────────────────
 
 function TrackingSearch() {
+  const navigate = useNavigate();
   return (
     <div className="mx-auto w-full max-w-xl">
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="space-y-8 text-center"
+        className="space-y-6 text-center sm:space-y-8"
       >
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
           <PackageSearch className="h-8 w-8 text-primary" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Track your shipment</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Track your shipment</h1>
+          <p className="text-xs text-muted-foreground sm:text-sm">
             Enter a tracking number to see live status, route map and the full timeline.
           </p>
         </div>
@@ -114,11 +115,11 @@ function TrackingSearch() {
             e.preventDefault();
             const data = new FormData(e.currentTarget);
             const tn = String(data.get("tn") ?? "").trim();
-            if (tn) window.location.href = `/tracking/${encodeURIComponent(tn)}`;
+            if (tn) navigate(`/tracking/${encodeURIComponent(tn)}`);
           }}
         >
-          <Input name="tn" placeholder="e.g. TRK-XXXXXXXXXXXX" className="h-12 flex-1 text-center sm:text-left" autoFocus required />
-          <Button type="submit" size="lg" className="h-12 px-8">
+          <Input name="tn" placeholder="e.g. TRK-XXXXXXXXXXXX" className="h-12 flex-1 rounded-2xl px-4 text-center sm:text-left text-sm" autoFocus required />
+          <Button type="submit" size="lg" className="h-12 min-h-12 rounded-2xl px-8 font-semibold active:scale-95">
             Track
           </Button>
         </form>

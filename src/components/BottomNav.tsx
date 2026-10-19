@@ -44,19 +44,19 @@ export function BottomNav() {
               to={item.to}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1.5 text-[10px] font-semibold",
-                "transition-[background-color,color] duration-200 active:scale-[0.95]",
+                "relative flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-1 text-[11px] font-medium tracking-tight",
+                "transition-all duration-150 active:scale-[0.93]",
                 active
-                  ? "text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ? "text-primary font-semibold"
+                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
               )}
             >
               {active && (
                 <motion.span
                   layoutId="bottomnav-active"
                   aria-hidden
-                  className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-primary"
-                  transition={{ type: "spring", stiffness: 480, damping: 34 }}
+                  className="absolute inset-x-3.5 top-0.5 h-0.5 rounded-full bg-primary shadow-xs shadow-primary/50"
+                  transition={{ type: "spring", stiffness: 500, damping: 36 }}
                 />
               )}
               <motion.span

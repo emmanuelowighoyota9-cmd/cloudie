@@ -441,8 +441,10 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = {
  * diverge: an operator scanning an audit log and a customer checking whether
  * their top-up landed do not need the same amount of detail.
  */
-function fmtWhen(ts: number): string {
+function fmtWhen(ts?: number | null): string {
+  if (!ts || typeof ts !== "number" || isNaN(ts)) return "—";
   const date = new Date(ts);
+  if (isNaN(date.getTime())) return "—";
   const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleString(
     "en-NG",

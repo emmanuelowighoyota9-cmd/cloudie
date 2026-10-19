@@ -328,10 +328,10 @@ const DEFAULT_VTU_CATALOG_GROUPS = [
     serviceType: "electricity",
     label: "Electricity",
     products: [
-      { productCode: "electricity.ikedc.prepaid", name: "IKEDC Ikeja Electric (Prepaid)", providerLabel: "IKEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, requiresAmount: true, purchasable: true },
-      { productCode: "electricity.ekedc.prepaid", name: "EKEDC Eko Electric (Prepaid)", providerLabel: "EKEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, requiresAmount: true, purchasable: true },
-      { productCode: "electricity.aedc.prepaid", name: "AEDC Abuja Electric (Prepaid)", providerLabel: "AEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, requiresAmount: true, purchasable: true },
-      { productCode: "electricity.ibedc.prepaid", name: "IBEDC Ibadan Electric (Prepaid)", providerLabel: "IBEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, requiresAmount: true, purchasable: true },
+      { productCode: "electricity.ikedc.prepaid", name: "IKEDC Ikeja Electric (Prepaid)", providerLabel: "IKEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, fixedPoints: null, requiresAmount: true, purchasable: true },
+      { productCode: "electricity.ekedc.prepaid", name: "EKEDC Eko Electric (Prepaid)", providerLabel: "EKEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, fixedPoints: null, requiresAmount: true, purchasable: true },
+      { productCode: "electricity.aedc.prepaid", name: "AEDC Abuja Electric (Prepaid)", providerLabel: "AEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, fixedPoints: null, requiresAmount: true, purchasable: true },
+      { productCode: "electricity.ibedc.prepaid", name: "IBEDC Ibadan Electric (Prepaid)", providerLabel: "IBEDC", serviceType: "electricity", indicativeMinPoints: 1000, indicativeMaxPoints: 100000, fixedPoints: null, requiresAmount: true, purchasable: true },
     ],
   },
   {

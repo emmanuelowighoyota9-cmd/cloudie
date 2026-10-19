@@ -169,30 +169,27 @@ export default function Dashboard() {
 
   return (
     <div className="cloudie-dashboard space-y-6 sm:space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-border bg-card">
-        <CardContent className="p-5 sm:p-7">
-          {" "}
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+      <section className="overflow-hidden rounded-3xl border border-border/90 bg-gradient-to-br from-card via-card to-card/90 shadow-sm">
+        <CardContent className="p-4 sm:p-7">
+          <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Sparkles className="size-4" />
-                </span>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1">
+                <Sparkles className="size-3.5 text-primary" />
+                <span className="text-[11px] font-semibold tracking-wide text-primary">
                   Cloudie Command Center
-                </p>
+                </span>
               </div>
-              <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              <h1 className="mt-3 text-2xl font-bold tracking-tight text-foreground sm:text-4xl">
                 Welcome back, {displayName(user?.name)}
               </h1>
-              <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
                 Your personal workspace connects points activity, orders, notifications and tools. Switch into shipments, ticketing, Business Suite or services whenever you need them.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2">
               <Link
                 to="/notifications"
-                className="relative flex size-11 items-center justify-center rounded-xl border border-border bg-card text-foreground hover:bg-muted"
+                className="relative flex min-h-11 min-w-11 items-center justify-center rounded-2xl border border-border bg-card text-foreground transition-all duration-150 hover:bg-muted active:scale-95"
                 aria-label="Notifications"
               >
                 <Bell className="size-5" />
@@ -202,7 +199,7 @@ export default function Dashboard() {
                   </span>
                 )}
               </Link>
-              <Button asChild className="gap-2">
+              <Button asChild size="default" className="min-h-11 gap-2 rounded-2xl px-5 font-semibold active:scale-95">
                 <Link to="/buy-points">
                   <Plus className="size-4" /> Fund wallet
                 </Link>
@@ -226,12 +223,12 @@ export default function Dashboard() {
             <Link
               key={action.kind}
               to={catalogItem.path}
-              className="group flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-1.5 py-2 text-center shadow-sm"
+              className="group flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/80 bg-card/90 px-2 py-2.5 text-center shadow-xs transition-all duration-150 active:scale-95 active:bg-muted"
             >
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Icon className="size-4" />
+              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-150 group-hover:scale-105">
+                <Icon className="size-4.5" />
               </span>
-              <span className="max-w-full truncate text-[10px] font-semibold text-foreground">
+              <span className="max-w-full truncate text-[11px] font-medium text-foreground">
                 {action.label}
               </span>
             </Link>
@@ -239,55 +236,53 @@ export default function Dashboard() {
         })}
       </nav>
 
-      <Card className="overflow-hidden border-primary/15 bg-card">
-        <div className="cloudie-wallet-strip h-1.5" />
-        <CardContent className="p-5 sm:p-7">
+      <Card className="overflow-hidden border-border/90 bg-gradient-to-br from-card via-card to-primary/[0.03] shadow-sm">
+        <div className="cloudie-wallet-strip h-1" />
+        <CardContent className="p-4 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="cloudie-wallet-icon flex size-14 items-center justify-center rounded-2xl shadow-lg">
-                <Coins className="size-7 text-white" />
+            <div className="flex items-center gap-3.5 sm:gap-4">
+              <div className="cloudie-wallet-icon flex size-13 sm:size-14 shrink-0 items-center justify-center rounded-2xl shadow-md">
+                <Coins className="size-6 sm:size-7 text-white" />
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Available wallet
                 </p>
-                {/* `undefined` = still loading; `null` = no wallet row yet, which
-                    is a real zero rather than an unknown. */}
                 {balance === undefined ? (
                   <span
                     aria-hidden
-                    className="mt-2 block h-9 w-40 animate-pulse rounded-lg bg-surface-2"
+                    className="mt-2 block h-8 w-36 animate-pulse rounded-lg bg-surface-2"
                   />
                 ) : (
-                  <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+                  <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground sm:text-4xl">
                     {walletAmount === null && balance != null
                       ? "—"
                       : formatNgn(walletAmount ?? 0)}
                   </p>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Ready for Cloudie services
+                <p className="text-[11px] text-muted-foreground">
+                  Ready for instant Cloudie services
                 </p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <Link
                 to="/personal/wallet"
-                className="rounded-xl border border-border bg-card p-3 hover:bg-muted"
+                className="flex min-h-12 flex-col justify-center rounded-2xl border border-border/80 bg-card p-3 transition-all duration-150 hover:bg-muted active:scale-95"
               >
                 <WalletCards className="size-4 text-primary" />
-                <p className="mt-2 text-[10px] text-muted-foreground">Wallet</p>
-                <p className="text-xs font-bold">Manage</p>
+                <p className="mt-1.5 text-[10px] text-muted-foreground">Wallet</p>
+                <p className="text-xs font-bold text-foreground">Manage</p>
               </Link>
               <Link
                 to="/transactions"
-                className="rounded-xl border border-border bg-card p-3 hover:bg-muted"
+                className="flex min-h-12 flex-col justify-center rounded-2xl border border-border/80 bg-card p-3 transition-all duration-150 hover:bg-muted active:scale-95"
               >
                 <Activity className="size-4 text-primary" />
-                <p className="mt-2 text-[10px] text-muted-foreground">
+                <p className="mt-1.5 text-[10px] text-muted-foreground">
                   Activity
                 </p>
-                <p className="text-xs font-bold">
+                <p className="truncate text-xs font-bold text-foreground">
                   {ledger === undefined
                     ? "Loading…"
                     : `${monthlyTransactions} this month`}
@@ -295,11 +290,11 @@ export default function Dashboard() {
               </Link>
               <Link
                 to="/orders"
-                className="rounded-xl border border-border bg-card p-3 hover:bg-muted"
+                className="flex min-h-12 flex-col justify-center rounded-2xl border border-border/80 bg-card p-3 transition-all duration-150 hover:bg-muted active:scale-95"
               >
                 <Receipt className="size-4 text-primary" />
-                <p className="mt-2 text-[10px] text-muted-foreground">Orders</p>
-                <p className="text-xs font-bold">
+                <p className="mt-1.5 text-[10px] text-muted-foreground">Orders</p>
+                <p className="truncate text-xs font-bold text-foreground">
                   {orders === undefined ? "Loading…" : `${activeOrders} active`}
                 </p>
               </Link>
@@ -309,16 +304,16 @@ export default function Dashboard() {
       </Card>
 
       <section className="space-y-3">
-        <div className="flex items-end justify-between">
+        <div className="flex items-end justify-between px-0.5">
           <div>
-            <h2 className="text-lg font-bold text-foreground">Pay & manage</h2>
-            <p className="text-xs text-muted-foreground">
+            <h2 className="text-base font-bold text-foreground sm:text-lg">Pay & manage</h2>
+            <p className="text-[11px] text-muted-foreground sm:text-xs">
               Your most-used services, one tap away.
             </p>
           </div>
           <Link
             to="/services/my"
-            className="text-xs font-semibold text-primary"
+            className="text-xs font-semibold text-primary transition-colors hover:underline"
           >
             View all
           </Link>
@@ -337,12 +332,12 @@ export default function Dashboard() {
             <Link
               key={item.label}
               to={item.to}
-              className="group flex min-h-[82px] flex-col items-center justify-center gap-2 rounded-2xl border border-border bg-card p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+              className="group flex min-h-[86px] flex-col items-center justify-center gap-2 rounded-2xl border border-border/80 bg-card p-2 text-center shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/40 active:scale-95"
             >
-              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <item.icon className="size-4" />
+              <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-150 group-hover:scale-105">
+                <item.icon className="size-5" />
               </span>
-              <span className="truncate text-[10px] font-semibold text-foreground">
+              <span className="truncate text-[11px] font-semibold text-foreground">
                 {item.label}
               </span>
             </Link>

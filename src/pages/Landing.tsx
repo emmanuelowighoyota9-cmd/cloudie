@@ -253,40 +253,40 @@ export default function Landing() {
               <Sparkles className="h-3.5 w-3.5 text-primary" />
               One account. Five workspaces. All connected.
             </div>
-            <h1 className="max-w-3xl font-display text-5xl font-semibold leading-[1.02] tracking-[-0.055em] text-foreground md:text-7xl">
+            <h1 className="max-w-3xl font-display text-3xl font-bold leading-[1.1] tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl">
               Everything your business runs on, <span className="text-primary">in one workspace</span>
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground">
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:mt-6 sm:text-lg">
               {brand.name} brings shipments, travel documents, invoices, customer-facing portal layouts, and everyday tools together behind one sign-in. The workspace organizes records and generates documents; it does not by itself book travel, dispatch parcels, or provide regulated financial services.
             </p>
-            <form onSubmit={handleTrack} className="mt-8 flex max-w-md flex-col gap-2 sm:flex-row">
+            <form onSubmit={handleTrack} className="mt-6 flex max-w-md flex-col gap-2 sm:mt-8 sm:flex-row">
               <Input
                 value={trackingNumber}
                 onChange={(e) => setTrackingNumber(e.target.value)}
                 placeholder="Track a shipment · e.g. TRK-nGkx2V20260210"
                 aria-label="Tracking number"
-                className="h-11 flex-1"
+                className="h-12 rounded-2xl px-4 text-sm flex-1"
               />
-              <Button type="submit" size="lg" className="gap-2">
+              <Button type="submit" size="lg" className="h-12 min-h-12 gap-2 rounded-2xl px-6 font-semibold active:scale-95">
                 <Search className="h-4 w-4" />
                 Track
               </Button>
             </form>
-            <div className="mt-3 flex gap-2">
-              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm">Logistics suite</Button></Link>
-              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="border-sidebar bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent">Business banking</Button></Link>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl">Logistics suite</Button></Link>
+              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl border-sidebar bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent">Business banking</Button></Link>
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <Link to="/auth">
-                <Button size="lg" className="w-full gap-2 px-8 sm:w-auto">
+              <Link to="/auth" className="w-full sm:w-auto">
+                <Button size="lg" className="h-12 min-h-12 w-full gap-2 rounded-2xl px-8 font-semibold active:scale-95 sm:w-auto">
                   Start for Free <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/auth">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">Sign In</Button>
+              <Link to="/auth" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="h-12 min-h-12 w-full rounded-2xl font-semibold active:scale-95 sm:w-auto">Sign In</Button>
               </Link>
-              <Link to="/dashboard">
-                <Button variant="outline" size="lg" className="w-full gap-2 sm:w-auto">
+              <Link to="/dashboard" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="h-12 min-h-12 w-full gap-2 rounded-2xl font-semibold active:scale-95 sm:w-auto">
                   <LayoutDashboard className="h-4 w-4" /> Open dashboard
                 </Button>
               </Link>

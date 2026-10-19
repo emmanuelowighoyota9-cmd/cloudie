@@ -11,9 +11,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatNgn, usePricing } from "@/lib/pricing";
 
 const PACKAGE_STYLES = [
-  { icon: Wallet, color: "from-blue-500 to-blue-600" },
-  { icon: Zap, color: "from-blue-600 to-indigo-600" },
-  { icon: Wallet, color: "from-indigo-500 to-indigo-600" },
+  { icon: Wallet, color: "bg-primary/10 text-primary border border-primary/20" },
+  { icon: Zap, color: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" },
+  { icon: Wallet, color: "bg-teal-500/10 text-teal-400 border border-teal-500/20" },
 ];
 
 export default function BuyPoints() {
@@ -112,11 +112,11 @@ export default function BuyPoints() {
         </p>
       </div>
 
-      <Card className="max-w-xl border-primary/20 bg-primary/5">
-        <CardContent className="p-5">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Available balance</p>
-          <p className="mt-2 text-3xl font-bold">{formatNgn(balance ?? 0)}</p>
-          <div className="mt-4 flex gap-2">
+      <Card className="max-w-xl overflow-hidden border-primary/20 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm">
+        <CardContent className="p-4 sm:p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Available balance</p>
+          <p className="mt-1 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">{formatNgn(balance ?? 0)}</p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <input
               inputMode="decimal"
               type="number"
@@ -125,42 +125,43 @@ export default function BuyPoints() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="Enter amount, e.g. 5000"
-              className="h-11 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm"
+              className="h-12 min-w-0 flex-1 rounded-2xl border border-border bg-background px-4 text-sm font-medium focus:border-primary focus:outline-none"
             />
             <Button
+              className="h-12 min-h-12 rounded-2xl px-6 font-semibold active:scale-95"
               disabled={loading || !Number.isFinite(customAmount) || customAmount < 100}
               onClick={() => handlePurchase(customAmount, `custom-${customAmount}`)}
             >
-              {loading && selectedPkg?.startsWith("custom-") ? "Processing…" : "Fund"}
+              {loading && selectedPkg?.startsWith("custom-") ? "Processing…" : "Fund wallet"}
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Minimum ₦100 · Card, bank transfer, USSD and other Paystack methods.</p>
+          <p className="mt-2.5 text-xs text-muted-foreground">Minimum ₦100 · Card, bank transfer, USSD and other Paystack methods.</p>
         </CardContent>
       </Card>
 
       <div>
-        <h2 className="mb-4 text-lg font-semibold">Quick funding amounts</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="mb-4 text-base font-bold text-foreground sm:text-lg">Quick funding amounts</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {pricingLoading && packages.length === 0 && <Card><CardContent className="p-6 text-sm text-muted-foreground">Loading…</CardContent></Card>}
           {packages.map((pkg, index) => {
             const style = PACKAGE_STYLES[index % PACKAGE_STYLES.length];
             const Icon = style.icon;
             return (
-              <Card key={pkg.id} className="overflow-hidden">
-                <CardContent className="p-5">
-                  {pkg.popular && <Badge className="mb-3">Popular</Badge>}
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${style.color} text-white`}>
-                    <Icon className="h-5 w-5" />
+              <Card key={pkg.id} className="overflow-hidden border-border/80 transition-all duration-150 hover:border-primary/40 hover:shadow-xs">
+                <CardContent className="p-4 sm:p-5">
+                  {pkg.popular && <Badge className="mb-3 rounded-full bg-primary/10 text-primary border-primary/20 text-[10px]">Popular</Badge>}
+                  <div className={`flex size-11 items-center justify-center rounded-2xl ${style.color}`}>
+                    <Icon className="size-5" />
                   </div>
-                  <h3 className="mt-4 font-semibold">{pkg.name}</h3>
-                  <p className="mt-1 text-2xl font-bold">{formatNgn(pkg.priceNgn)}</p>
+                  <h3 className="mt-3 text-base font-bold text-foreground">{pkg.name}</h3>
+                  <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">{formatNgn(pkg.priceNgn)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">Wallet funding · no points conversion</p>
                   <Button
-                    className="mt-5 w-full gap-2"
+                    className="mt-4 h-11 w-full gap-2 rounded-2xl font-semibold active:scale-95"
                     onClick={() => handlePurchase(pkg.priceNgn, pkg.id)}
                     disabled={loading}
                   >
-                    <CreditCard className="h-4 w-4" />
+                    <CreditCard className="size-4" />
                     {loading && selectedPkg === pkg.id ? "Processing…" : `Add ${formatNgn(pkg.priceNgn)}`}
                   </Button>
                 </CardContent>

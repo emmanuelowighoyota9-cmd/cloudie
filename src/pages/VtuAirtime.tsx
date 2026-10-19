@@ -480,8 +480,10 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
 };
 
-function fmtWhen(ts: number): string {
+function fmtWhen(ts?: number | null): string {
+  if (!ts || typeof ts !== "number" || isNaN(ts)) return "—";
   const date = new Date(ts);
+  if (isNaN(date.getTime())) return "—";
   const sameYear = date.getFullYear() === new Date().getFullYear();
   return date.toLocaleString(
     "en-NG",
