@@ -78,6 +78,24 @@ export async function runMigrations({
       )
     `);
 
+    // Normalize legacy bookkeeping tables: migration 001 historically created
+    // schema_migrations with a `description` column instead of `filename`.
+    // Add the runner's column additively and backfill; never drop or rewrite data.
+    const columnResult = await client.query(
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'schema_migrations'`,
+    );
+    const columnNames = new Set(columnResult.rows.map((row) => row.column_name));
+    if (!columnNames.has("filename")) {
+      await client.query("ALTER TABLE schema_migrations ADD COLUMN filename TEXT");
+    }
+    if (columnNames.has("description")) {
+      await client.query("ALTER TABLE schema_migrations ALTER COLUMN description SET DEFAULT ''");
+      await client.query(
+        "UPDATE schema_migrations SET filename = version || '.sql' WHERE filename IS NULL",
+      );
+    }
+
     const existingResult = await client.query(
       "SELECT version, filename, checksum, applied_at FROM schema_migrations ORDER BY version ASC",
     );

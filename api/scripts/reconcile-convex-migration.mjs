@@ -13,14 +13,14 @@ import pg from "pg";
 const { Client } = pg;
 
 const TABLE_MAPPINGS = [
-  { convexTable: "users", neonTable: "users" },
-  { convexTable: "tenants", neonTable: "tenants" },
+  { convexTable: "users", neonTable: "app_users" },
+  { convexTable: "tenants", neonTable: "tenant_sites" },
   { convexTable: "shipments", neonTable: "shipments" },
   { convexTable: "shipmentEvents", neonTable: "shipment_events" },
-  { convexTable: "walletLedger", neonTable: "wallet_ledger_entries" },
+  { convexTable: "walletLedger", neonTable: "wallet_ledger" },
   { convexTable: "marketplaceProducts", neonTable: "catalog_products" },
-  { convexTable: "marketplaceOrders", neonTable: "orders" },
-  { convexTable: "notifications", neonTable: "notifications" },
+  { convexTable: "marketplaceOrders", neonTable: "commerce_orders" },
+  { convexTable: "notifications", neonTable: "user_notifications" },
   { convexTable: "auditLogs", neonTable: "admin_audit_logs" },
 ];
 
@@ -60,8 +60,8 @@ export async function verifyNeonIntegrity({
     // Verify critical relational invariants
     const orphanWallets = await client.query(`
       SELECT COUNT(*)::bigint AS count
-      FROM wallets w
-      LEFT JOIN users u ON u.id = w.user_id
+      FROM wallet_ledger w
+      LEFT JOIN app_users u ON u.id = w.user_id
       WHERE u.id IS NULL
     `);
     const orphanShipmentEvents = await client.query(`

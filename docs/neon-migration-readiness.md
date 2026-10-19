@@ -64,8 +64,9 @@ For `cloudie.wuaze.com` on InfinityFree, keep the frontend static and use a remo
 
 - [x] Repository architecture inspected.
 - [x] Neon project and production branch identified.
-- [x] Database inspected; no application tables found.
-- [ ] Neon connection tested from the application runtime.
-- [ ] Replacement API implemented.
-- [ ] Convex functions and data migrated.
-- [ ] Automated tests and production cutover completed.
+- [x] Database inspected; no application tables found (as of the initial audit; see the 2026-10-19 update below).
+- [x] Neon connection tested from the application runtime — `api/scripts/e2e-live.ts` exercises register/login/session/CSRF/admin-audit flows against the live `DATABASE_URL` (2026-10-19, all 19 checks passed; the script deletes every row it created).
+- [x] Schema migrations 001–007 applied to the connected Neon database and recorded in `schema_migrations` with SHA-256 checksums (2026-10-19). Re-running `npm run migrate` is a verified no-op. The 005 ledger-integrity behavior test passes against this database.
+- [ ] Replacement API implemented — partial: ~65 routes exist (see `migrations/STATUS.md` §2), but 373 Convex functions are still called by 96 frontend files; 37 modules have no API coverage (see `docs/neon-migration-trace.md`).
+- [ ] Convex functions and data migrated — not started: no data has been exported from Convex or imported into Neon; no credential/identity migration has been performed.
+- [ ] Automated tests and production cutover completed — the staging API is not yet wired into the frontend (`src/main.tsx` still constructs a Convex client), and the session-transport, identity, and financial-write gates in `docs/convex-to-neon-cutover-gates.md` remain open.
