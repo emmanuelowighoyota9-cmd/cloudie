@@ -17,4 +17,4 @@ This folder starts an additive PostgreSQL foundation for users, tenant sites, wa
 4. Complete auth/roles, tenant membership, banking accounts and double-entry ledger, deposits/withdrawals/transfers, and remaining service domains.
 5. Prove import counts, financial reconciliation, and feature parity before any production cutover.
 
-The SQL has not been applied to Neon by this commit.
+All migrations 001–007 have been applied to the connected Neon database (`neondb`) and recorded in `schema_migrations` with SHA-256 checksums; see `STATUS.md` for the applied-state evidence and verification commands.

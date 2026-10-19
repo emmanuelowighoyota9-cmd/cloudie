@@ -59,7 +59,11 @@ describe("Neon adapter & currency formatting regression suite", () => {
   test("ordered SQL migrations are discovered with deterministic SHA-256 checksums", () => {
     const migrations = discoverMigrations();
     expect(migrations.length).toBeGreaterThanOrEqual(6);
-    expect(migrations.map((m) => m.version)).toEqual(["001", "002", "003", "004", "005", "006"]);
+    const versions = migrations.map((m) => m.version);
+    // The runner applies migrations in lexical order; the baseline phases 001–006
+    // must always be present, and later phases (e.g. 007) simply extend the list.
+    expect(versions).toEqual([...versions].sort());
+    expect(versions.slice(0, 6)).toEqual(["001", "002", "003", "004", "005", "006"]);
     for (const m of migrations) {
       expect(m.checksum).toMatch(/^[a-f0-9]{64}$/);
       expect(computeChecksum(m.sql)).toBe(m.checksum);

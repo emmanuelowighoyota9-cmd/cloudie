@@ -87,8 +87,8 @@ CREATE INDEX IF NOT EXISTS vtu_routes_product_enabled_idx
 
 CREATE TABLE IF NOT EXISTS payment_records (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenant_sites(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
   reference TEXT NOT NULL UNIQUE,
   provider TEXT NOT NULL DEFAULT 'paystack',
   channel TEXT NOT NULL DEFAULT 'card',
@@ -111,7 +111,7 @@ CREATE INDEX IF NOT EXISTS payment_records_status_created_idx
 
 CREATE TABLE IF NOT EXISTS crypto_deposit_requests (
   id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
   asset TEXT NOT NULL,
   network TEXT NOT NULL,
   amount_usd NUMERIC(14, 2) NOT NULL CHECK (amount_usd > 0),
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS crypto_deposit_requests (
   sender_wallet TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   admin_note TEXT,
-  reviewed_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_by_user_id TEXT REFERENCES app_users(id) ON DELETE SET NULL,
   reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -145,15 +145,15 @@ CREATE TABLE IF NOT EXISTS provider_configs (
   config JSONB NOT NULL DEFAULT '{}'::jsonb,
   last_tested_at TIMESTAMPTZ,
   last_test_ok BOOLEAN,
-  updated_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  updated_by_user_id TEXT REFERENCES app_users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS service_orders (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL,
-  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  tenant_id TEXT REFERENCES tenant_sites(id) ON DELETE SET NULL,
+  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
   service_type TEXT NOT NULL,
   title TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled', 'failed')),

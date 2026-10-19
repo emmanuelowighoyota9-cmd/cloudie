@@ -1,6 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { randomBytes, scrypt as scryptCallback } from "node:crypto";
+import { promisify } from "node:util";
 import { SignJWT } from "jose";
+
+// Node's scrypt takes a callback; the promise form is what the server uses.
+const scryptAsync = promisify(scryptCallback) as (
+  password: string,
+  salt: Buffer,
+  keylen: number,
+) => Promise<Buffer>;
 
 // Configure before importing server.ts: this keeps the app unbound to a port and
 // prevents these middleware tests from requiring a reachable PostgreSQL instance.
@@ -303,5 +312,136 @@ test("enforces rate limiting on repeated login attempts from the same IP", async
     lastStatus = response.status;
   }
   assert.equal(lastStatus, 429);
+});
+
+/**
+ * Session-cookie profile. The cutover gates require proof that the browser
+ * session is HttpOnly + SameSite with a bounded lifetime before any cookie-only
+ * cutover, and that production additionally marks it Secure. Both are asserted
+ * here against the real login handler rather than assumed from source.
+ */
+test("login issues an HttpOnly, SameSite=Lax session cookie with a bounded lifetime", async () => {
+  const password = "correct horse battery staple";
+  const salt = randomBytes(16);
+  const derived = await scryptAsync(password, salt, 64);
+  const passwordHash = `scrypt:${salt.toString("hex")}:${derived.toString("hex")}`;
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (sql: unknown) => {
+    if (String(sql).includes("FROM app_users")) {
+      return {
+        rows: [
+          {
+            id: "cookie-test-user",
+            email: "cookie@example.com",
+            name: "Cookie Test",
+            role: "user",
+            is_suspended: false,
+            is_terminated: false,
+            password_hash: passwordHash,
+          },
+        ],
+        rowCount: 1,
+      };
+    }
+    return { rows: [], rowCount: 0 };
+  };
+  try {
+    const response = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.101",
+      },
+      body: JSON.stringify({ email: "cookie@example.com", password }),
+    });
+    assert.equal(response.status, 200);
+    const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+    const cookies = headers.getSetCookie?.() ?? [headers.get("set-cookie") ?? ""];
+    const sessionCookie = cookies.find((cookie) => cookie.startsWith("cloudie_session=")) ?? "";
+    assert.notEqual(sessionCookie, "", `expected a cloudie_session cookie, got: ${cookies.join(" | ")}`);
+    assert.match(sessionCookie, /HttpOnly/i);
+    assert.match(sessionCookie, /SameSite=Lax/i);
+    assert.match(sessionCookie, /Path=\//i);
+    assert.match(sessionCookie, /Max-Age=28800/i);
+    // NODE_ENV is "test" here; production is asserted separately below.
+    assert.doesNotMatch(sessionCookie, /Secure/i);
+
+    process.env.NODE_ENV = "production";
+    const productionResponse = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.102",
+      },
+      body: JSON.stringify({ email: "cookie@example.com", password }),
+    });
+    assert.equal(productionResponse.status, 200);
+    const productionCookies =
+      (productionResponse.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
+    const productionSession = productionCookies.find((cookie) => cookie.startsWith("cloudie_session=")) ?? "";
+    assert.match(productionSession, /Secure/i);
+  } finally {
+    process.env.NODE_ENV = "test";
+    mutablePool.query = originalQuery;
+  }
+});
+
+/**
+ * Disabled accounts. Login must refuse suspended and terminated users with the
+ * same response as a bad password (no account-state oracle) and must not mint a
+ * session cookie when it does.
+ */
+test("refuses login for suspended and terminated accounts without issuing a session", async () => {
+  const password = "correct horse battery staple";
+  const salt = randomBytes(16);
+  const derived = await scryptAsync(password, salt, 64);
+  const passwordHash = `scrypt:${salt.toString("hex")}:${derived.toString("hex")}`;
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  const account = (flags: { is_suspended: boolean; is_terminated: boolean }) => ({
+    rows: [
+      {
+        id: "disabled-test-user",
+        email: "disabled@example.com",
+        name: "Disabled Test",
+        role: "user",
+        ...flags,
+        password_hash: passwordHash,
+      },
+    ],
+    rowCount: 1,
+  });
+  try {
+    for (const [index, flags] of [
+      { is_suspended: true, is_terminated: false },
+      { is_suspended: false, is_terminated: true },
+    ].entries()) {
+      mutablePool.query = async (sql: unknown) =>
+        String(sql).includes("FROM app_users") ? account(flags) : { rows: [], rowCount: 0 };
+      const response = await app.request("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "http://localhost:5173",
+          "X-Forwarded-For": `203.0.113.${110 + index}`,
+        },
+        body: JSON.stringify({ email: "disabled@example.com", password }),
+      });
+      assert.equal(response.status, 401, `expected 401 for ${JSON.stringify(flags)}`);
+      assert.deepEqual(await response.json(), { error: "Invalid email or password" });
+      const headers = response.headers as Headers & { getSetCookie?: () => string[] };
+      const cookies = headers.getSetCookie?.() ?? [];
+      assert.equal(
+        cookies.some((cookie) => cookie.startsWith("cloudie_session=")),
+        false,
+        "a refused login must not set a session cookie",
+      );
+    }
+  } finally {
+    mutablePool.query = originalQuery;
+  }
 });
 
