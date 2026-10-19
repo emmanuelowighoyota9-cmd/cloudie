@@ -11,7 +11,7 @@
  *  - NEVER cache non-GET requests or range/partial responses.
  *  - Never cache authenticated JSON responses that could leak between accounts.
  */
-const CACHE_VERSION = "cloudie-v1";
+const CACHE_VERSION = "cloudie-v3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const OFFLINE_URL = "/offline.html";
@@ -50,10 +50,11 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-/** Only same-origin, static, GET requests are ever cached. */
+/** Only same-origin, static, GET requests (excluding sw.js) are ever cached. */
 function isCacheableAsset(request, url) {
   if (request.method !== "GET") return false;
   if (url.origin !== self.location.origin) return false;
+  if (url.pathname === "/sw.js") return false;
   if (url.pathname.startsWith("/api/")) return false;
   // Convex HTTP / auth routes must always hit the network.
   if (url.pathname.startsWith("/.well-known/")) return false;
@@ -65,14 +66,32 @@ function isCacheableAsset(request, url) {
   );
 }
 
+/**
+ * Prevent SPA HTML fallbacks or error pages from ever being cached or served
+ * as JavaScript or CSS modules (which triggers "'text/html' is not a valid
+ * JavaScript MIME type").
+ */
+function hasValidAssetMimeType(url, response) {
+  if (!response || !response.ok) return false;
+  const contentType = (response.headers.get("content-type") || "").toLowerCase();
+  if (contentType.includes("text/html")) return false;
+  if (/\.(?:js|mjs)$/i.test(url.pathname)) {
+    return contentType.includes("javascript") || contentType.includes("ecmascript");
+  }
+  if (/\.css$/i.test(url.pathname)) {
+    return contentType.includes("text/css");
+  }
+  return true;
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Never intercept cross-origin traffic (Convex data, auth) or non-GET.
+  // Never intercept cross-origin traffic (API, Convex data, auth) or non-GET.
   if (url.origin !== self.location.origin || request.method !== "GET") return;
 
-  // Navigations: network first, then cached shell, then the offline page.
+  // Navigations: network first (bypassing stale HTTP cache), then offline page.
   if (request.mode === "navigate") {
     event.respondWith(
       (async () => {
@@ -90,20 +109,31 @@ self.addEventListener("fetch", (event) => {
 
   if (!isCacheableAsset(request, url)) return;
 
-  // Static assets: stale-while-revalidate.
+  // Static assets: stale-while-revalidate with strict MIME-type verification.
   event.respondWith(
     (async () => {
       const cache = await caches.open(ASSET_CACHE);
       const cached = await cache.match(request);
+      const validCached = cached && hasValidAssetMimeType(url, cached) ? cached : null;
+      if (cached && !validCached) {
+        await cache.delete(request).catch(() => undefined);
+      }
+
       const network = fetch(request)
         .then((response) => {
-          if (response && response.ok && response.type === "basic") {
+          if (
+            response &&
+            response.ok &&
+            response.type === "basic" &&
+            hasValidAssetMimeType(url, response)
+          ) {
             cache.put(request, response.clone()).catch(() => undefined);
           }
           return response;
         })
         .catch(() => undefined);
-      return cached ?? (await network) ?? Response.error();
+
+      return validCached ?? (await network) ?? Response.error();
     })(),
   );
 });

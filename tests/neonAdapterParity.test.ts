@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
 import { api } from "../src/convex/_generated/api";
 import { resolveFunctionName } from "../src/lib/neonClient";
 import { formatNgn, formatUsd, DEFAULT_POINT_PACKAGES } from "../src/lib/pricing";
 import { fmtMoney } from "../src/lib/money";
 import { discoverMigrations, computeChecksum } from "../api/scripts/migrate.mjs";
+import { verifyDistDirectory } from "../scripts/verify-dist.mjs";
 
 describe("Neon adapter & currency formatting regression suite", () => {
   test("resolveFunctionName extracts exact module:fn name from Convex anyApi Proxies", () => {
@@ -61,6 +63,35 @@ describe("Neon adapter & currency formatting regression suite", () => {
     for (const m of migrations) {
       expect(m.checksum).toMatch(/^[a-f0-9]{64}$/);
       expect(computeChecksum(m.sql)).toBe(m.checksum);
+    }
+  });
+
+  test("public/.htaccess and public/sw.js prevent text/html JavaScript MIME errors", () => {
+    const htaccess = readFileSync("public/.htaccess", "utf8");
+    expect(htaccess).toContain("AddType text/javascript .js .mjs");
+    expect(htaccess).toContain("AddType text/css .css");
+    expect(htaccess).toContain("RewriteCond %{REQUEST_URI} ^/assets/ [OR]");
+    expect(htaccess).toContain("RewriteRule ^ - [R=404,L]");
+    expect(htaccess).toContain("RewriteRule ^ /index.html [L]");
+    expect(htaccess).toContain("no-cache, no-store, must-revalidate");
+    expect(htaccess).toContain("public, max-age=31536000, immutable");
+
+    const sw = readFileSync("public/sw.js", "utf8");
+    expect(sw).toContain('const CACHE_VERSION = "cloudie-v3"');
+    expect(sw).toContain("function hasValidAssetMimeType(url, response)");
+    expect(sw).toContain('contentType.includes("text/html")');
+
+    const mainTsx = readFileSync("src/main.tsx", "utf8");
+    expect(mainTsx).toContain('import Dashboard from "./pages/Dashboard.tsx"');
+    expect(mainTsx).toContain('import { AppLayout } from "./components/AppLayout.tsx"');
+    expect(mainTsx).toContain('window.addEventListener("vite:preloadError"');
+  });
+
+  test("production dist output passes asset and MIME verification when built", () => {
+    if (existsSync("dist/index.html")) {
+      const summary = verifyDistDirectory();
+      expect(summary.htmlAssetCount).toBeGreaterThanOrEqual(4);
+      expect(summary.totalAssetFiles).toBeGreaterThan(10);
     }
   });
 });

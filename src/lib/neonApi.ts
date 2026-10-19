@@ -1,4 +1,9 @@
-const API_BASE_URL = (import.meta.env.VITE_NEON_API_URL as string | undefined)?.replace(/\/$/, "") || "";
+const DEFAULT_API_URL = "https://cloudie-operations-api-stage.onrender.com";
+const API_BASE_URL = (
+  (import.meta.env.VITE_NEON_API_URL as string | undefined) ||
+  (import.meta.env.VITE_API_URL as string | undefined) ||
+  DEFAULT_API_URL
+).replace(/\/$/, "");
 const SAME_ORIGIN_API = import.meta.env.VITE_NEON_API_SAME_ORIGIN === "true";
 
 const TOKEN_KEY = "cloudie_api_token";
@@ -32,10 +37,7 @@ export class NeonApiError extends Error {
 
 function baseUrl() {
   if (SAME_ORIGIN_API) return "";
-  if (API_BASE_URL) return API_BASE_URL;
-  throw new Error(
-    "Neon API is not configured. Set VITE_NEON_API_URL to the intended API origin, or enable VITE_NEON_API_SAME_ORIGIN only after the same-origin gateway is configured.",
-  );
+  return API_BASE_URL;
 }
 
 function readCsrfCookie() {

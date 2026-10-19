@@ -13,110 +13,181 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { EASE_OUT_QUINT } from "@/components/motion";
 import "./index.css";
+import Landing from "./pages/Landing.tsx";
+import AuthPage from "./pages/Auth.tsx";
+import AdminLogin from "./pages/AdminLogin.tsx";
+import NotFound from "./pages/NotFound.tsx";
+import Dashboard from "./pages/Dashboard.tsx";
+import { AppLayout } from "./components/AppLayout.tsx";
 
-// Lazy-loaded pages
-const Landing = lazy(() => import("./pages/Landing.tsx"));
-const AuthPage = lazy(() => import("./pages/Auth.tsx"));
-const AdminLogin = lazy(() => import("./pages/AdminLogin.tsx"));
-const NotFound = lazy(() => import("./pages/NotFound.tsx"));
-const Dashboard = lazy(() => import("./pages/Dashboard.tsx"));
-const Personal = lazy(() => import("./pages/Personal.tsx"));
-const Wallet = lazy(() => import("./pages/Wallet.tsx"));
-const MyServices = lazy(() => import("./pages/MyServices.tsx"));
-const Billing = lazy(() => import("./pages/Billing.tsx"));
-const Shipments = lazy(() => import("./pages/Shipments.tsx"));
-const NewShipment = lazy(() => import("./pages/NewShipment.tsx"));
-const ShipmentDetail = lazy(() => import("./pages/ShipmentDetail.tsx"));
-const ShipmentUpdates = lazy(() => import("./pages/ShipmentUpdates.tsx"));
-const ShipmentUpdateForm = lazy(() => import("./pages/ShipmentUpdateForm.tsx"));
-const VtuCatalog = lazy(() => import("./pages/VtuCatalog.tsx"));
-const VtuAirtime = lazy(() => import("./pages/VtuAirtime.tsx"));
-const VtuBills = lazy(() => import("./pages/VtuBills.tsx"));
-const VtuData = lazy(() => import("./pages/VtuData.tsx"));
-const VtuElectricity = lazy(() => import("./pages/VtuElectricity.tsx"));
-const VtuExamPins = lazy(() => import("./pages/VtuExamPins.tsx"));
-const VtuHistory = lazy(() => import("./pages/VtuHistory.tsx"));
-const PublicTracking = lazy(() => import("./pages/PublicTracking.tsx"));
-const SiteLanding = lazy(() => import("./pages/site/SiteLanding.tsx"));
-const SiteBanking = lazy(() => import("./pages/site/SiteBanking.tsx"));
-const SiteAuth = lazy(() => import("./pages/site/SiteAuth.tsx"));
-const SiteDashboard = lazy(() => import("./pages/site/SiteDashboard.tsx"));
-const SiteAccounts = lazy(() => import("./pages/site/SiteAccounts.tsx"));
-const SiteTransactions = lazy(() => import("./pages/site/SiteTransactions.tsx"));
-const SiteKyc = lazy(() => import("./pages/site/SiteKyc.tsx"));
-const SiteAdmin = lazy(() => import("./pages/site/SiteAdmin.tsx"));
-const AdminBankingTenants = lazy(() => import("./pages/AdminBankingTenants.tsx"));
-const AdminBankingCreateTenant = lazy(() => import("./pages/AdminBankingCreateTenant.tsx"));
-const AdminBankingTenantDetail = lazy(() => import("./pages/AdminBankingTenantDetail.tsx"));
-const AdminBankingTenantSettings = lazy(() => import("./pages/AdminBankingTenantSettings.tsx"));
-const TenantBankingHost = lazy(() => import("./pages/TenantBankingHost.tsx"));
-const TenantGateLazy = lazy(() => import("./components/tenant/TenantGate.tsx").then(m => ({ default: m.TenantGate })));
+const CHUNK_RELOAD_KEY = "cloudie:chunk-reload";
 
-const Ticketing = lazy(() => import("./pages/Ticketing.tsx"));
-const FlightDocument = lazy(() => import("./pages/FlightDocument.tsx"));
-const HotelDocument = lazy(() => import("./pages/HotelDocument.tsx"));
-const InvoiceDocument = lazy(() => import("./pages/InvoiceDocument.tsx"));
-const CustomsDocument = lazy(() => import("./pages/CustomsDocument.tsx"));
-const BusinessSuite = lazy(() => import("./pages/BusinessSuite.tsx"));
-const NewSite = lazy(() => import("./pages/NewSite.tsx"));
-const SiteDetail = lazy(() => import("./pages/SiteDetail.tsx"));
-const DocumentsPage = lazy(() => import("./pages/Documents.tsx"));
-const DocumentTemplates = lazy(() => import("./pages/DocumentTemplates.tsx"));
-const DocumentGenerator = lazy(() => import("./pages/DocumentGenerator.tsx"));
-const DocumentBuilder = lazy(() => import("./pages/DocumentBuilder.tsx"));
-const OwnDocumentTemplate = lazy(() => import("./pages/OwnDocumentTemplate.tsx"));
-const DocumentDetail = lazy(() => import("./pages/DocumentDetail.tsx"));
-const PublicDocument = lazy(() => import("./pages/PublicDocument.tsx"));
-const AdminDocumentTemplates = lazy(() => import("./pages/AdminDocumentTemplates.tsx"));
-const AdminDocumentTemplateEditor = lazy(() => import("./pages/AdminDocumentTemplateEditor.tsx"));
-const AdminTemplateClassifier = lazy(() => import("./pages/AdminTemplateClassifier.tsx"));
-const Services = lazy(() => import("./pages/Services.tsx"));
-const EmailCampaign = lazy(() => import("./pages/EmailCampaign.tsx"));
-const RenderStudio = lazy(() => import("./pages/RenderStudio.tsx"));
-const AssetsPage = lazy(() => import("./pages/Assets.tsx"));
-const MarketplacePage = lazy(() => import("./pages/Marketplace.tsx"));
-const Referrals = lazy(() => import("./pages/Referrals.tsx"));
-const NotificationsPage = lazy(() => import("./pages/Notifications.tsx"));
-const Support = lazy(() => import("./pages/Support.tsx"));
-const Settings = lazy(() => import("./pages/Settings.tsx"));
-const BuyPoints = lazy(() => import("./pages/BuyPoints.tsx"));
-const Orders = lazy(() => import("./pages/Orders.tsx"));
-const Vendor = lazy(() => import("./pages/Vendor.tsx"));
-const Transactions = lazy(() => import("./pages/Transactions.tsx"));
-const AppLayout = lazy(() => import("./components/AppLayout.tsx").then(m => ({ default: m.AppLayout })));
-const Admin = lazy(() => import("./pages/Admin.tsx"));
-const AdminUsers = lazy(() => import("./pages/AdminUsers.tsx"));
-const AdminUserDetail = lazy(() => import("./pages/AdminUserDetail.tsx"));
-const AdminVendors = lazy(() => import("./pages/AdminVendors.tsx"));
-const AdminVendorDetail = lazy(() => import("./pages/AdminVendorDetail.tsx"));
-const AdminTenants = lazy(() => import("./pages/AdminTenants.tsx"));
-const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics.tsx"));
-const AdminAuditLogs = lazy(() => import("./pages/AdminAuditLogs.tsx"));
-const AdminMarketplace = lazy(() => import("./pages/AdminMarketplace.tsx"));
-const AdminOrders = lazy(() => import("./pages/AdminOrders.tsx"));
-const AdminDisputes = lazy(() => import("./pages/AdminDisputes.tsx"));
-const AdminShipments = lazy(() => import("./pages/AdminShipments.tsx"));
-const AdminCreateShipment = lazy(() => import("./pages/AdminCreateShipment.tsx"));
-const AdminShipmentDetail = lazy(() => import("./pages/AdminShipmentDetail.tsx"));
-const AdminLocations = lazy(() => import("./pages/AdminLocations.tsx"));
-const AdminDocuments = lazy(() => import("./pages/AdminDocuments.tsx"));
-const AdminTransactions = lazy(() => import("./pages/AdminTransactions.tsx"));
-const AdminRisk = lazy(() => import("./pages/AdminRisk.tsx"));
-const AdminMaintenance = lazy(() => import("./pages/AdminMaintenance.tsx"));
-const AdminKYC = lazy(() => import("./pages/AdminKYC.tsx"));
-const AdminNotifications = lazy(() => import("./pages/AdminNotifications.tsx"));
-const AdminInfrastructure = lazy(() => import("./pages/AdminInfrastructure.tsx"));
-const AdminPricing = lazy(() => import("./pages/AdminPricing.tsx"));
-const AdminVtuProviders = lazy(() => import("./pages/AdminVtuProviders.tsx"));
-const AdminVtuCatalog = lazy(() => import("./pages/AdminVtuCatalog.tsx"));
-const AdminVtuUnresolved = lazy(() => import("./pages/AdminVtuUnresolved.tsx"));
-const AdminCatalog = lazy(() => import("./pages/AdminCatalog.tsx"));
-const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
-const AdminAppearance = lazy(() => import("./pages/AdminAppearance.tsx"));
-const AdminPaymentProviders = lazy(() => import("./pages/AdminPaymentProviders.tsx"));
-const AdminEmailSettings = lazy(() => import("./pages/AdminEmailSettings.tsx"));
-const AdminAdministrators = lazy(() => import("./pages/AdminAdministrators.tsx"));
-const AdminLayout = lazy(() => import("./components/admin/AdminLayout.tsx").then(m => ({ default: m.AdminLayout })));
+function isChunkLoadError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /not a valid JavaScript MIME type|Failed to fetch dynamically imported module|Importing a module script failed|Loading chunk .* failed|Unable to preload CSS/i.test(
+    msg,
+  );
+}
+
+async function clearStaleAssetCaches(): Promise<void> {
+  try {
+    if ("caches" in window) {
+      const keys = await window.caches.keys();
+      await Promise.all(keys.map((k) => window.caches.delete(k)));
+    }
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.update().catch(() => undefined)));
+    }
+  } catch {
+    // Ignore storage/SW cleanup errors in restricted browsing contexts.
+  }
+}
+
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+) {
+  return lazy(async () => {
+    try {
+      const mod = await importer();
+      try {
+        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      return mod;
+    } catch (err) {
+      if (typeof window !== "undefined" && isChunkLoadError(err)) {
+        await clearStaleAssetCaches();
+        try {
+          const target = window.location.pathname + window.location.search;
+          if (sessionStorage.getItem(CHUNK_RELOAD_KEY) !== target) {
+            sessionStorage.setItem(CHUNK_RELOAD_KEY, target);
+            window.location.reload();
+          }
+        } catch {
+          // Storage blocked; fall through to error boundary.
+        }
+      }
+      throw err;
+    }
+  });
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("vite:preloadError", (event) => {
+    event.preventDefault();
+    void clearStaleAssetCaches().finally(() => {
+      try {
+        const target = window.location.pathname + window.location.search;
+        if (sessionStorage.getItem(CHUNK_RELOAD_KEY) !== target) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, target);
+          window.location.reload();
+        }
+      } catch {
+        window.location.reload();
+      }
+    });
+  });
+}
+
+// Lazy-loaded secondary pages with automatic stale-chunk recovery
+const Personal = lazyWithRetry(() => import("./pages/Personal.tsx"));
+const Wallet = lazyWithRetry(() => import("./pages/Wallet.tsx"));
+const MyServices = lazyWithRetry(() => import("./pages/MyServices.tsx"));
+const Billing = lazyWithRetry(() => import("./pages/Billing.tsx"));
+const Shipments = lazyWithRetry(() => import("./pages/Shipments.tsx"));
+const NewShipment = lazyWithRetry(() => import("./pages/NewShipment.tsx"));
+const ShipmentDetail = lazyWithRetry(() => import("./pages/ShipmentDetail.tsx"));
+const ShipmentUpdates = lazyWithRetry(() => import("./pages/ShipmentUpdates.tsx"));
+const ShipmentUpdateForm = lazyWithRetry(() => import("./pages/ShipmentUpdateForm.tsx"));
+const VtuCatalog = lazyWithRetry(() => import("./pages/VtuCatalog.tsx"));
+const VtuAirtime = lazyWithRetry(() => import("./pages/VtuAirtime.tsx"));
+const VtuBills = lazyWithRetry(() => import("./pages/VtuBills.tsx"));
+const VtuData = lazyWithRetry(() => import("./pages/VtuData.tsx"));
+const VtuElectricity = lazyWithRetry(() => import("./pages/VtuElectricity.tsx"));
+const VtuExamPins = lazyWithRetry(() => import("./pages/VtuExamPins.tsx"));
+const VtuHistory = lazyWithRetry(() => import("./pages/VtuHistory.tsx"));
+const PublicTracking = lazyWithRetry(() => import("./pages/PublicTracking.tsx"));
+const SiteLanding = lazyWithRetry(() => import("./pages/site/SiteLanding.tsx"));
+const SiteBanking = lazyWithRetry(() => import("./pages/site/SiteBanking.tsx"));
+const SiteAuth = lazyWithRetry(() => import("./pages/site/SiteAuth.tsx"));
+const SiteDashboard = lazyWithRetry(() => import("./pages/site/SiteDashboard.tsx"));
+const SiteAccounts = lazyWithRetry(() => import("./pages/site/SiteAccounts.tsx"));
+const SiteTransactions = lazyWithRetry(() => import("./pages/site/SiteTransactions.tsx"));
+const SiteKyc = lazyWithRetry(() => import("./pages/site/SiteKyc.tsx"));
+const SiteAdmin = lazyWithRetry(() => import("./pages/site/SiteAdmin.tsx"));
+const AdminBankingTenants = lazyWithRetry(() => import("./pages/AdminBankingTenants.tsx"));
+const AdminBankingCreateTenant = lazyWithRetry(() => import("./pages/AdminBankingCreateTenant.tsx"));
+const AdminBankingTenantDetail = lazyWithRetry(() => import("./pages/AdminBankingTenantDetail.tsx"));
+const AdminBankingTenantSettings = lazyWithRetry(() => import("./pages/AdminBankingTenantSettings.tsx"));
+const TenantBankingHost = lazyWithRetry(() => import("./pages/TenantBankingHost.tsx"));
+const TenantGateLazy = lazyWithRetry(() => import("./components/tenant/TenantGate.tsx").then(m => ({ default: m.TenantGate })));
+
+const Ticketing = lazyWithRetry(() => import("./pages/Ticketing.tsx"));
+const FlightDocument = lazyWithRetry(() => import("./pages/FlightDocument.tsx"));
+const HotelDocument = lazyWithRetry(() => import("./pages/HotelDocument.tsx"));
+const InvoiceDocument = lazyWithRetry(() => import("./pages/InvoiceDocument.tsx"));
+const CustomsDocument = lazyWithRetry(() => import("./pages/CustomsDocument.tsx"));
+const BusinessSuite = lazyWithRetry(() => import("./pages/BusinessSuite.tsx"));
+const NewSite = lazyWithRetry(() => import("./pages/NewSite.tsx"));
+const SiteDetail = lazyWithRetry(() => import("./pages/SiteDetail.tsx"));
+const DocumentsPage = lazyWithRetry(() => import("./pages/Documents.tsx"));
+const DocumentTemplates = lazyWithRetry(() => import("./pages/DocumentTemplates.tsx"));
+const DocumentGenerator = lazyWithRetry(() => import("./pages/DocumentGenerator.tsx"));
+const DocumentBuilder = lazyWithRetry(() => import("./pages/DocumentBuilder.tsx"));
+const OwnDocumentTemplate = lazyWithRetry(() => import("./pages/OwnDocumentTemplate.tsx"));
+const DocumentDetail = lazyWithRetry(() => import("./pages/DocumentDetail.tsx"));
+const PublicDocument = lazyWithRetry(() => import("./pages/PublicDocument.tsx"));
+const AdminDocumentTemplates = lazyWithRetry(() => import("./pages/AdminDocumentTemplates.tsx"));
+const AdminDocumentTemplateEditor = lazyWithRetry(() => import("./pages/AdminDocumentTemplateEditor.tsx"));
+const AdminTemplateClassifier = lazyWithRetry(() => import("./pages/AdminTemplateClassifier.tsx"));
+const Services = lazyWithRetry(() => import("./pages/Services.tsx"));
+const EmailCampaign = lazyWithRetry(() => import("./pages/EmailCampaign.tsx"));
+const RenderStudio = lazyWithRetry(() => import("./pages/RenderStudio.tsx"));
+const AssetsPage = lazyWithRetry(() => import("./pages/Assets.tsx"));
+const MarketplacePage = lazyWithRetry(() => import("./pages/Marketplace.tsx"));
+const Referrals = lazyWithRetry(() => import("./pages/Referrals.tsx"));
+const NotificationsPage = lazyWithRetry(() => import("./pages/Notifications.tsx"));
+const Support = lazyWithRetry(() => import("./pages/Support.tsx"));
+const Settings = lazyWithRetry(() => import("./pages/Settings.tsx"));
+const BuyPoints = lazyWithRetry(() => import("./pages/BuyPoints.tsx"));
+const Orders = lazyWithRetry(() => import("./pages/Orders.tsx"));
+const Vendor = lazyWithRetry(() => import("./pages/Vendor.tsx"));
+const Transactions = lazyWithRetry(() => import("./pages/Transactions.tsx"));
+const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
+const AdminUsers = lazyWithRetry(() => import("./pages/AdminUsers.tsx"));
+const AdminUserDetail = lazyWithRetry(() => import("./pages/AdminUserDetail.tsx"));
+const AdminVendors = lazyWithRetry(() => import("./pages/AdminVendors.tsx"));
+const AdminVendorDetail = lazyWithRetry(() => import("./pages/AdminVendorDetail.tsx"));
+const AdminTenants = lazyWithRetry(() => import("./pages/AdminTenants.tsx"));
+const AdminAnalytics = lazyWithRetry(() => import("./pages/AdminAnalytics.tsx"));
+const AdminAuditLogs = lazyWithRetry(() => import("./pages/AdminAuditLogs.tsx"));
+const AdminMarketplace = lazyWithRetry(() => import("./pages/AdminMarketplace.tsx"));
+const AdminOrders = lazyWithRetry(() => import("./pages/AdminOrders.tsx"));
+const AdminDisputes = lazyWithRetry(() => import("./pages/AdminDisputes.tsx"));
+const AdminShipments = lazyWithRetry(() => import("./pages/AdminShipments.tsx"));
+const AdminCreateShipment = lazyWithRetry(() => import("./pages/AdminCreateShipment.tsx"));
+const AdminShipmentDetail = lazyWithRetry(() => import("./pages/AdminShipmentDetail.tsx"));
+const AdminLocations = lazyWithRetry(() => import("./pages/AdminLocations.tsx"));
+const AdminDocuments = lazyWithRetry(() => import("./pages/AdminDocuments.tsx"));
+const AdminTransactions = lazyWithRetry(() => import("./pages/AdminTransactions.tsx"));
+const AdminRisk = lazyWithRetry(() => import("./pages/AdminRisk.tsx"));
+const AdminMaintenance = lazyWithRetry(() => import("./pages/AdminMaintenance.tsx"));
+const AdminKYC = lazyWithRetry(() => import("./pages/AdminKYC.tsx"));
+const AdminNotifications = lazyWithRetry(() => import("./pages/AdminNotifications.tsx"));
+const AdminInfrastructure = lazyWithRetry(() => import("./pages/AdminInfrastructure.tsx"));
+const AdminPricing = lazyWithRetry(() => import("./pages/AdminPricing.tsx"));
+const AdminVtuProviders = lazyWithRetry(() => import("./pages/AdminVtuProviders.tsx"));
+const AdminVtuCatalog = lazyWithRetry(() => import("./pages/AdminVtuCatalog.tsx"));
+const AdminVtuUnresolved = lazyWithRetry(() => import("./pages/AdminVtuUnresolved.tsx"));
+const AdminCatalog = lazyWithRetry(() => import("./pages/AdminCatalog.tsx"));
+const AdminSettings = lazyWithRetry(() => import("./pages/AdminSettings.tsx"));
+const AdminAppearance = lazyWithRetry(() => import("./pages/AdminAppearance.tsx"));
+const AdminPaymentProviders = lazyWithRetry(() => import("./pages/AdminPaymentProviders.tsx"));
+const AdminEmailSettings = lazyWithRetry(() => import("./pages/AdminEmailSettings.tsx"));
+const AdminAdministrators = lazyWithRetry(() => import("./pages/AdminAdministrators.tsx"));
+const AdminLayout = lazyWithRetry(() => import("./components/admin/AdminLayout.tsx").then(m => ({ default: m.AdminLayout })));
 
 function RouteLoading() {
   return (
@@ -191,13 +262,25 @@ class RootErrorBoundary extends React.Component<
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, message: error.message || "Unknown error" };
   }
+  handleReload = () => {
+    void clearStaleAssetCaches().finally(() => {
+      window.location.reload();
+    });
+  };
   render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-6">
-          <div className="max-w-lg text-center">
+          <div className="max-w-lg text-center space-y-3">
             <p className="text-sm font-semibold">Runtime error</p>
             <p className="mt-2 text-xs text-muted-foreground break-words">{this.state.message}</p>
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="mt-3 inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              Reload application
+            </button>
           </div>
         </div>
       );
@@ -214,7 +297,12 @@ const convex = new ConvexReactClient(convexUrl);
 // and a service worker would risk serving stale bundles to the preview.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    navigator.serviceWorker
+      .register("/sw.js", { updateViaCache: "none" })
+      .then((reg) => {
+        reg.update().catch(() => undefined);
+      })
+      .catch(() => undefined);
   });
 }
 

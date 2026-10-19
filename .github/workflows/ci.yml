@@ -49,7 +49,12 @@ jobs:
         run: npx eslint src/pages/MyServices.tsx src/pages/Billing.tsx src/convex/serviceHub.ts src/convex/auth/emailOtp.ts src/convex/auth.config.ts
 
       - name: Production build
+        env:
+          VITE_NEON_API_URL: ${{ vars.VITE_NEON_API_URL || 'https://cloudie-operations-api-stage.onrender.com' }}
         run: npm run build
+
+      - name: Verify production build assets and .htaccess
+        run: npm run smoke:dist
 
   validate-neon-api:
     name: Validate Neon API

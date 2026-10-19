@@ -1,8 +1,49 @@
 Options -Indexes
 DirectoryIndex index.html
-RewriteEngine On
 
-# Let real files and directories load normally; send app routes to the SPA shell.
+<IfModule mod_mime.c>
+  AddType text/javascript .js .mjs
+  AddType text/css .css
+  AddType application/json .json .map
+  AddType application/manifest+json .webmanifest
+  AddType image/svg+xml .svg
+  AddType application/wasm .wasm
+</IfModule>
+
+<IfModule mod_headers.c>
+  # Revalidate HTML entry points, service worker, and web manifest on every load
+  # so deployments never serve stale chunk hashes from a 30-day browser cache.
+  <FilesMatch "^(index\.html|404\.html|offline\.html|sw\.js|manifest\.webmanifest)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+
+  # Hashed Vite assets in /assets/ are content-addressed and safe to cache immutable.
+  <FilesMatch "\.(?:js|mjs|css|woff2?|ttf|eot)$">
+    Header merge Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Keep sw.js uncached even though it ends in .js.
+  <Files "sw.js">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </Files>
+</IfModule>
+
+RewriteEngine On
+RewriteBase /
+
+# Never rewrite missing static assets or hashed bundles to index.html.
+# Returning index.html (text/html) for a missing .js module causes:
+# "Runtime error: 'text/html' is not a valid JavaScript MIME type"
+RewriteCond %{REQUEST_URI} ^/assets/ [OR]
+RewriteCond %{REQUEST_URI} \.(?:js|mjs|css|map|json|webmanifest|wasm|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|eot)$ [NC]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^ - [R=404,L]
+
+# Let real files and directories load normally; send client-side routes to the SPA shell.
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^ index.html [L]
+RewriteRule ^ /index.html [L]

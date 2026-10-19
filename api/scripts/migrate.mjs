@@ -14,9 +14,6 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import pg from "pg";
-
-const { Client } = pg;
 
 const ADVISORY_LOCK_KEY = 729481023;
 const migrationsDir = resolve(import.meta.dirname, "../../migrations");
@@ -63,7 +60,8 @@ export async function runMigrations({
     throw new Error("DATABASE_URL or TEST_DATABASE_URL is required to run migrations.");
   }
 
-  const client = new Client({ connectionString });
+  const { default: pg } = await import("pg");
+  const client = new pg.Client({ connectionString });
   await client.connect();
   let lockAcquired = false;
 
