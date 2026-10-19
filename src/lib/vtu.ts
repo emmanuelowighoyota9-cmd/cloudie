@@ -196,6 +196,44 @@ export function validateCustomerIdentifier(
 }
 
 /**
+ * Automatically detects the Nigerian telecom network from a phone number prefix.
+ * Supports MTN, Airtel, Glo, and 9mobile.
+ */
+export function detectNigerianNetwork(
+  phone: string,
+): "mtn" | "airtel" | "glo" | "9mobile" | null {
+  const digits = (phone ?? "").replace(/[\s-+]/g, "");
+  let normalized = digits;
+  if (normalized.startsWith("234")) {
+    normalized = "0" + normalized.slice(3);
+  }
+  if (normalized.length < 4) return null;
+  const prefix = normalized.slice(0, 4);
+
+  const mtnPrefixes = [
+    "0803", "0806", "0703", "0706", "0813", "0816", "0810", "0814", "0903", "0906", "0913", "0916"
+  ];
+  if (mtnPrefixes.includes(prefix)) return "mtn";
+
+  const airtelPrefixes = [
+    "0802", "0808", "0708", "0812", "0701", "0902", "0901", "0904", "0907", "0912"
+  ];
+  if (airtelPrefixes.includes(prefix)) return "airtel";
+
+  const gloPrefixes = [
+    "0805", "0807", "0705", "0815", "0811", "0905", "0915"
+  ];
+  if (gloPrefixes.includes(prefix)) return "glo";
+
+  const etisalatPrefixes = [
+    "0809", "0817", "0818", "0909", "0908"
+  ];
+  if (etisalatPrefixes.includes(prefix)) return "9mobile";
+
+  return null;
+}
+
+/**
  * Mask a destination number for display and for log payloads.
  *
  * Shows the last four digits only. Phone and meter numbers are personal data

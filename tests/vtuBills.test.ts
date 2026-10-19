@@ -6,6 +6,8 @@ import { registerAdapter } from "../src/convex/vtuRegistry";
 import { encrypt } from "../src/convex/lib/encryption";
 import { aidapayAdapter } from "../src/convex/providers/aidapay";
 import type { ProviderPurchaseRequest, VtuProviderAdapter } from "../src/convex/vtuShared";
+import { detectNigerianNetwork } from "../src/lib/vtu";
+import { safeFormatPoints, safeFormatNgn } from "../src/pages/VtuBills";
 
 /**
  * The bill-payment slice: electricity, data and cable, end to end.
@@ -470,6 +472,28 @@ describe("delivery values survive to the customer", () => {
         expect(formatted).toBe("Select");
       }
     }
+
+    // Direct assertions on safeFormatPoints edge cases
+    expect(safeFormatPoints(undefined)).toBe("Select");
+    expect(safeFormatPoints(null)).toBe("Select");
+    expect(safeFormatPoints(NaN)).toBe("Select");
+    expect(safeFormatPoints(1500)).toBe("1,500 pts");
+    expect(safeFormatPoints(0)).toBe("0 pts");
+
+    // Direct assertions on safeFormatNgn edge cases
+    expect(safeFormatNgn(undefined)).toBe("—");
+    expect(safeFormatNgn(null)).toBe("—");
+    expect(safeFormatNgn(NaN)).toBe("—");
+    expect(safeFormatNgn(5000)).toContain("5,000");
+  });
+
+  test("detectNigerianNetwork identifies telecom network from prefix", () => {
+    expect(detectNigerianNetwork("08031234567")).toBe("mtn");
+    expect(detectNigerianNetwork("08021234567")).toBe("airtel");
+    expect(detectNigerianNetwork("08051234567")).toBe("glo");
+    expect(detectNigerianNetwork("08091234567")).toBe("9mobile");
+    expect(detectNigerianNetwork("+2348141234567")).toBe("mtn");
+    expect(detectNigerianNetwork("1234")).toBeNull();
   });
 });
 

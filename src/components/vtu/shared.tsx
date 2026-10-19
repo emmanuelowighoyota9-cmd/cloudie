@@ -29,14 +29,17 @@
 import type { ReactNode } from "react";
 import {
   CheckCircle2,
+  ChevronLeft,
   Clock,
   GraduationCap,
   HelpCircle,
+  History,
   LayoutGrid,
   Lightbulb,
   Loader2,
   Radio,
   Receipt,
+  Sparkles,
   Trophy,
   Tv,
   Wifi,
@@ -64,12 +67,12 @@ export const VTU_STATUS_TONE: Record<
     icon: Clock,
   },
   processing: {
-    tone: "text-sky-700 dark:text-sky-400 border-sky-500/25 bg-sky-500/10",
+    tone: "text-sky-400 border-sky-500/25 bg-sky-500/10",
     icon: Loader2,
     spin: true,
   },
   confirmed: {
-    tone: "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/10",
+    tone: "text-emerald-400 border-emerald-500/25 bg-emerald-500/10",
     icon: CheckCircle2,
   },
   reversed: {
@@ -77,22 +80,17 @@ export const VTU_STATUS_TONE: Record<
     icon: CheckCircle2,
   },
   unknown: {
-    tone: "text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/10",
+    tone: "text-amber-400 border-amber-500/25 bg-amber-500/10",
     icon: HelpCircle,
   },
   unresolved: {
-    tone: "text-amber-700 dark:text-amber-400 border-amber-500/25 bg-amber-500/10",
+    tone: "text-amber-400 border-amber-500/25 bg-amber-500/10",
     icon: HelpCircle,
   },
 };
 
 /**
  * Compact status chip for list rows.
- *
- * Returns NOTHING for a status it has no copy for. The alternative — falling
- * back to another status's wording — is the defect this replaced on the
- * purchase page: it told a customer "Queued" while their transaction was
- * actually waiting on a human.
  */
 export function VtuStatusPill({
   status,
@@ -145,13 +143,6 @@ export function VtuServiceIcon({
 
 /**
  * The destinations that make up the customer's VTU experience.
- *
- * One list, used both to render the nav and to decide which tab is active, so
- * a tab can never claim to be on the page you are looking at.
- *
- * `/vtu/bills` covers data bundles, cable and electricity, and is also the
- * single-product purchase screen, so its label names the category rather than
- * the one product you happen to be buying.
  */
 const VTU_DESTINATIONS = [
   { to: "/vtu", label: "Browse", icon: LayoutGrid },
@@ -164,13 +155,6 @@ const VTU_DESTINATIONS = [
 
 /**
  * The canvas every VTU page sits on.
- *
- * Full-bleed: the app shell pads its outlet, so the shop cancels that padding
- * and paints its own cream edge to edge. Without the bleed the shop would be a
- * cream rectangle floating in a blue page, which reads as a card rather than
- * as somewhere you have gone.
- *
- * The inner column is re-padded, so only the BACKGROUND escapes the shell.
  */
 export function VtuShell({
   children,
@@ -183,43 +167,45 @@ export function VtuShell({
   return (
     <div
       className={cn(
-        "cloudie-vtu-ref bg-vtu-canvas text-vtu-text min-h-[calc(100dvh-4rem)]",
-        // Cancels the app shell's gutter and vertical padding, at every
-        // breakpoint it sets them (0.75/1.25/2rem and 1/1.5/2rem).
+        "cloudie-vtu-shell min-h-[calc(100dvh-4rem)] bg-background text-foreground",
         "-mx-3 -my-4 sm:-mx-5 sm:-my-6 lg:-mx-8 lg:-my-8",
         className,
       )}
     >
-      <style>{`.cloudie-vtu-ref{background:var(--background)!important;color:var(--foreground)!important;min-height:100dvh!important}
-.cloudie-vtu-ref>div{max-width:560px!important;padding:0 16px 32px!important;gap:20px!important}
-.cloudie-vtu-ref .vtu-band{background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 10%,var(--card)),var(--card))!important;border:1px solid color-mix(in srgb,var(--primary) 12%,var(--border))!important;box-shadow:0 12px 30px color-mix(in srgb,var(--primary) 8%,transparent)!important;border-radius:22px!important;padding:18px!important;color:var(--foreground)!important}
-.cloudie-vtu-ref .vtu-band h1{font-size:27px!important;line-height:1.05!important;letter-spacing:-.045em!important}
-.cloudie-vtu-ref .vtu-band p{color:var(--muted-foreground)!important}
-.cloudie-vtu-ref .vtu-band>div>div:last-child{display:none!important}
-.cloudie-vtu-ref nav[aria-label="VTU sections"]{display:none!important}
-.cloudie-vtu-ref .vtu-panel{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:20px!important;box-shadow:0 12px 32px color-mix(in srgb,var(--primary) 7%,transparent)!important}
-.cloudie-vtu-ref .vtu-chip{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--foreground)!important;box-shadow:none!important;transition:all .18s ease!important}
-.cloudie-vtu-ref .vtu-chip:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--border))!important;transform:translateY(-1px)}
-.cloudie-vtu-ref .vtu-chip[aria-pressed="true"]{background:color-mix(in srgb,var(--primary) 9%,var(--card))!important;border-color:var(--primary)!important;box-shadow:0 6px 18px color-mix(in srgb,var(--primary) 14%,transparent)!important}
-.cloudie-vtu-ref input,.cloudie-vtu-ref select{background:var(--card)!important;border:1px solid var(--border)!important;border-radius:14px!important;color:var(--foreground)!important;min-height:50px!important;transition:border-color .18s,box-shadow .18s!important}
-.cloudie-vtu-ref input:focus,.cloudie-vtu-ref select:focus{border-color:var(--primary)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 12%,transparent)!important;outline:none!important}
-.cloudie-vtu-ref input::placeholder{color:var(--muted-foreground)!important}
-.cloudie-vtu-ref .vtu-receipt-row{border-color:var(--border)!important}
-.cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]{background:linear-gradient(100deg,var(--primary),var(--accent))!important;color:var(--primary-foreground)!important;border:0!important;border-radius:14px!important;min-height:52px!important;font-weight:700!important;box-shadow:0 10px 24px color-mix(in srgb,var(--primary) 20%,transparent)!important}
-.cloudie-vtu-ref button[data-slot="button"][class*="variant-vtu"]:hover{filter:saturate(1.08) brightness(1.03)!important;transform:translateY(-1px)}
-.cloudie-vtu-ref .cloudie-vtu-mobile-head{display:flex;align-items:center;justify-content:center;position:relative;padding:12px 0 4px}
-.cloudie-vtu-ref .cloudie-vtu-back{position:absolute;left:0;display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--border);background:var(--card);color:var(--foreground);font-size:28px;border-radius:12px;box-shadow:0 4px 12px color-mix(in srgb,var(--primary) 7%,transparent)}
-.cloudie-vtu-ref .cloudie-vtu-logo{font-weight:850;font-size:22px;letter-spacing:-.045em;color:var(--primary)}
-.cloudie-vtu-ref .cloudie-vtu-logo-mark{display:inline-block;width:13px;height:13px;margin-right:6px;border-radius:7px 7px 4px 7px;background:linear-gradient(135deg,var(--primary),var(--accent));transform:rotate(-35deg);vertical-align:-1px}
-.cloudie-vtu-ref .vtu-quick-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
-.cloudie-vtu-ref .vtu-quick-grid button{min-height:48px;border-radius:13px;border:1px solid var(--border);background:var(--card);font-weight:700;color:var(--foreground);transition:.18s}
-.cloudie-vtu-ref .vtu-quick-grid button:hover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--card))}
-@media(max-width:420px){.cloudie-vtu-ref>div{padding-left:13px!important;padding-right:13px!important}.cloudie-vtu-ref .vtu-band{padding:16px!important}}
-@media(min-width:1024px){.cloudie-vtu-ref>div{max-width:700px!important}}      `}</style>
-      <div className="cloudie-vtu-mobile-head">
-        <button type="button" className="cloudie-vtu-back" aria-label="Go back" onClick={() => navigate(-1)}>‹</button>
-        <div className="cloudie-vtu-logo"><span className="cloudie-vtu-logo-mark" />Cloudie</div>
+      {/* Mobile-first Header */}
+      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-border/80 bg-background/80 px-3.5 py-3 backdrop-blur-xl sm:px-6">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-foreground shadow-xs transition-all hover:bg-muted active:scale-95"
+            aria-label="Go back"
+            onClick={() => navigate(-1)}
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Zap className="size-4" />
+            </span>
+            <div>
+              <span className="font-display text-sm font-bold tracking-tight text-foreground sm:text-base">
+                Cloudie Pay
+              </span>
+              <span className="ml-2 hidden rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary sm:inline-block">
+                Instant VTU &amp; Bills
+              </span>
+            </div>
+          </div>
+        </div>
+        <Link
+          to="/vtu/history"
+          className="flex items-center gap-1.5 rounded-xl border border-border bg-card/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-xs transition-colors hover:bg-muted"
+        >
+          <History className="h-3.5 w-3.5 text-primary" />
+          <span>Receipts</span>
+        </Link>
       </div>
+
       <div className="mx-auto w-full max-w-5xl space-y-5 px-3 py-4 pb-8 sm:space-y-6 sm:px-5 sm:py-7 lg:px-8 lg:py-9">
         {children}
       </div>
@@ -243,7 +229,7 @@ export function VtuBand({
   return (
     <div
       className={cn(
-        "vtu-band relative overflow-hidden rounded-[1.5rem] px-5 py-5 shadow-[0_24px_55px_-35px_hsl(var(--vtu-band)/0.75)] sm:px-6 sm:py-6",
+        "vtu-band relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.06] p-5 shadow-sm sm:p-6",
         className,
       )}
     >
@@ -254,17 +240,6 @@ export function VtuBand({
 
 /**
  * Navigation across the VTU pages.
- *
- * Before this, the four VTU pages were linked only by an ad-hoc "All services"
- * arrow on each one — three different implementations of the same link, and no
- * way to reach airtime or history except by going back to the catalogue first.
- *
- * Matching is on `pathname` alone, deliberately. `/vtu/airtime?network=MTN` and
- * `/vtu/bills?product=data-mtn-1GB` are the SAME destinations as their bare
- * forms, so the tab must not switch off when a query is present.
- *
- * `/vtu` matches exactly rather than by prefix, so opening the catalogue does
- * not light up "Browse" while you are three screens deep on airtime.
  */
 export function VtuNav({ className }: { className?: string }) {
   const location = useLocation();
@@ -273,10 +248,7 @@ export function VtuNav({ className }: { className?: string }) {
     <nav
       aria-label="VTU sections"
       className={cn(
-        // Scrolls rather than wraps on a narrow phone: four tabs plus their
-        // labels do not fit 320px, and a wrapped nav pushes the page heading
-        // down on exactly the screens where vertical space is scarcest.
-        "sticky top-1 z-20 -mx-1 flex gap-1.5 overflow-x-auto rounded-2xl bg-vtu-canvas/90 px-1 py-1 pb-2 backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        "sticky top-14 z-20 flex gap-1.5 overflow-x-auto rounded-2xl border border-border/80 bg-card/90 p-1.5 shadow-md backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
     >
@@ -286,15 +258,12 @@ export function VtuNav({ className }: { className?: string }) {
           <Link
             key={item.to}
             to={item.to}
-            // `page` is what a screen reader announces; the highlight alone
-            // would leave the current page unstated.
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex min-h-12 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold",
-              "transition-[background-color,color,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              "flex min-h-10 shrink-0 items-center gap-2 rounded-xl px-3.5 text-xs font-semibold tracking-tight transition-all active:scale-95",
               active
-                ? "bg-vtu-band text-vtu-band-fg shadow-sm"
-                : "bg-vtu-chip text-vtu-muted hover:bg-vtu-card hover:text-vtu-text",
+                ? "bg-primary text-primary-foreground shadow-xs"
+                : "bg-surface-2/60 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <item.icon className="h-4 w-4 shrink-0" aria-hidden />
@@ -308,10 +277,6 @@ export function VtuNav({ className }: { className?: string }) {
 
 /**
  * A tappable choice: a network, an amount, a plan, a category.
- *
- * Selection is carried by `aria-pressed` and painted from it in CSS
- * (`.vtu-chip`), so the yellow fill cannot drift away from the state assistive
- * tech reads.
  */
 export function VtuChoice({
   selected,
@@ -333,7 +298,10 @@ export function VtuChoice({
       aria-pressed={selected}
       disabled={disabled}
       className={cn(
-        "vtu-chip min-h-14 rounded-2xl px-3.5 py-3 text-left shadow-[0_8px_24px_-20px_hsl(var(--vtu-text)/0.5)] transition-all duration-200 active:scale-[0.98] disabled:opacity-60",
+        "min-h-14 rounded-2xl border p-3.5 text-left transition-all duration-150 active:scale-[0.98] disabled:opacity-60",
+        selected
+          ? "border-primary bg-primary/10 text-foreground ring-2 ring-primary/25 shadow-xs"
+          : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-muted/50",
         className,
       )}
     >

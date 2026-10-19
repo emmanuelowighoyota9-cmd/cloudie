@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { StaggerGroup, StaggerItem } from "@/components/motion";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "convex/react";
@@ -35,6 +36,8 @@ import {
   Activity,
   CircleCheck,
   Clock3,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { Link } from "react-router";
 import { usePricing } from "@/lib/pricing";
@@ -167,6 +170,24 @@ export default function Dashboard() {
     (o) => !["completed", "cancelled", "refunded"].includes(o.status),
   ).length;
 
+  const [showBalance, setShowBalance] = useState(() => {
+    try {
+      return localStorage.getItem("cloudie_show_balance") !== "false";
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleBalance = () => {
+    setShowBalance((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("cloudie_show_balance", String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   return (
     <div className="cloudie-dashboard space-y-6 sm:space-y-8">
       <section className="overflow-hidden rounded-3xl border border-border/90 bg-gradient-to-br from-card via-card to-card/90 shadow-sm">
@@ -245,9 +266,19 @@ export default function Dashboard() {
                 <Coins className="size-6 sm:size-7 text-white" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Available wallet
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Available wallet
+                  </p>
+                  <button
+                    type="button"
+                    onClick={toggleBalance}
+                    className="rounded-md p-1 text-muted-foreground transition hover:text-foreground active:scale-90"
+                    aria-label={showBalance ? "Hide balance" : "Show balance"}
+                  >
+                    {showBalance ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                </div>
                 {balance === undefined ? (
                   <span
                     aria-hidden
@@ -255,9 +286,11 @@ export default function Dashboard() {
                   />
                 ) : (
                   <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    {walletAmount === null && balance != null
-                      ? "—"
-                      : formatNgn(walletAmount ?? 0)}
+                    {!showBalance
+                      ? "••••••••"
+                      : walletAmount === null && balance != null
+                        ? "—"
+                        : formatNgn(walletAmount ?? 0)}
                   </p>
                 )}
                 <p className="text-[11px] text-muted-foreground">

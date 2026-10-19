@@ -21,7 +21,7 @@ import {
   VtuSteps,
 } from "@/components/vtu/shared";
 import { formatNgn } from "@/lib/pricing";
-import { maskIdentifier, validatePhone } from "@/lib/vtu";
+import { detectNigerianNetwork, maskIdentifier, validatePhone } from "@/lib/vtu";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, Coins, Contact, Loader2, Lock, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -193,13 +193,14 @@ export default function VtuAirtime() {
       {step === "details" && (
         <>
           <Reveal>
-            <div className="space-y-5">
+            <div className="space-y-4">
               <div>
-                <p className="mb-2 text-sm font-medium text-vtu-muted">Choose provider</p>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Select Mobile Network
+                </p>
                 <div className="grid grid-cols-4 gap-2">
                   {VTU_NETWORKS.map((n) => {
                     const active = network === n.key;
-                    const cashback = n.key === "mtn" || n.key === "airtel";
                     return (
                       <button
                         key={n.key}
@@ -207,23 +208,14 @@ export default function VtuAirtime() {
                         onClick={() => setNetwork(n.key)}
                         aria-pressed={active}
                         className={cn(
-                          "relative min-h-[72px] rounded-2xl border text-sm font-semibold transition-all active:scale-[.98]",
-                          active ? "border-transparent shadow-md ring-2 ring-vtu-accent/50" : "border-vtu-line bg-white",
-                          n.key === "mtn" && "bg-[#ffd91a]",
-                          n.key === "airtel" && "bg-[#e42b32] text-white",
-                          n.key === "glo" && "bg-[#62bf3c] text-white",
-                          n.key === "9mobile" && "bg-[#dff2e6]",
+                          "relative flex min-h-[70px] flex-col items-center justify-center gap-1.5 rounded-2xl border p-2 transition-all active:scale-95",
+                          active
+                            ? "border-primary bg-primary/10 ring-2 ring-primary/25 shadow-xs"
+                            : "border-border bg-card hover:bg-muted/50",
                         )}
                       >
-                        {cashback && (
-                          <span className="absolute -top-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#69a844] px-2 py-1 text-[9px] font-bold text-white">
-                            ₦120 cashback
-                          </span>
-                        )}
-                        <span className="flex flex-col items-center gap-1.5 pt-1">
-                          <VtuNetworkMark network={n.key} className="h-7 w-7" />
-                          <span>{n.label}</span>
-                        </span>
+                        <VtuNetworkMark network={n.key} className="h-7 w-7" />
+                        <span className="text-xs font-bold text-foreground">{n.label}</span>
                       </button>
                     );
                   })}
@@ -233,12 +225,12 @@ export default function VtuAirtime() {
           </Reveal>
 
           <Reveal delay={0.04}>
-            <div className="vtu-panel space-y-5 px-5 py-5">
+            <div className="space-y-5 rounded-3xl border border-border bg-card p-4 sm:p-6 shadow-sm">
               <VtuSection
-                title="Amount"
-                hint="Prices are shown directly in Nigerian naira."
+                title="Select Recharge Amount"
+                hint="Instant airtime credited directly to the phone number."
               >
-                <div className="vtu-quick-grid">
+                <div className="grid grid-cols-3 gap-2">
                   {AMOUNTS.map((n) => {
                     const offer = offers?.offers.find(
                       (o) => o.serviceCode === `airtime.${network}.${n}`,
@@ -251,104 +243,117 @@ export default function VtuAirtime() {
                         aria-pressed={active}
                         onClick={() => setAmount(n)}
                         className={cn(
-                          "flex min-h-[58px] flex-col items-center justify-center",
-                          active &&
-                            "border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_8%,var(--card))] text-[var(--primary)] shadow-sm",
+                          "flex min-h-[58px] flex-col items-center justify-center rounded-2xl border p-2 text-center transition-all active:scale-95",
+                          active
+                            ? "border-primary bg-primary/10 ring-2 ring-primary/25 text-foreground shadow-xs"
+                            : "border-border bg-surface-2 text-foreground hover:bg-muted/50",
                         )}
                       >
                         <span className="text-sm font-bold tabular-nums">{formatNgn(n)}</span>
                         <span className="text-[10px] text-muted-foreground">
-                          {offer ? "Available" : "Checking…"}
+                          {offer ? "Instant" : "Checking…"}
                         </span>
                       </button>
                     );
                   })}
                 </div>
                 {selected?.override && (
-                  <p className="text-[11px] text-vtu-muted">
-                    This amount has an admin-set price override.
+                  <p className="text-[11px] text-muted-foreground">
+                    This amount has an active discount or override.
                   </p>
                 )}
               </VtuSection>
 
               <div className="space-y-4">
                 <div>
-                  <p className="mb-2 text-sm font-medium text-vtu-muted">Select Airtime Type</p>
-                  <div className="flex rounded-full bg-[#e8e2eb] p-1">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Airtime Type
+                  </p>
+                  <div className="flex rounded-2xl border border-border bg-surface-2 p-1">
                     {(["prepaid", "postpaid"] as const).map((kind) => (
                       <button
                         key={kind}
                         type="button"
                         onClick={() => setAirtimeType(kind)}
                         className={cn(
-                          "min-h-11 flex-1 rounded-full text-sm font-medium capitalize transition-all",
-                          airtimeType === kind ? "bg-white text-[#3a3340] shadow-sm" : "text-[#756b79]",
+                          "min-h-10 flex-1 rounded-xl text-xs font-semibold capitalize transition-all",
+                          airtimeType === kind
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground",
                         )}
                       >
                         {kind}
                       </button>
                     ))}
                   </div>
-                  {airtimeType === "postpaid" && (
-                    <p className="mt-2 text-[11px] text-vtu-muted">
-                      Postpaid selection is prepared in the mobile UI; the current provider catalog will determine availability.
-                    </p>
-                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="vtu-phone" className="text-sm font-medium text-vtu-text">
-                    Phone Number
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="vtu-phone" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Recipient Phone Number
+                    </Label>
+                    <span className="text-[11px] font-medium text-primary">
+                      {networkLabel}
+                    </span>
+                  </div>
                   <div className="relative">
                     <Input
                       id="vtu-phone"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Enter Phone Number"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPhone(val);
+                        const autoNet = detectNigerianNetwork(val);
+                        if (autoNet && VTU_NETWORKS.some((n) => n.key === autoNet)) {
+                          setNetwork(autoNet);
+                        }
+                      }}
+                      placeholder="e.g. 0803 123 4567"
                       inputMode="tel"
                       autoComplete="off"
                       disabled={locked}
-                      className="min-h-12 pr-20 border-vtu-line bg-white text-vtu-text placeholder:text-vtu-muted"
+                      className="min-h-12 rounded-2xl border-border bg-surface-2 pr-12 text-foreground placeholder:text-muted-foreground"
                       aria-invalid={phone.length > 0 && !phoneCheck.ok}
                     />
                     <div className="absolute inset-y-0 right-2 flex items-center gap-1">
-                      <button type="button" className="rounded-lg p-2 text-vtu-accent-ink" aria-label="Search contact">
-                        <Search className="h-4 w-4" />
-                      </button>
-                      <button type="button" className="rounded-lg p-2 text-vtu-accent-ink" aria-label="Choose contact">
-                        <Contact className="h-4 w-4" />
-                      </button>
+                      <Contact className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </div>
                   {phone.length > 0 && !phoneCheck.ok ? (
                     <p className="text-xs text-destructive">{phoneCheck.error}</p>
                   ) : (
-                    <p className="text-[11px] text-[#b45e63]">
-                      Please verify the recipient's phone number before proceeding.
+                    <p className="text-[11px] text-muted-foreground">
+                      Network auto-detects from phone prefix. You can also select manually.
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-vtu-chip px-4 py-3">
-                <span className="flex items-center gap-1.5 text-xs text-vtu-muted">
-                  <Coins className="h-3.5 w-3.5" />
-                  {networkLabel} {formatNgn(amount)}
-                </span>
-                <span className="text-base font-semibold tabular-nums">
-                  {selected ? formatNgn(selected.amountNgn) : "Loading…"}
-                </span>
+              <div className="rounded-2xl border border-border bg-surface-2/60 p-4">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Recharge value</span>
+                  <span className="font-semibold text-foreground">{networkLabel} {formatNgn(amount)}</span>
+                </div>
+                <div className="mt-2.5 flex items-center justify-between border-t border-border/80 pt-2.5">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <Coins className="h-4 w-4 text-primary" />
+                    Total wallet debit
+                  </span>
+                  <span className="text-lg font-bold tabular-nums text-foreground">
+                    {selected ? formatNgn(selected.amountNgn) : "Loading…"}
+                  </span>
+                </div>
               </div>
 
               {selected && !affordable && (
-                <p className="rounded-xl border border-vtu-line bg-vtu-chip px-3 py-2 text-xs text-vtu-muted">
+                <p className="rounded-xl border border-border bg-surface-2 p-3 text-xs text-muted-foreground">
                   You need {formatNgn(Math.max(0, priceToPay - (balance ?? 0)))} more in your wallet.
                 </p>
               )}
 
               <Button
-                variant="vtu"
+                variant="default"
                 size="lg"
                 onClick={() => {
                   if (!phoneCheck.ok) {
@@ -358,7 +363,7 @@ export default function VtuAirtime() {
                   setConfirmed(true);
                 }}
                 disabled={locked || !selected || !phoneCheck.ok || !affordable}
-                className="w-full"
+                className="min-h-12 w-full rounded-2xl text-sm font-bold shadow-md active:scale-98"
               >
                 Pay {selected ? formatNgn(priceToPay) : "…"}
               </Button>
