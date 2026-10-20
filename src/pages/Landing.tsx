@@ -202,10 +202,10 @@ export default function Landing() {
           </nav>
           <div className="flex items-center gap-2">
             <PwaInstallButton />
-            <Link to="/auth">
+            <Link to="/login">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
-            <Link to="/auth">
+            <Link to="/register">
               <Button size="sm" className="gap-1">
                 Get Started <ArrowRight className="h-3.5 w-3.5" />
               </Button>
@@ -273,16 +273,16 @@ export default function Landing() {
               </Button>
             </form>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl">Logistics suite</Button></Link>
-              <Link to="/auth?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl border-sidebar bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent">Business banking</Button></Link>
+              <Link to="/login?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl">Logistics suite</Button></Link>
+              <Link to="/login?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl border-sidebar bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent">Business banking</Button></Link>
             </div>
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <Link to="/auth" className="w-full sm:w-auto">
+              <Link to="/register" className="w-full sm:w-auto">
                 <Button size="lg" className="h-12 min-h-12 w-full gap-2 rounded-2xl px-8 font-semibold active:scale-95 sm:w-auto">
                   Start for Free <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/auth" className="w-full sm:w-auto">
+              <Link to="/login" className="w-full sm:w-auto">
                 <Button variant="outline" size="lg" className="h-12 min-h-12 w-full rounded-2xl font-semibold active:scale-95 sm:w-auto">Sign In</Button>
               </Link>
               <Link to="/dashboard" className="w-full sm:w-auto">
@@ -756,7 +756,7 @@ export default function Landing() {
           <p className="mt-4 text-muted-foreground">
             Explore every workspace with one account. Start with the tools you need and switch when you are ready.
           </p>
-          <Link to="/auth" className="mt-8 inline-block">
+          <Link to="/register" className="mt-8 inline-block">
             <Button size="lg" className="gap-2 px-8">
               Get Started Free <ArrowRight className="h-4 w-4" />
             </Button>
@@ -809,7 +809,7 @@ export default function Landing() {
               <ul className="mt-4 space-y-2.5 text-sm">
                 {[
                   { label: "Open dashboard", href: "/dashboard" },
-                  { label: "Create an account", href: "/auth" },
+                  { label: "Create an account", href: "/register" },
                   { label: "Track a shipment", href: "/tracking" },
                   { label: "Document studio", href: "/auth?returnTo=/documents" },
                   { label: "Business suite", href: "/auth?returnTo=/business" },

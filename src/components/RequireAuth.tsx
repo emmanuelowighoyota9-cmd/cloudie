@@ -17,9 +17,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     const returnTo = `${location.pathname}${location.search}`;
+    // `/login` is the canonical entry; `/auth` remains as the legacy alias.
     return (
       <Navigate
-        to={`/auth?returnTo=${encodeURIComponent(returnTo)}`}
+        to={`/login?returnTo=${encodeURIComponent(returnTo)}`}
         replace
       />
     );

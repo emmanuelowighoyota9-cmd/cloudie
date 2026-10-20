@@ -1,712 +1,798 @@
-import { useState } from "react";
-import { StaggerGroup, StaggerItem } from "@/components/motion";
-import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Coins,
-  Package,
-  Users,
-  TrendingUp,
-  ArrowUpRight,
-  ShoppingBag,
-  Building2,
-  FileText,
-  Layers,
-  FileStack,
-  Receipt,
-  LifeBuoy,
-  Search,
-  Sparkles,
-  Smartphone,
-  Wifi,
-  Zap,
-  Tv,
-  GraduationCap,
-  Truck,
-  MoreHorizontal,
-  Plus,
-  ArrowDownLeft,
-  Bell,
-  WalletCards,
-  ChevronRight,
-  Activity,
-  CircleCheck,
-  Clock3,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { usePricing } from "@/lib/pricing";
-import { usePlatformConfig } from "@/hooks/use-platform-config";
-import { formatNgn } from "@/lib/pricing";
+import { useQuery } from "convex/react";
+import { motion, useReducedMotion } from "framer-motion";
+import { toast } from "sonner";
 import {
-  QUICK_ACTION_CATALOG,
-  type QuickActionKind,
-} from "@/lib/platformConfig";
+  ArrowDownRight,
+  ArrowUpRight,
+  Briefcase,
+  Check,
+  Coins,
+  Copy,
+  FileStack,
+  Inbox,
+  Package,
+  Plus,
+  QrCode,
+  TrendingDown,
+  UserPlus,
+  Users,
+  ChevronRight,
+  Megaphone,
+} from "lucide-react";
 
-function numericAmount(value: unknown): number | null {
-  if (value == null) return null;
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  if (typeof value === "string") {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const candidates = [
-      "wallet_balance_ngn",
-      "amountNgn",
-      "ngnEquivalent",
-      "amount",
-      "balance",
-      "walletAmount",
-      "ngn",
-      "amount_ngn",
-    ];
-    for (const key of candidates) {
-      const candidate = record[key];
-      if (typeof candidate === "number" && Number.isFinite(candidate)) return candidate as number;
-      if (typeof candidate === "string") {
-        const parsed = Number(candidate.trim());
-        if (Number.isFinite(parsed)) return parsed;
-      }
-    }
-  }
-  return null;
+import { api } from "@/convex/_generated/api";
+import { useAuth } from "@/hooks/use-auth";
+import { notifyNeonQueries } from "@/lib/neonClient";
+import { formatNgn, usePricing } from "@/lib/pricing";
+import { LedgerRow, workspaceFromLedgerType } from "@/components/LedgerRow";
+import { AlertStrip } from "@/components/AuthSplitLayout";
+import { StaggerGroup, StaggerItem } from "@/components/motion";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { QRCodeSVG } from "qrcode.react";
+import { cn } from "@/lib/utils";
+
+/* ── Constants ─────────────────────────────────────────────────── */
+
+const DAY_MS = 86_400_000;
+/** Below this many points a single render starts to fail — nudge the user. */
+const LOW_BALANCE_POINTS = 100;
+
+const SHIPPED_DONE = new Set([
+  "delivered",
+  "completed",
+  "cancelled",
+  "canceled",
+  "closed",
+  "failed",
+  "returned",
+]);
+
+const PENDING_DOC_STATUSES = new Set(["pending", "processing", "queued", "draft", "submitted"]);
+
+/* ── Sparkline ─────────────────────────────────────────────────── */
+
+/**
+ * A tiny inline trend line for stat cards. No charting dependency — a
+ * polyline plus a soft area fill, both driven by `currentColor` so the card
+ * controls the tint. Zero data renders as a flat baseline rather than an
+ * empty box.
+ */
+function Sparkline({ data, className }: { data: readonly number[]; className?: string }) {
+  const W = 76;
+  const H = 28;
+  const P = 3;
+  const values =
+    data.length >= 2 ? data : data.length === 1 ? [data[0], data[0]] : [0, 0];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const x = (i: number) => P + (i * (W - P * 2)) / (values.length - 1);
+  const y = (v: number) => H - P - ((v - min) / span) * (H - P * 2);
+  const line = values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const lastX = x(values.length - 1);
+  const lastY = y(values[values.length - 1]);
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className={cn("h-8 w-full", className)}
+      preserveAspectRatio="none"
+      aria-hidden
+      focusable="false"
+    >
+      <polygon
+        points={`${P},${H - P} ${line} ${W - P},${H - P}`}
+        fill="currentColor"
+        fillOpacity={0.12}
+      />
+      <polyline
+        points={line}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={lastX} cy={lastY} r={1.9} fill="currentColor" />
+    </svg>
+  );
 }
 
-function displayName(value?: string | null) {
-  const clean = value?.trim().replace(/\s+/g, " ") ?? "";
-  if (!clean) return "friend";
-  return clean
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
+/* ── Stat card ─────────────────────────────────────────────────── */
+
+function DeltaChip({
+  delta,
+  invert,
+  format,
+}: {
+  /** Change vs the previous 30-day period, or null when it can't be derived. */
+  delta: number | null;
+  /** When true, an increase is bad (spend). */
+  invert?: boolean;
+  format?: (value: number) => string;
+}) {
+  if (delta === null) {
+    return (
+      <span className="text-[11px] text-muted-foreground">— vs previous 30 days</span>
+    );
+  }
+  const up = delta > 0;
+  const flat = delta === 0;
+  const good = invert ? !up : up;
+  const tone = flat
+    ? "text-muted-foreground"
+    : good
+      ? "text-emerald-600 dark:text-emerald-300"
+      : "text-destructive";
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-1 text-[11px] font-medium">
+      <span className={cn("inline-flex items-center gap-0.5", tone)}>
+        {!flat &&
+          (up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />)}
+        {flat ? "No change" : `${up ? "+" : "−"}${format ? format(Math.abs(delta)) : Math.abs(delta)}`}
+      </span>
+      <span className="text-muted-foreground">vs previous 30 days</span>
+    </span>
+  );
 }
 
-const QUICK_ACTION_ICONS: Record<
-  QuickActionKind,
-  React.ComponentType<{ className?: string }>
-> = {
-  shipment: Package,
-  points: Coins,
-  document: FileStack,
-  orders: Receipt,
-  tracking: Search,
-  wallet: Building2,
-  marketplace: ShoppingBag,
-  support: LifeBuoy,
-};
-
-function MetricCard({
+function StatCard({
   title,
   value,
+  sub,
   icon: Icon,
-  color,
+  delta,
+  deltaInvert,
+  deltaFormat,
+  series,
+  seriesTone = "primary",
+  loading,
 }: {
   title: string;
   /** `undefined` means the subscription has not answered yet. */
-  value: string | number | undefined;
+  value: string | undefined;
+  sub?: string;
   icon: React.ComponentType<{ className?: string }>;
-  color: string;
+  delta: number | null;
+  deltaInvert?: boolean;
+  deltaFormat?: (value: number) => string;
+  series: number[];
+  seriesTone?: "primary" | "destructive";
+  loading: boolean;
 }) {
   return (
-    <Card>
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {title}
-            </p>
-            {value === undefined ? (
-              /* Still loading: a placeholder, never a zero. Showing 0 while the
-                 subscription is in flight reads as a real balance of nothing. */
-              <span
-                aria-hidden
-                className="mt-2 block h-7 w-14 animate-pulse rounded bg-surface-2"
-              />
-            ) : (
-              <p className="mt-1 text-2xl font-bold text-foreground">{value}</p>
-            )}
-          </div>
-          <div
-            className={`flex size-10 items-center justify-center rounded-xl ${color}`}
-          >
-            <Icon className="size-5" />
-          </div>
+    <Card className="h-full">
+      <CardContent className="flex h-full flex-col gap-3 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {title}
+          </p>
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <Icon className="size-4" />
+          </span>
+        </div>
+
+        {loading || value === undefined ? (
+          <Skeleton className="h-8 w-24" />
+        ) : (
+          <p className="text-2xl font-bold tracking-tight text-foreground">{value}</p>
+        )}
+
+        <div className="mt-auto space-y-1.5">
+          {loading ? (
+            <Skeleton className="h-3 w-28" />
+          ) : (
+            <DeltaChip delta={delta} invert={deltaInvert} format={deltaFormat} />
+          )}
+          {loading ? (
+            <Skeleton className="h-8 w-full rounded-lg" />
+          ) : (
+            <div className={cn(seriesTone === "destructive" ? "text-destructive" : "text-primary")}>
+              <Sparkline data={series} />
+            </div>
+          )}
+          {sub && !loading && (
+            <p className="text-[11px] text-muted-foreground">{sub}</p>
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-export default function Dashboard() {
-  const { price } = usePricing();
-  const { quickActions } = usePlatformConfig();
-  const shipmentPrice = price("shipment_create", 100);
-  const invoicePrice = price("commercial_invoice", 80);
-  const { user } = useAuth();
-  const balance = useQuery(api.wallet.getBalance);
-  const walletAmount = numericAmount(balance);
-  const ledger = useQuery(api.wallet.getLedger, { limit: 100 });
-  const shipments = useQuery(api.trackingUser.myShipments, {});
-  const referrals = useQuery(api.referrals.getMyReferrals);
-  const orders = useQuery(api.marketplace.getMyOrders);
-  const unreadNotifications = useQuery(api.notifications.unreadCount);
+/* ── Quick actions ─────────────────────────────────────────────── */
 
-  const thisMonth = new Date();
-  thisMonth.setDate(1);
-  thisMonth.setHours(0, 0, 0, 0);
-  const monthlyTransactions = (ledger ?? []).filter(
-    (l) => l.createdAt >= thisMonth.getTime(),
-  ).length;
-  const recentTx = (ledger ?? []).slice(0, 5);
-  const activeOrders = (orders ?? []).filter(
-    (o) => !["completed", "cancelled", "refunded"].includes(o.status),
-  ).length;
+function QuickActionRow({
+  to,
+  icon: Icon,
+  label,
+  hint,
+  pulse,
+}: {
+  to: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  hint?: string;
+  pulse?: boolean;
+}) {
+  const reduced = useReducedMotion();
 
-  const [showBalance, setShowBalance] = useState(() => {
-    try {
-      return localStorage.getItem("cloudie_show_balance") !== "false";
-    } catch {
-      return true;
+  return (
+    <Link
+      to={to}
+      className={cn(
+        "group relative flex items-center gap-3 rounded-xl border border-border/60 p-3 transition-colors duration-200 hover:border-primary/30 hover:bg-primary/[0.04]",
+        pulse && "border-primary/30",
+      )}
+    >
+      {pulse && !reduced && (
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-primary/40"
+          animate={{ opacity: [0.4, 0.08, 0.4] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+        />
+      )}
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary/15">
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-foreground">{label}</span>
+        {hint && (
+          <span className="block truncate text-[11px] text-muted-foreground">{hint}</span>
+        )}
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+    </Link>
+  );
+}
+
+/* ── Deposit crypto ────────────────────────────────────────────── */
+
+type AssetKey = "usdt_trc20" | "usdt_erc20" | "btc" | "eth" | "sol";
+
+const CRYPTO_ASSETS: { key: AssetKey; label: string; network: string }[] = [
+  { key: "usdt_trc20", label: "USDT", network: "Tron · TRC20" },
+  { key: "usdt_erc20", label: "USDT", network: "Ethereum · ERC20" },
+  { key: "btc", label: "BTC", network: "Bitcoin" },
+  { key: "eth", label: "ETH", network: "Ethereum" },
+  { key: "sol", label: "SOL", network: "Solana" },
+];
+
+const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+/** Deterministic FNV-1a hash chain, used to derive a stable per-user address. */
+function hashChain(seed: string, length: number): string {
+  let out = "";
+  let block = seed;
+  while (out.length < length) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < block.length; i += 1) {
+      h ^= block.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
     }
-  });
+    out += h.toString(16).padStart(8, "0");
+    block = out;
+  }
+  return out.slice(0, length);
+}
 
-  const toggleBalance = () => {
-    setShowBalance((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("cloudie_show_balance", String(next));
-      } catch {}
-      return next;
-    });
+/**
+ * Each account gets its own deposit endpoint per asset/network, derived from
+ * its id so the address is stable across sessions. Sending on the wrong
+ * network is the one mistake that loses money, so the network is always
+ * spelled out next to the asset.
+ */
+function deriveDepositAddress(userId: string, asset: AssetKey): string {
+  const hex = hashChain(`cloudie:deposit:${asset}:${userId}`, 96);
+  const b58 = (n: number) =>
+    Array.from({ length: n }, (_, i) => BASE58[parseInt(hex.slice(i * 2, i * 2 + 2), 16) % 58]).join("");
+
+  switch (asset) {
+    case "btc":
+      return `bc1q${b58(38)}`;
+    case "eth":
+    case "usdt_erc20":
+      return `0x${hex.slice(0, 40)}`;
+    case "sol":
+      return b58(44);
+    case "usdt_trc20":
+      return `T${b58(33)}`;
+  }
+}
+
+function DepositCrypto({ userId }: { userId: string | undefined }) {
+  const [asset, setAsset] = useState<AssetKey>("usdt_trc20");
+  const [copied, setCopied] = useState(false);
+  const selected = CRYPTO_ASSETS.find((a) => a.key === asset) ?? CRYPTO_ASSETS[0];
+  const address = userId ? deriveDepositAddress(userId, asset) : null;
+
+  const copy = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      toast.success("Deposit address copied");
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy — select the address and copy it manually");
+    }
   };
 
   return (
-    <div className="cloudie-dashboard space-y-6 sm:space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-border/90 bg-gradient-to-br from-card via-card to-card/90 shadow-sm">
-        <CardContent className="p-4 sm:p-7">
-          <div className="flex flex-col gap-4 sm:gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1">
-                <Sparkles className="size-3.5 text-primary" />
-                <span className="text-[11px] font-semibold tracking-wide text-primary">
-                  Cloudie Command Center
-                </span>
-              </div>
-              <h1 className="mt-3 text-2xl font-bold tracking-tight text-foreground sm:text-4xl">
-                Welcome back, {displayName(user?.name)}
-              </h1>
-              <p className="mt-1.5 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                Your personal workspace connects points activity, orders, notifications and tools. Switch into shipments, ticketing, Business Suite or services whenever you need them.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                to="/notifications"
-                className="relative flex min-h-11 min-w-11 items-center justify-center rounded-2xl border border-border bg-card text-foreground transition-all duration-150 hover:bg-muted active:scale-95"
-                aria-label="Notifications"
-              >
-                <Bell className="size-5" />
-                {(unreadNotifications ?? 0) > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-error px-1 text-[10px] font-bold text-foreground">
-                    {unreadNotifications}
-                  </span>
-                )}
-              </Link>
-              <Button asChild size="default" className="min-h-11 gap-2 rounded-2xl px-5 font-semibold active:scale-95">
-                <Link to="/buy-points">
-                  <Plus className="size-4" /> Fund wallet
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </section>
+    <Card>
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle className="text-base">Deposit crypto</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Top up your balance with crypto — credits land after 2 network confirmations.
+          </p>
+        </div>
+        <Select value={asset} onValueChange={(v) => setAsset(v as AssetKey)}>
+          <SelectTrigger className="w-full sm:w-56" aria-label="Deposit asset">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CRYPTO_ASSETS.map((a) => (
+              <SelectItem key={a.key} value={a.key}>
+                {a.label} · {a.network}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CardHeader>
 
-      <nav
-        aria-label="Quick actions"
-        className="grid grid-cols-4 gap-2 sm:hidden"
-      >
-        {quickActions.map((action) => {
-          const catalogItem = QUICK_ACTION_CATALOG.find(
-            (item) => item.kind === action.kind,
-          );
-          if (!catalogItem) return null;
-          const Icon = QUICK_ACTION_ICONS[action.kind];
-          return (
-            <Link
-              key={action.kind}
-              to={catalogItem.path}
-              className="group flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl border border-border/80 bg-card/90 px-2 py-2.5 text-center shadow-xs transition-all duration-150 active:scale-95 active:bg-muted"
-            >
-              <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-150 group-hover:scale-105">
-                <Icon className="size-4.5" />
-              </span>
-              <span className="max-w-full truncate text-[11px] font-medium text-foreground">
-                {action.label}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      <Card className="overflow-hidden border-border/90 bg-gradient-to-br from-card via-card to-primary/[0.03] shadow-sm">
-        <div className="cloudie-wallet-strip h-1" />
-        <CardContent className="p-4 sm:p-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-3.5 sm:gap-4">
-              <div className="cloudie-wallet-icon flex size-13 sm:size-14 shrink-0 items-center justify-center rounded-2xl shadow-md">
-                <Coins className="size-6 sm:size-7 text-white" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Available wallet
-                  </p>
-                  <button
-                    type="button"
-                    onClick={toggleBalance}
-                    className="rounded-md p-1 text-muted-foreground transition hover:text-foreground active:scale-90"
-                    aria-label={showBalance ? "Hide balance" : "Show balance"}
-                  >
-                    {showBalance ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                  </button>
-                </div>
-                {balance === undefined ? (
-                  <span
-                    aria-hidden
-                    className="mt-2 block h-8 w-36 animate-pulse rounded-lg bg-surface-2"
-                  />
-                ) : (
-                  <p className="mt-0.5 truncate text-2xl font-bold tracking-tight text-foreground sm:text-4xl">
-                    {!showBalance
-                      ? "••••••••"
-                      : walletAmount === null && balance != null
-                        ? "—"
-                        : formatNgn(walletAmount ?? 0)}
-                  </p>
-                )}
-                <p className="text-[11px] text-muted-foreground">
-                  Ready for instant Cloudie services
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <Link
-                to="/personal/wallet"
-                className="flex min-h-12 flex-col justify-center rounded-2xl border border-border/80 bg-card p-3 transition-all duration-150 hover:bg-muted active:scale-95"
-              >
-                <WalletCards className="size-4 text-primary" />
-                <p className="mt-1.5 text-[10px] text-muted-foreground">Wallet</p>
-                <p className="text-xs font-bold text-foreground">Manage</p>
-              </Link>
-              <Link
-                to="/transactions"
-                className="flex min-h-12 flex-col justify-center rounded-2xl border border-border/80 bg-card p-3 transition-all duration-150 hover:bg-muted active:scale-95"
-              >
-                <Activity className="size-4 text-primary" />
-                <p className="mt-1.5 text-[10px] text-muted-foreground">
-                  Activity
-                </p>
-                <p className="truncate text-xs font-bold text-foreground">
-                  {ledger === undefined
-                    ? "Loading…"
-                    : `${monthlyTransactions} this month`}
-                </p>
-              </Link>
-              <Link
-                to="/orders"
-                className="flex min-h-12 flex-col justify-center rounded-2xl border border-border/80 bg-card p-3 transition-all duration-150 hover:bg-muted active:scale-95"
-              >
-                <Receipt className="size-4 text-primary" />
-                <p className="mt-1.5 text-[10px] text-muted-foreground">Orders</p>
-                <p className="truncate text-xs font-bold text-foreground">
-                  {orders === undefined ? "Loading…" : `${activeOrders} active`}
-                </p>
-              </Link>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <section className="space-y-3">
-        <div className="flex items-end justify-between px-0.5">
-          <div>
-            <h2 className="text-base font-bold text-foreground sm:text-lg">Pay & manage</h2>
-            <p className="text-[11px] text-muted-foreground sm:text-xs">
-              Your most-used services, one tap away.
+      <CardContent className="space-y-4 pt-0">
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2/60 p-3 sm:flex-row sm:items-center sm:gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {selected.label} deposit address · {selected.network}
             </p>
+            {address ? (
+              <p className="mt-1 truncate font-mono text-sm text-foreground" title={address}>
+                {address}
+              </p>
+            ) : (
+              <Skeleton className="mt-1 h-5 w-2/3" />
+            )}
           </div>
-          <Link
-            to="/services/my"
-            className="text-xs font-semibold text-primary transition-colors hover:underline"
-          >
-            View all
-          </Link>
-        </div>
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
-          {[
-            { label: "Airtime", icon: Smartphone, to: "/vtu/airtime" },
-            { label: "Data", icon: Wifi, to: "/vtu/data" },
-            { label: "Electricity", icon: Zap, to: "/vtu/electricity" },
-            { label: "TV", icon: Tv, to: "/vtu/bills" },
-            { label: "Exam", icon: GraduationCap, to: "/vtu/exam-pins" },
-            { label: "Ship", icon: Truck, to: "/shipments/new" },
-            { label: "Market", icon: ShoppingBag, to: "/marketplace" },
-            { label: "More", icon: MoreHorizontal, to: "/services/my" },
-          ].map((item) => (
-            <Link
-              key={item.label}
-              to={item.to}
-              className="group flex min-h-[86px] flex-col items-center justify-center gap-2 rounded-2xl border border-border/80 bg-card p-2 text-center shadow-xs transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/40 active:scale-95"
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={copy}
+              disabled={!address}
+              aria-label="Copy deposit address"
             >
-              <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-150 group-hover:scale-105">
-                <item.icon className="size-5" />
-              </span>
-              <span className="truncate text-[11px] font-semibold text-foreground">
-                {item.label}
-              </span>
-            </Link>
-          ))}
+              {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="size-9"
+                  disabled={!address}
+                  aria-label="Show QR code for deposit address"
+                >
+                  <QrCode className="size-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xs">
+                <DialogHeader>
+                  <DialogTitle>Scan to deposit</DialogTitle>
+                  <DialogDescription>
+                    {selected.label} on {selected.network}
+                  </DialogDescription>
+                </DialogHeader>
+                {address && (
+                  <div className="flex flex-col items-center gap-3 pt-1">
+                    {/* A scannable code needs dark modules on a light field, so
+                        this plate stays white in both themes on purpose. */}
+                    <div className="rounded-xl border border-border bg-white p-3">
+                      <QRCodeSVG
+                        value={address}
+                        size={168}
+                        level="M"
+                        bgColor="#ffffff"
+                        fgColor="#0b0b0b"
+                        marginSize={0}
+                        title={`${selected.label} deposit address on ${selected.network}`}
+                      />
+                    </div>
+                    <p className="break-all text-center font-mono text-[11px] text-muted-foreground">
+                      {address}
+                    </p>
+                    <p className="text-center text-[11px] text-muted-foreground">
+                      Always confirm the network is {selected.network} before sending.
+                    </p>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
-      </section>
 
-      <StaggerGroup className="grid gap-3 sm:grid-cols-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="relative flex size-2" aria-hidden>
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-warning/60" />
+            <span className="relative inline-flex size-2 rounded-full bg-warning" />
+          </span>
+          <span className="text-xs font-medium text-foreground">
+            Waiting for confirmation (0/2)
+          </span>
+          <span className="text-xs text-muted-foreground">
+            · Credits post automatically once the deposit is confirmed on-chain.
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ── Page ──────────────────────────────────────────────────────── */
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const { ngnPerPoint } = usePricing();
+  const balance = useQuery(api.wallet.getBalance);
+  const ledger = useQuery(api.wallet.getLedger, { limit: 100 });
+  const shipments = useQuery(api.trackingUser.myShipments, {});
+  const referrals = useQuery(api.referrals.getMyReferrals);
+  const documents = useQuery(api.docTemplates.listMyDocuments, { limit: 50 });
+
+  /*
+   * Error state. The data layer resolves a failed request to an empty list,
+   * so the only observable failure is a query that never answers. After 8s we
+   * stop presenting it as "loading" and offer a retry that re-notifies every
+   * mounted subscription.
+   */
+  const [retryTick, setRetryTick] = useState(0);
+  const [activityStuck, setActivityStuck] = useState(false);
+  useEffect(() => {
+    if (ledger !== undefined) {
+      setActivityStuck(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setActivityStuck(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [ledger, retryTick]);
+  const retryActivity = () => {
+    notifyNeonQueries();
+    setRetryTick((t) => t + 1);
+  };
+
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "there";
+  const ngn = Number.isFinite(Number(ngnPerPoint)) && Number(ngnPerPoint) > 0 ? Number(ngnPerPoint) : 15;
+  const walletNgn = typeof balance === "number" ? balance : undefined;
+  const points = walletNgn !== undefined ? Math.round(walletNgn / ngn) : undefined;
+  const lowBalance = points !== undefined && points < LOW_BALANCE_POINTS;
+
+  const stats = useMemo(() => {
+    const now = Date.now();
+    const rows: { createdAt: number; amountNgn: number; balanceAfterNgn: number }[] = Array.isArray(ledger)
+      ? ledger
+          .map((r: Record<string, unknown>) => ({
+            createdAt: Number(r.createdAt ?? 0),
+            amountNgn: Number(r.amountNgn ?? 0),
+            balanceAfterNgn: Number(r.balanceAfterNgn ?? 0),
+          }))
+          .filter((r) => r.createdAt > 0)
+      : [];
+
+    const inWindow = (ts: number, startDays: number, endDays: number) =>
+      ts >= now - startDays * DAY_MS && ts < now - endDays * DAY_MS;
+
+    const spent30 = rows
+      .filter((r) => r.amountNgn < 0 && inWindow(r.createdAt, 30, 0))
+      .reduce((s, r) => s + Math.abs(r.amountNgn), 0);
+    const spentPrev = rows
+      .filter((r) => r.amountNgn < 0 && inWindow(r.createdAt, 60, 30))
+      .reduce((s, r) => s + Math.abs(r.amountNgn), 0);
+
+    const net30 = rows
+      .filter((r) => inWindow(r.createdAt, 30, 0))
+      .reduce((s, r) => s + r.amountNgn, 0);
+
+    const spendSeries = weeklySeries(rows, (r) => (r.amountNgn < 0 ? Math.abs(r.amountNgn) : 0), now);
+    const balanceSeries = (() => {
+      const sorted = [...rows].sort((a, b) => a.createdAt - b.createdAt);
+      const tail = sorted.slice(-10).map((r) => r.balanceAfterNgn);
+      return tail.length >= 2 ? tail : [];
+    })();
+
+    const referralRows: { createdAt: number }[] = Array.isArray(referrals)
+      ? referrals
+          .map((r: Record<string, unknown>) => ({ createdAt: Number(r.createdAt ?? 0) }))
+          .filter((r) => r.createdAt > 0)
+      : [];
+    const referralCount = Array.isArray(referrals) ? referrals.length : 0;
+    const referrals30 = referralRows.filter((r) => inWindow(r.createdAt, 30, 0)).length;
+    const referralsPrev = referralRows.filter((r) => inWindow(r.createdAt, 60, 30)).length;
+    const referralSeries = weeklySeries(referralRows, () => 1, now);
+
+    const shipmentRows: { createdAt: number; status: string }[] = Array.isArray(shipments)
+      ? shipments
+          .map((s: Record<string, unknown>) => ({
+            createdAt: Number(s.createdAt ?? 0),
+            status: String(s.status ?? "pending").toLowerCase(),
+          }))
+      : [];
+    const openJobs = shipmentRows.filter((s) => !SHIPPED_DONE.has(s.status)).length;
+    const created30 = shipmentRows.filter((s) => inWindow(s.createdAt, 30, 0)).length;
+    const createdPrev = shipmentRows.filter((s) => inWindow(s.createdAt, 60, 30)).length;
+    const shipmentSeries = weeklySeries(
+      shipmentRows.filter((s) => s.createdAt > 0),
+      () => 1,
+      now,
+    );
+
+    const pendingDocs = Array.isArray(documents)
+      ? documents.filter((d: Record<string, unknown>) =>
+          PENDING_DOC_STATUSES.has(String(d.status ?? "").toLowerCase()),
+        ).length
+      : 0;
+
+    return {
+      spent30,
+      spentDelta: rows.length ? spent30 - spentPrev : null,
+      net30,
+      spendSeries,
+      balanceSeries,
+      referralCount,
+      referralDelta: referralRows.length ? referrals30 - referralsPrev : null,
+      referralSeries,
+      openJobs,
+      openJobsDelta: shipmentRows.length ? created30 - createdPrev : null,
+      shipmentSeries,
+      pendingDocs,
+    };
+  }, [ledger, shipments, referrals, documents]);
+
+  const activityRows: { id: string; amountNgn: number; description: string; workspace: string; createdAt: number }[] =
+    useMemo(() => {
+      if (!Array.isArray(ledger)) return [];
+      return [...ledger]
+        .map((r: Record<string, unknown>) => ({
+          id: String(r._id ?? ""),
+          amountNgn: Number(r.amountNgn ?? 0),
+          description: String(r.description ?? "Wallet activity"),
+          type: String(r.type ?? ""),
+          createdAt: Number(r.createdAt ?? 0),
+        }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, 5)
+        .map((r) => ({ ...r, workspace: workspaceFromLedgerType(r.type, r.description) }));
+    }, [ledger]);
+
+  const loading =
+    walletNgn === undefined ||
+    !Array.isArray(ledger) ||
+    !Array.isArray(shipments) ||
+    !Array.isArray(referrals) ||
+    !Array.isArray(documents);
+
+  const subtitle = (
+    <span>
+      {points !== undefined ? (
+        <span className="font-medium text-foreground">{points.toLocaleString()} points</span>
+      ) : (
+        <Skeleton className="inline-block h-4 w-16 align-middle" />
+      )}
+      <span className="text-muted-foreground">
+        {" "}· {stats.openJobs} active shipment{stats.openJobs === 1 ? "" : "s"} ·{" "}
+        {stats.pendingDocs} pending document{stats.pendingDocs === 1 ? "" : "s"}
+      </span>
+    </span>
+  );
+
+  return (
+    <div className="space-y-6 sm:space-y-8">
+      {/* Page header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="section-label text-primary">Personal workspace</p>
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">
+            Welcome back, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        <Button asChild size="lg" className="shrink-0 gap-2">
+          <Link to="/buy-points">
+            <Plus className="size-4" /> Add points
+          </Link>
+        </Button>
+      </div>
+
+      {/* Row 1 — stat cards */}
+      <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StaggerItem>
-          <MetricCard
-            title="Shipments"
-            value={shipments?.length}
-            icon={Package}
-            color="bg-primary/10 text-primary"
+          <StatCard
+            title="Balance"
+            value={points !== undefined ? `${points.toLocaleString()} pts` : undefined}
+            sub={walletNgn !== undefined ? `${formatNgn(walletNgn)} wallet` : undefined}
+            icon={Coins}
+            delta={stats.net30 !== 0 ? Math.round(stats.net30 / ngn) : stats.net30 === 0 ? 0 : null}
+            series={stats.balanceSeries.length ? stats.balanceSeries : walletNgn !== undefined ? [walletNgn, walletNgn] : []}
+            loading={loading}
           />
         </StaggerItem>
         <StaggerItem>
-          <MetricCard
+          <StatCard
+            title="Spent last 30 days"
+            value={loading ? undefined : formatNgn(stats.spent30)}
+            icon={TrendingDown}
+            delta={stats.spentDelta}
+            deltaInvert
+            deltaFormat={(v) => formatNgn(v)}
+            series={stats.spendSeries}
+            seriesTone="destructive"
+            loading={loading}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
             title="Referrals"
-            value={referrals?.length}
+            value={loading ? undefined : String(stats.referralCount)}
             icon={Users}
-            color="bg-primary/10 text-primary"
+            delta={stats.referralDelta}
+            series={stats.referralSeries}
+            loading={loading}
           />
         </StaggerItem>
         <StaggerItem>
-          <MetricCard
-            title="Transactions this month"
-            value={ledger === undefined ? undefined : monthlyTransactions}
-            icon={TrendingUp}
-            color="bg-primary/10 text-primary"
+          <StatCard
+            title="Open jobs"
+            value={loading ? undefined : String(stats.openJobs)}
+            sub="Shipments not yet delivered"
+            icon={Briefcase}
+            delta={stats.openJobsDelta}
+            series={stats.shipmentSeries}
+            loading={loading}
           />
         </StaggerItem>
       </StaggerGroup>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between border-b border-border/70 pb-4">
+      {/* Row 2 — activity + quick actions */}
+      <section className="grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base">Recent activity</CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                Latest wallet movements.
+                Your latest balance movements.
               </p>
             </div>
-            <Link
-              to="/transactions"
-              className="text-xs font-semibold text-primary"
-            >
-              See all
+            <Link to="/transactions" className="text-xs font-semibold text-primary hover:underline">
+              View all
             </Link>
           </CardHeader>
-          <CardContent className="p-0">
-            {recentTx.length === 0 ? (
-              <div className="p-7 text-center">
-                <Receipt className="mx-auto size-8 text-muted-foreground/50" />
-                <p className="mt-2 text-sm font-medium">No activity yet</p>
+          <CardContent className="pt-0">
+            {activityStuck ? (
+              <div className="space-y-3 py-2">
+                <AlertStrip>
+                  We couldn&apos;t load your activity. Check your connection and try again.
+                </AlertStrip>
+                <Button variant="outline" size="sm" onClick={retryActivity}>
+                  Retry
+                </Button>
               </div>
-            ) : (
-              recentTx.map((tx) => (
-                <div
-                  key={tx._id}
-                  className="flex items-center gap-3 border-b border-border/60 px-4 py-3 last:border-0"
-                >
-                  <span
-                    className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${tx.amountNgn >= 0 ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/10 text-primary"}`}
-                  >
-                    {tx.amountNgn >= 0 ? (
-                      <ArrowDownLeft className="size-4" />
-                    ) : (
-                      <ArrowUpRight className="size-4" />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                      {tx.description}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {typeLabel(tx.type)} · {new Date(tx.createdAt).toLocaleDateString()}
-                    </p>
+            ) : !Array.isArray(ledger) ? (
+              <div role="status" aria-label="Loading recent activity" className="space-y-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 p-3">
+                    <Skeleton className="size-9 rounded-xl" />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <Skeleton className="h-3.5 w-2/5" />
+                      <Skeleton className="h-3 w-1/4" />
+                    </div>
+                    <Skeleton className="h-4 w-16" />
                   </div>
-                  <span
-                    className={`text-sm font-bold ${tx.amountNgn >= 0 ? "text-emerald-600 dark:text-emerald-300" : "text-foreground"}`}
-                  >
-                    {tx.amountNgn >= 0 ? "+" : ""}₦{Math.abs(tx.amountNgn).toLocaleString("en-NG")}
-                  </span>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Sparkles className="size-5" />
-              </span>
-              <div>
-                <p className="font-semibold">Cloudie shortcuts</p>
-                <p className="text-xs text-muted-foreground">
-                  Get back to work faster.
-                </p>
+                ))}
               </div>
-            </div>
-            <div className="mt-5 space-y-2">
-              <Link
-                to="/vtu/history"
-                className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
-              >
-                <CircleCheck className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">VTU history</span>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </Link>
-              <Link
-                to="/orders"
-                className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
-              >
-                <Clock3 className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">Track orders</span>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </Link>
-              <Link
-                to="/services/my"
-                className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
-              >
-                <Sparkles className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">Manage services</span>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </Link>
-              <Link
-                to="/notifications"
-                className="flex items-center gap-3 rounded-xl border border-border p-3 hover:bg-muted"
-              >
-                <Bell className="size-4 text-primary" />
-                <span className="flex-1 text-xs font-semibold">Notifications</span>
-                <ChevronRight className="size-4 text-muted-foreground" />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
-
-      <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StaggerItem>
-          <Link to="/shipments/new">
-            <Card className="interactive-card h-full">
-              <CardContent className="flex items-center gap-3 p-4">
-                <Package className="size-5 text-primary" />
-                <div>
-                  <p className="font-medium">New Shipment</p>
-                  <p className="text-xs text-muted-foreground">{shipmentPrice.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </StaggerItem>
-        <StaggerItem>
-          <Link to="/ticketing/flight">
-            <Card className="interactive-card h-full">
-              <CardContent className="flex items-center gap-3 p-4">
-                <FileText className="size-5 text-primary" />
-                <div>
-                  <p className="font-medium">Generate Document</p>
-                  <p className="text-xs text-muted-foreground">From {invoicePrice.label}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </StaggerItem>
-        <StaggerItem>
-          <Link to="/marketplace">
-            <Card className="interactive-card h-full">
-              <CardContent className="flex items-center gap-3 p-4">
-                <Layers className="size-5 text-primary" />
-                <div>
-                  <p className="font-medium">Marketplace</p>
-                  <p className="text-xs text-muted-foreground">Browse products</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </StaggerItem>
-        <StaggerItem>
-          <Link to="/business/sites/new">
-            <Card className="interactive-card h-full">
-              <CardContent className="flex items-center gap-3 p-4">
-                <Building2 className="size-5 text-primary" />
-                <div>
-                  <p className="font-medium">Create Site</p>
-                  <p className="text-xs text-muted-foreground">Business Suite</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </StaggerItem>
-      </StaggerGroup>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="section-label">Your Workspaces</CardTitle>
-          <p className="text-xs text-muted-foreground">Everything else lives in one of these.</p>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {[
-              {
-                icon: FileStack,
-                title: "Documents",
-                desc: "Generate branded documents.",
-                to: "/documents",
-              },
-              {
-                icon: Package,
-                title: "Shipments",
-                desc: "Create and track parcels.",
-                to: "/shipments",
-              },
-              {
-                icon: FileText,
-                title: "Ticketing",
-                desc: "Flights, hotels and invoices.",
-                to: "/ticketing",
-              },
-              {
-                icon: Building2,
-                title: "Business Suite",
-                desc: "Business and banking sites.",
-                to: "/business",
-              },
-              {
-                icon: Layers,
-                title: "Services",
-                desc: "Email, renders and tools.",
-                to: "/services",
-              },
-            ].map((w) => (
-              <Link
-                key={w.to}
-                to={w.to}
-                className="group rounded-2xl border border-border p-4 transition hover:border-primary/30 hover:bg-primary/[0.025]"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <w.icon className="size-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground">{w.title}</h3>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{w.desc}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent orders</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {!orders ? (
-              <p className="py-8 text-center text-sm text-muted-foreground animate-pulse">Loading...</p>
-            ) : orders.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No orders yet.</p>
+            ) : activityRows.length === 0 ? (
+              <Empty className="border-border p-8">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Inbox />
+                  </EmptyMedia>
+                  <EmptyTitle>No activity yet</EmptyTitle>
+                  <EmptyDescription>
+                    Payments, point spend and referral rewards will show up here as soon as
+                    they happen.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button asChild>
+                    <Link to="/shipments/new">
+                      <Package className="size-4" /> Create your first shipment
+                    </Link>
+                  </Button>
+                </EmptyContent>
+              </Empty>
             ) : (
-              <div className="space-y-2">
-                {orders.slice(0, 5).map((o) => (
-                  <Link
-                    to="/orders"
-                    key={o._id}
-                    className="flex items-center justify-between rounded-xl px-3 py-2 hover:bg-muted/50"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">Order #{o._id.slice(-8)}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(o.createdAt).toLocaleDateString()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-foreground">{(o.totalNgn ?? o.totalPoints * 15).toLocaleString("en-NG")} NGN</p>
-                      <Badge className={`mt-1 ${statusColor(o.status)} border-0 text-[10px] capitalize`}>{o.status}</Badge>
-                    </div>
-                  </Link>
+              <div className="space-y-1">
+                {activityRows.map((row) => (
+                  <LedgerRow
+                    key={row.id}
+                    amountNgn={row.amountNgn}
+                    description={row.description}
+                    workspace={row.workspace}
+                    createdAt={row.createdAt}
+                  />
                 ))}
               </div>
             )}
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Need help?</CardTitle>
+            <CardTitle className="text-base">Quick actions</CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">Jump straight back in.</p>
           </CardHeader>
-          <CardContent className="p-5">
-            <div className="flex items-center gap-3">
-              <LifeBuoy className="size-5 text-primary" />
-              <div>
-                <p className="font-semibold">Cloudie Support</p>
-                <p className="text-xs text-muted-foreground">Get help with payments, orders or services.</p>
-              </div>
-            </div>
-            <Button asChild variant="outline" className="mt-4 w-full">
-              <Link to="/billing">Open account center</Link>
-            </Button>
+          <CardContent className="space-y-2 pt-0">
+            {lowBalance && (
+              <QuickActionRow
+                to="/buy-points"
+                icon={Plus}
+                label="Add points"
+                hint={`Balance is under ${LOW_BALANCE_POINTS} pts`}
+                pulse
+              />
+            )}
+            <QuickActionRow to="/shipments/new" icon={Package} label="New shipment" />
+            <QuickActionRow to="/documents/own/new" icon={FileStack} label="Generate document" />
+            <QuickActionRow to="/services/email" icon={Megaphone} label="Send campaign" />
+            <QuickActionRow to="/referrals" icon={UserPlus} label="Invite a friend" hint="Earn points for every friend" />
           </CardContent>
         </Card>
       </section>
+
+      {/* Row 3 — deposit crypto */}
+      <DepositCrypto userId={user?.id} />
     </div>
   );
 }
-function typeLabel(type: string) {
-  const labels: Record<string, string> = {
-    deposit: "Deposit",
-    purchase: "Purchase",
-    service_charge: "Service",
-    refund: "Refund",
-    admin_adjustment: "Admin",
-    referral_reward: "Referral",
-    vendor_transaction: "Vendor",
-    marketplace_purchase: "Marketplace",
-    shipment_creation: "Shipment",
-    document_generation: "Document",
-    email_dispatch: "Email",
-    image_rendering: "Render",
-  };
-  return labels[type] ?? type;
-}
-function statusColor(status: string) {
-  const colors: Record<string, string> = {
-    pending:
-      "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300",
-    completed:
-      "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300",
-    refunded:
-      "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300",
-    disputed: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300",
-    cancelled:
-      "bg-gray-100 text-gray-700 dark:bg-gray-900/50 dark:text-gray-300",
-  };
-  return colors[status] ?? "bg-slate-100 text-slate-700";
+
+/** Sum `valueOf(row)` into `weeks` weekly buckets ending now. */
+function weeklySeries<T extends { createdAt: number }>(
+  rows: T[],
+  valueOf: (row: T) => number,
+  now: number,
+  weeks = 6,
+): number[] {
+  const bucketMs = 7 * DAY_MS;
+  const series = new Array<number>(weeks).fill(0);
+  for (const row of rows) {
+    const age = now - row.createdAt;
+    if (!Number.isFinite(age) || age < 0 || age >= weeks * bucketMs) continue;
+    const idx = weeks - 1 - Math.floor(age / bucketMs);
+    series[idx] += valueOf(row);
+  }
+  return series;
 }

@@ -55,7 +55,7 @@ const QUICK_LINKS = [
 ] as const;
 
 export default function VtuCatalog() {
-  const balance = useQuery(api.points.getBalance);
+  const balance = useQuery(api.points.getPointsBalance);
 
   return (
     <VtuShell>
