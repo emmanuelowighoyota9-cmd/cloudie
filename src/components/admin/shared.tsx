@@ -136,6 +136,19 @@ const BADGE_STYLES: Record<string, string> = {
   failed: TONE.blocked,
   cancelled: TONE.inert,
   draft: TONE.inert,
+  // Tracking lifecycle states (shipment timelines, public tracker).
+  created: TONE.inert,
+  booked: TONE.progress,
+  at_origin_facility: TONE.moving,
+  departed_origin: TONE.moving,
+  arrived_destination_country: TONE.moving,
+  customs_clearance: TONE.progress,
+  customs_cleared: TONE.progress,
+  at_destination_facility: TONE.moving,
+  delivery_attempted: TONE.blocked,
+  exception: TONE.blocked,
+  on_hold: TONE.blocked,
+  returned: TONE.blocked,
 };
 
 /**

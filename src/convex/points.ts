@@ -5,196 +5,93 @@ import { v } from "convex/values";
 import { readPointRate } from "./pricing";
 import { creditWallet, debitWallet } from "./wallet";
 
-/**
- * Legacy compatibility surface.
+/** Points ledger helpers for extension work.
+
+ * The platform already has `pointLedger` in `schema.ts`, but the customer-facing
+ * wallet surfaces still render almost entirely in NGN. This module is the start
+ * of a first-class points read path so Wallet, Transactions and the sidebar can
+ * talk about credits without pretending the points ledger does not exist.
  *
- * Cloudie is now NGN-wallet based. These exports remain temporarily so older
- * callers can migrate without breaking the deployment, but every balance and
- * money mutation is delegated to the authoritative wallet service.
+ * Rule: these exports are read helpers and thin adapters. The authoritative
+ * money path is still `wallet.ts`; this file only exposes the points side when
+ * we intentionally want to show both ledgers.
  */
-export const getBalance = query({
+export const getPointsBalance = query({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return null;
+
     const user = await ctx.db.get(userId);
     if (!user) return 0;
-    if (typeof user.walletBalanceNgn === "number") return user.walletBalanceNgn;
-    const rate = await readPointRate(ctx);
-    return (user.pointsBalance ?? 0) * rate.ngnPerPoint;
-  },
-});
 
-export const getLedger = query({
-  args: { limit: v.optional(v.number()), type: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
-    const rows = await ctx.db.query("walletLedger")
+    const rows = await ctx.db
+      .query("pointLedger")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(Math.min(args.limit ?? 100, 200));
-    return args.type ? rows.filter((r) => r.type === args.type) : rows;
-  },
-});
+      .take(1);
 
-export const getAdminLedger = query({
-  args: { userId: v.optional(v.id("users")), limit: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const adminId = await getAuthUserId(ctx);
-    if (!adminId) return [];
-    const admin = await ctx.db.get(adminId);
-    if (admin?.role !== "admin") return [];
-    if (args.userId) {
-      return await ctx.db.query("walletLedger")
-        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
-        .order("desc")
-        .take(Math.min(args.limit ?? 100, 500));
+    if (rows.length > 0 && typeof rows[0].balanceAfter === "number") {
+      return rows[0].balanceAfter;
     }
-    return await ctx.db.query("walletLedger").order("desc").take(Math.min(args.limit ?? 100, 500));
+
+    if (typeof user.pointsBalance === "number" && Number.isFinite(user.pointsBalance)) {
+      return user.pointsBalance;
+    }
+
+    return 0;
   },
 });
 
-export const credit = internalMutation({
-  args: {
-    userId: v.id("users"),
-    amount: v.number(),
-    description: v.string(),
-    type: pointTxTypeValidator,
-    reference: v.optional(v.string()),
-    referenceId: v.optional(v.string()),
-    idempotencyKey: v.optional(v.string()),
-    metadata: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    return await creditWallet(ctx, {
-      userId: args.userId,
-      amountNgn: args.amount,
-      description: args.description,
-      type: args.type,
-      reference: args.reference,
-      referenceId: args.referenceId,
-      idempotencyKey: args.idempotencyKey,
-      metadata: args.metadata,
-    });
-  },
-});
-
-export const debit = internalMutation({
-  args: {
-    userId: v.id("users"),
-    amount: v.number(),
-    description: v.string(),
-    type: pointTxTypeValidator,
-    reference: v.optional(v.string()),
-    referenceId: v.optional(v.string()),
-    idempotencyKey: v.optional(v.string()),
-    metadata: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    return await debitWallet(ctx, {
-      userId: args.userId,
-      amountNgn: args.amount,
-      description: args.description,
-      type: args.type,
-      reference: args.reference,
-      referenceId: args.referenceId,
-      idempotencyKey: args.idempotencyKey,
-      metadata: args.metadata,
-    });
-  },
-});
-
-export const adminAdjust = mutation({
-  args: {
-    userId: v.id("users"),
-    amount: v.number(),
-    reason: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const adminId = await getAuthUserId(ctx);
-    if (!adminId) throw new Error("UNAUTHORIZED");
-    const admin = await ctx.db.get(adminId);
-    if (!admin || admin.role !== "admin" || admin.isSuspended) throw new Error("FORBIDDEN");
-    if (!args.reason.trim()) throw new Error("A reason is required");
-    const target = await ctx.db.get(args.userId);
-    if (!target) throw new Error("User not found");
-    const rate = await readPointRate(ctx);
-    const before = typeof target.walletBalanceNgn === "number" ? target.walletBalanceNgn : Math.max(0, (target.pointsBalance ?? 0) * rate.ngnPerPoint);
-    const after = Math.round((before + args.amount) * 100) / 100;
-    if (after < 0) throw new Error("Adjustment would result in a negative balance");
-    await ctx.db.patch(args.userId, { walletBalanceNgn: after });
-    return await ctx.db.insert("walletLedger", {
-      userId: args.userId,
-      amountNgn: args.amount,
-      balanceAfterNgn: after,
-      description: `Admin wallet adjustment: ${args.reason}`,
-      type: "admin_adjustment",
-      reference: "admin",
-      referenceId: adminId,
-      metadata: { reason: args.reason, adminId },
-      createdAt: Date.now(),
-    });
-  },
-});
-
-export const getAllUsers = query({
+export const getPointLedger = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
-    const user = await ctx.db.get(userId);
-    if (user?.role !== "admin") return [];
-    return await ctx.db.query("users").order("desc").take(args.limit ?? 50);
+
+    return await ctx.db
+      .query("pointLedger")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(Math.min(args.limit ?? 100, 200));
   },
 });
 
-/** Intentionally disabled: balance credit must come from a verified payment. */
-export const buyPoints = mutation({
+/**
+ * Credit points through the existing wallet adapter.
+ *
+ * Kept intentionally small for now: the conversion rate between NGN and points
+ * is still admin-configured in `pricing.ts`. If points become a separate spend
+ * currency, this helper is where that rule should live, not in the UI.
+ */
+export const creditPoints = internalMutation({
   args: {
-    packageId: v.string(),
+    userId: v.id("users"),
     points: v.number(),
-    amountUsd: v.number(),
-    paymentMethod: v.string(),
+    description: v.string(),
+    type: pointTxTypeValidator,
+    reference: v.optional(v.string()),
+    referenceId: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
+    metadata: v.optional(v.any()),
   },
-  handler: async () => {
-    throw new Error("POINTS_DEPRECATED: use verified NGN wallet funding");
-  },
-});
-
-export const getStats = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
-    const user = await ctx.db.get(userId);
-    if (user?.role !== "admin") return null;
+  handler: async (ctx, args) => {
+    if (!Number.isFinite(args.points) || args.points <= 0) {
+      throw new Error("Points credit must be positive");
+    }
 
     const rate = await readPointRate(ctx);
-    const allUsers = await ctx.db.query("users").collect();
-    const allShipments = await ctx.db.query("shipments").collect();
-    const allDocuments = await ctx.db.query("documents").collect();
-    const allProducts = await ctx.db.query("marketplaceProducts").collect();
-    const allTenants = await ctx.db.query("tenantSites").collect();
-    const allVendors = await ctx.db.query("vendors").collect();
+    const ngnEquivalent = args.points * rate.ngnPerPoint;
 
-    const totalWalletNgn = allUsers.reduce(
-      (sum, u) => sum + (u.walletBalanceNgn ?? (u.pointsBalance ?? 0) * rate.ngnPerPoint),
-      0,
-    );
-
-    return {
-      totalUsers: allUsers.length,
-      activeUsers: allUsers.filter((u) => !u.isSuspended).length,
-      vendors: allVendors.length,
-      approvedVendors: allVendors.filter((v) => v.status === "approved").length,
-      tenants: allTenants.length,
-      activeTenants: allTenants.filter((t) => t.isActive).length,
-      totalWalletNgn,
-      shipments: allShipments.length,
-      documents: allDocuments.length,
-      products: allProducts.length,
-    };
+    return await creditWallet(ctx, {
+      userId: args.userId,
+      amountNgn: ngnEquivalent,
+      description: args.description,
+      type: args.type,
+      reference: args.reference,
+      referenceId: args.referenceId,
+      idempotencyKey: args.idempotencyKey,
+      metadata: args.metadata,
+    });
   },
 });

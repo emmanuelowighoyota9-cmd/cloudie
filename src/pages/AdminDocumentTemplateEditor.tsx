@@ -140,7 +140,7 @@ export default function DocumentTemplateEditor({
     api.docTemplates.getMyTemplate,
     isOwn && templateId ? { templateId: templateId as Id<"documentTemplates"> } : "skip",
   );
-  const pointsBalance = useQuery(api.points.getBalance);
+  const pointsBalance = useQuery(api.points.getPointsBalance);
   const balanceLoading = pointsBalance === undefined;
   const canAffordDesign = typeof pointsBalance === "number" && pointsBalance >= designPrice.points;
   const existing = isOwn ? ownExisting : adminExisting;

@@ -617,16 +617,32 @@ export function useQuery(queryRef: unknown, args?: unknown): any {
             if (!cancelled) setState(null);
             return;
           }
-          const res = await neonApi.track(trackingNumber).catch(() => null);
+          const res = await neonApi.track(trackingNumber).catch((error: unknown) => {
+            // Surface rate limits so the tracker can explain the wait instead of
+            // claiming the shipment does not exist.
+            if (error && typeof error === "object" && (error as { status?: number }).status === 429) {
+              return { __rateLimited: true } as { __rateLimited: true; shipment?: undefined };
+            }
+            return null;
+          });
           if (!cancelled) {
-            if (!res || !res.shipment) {
+            if (res && "__rateLimited" in res) {
+              setState({ __rateLimited: true });
+            } else if (!res || !res.shipment) {
               setState(null);
             } else {
               const s = normalizeShipment(res.shipment);
               const events = Array.isArray(res.events) ? res.events.map(normalizeShipmentEvent) : [];
+              // Initials only — the public API never returns the full name.
+              const masked = String(
+                (res.shipment as Record<string, unknown>).recipient_masked ??
+                (res.shipment as Record<string, unknown>).recipientMasked ??
+                "",
+              ).trim();
               setState({
                 ...s,
                 status: s.status.toUpperCase(),
+                recipientMasked: masked || null,
                 events,
                 route: [],
                 packages: [],

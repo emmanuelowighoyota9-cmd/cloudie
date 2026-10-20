@@ -15,9 +15,12 @@ import { EASE_OUT_QUINT } from "@/components/motion";
 import "./index.css";
 import Landing from "./pages/Landing.tsx";
 import AuthPage from "./pages/Auth.tsx";
+import LoginPage from "./pages/Login.tsx";
+import RegisterPage from "./pages/Register.tsx";
 import AdminLogin from "./pages/AdminLogin.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
+import DesignSystem from "./pages/DesignSystem.tsx";
 import { AppLayout } from "./components/AppLayout.tsx";
 
 const CHUNK_RELOAD_KEY = "cloudie:chunk-reload";
@@ -155,6 +158,7 @@ const BuyPoints = lazyWithRetry(() => import("./pages/BuyPoints.tsx"));
 const Orders = lazyWithRetry(() => import("./pages/Orders.tsx"));
 const Vendor = lazyWithRetry(() => import("./pages/Vendor.tsx"));
 const Transactions = lazyWithRetry(() => import("./pages/Transactions.tsx"));
+const Ledger = lazyWithRetry(() => import("./pages/Ledger.tsx"));
 const Admin = lazyWithRetry(() => import("./pages/Admin.tsx"));
 const AdminUsers = lazyWithRetry(() => import("./pages/AdminUsers.tsx"));
 const AdminUserDetail = lazyWithRetry(() => import("./pages/AdminUserDetail.tsx"));
@@ -385,6 +389,8 @@ createRoot(document.getElementById("root")!).render(
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
+                <Route path="/login" element={<LoginPage redirectAfterAuth="/dashboard" />} />
+                <Route path="/register" element={<RegisterPage redirectAfterAuth="/dashboard" />} />
                 <Route path="/admin/login" element={<AdminLogin />} />
                 <Route path="/track/:trackingNumber" element={<PublicTracking />} />
                 <Route path="/tracking" element={<PublicTracking />} />
@@ -414,6 +420,11 @@ createRoot(document.getElementById("root")!).render(
                 {/* Authenticated app routes with layout */}
                 <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
                   <Route path="/dashboard" element={<Dashboard />} />
+                  {/* `/app` is the Master Prompt's name for the personal workspace dashboard. */}
+                  <Route path="/app" element={<Dashboard />} />
+                  <Route path="/app/ledger" element={<Ledger />} />
+                  <Route path="/ledger" element={<Ledger />} />
+                  <Route path="/app/shipments" element={<Shipments />} />
                   <Route path="/services/my" element={<MyServices />} />
                   <Route path="/billing" element={<Billing />} />
                   <Route path="/personal" element={<Personal />} />
@@ -428,7 +439,9 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/vtu/exam-pins" element={<VtuExamPins />} />
                   <Route path="/vtu/history" element={<VtuHistory />} />
                   <Route path="/shipments/new" element={<NewShipment />} />
+                  <Route path="/app/shipments/new" element={<NewShipment />} />
                   <Route path="/shipments/:id" element={<ShipmentDetail />} />
+                  <Route path="/app/shipments/:id" element={<ShipmentDetail />} />
                   <Route path="/shipments/:id/updates" element={<ShipmentUpdates />} />
                   <Route path="/shipments/:id/edit" element={<ShipmentUpdateForm />} />
                   <Route path="/ticketing" element={<Ticketing />} />
@@ -464,6 +477,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/orders" element={<Orders />} />
                   <Route path="/vendor" element={<Vendor />} />
                   <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/app/design-system" element={<DesignSystem />} />
 
                 </Route>
 

@@ -23,13 +23,18 @@ import {
   Menu,
   Box,
   Cloud,
+  AlertTriangle,
 } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { MobileNav } from "./MobileNav";
 import { AppSearch } from "./AppSearch";
-import { formatNgn } from "@/lib/pricing";
+import { formatNgn, usePricing } from "@/lib/pricing";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { cn } from "@/lib/utils";
+
+/** Below this many points a single render starts to fail — nudge the user. */
+const LOW_BALANCE_POINTS = 100;
 
 /**
  * The application top bar.
@@ -44,10 +49,16 @@ import { usePlatformConfig } from "@/hooks/use-platform-config";
 export function Header() {
   const { user, signOut } = useAuth();
   const { brand } = usePlatformConfig();
+  const { ngnPerPoint } = usePricing();
   const navigate = useNavigate();
   const walletBalance = useQuery(api.wallet.getBalance);
   const unreadCount = useQuery(api.notifications.unreadCount);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  const lowBalance =
+    typeof walletBalance === "number" &&
+    ngnPerPoint > 0 &&
+    Math.round(walletBalance / ngnPerPoint) < LOW_BALANCE_POINTS;
 
   const handleSignOut = async () => {
     await signOut();
@@ -104,13 +115,26 @@ export function Header() {
         <Link
           to="/buy-points"
           className="shrink-0 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Points balance — top up"
+          aria-label={
+            lowBalance
+              ? "Points balance is low — top up"
+              : "Points balance — top up"
+          }
         >
           <Badge
             variant="outline"
-            className="min-h-9 gap-1.5 rounded-full border-primary/25 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors duration-200 hover:bg-primary/15 sm:text-sm"
+            className={cn(
+              "min-h-9 gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-200 sm:text-sm",
+              lowBalance
+                ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/15"
+                : "border-primary/25 bg-primary/10 text-primary hover:bg-primary/15",
+            )}
           >
-            <Box className="size-3.5" />
+            {lowBalance ? (
+              <AlertTriangle className="size-3.5" />
+            ) : (
+              <Box className="size-3.5" />
+            )}
             {walletBalance != null ? formatNgn(walletBalance) : "—"}
             {walletBalance != null && (
               <span className="hidden text-[11px] font-normal opacity-90 sm:inline">NGN</span>

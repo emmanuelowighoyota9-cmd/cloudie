@@ -22,6 +22,7 @@ import {
   Receipt,
   Zap,
   LogOut,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ export const mainNav = [
   { label: "Marketplace", icon: ShoppingBag, to: "/marketplace" },
   { label: "My Orders", icon: Receipt, to: "/orders" },
   { label: "Wallet", icon: Wallet, to: "/personal/wallet" },
+  { label: "Credits", icon: Coins, to: "/personal/wallet" },
   { label: "Billing", icon: CreditCard, to: "/billing" },
   { label: "Digital Services", icon: Zap, to: "/vtu" },
   { label: "Shipments", icon: Truck, to: "/shipments" },

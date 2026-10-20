@@ -1,601 +1,528 @@
-import { useMemo, useState } from "react";
+import { Component, useMemo, useState, type ReactNode } from "react";
+import { Link, useNavigate, useParams } from "react-router";
 import { useQuery } from "convex/react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  ArrowRight,
+  ChevronDown,
+  CircleAlert,
+  Cloud,
+  Clock,
+  Package,
+  PackageSearch,
+  Search,
+  ShieldCheck,
+  TriangleAlert,
+  Trophy,
+} from "lucide-react";
+
 import { api } from "@/convex/_generated/api";
+import { ShipmentEvent } from "@/components/tracking/ShipmentEvent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Building2,
-  Check,
-  ChevronDown,
-  Clock,
-  Copy,
-  Factory,
-  Landmark,
-  MapPin,
-  Package,
-  PackageCheck,
-  PackageSearch,
-  Plane,
-  ShieldCheck,
-  Truck,
-  Warehouse,
-} from "lucide-react";
-import { Link, useNavigate, useParams } from "react-router";
-import { toast } from "sonner";
-import { RouteMap, type RouteMapStop } from "@/components/tracking/RouteMap";
-import { QrCodeSvg } from "@/components/tracking/Codes";
-import { statusBadgeClass, statusLabel, trackingUrl } from "@/lib/trackingUi";
+import { Skeleton } from "@/components/ui/skeleton";
+import { usePlatformConfig } from "@/hooks/use-platform-config";
+import { notifyNeonQueries } from "@/lib/neonClient";
+import { toViewEvents, toViewShipment } from "@/lib/shipmentView";
+import { statusLabel } from "@/lib/trackingUi";
+import { cn } from "@/lib/utils";
 
-// ─── Milestones ──────────────────────────────────────────────────────────────
+/* ── Route stages ──────────────────────────────────────────────── */
 
 const STAGES = [
-  { key: "booked", label: "Booked", icon: Package },
-  { key: "picked", label: "Picked up", icon: PackageCheck },
-  { key: "transit", label: "In transit", icon: Plane },
-  { key: "customs", label: "Customs", icon: Landmark },
-  { key: "arrived", label: "Arrived", icon: Building2 },
-  { key: "delivery", label: "Out for delivery", icon: Truck },
-  { key: "delivered", label: "Delivered", icon: Check },
+  { key: "created", label: "Created" },
+  { key: "dispatched", label: "Dispatched" },
+  { key: "transit", label: "In transit" },
+  { key: "delivery", label: "Out for delivery" },
+  { key: "delivered", label: "Delivered" },
 ] as const;
 
-const STATUS_STAGE: Record<string, number> = {
+const STAGE_BY_STATUS: Record<string, number> = {
+  PENDING: 0,
   CREATED: 0,
   BOOKED: 0,
   PICKED_UP: 1,
-  PROCESSING: 2,
-  AT_ORIGIN_FACILITY: 2,
-  DEPARTED_ORIGIN: 2,
+  PROCESSING: 1,
+  AT_ORIGIN_FACILITY: 1,
+  DEPARTED_ORIGIN: 1,
   IN_TRANSIT: 2,
   ARRIVED_DESTINATION_COUNTRY: 2,
-  CUSTOMS_CLEARANCE: 3,
-  CUSTOMS_CLEARED: 3,
-  AT_DESTINATION_FACILITY: 4,
-  OUT_FOR_DELIVERY: 5,
-  DELIVERY_ATTEMPTED: 5,
-  DELIVERED: 6,
+  CUSTOMS_CLEARANCE: 2,
+  CUSTOMS_CLEARED: 2,
+  AT_DESTINATION_FACILITY: 2,
+  OUT_FOR_DELIVERY: 3,
+  DELIVERY_ATTEMPTED: 3,
+  DELIVERED: 4,
+  FAILED: 2,
 };
 
-const ISSUE_STATUSES = ["EXCEPTION", "ON_HOLD", "CANCELLED", "RETURNED"];
+/** States that mean the shipment is not progressing as planned. */
+const TROUBLE = ["EXCEPTION", "ON_HOLD", "CANCELLED", "RETURNED", "FAILED"];
 
-const STOP_ICONS: Record<string, typeof MapPin> = {
-  warehouse: Warehouse,
-  airport: Plane,
-  sorting_center: Factory,
-  distribution_center: Building2,
-  customs_facility: Landmark,
-  delivery_hub: Truck,
-};
-
-function cityCountry(o: { city?: string | null; country?: string | null; label?: string } | null | undefined) {
-  if (!o) return "—";
-  const parts = [o.city, o.country].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : (o.label ?? "—");
+function stageFor(status: string): number {
+  return STAGE_BY_STATUS[status] ?? 2;
 }
 
-function fmtDate(ts: number | null | undefined, opts?: Intl.DateTimeFormatOptions) {
-  if (!ts) return null;
-  return new Date(ts).toLocaleDateString(undefined, opts ?? { month: "long", day: "numeric", year: "numeric" });
+function etaLabel(estimated: number | null, delivered: boolean, deliveredAt: number | null) {
+  if (delivered) {
+    return deliveredAt
+      ? `Delivered ${new Date(deliveredAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+      : "Delivered";
+  }
+  if (!estimated) return "ETA pending";
+  const days = Math.ceil((estimated - Date.now()) / 86_400_000);
+  if (days <= 0) return "ETA: due today";
+  return `ETA: ${days} day${days === 1 ? "" : "s"}`;
 }
 
-function fmtDay(ts: number) {
-  const d = new Date(ts);
-  const today = new Date();
-  const yest = new Date(Date.now() - 86400000);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-}
+/* ── Shell ─────────────────────────────────────────────────────── */
 
-
-// ─── Search screen ───────────────────────────────────────────────────────────
-
-function TrackingSearch() {
-  const navigate = useNavigate();
-  return (
-    <div className="mx-auto w-full max-w-xl">
-      <motion.div
-        initial={{ opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="space-y-6 text-center sm:space-y-8"
-      >
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
-          <PackageSearch className="h-8 w-8 text-primary" />
-        </div>
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Track your shipment</h1>
-          <p className="text-xs text-muted-foreground sm:text-sm">
-            Enter a tracking number to see live status, route map and the full timeline.
-          </p>
-        </div>
-        <form
-          className="flex flex-col gap-2 sm:flex-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const data = new FormData(e.currentTarget);
-            const tn = String(data.get("tn") ?? "").trim();
-            if (tn) navigate(`/tracking/${encodeURIComponent(tn)}`);
-          }}
-        >
-          <Input name="tn" placeholder="e.g. TRK-XXXXXXXXXXXX" className="h-12 flex-1 rounded-2xl px-4 text-center sm:text-left text-sm" autoFocus required />
-          <Button type="submit" size="lg" className="h-12 min-h-12 rounded-2xl px-8 font-semibold active:scale-95">
-            Track
-          </Button>
-        </form>
-        <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5" />
-          Only intentionally public information is shown — never addresses or contact details.
-        </p>
-      </motion.div>
-    </div>
-  );
-}
-
-// ─── Page ────────────────────────────────────────────────────────────────────
-
-export default function PublicTracking() {
-  const { trackingNumber } = useParams<{ trackingNumber: string }>();
-  const tracking = useQuery(
-    api.trackingQueries.publicTracking,
-    trackingNumber ? { trackingNumber } : "skip",
-  );
-  const [copied, setCopied] = useState(false);
-  const [showAllEvents, setShowAllEvents] = useState(false);
-
-  const stageIndex = tracking ? (STATUS_STAGE[tracking.status] ?? 0) : 0;
-  const isDelivered = tracking?.status === "DELIVERED";
-  const hasIssue = tracking ? ISSUE_STATUSES.includes(tracking.status) : false;
-
-  const mapStops = useMemo<RouteMapStop[]>(() => {
-    if (!tracking) return [];
-    const out: RouteMapStop[] = [];
-    const seen: { lon: number; lat: number }[] = [];
-    const push = (s: RouteMapStop) => {
-      if (!Number.isFinite(s.lon) || !Number.isFinite(s.lat)) return;
-      const dup = seen.some((p) => Math.abs(p.lon - s.lon) < 0.6 && Math.abs(p.lat - s.lat) < 0.6);
-      if (dup) return;
-      seen.push({ lon: s.lon, lat: s.lat });
-      out.push(s);
-    };
-
-    if (tracking.origin?.latitude != null && tracking.origin?.longitude != null) {
-      push({
-        label: tracking.origin.city ?? tracking.origin.country ?? "Origin",
-        sublabel: tracking.origin.country,
-        lon: tracking.origin.longitude,
-        lat: tracking.origin.latitude,
-        state: "done",
-        kind: "origin",
-      });
-    }
-    for (const s of tracking.route) {
-      if (s.latitude == null || s.longitude == null) continue;
-      push({
-        label: s.city ?? s.label,
-        sublabel: s.country ?? s.label,
-        lon: s.longitude,
-        lat: s.latitude,
-        state: s.status === "arrived" || s.status === "departed" ? "done" : "todo",
-        kind: "stop",
-      });
-    }
-    const cur = tracking.currentLocation;
-    if (cur?.latitude != null && cur?.longitude != null) {
-      push({
-        label: cur.city ?? cur.label,
-        sublabel: cur.country ?? undefined,
-        lon: cur.longitude,
-        lat: cur.latitude,
-        state: isDelivered ? "done" : "current",
-        kind: "stop",
-      });
-    }
-    if (tracking.destination?.latitude != null && tracking.destination?.longitude != null) {
-      push({
-        label: tracking.destination.city ?? tracking.destination.country ?? "Destination",
-        sublabel: tracking.destination.country,
-        lon: tracking.destination.longitude,
-        lat: tracking.destination.latitude,
-        state: isDelivered ? "done" : "todo",
-        kind: "destination",
-      });
-    }
-    return out;
-  }, [tracking, isDelivered]);
-
-  const groups = useMemo(() => {
-    type Events = NonNullable<typeof tracking>["events"];
-    if (!tracking) return [] as { day: string; items: Events }[];
-    const out: { day: string; items: Events }[] = [];
-    for (const e of tracking.events) {
-      const day = fmtDay(e.eventTimestamp);
-      const last = out[out.length - 1];
-      if (last && last.day === day) last.items.push(e);
-      else out.push({ day, items: [e] });
-    }
-    return out;
-  }, [tracking]);
-
-  const visibleGroups = showAllEvents ? groups : groups.slice(0, 2);
-
-  const copyTn = () => {
-    if (!tracking) return;
-    navigator.clipboard?.writeText(tracking.trackingNumber).then(
-      () => {
-        setCopied(true);
-        toast.success("Tracking number copied");
-        setTimeout(() => setCopied(false), 1800);
-      },
-      () => toast.error("Could not copy"),
-    );
-  };
+function PublicShell({ children }: { children: ReactNode }) {
+  const { brand } = usePlatformConfig();
+  const wordmark = brand.name.split(" ")[0] || "Cloudie";
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/" className="flex shrink-0 items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
-              <PackageCheck className="h-4 w-4 text-primary" />
+    <div className="flex min-h-screen flex-col bg-background">
+      <header className="border-b border-border/60 bg-background/85 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-[640px] items-center justify-between gap-3 px-4 py-3">
+          <Link to="/" className="flex items-center gap-2 text-foreground">
+            <span className="flex size-6 items-center justify-center rounded-md bg-primary/12 text-primary ring-1 ring-primary/20">
+              <Cloud className="size-3.5" aria-hidden />
             </span>
-            <span className="text-sm font-bold tracking-tight text-foreground">
-              Crestline Express<span className="text-muted-foreground"> Tracking</span>
-            </span>
+            <span className="text-sm font-semibold tracking-tight">{wordmark}</span>
           </Link>
-          <div className="flex min-w-0 items-center gap-1.5">
-            {trackingNumber ? (
-              <form
-                className="hidden min-w-0 flex-1 items-center gap-2 sm:flex md:max-w-sm"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const data = new FormData(e.currentTarget);
-                  const tn = String(data.get("tn") ?? "").trim();
-                  if (tn) window.location.href = `/tracking/${encodeURIComponent(tn)}`;
-                }}
-              >
-                <Input name="tn" placeholder="Track another number" className="h-9" />
-                <Button type="submit" size="sm" variant="outline" className="h-9">
-                  Track
-                </Button>
-              </form>
-            ) : (
-              <span className="hidden text-xs text-muted-foreground sm:inline">Live shipment visibility</span>
-            )}
-          </div>
+          <Link
+            to="/track"
+            className="text-[11px] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+          >
+            Track another
+          </Link>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <div role="note" className="mb-6 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm leading-6 text-muted-foreground"><span className="font-semibold text-foreground">Carrier verification required.</span> Tracking records reflect information entered into this workspace and do not independently verify carrier custody or delivery. Confirm shipment status directly with the carrier.</div>
-        {!trackingNumber ? (
-          <div className="py-10 sm:py-16">
-            <TrackingSearch />
-          </div>
-        ) : tracking === undefined ? (
-          <div className="space-y-5">
-            <div className="h-40 animate-pulse rounded-2xl border border-border bg-card" />
-            <div className="h-72 animate-pulse rounded-2xl border border-border bg-card" />
-          </div>
-        ) : !tracking ? (
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mx-auto max-w-lg rounded-2xl border border-border bg-card p-10 text-center"
-          >
-            < Package className="mx-auto h-10 w-10 text-muted-foreground/50" />
-            <p className="mt-4 text-base font-semibold text-foreground">Shipment not found</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Double-check the tracking number — they look like TRK-XXXXXXXXXXXX.
-            </p>
-            <Button asChild variant="outline" size="sm" className="mt-5">
-              <Link to="/tracking">Try another number</Link>
-            </Button>
-          </motion.div>
-        ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.45, ease: "easeOut" }}
-            className="space-y-6"
-          >
-            {/* ── Status hero ───────────────────────────────────────────── */}
-            <section className="overflow-hidden rounded-2xl border border-border bg-card">
-              <div className="flex flex-col gap-6 p-5 sm:p-7 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary ring-1 ring-primary/15">
-                      <ShieldCheck className="h-3.5 w-3.5" /> Verified shipment
-                    </span>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadgeClass(tracking.status)}`}>
-                      {statusLabel(tracking.status)}
-                    </span>
-                  </div>
+      <main className="mx-auto w-full max-w-[640px] flex-1 px-4 py-6 sm:py-8">{children}</main>
 
-                  <h1 className="text-2xl font-bold leading-tight tracking-tight text-foreground sm:text-3xl">
-                    {hasIssue ? "There is an update on your shipment" : isDelivered ? "Your shipment was delivered" : statusLabel(tracking.status)}
-                  </h1>
-
-                  <button
-                    type="button"
-                    onClick={copyTn}
-                    className="group inline-flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground transition-colors hover:bg-secondary"
-                  >
-                    {tracking.trackingNumber}
-                    {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground" />}
-                  </button>
-                </div>
-
-                <div className="shrink-0 rounded-xl border border-border bg-background/60 p-4 lg:min-w-[220px]">
-                  <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    <Clock className="h-3.5 w-3.5" />
-                    {tracking.actualDelivery ? "Delivered on" : "Estimated delivery"}
-                  </p>
-                  <p className="mt-1 text-xl font-bold text-foreground">
-                    {tracking.actualDelivery
-                      ? fmtDate(tracking.actualDelivery)
-                      : tracking.estimatedDelivery
-                        ? fmtDate(tracking.estimatedDelivery)
-                        : "Pending"}
-                  </p>
-                  <dl className="mt-3 space-y-1 text-xs text-muted-foreground">
-                    {tracking.serviceName && (
-                      <div className="flex justify-between gap-3">
-                        <dt>Service</dt>
-                        <dd className="font-medium text-foreground">{tracking.serviceName}</dd>
-                      </div>
-                    )}
-                    {tracking.carrierName && (
-                      <div className="flex justify-between gap-3">
-                        <dt>Carrier</dt>
-                        <dd className="font-medium text-foreground">{tracking.carrierName}</dd>
-                      </div>
-                    )}
-                    <div className="flex justify-between gap-3">
-                      <dt>Progress</dt>
-                      <dd className="font-medium text-foreground">{tracking.progress}%</dd>
-                    </div>
-                  </dl>
-                </div>
-              </div>
-
-              {/* Progress */}
-              <div className="border-t border-border px-5 py-4 sm:px-7">
-                <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                  <motion.div
-                    className="h-full rounded-full bg-primary"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${tracking.progress}%` }}
-                    transition={{ duration: 0.9, ease: "easeOut" }}
-                  />
-                </div>
-
-                {/* Milestone stepper */}
-                <ol className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                  {STAGES.map((s, i) => {
-                    const done = i < stageIndex || (i === stageIndex && isDelivered);
-                    const active = i === stageIndex && !isDelivered;
-                    const Icon = s.icon;
-                    return (
-                      <li key={s.key} className="flex min-w-[104px] flex-1 flex-col items-center gap-1.5 text-center">
-                        <span
-                          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-                            done
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : active
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border bg-background text-muted-foreground"
-                          }`}
-                        >
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <span className={`text-[11px] leading-tight ${done || active ? "font-medium text-foreground" : "text-muted-foreground"}`}>
-                          {s.label}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-              </div>
-            </section>
-
-            {/* ── Map + summary ─────────────────────────────────────────── */}
-            <section className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-              <div className="space-y-6">
-                {mapStops.length >= 2 ? (
-                  <div className="overflow-hidden rounded-2xl border border-border bg-card">
-                    <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3">
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        <h2 className="text-sm font-semibold text-foreground">Live route</h2>
-                      </div>
-                      {tracking.currentLocation && (
-                        <span className="truncate text-xs text-muted-foreground">
-                          Now: <span className="font-medium text-foreground">{cityCountry(tracking.currentLocation)}</span>
-                        </span>
-                      )}
-                    </div>
-                    <RouteMap
-                      stops={mapStops}
-                      inTransit={!isDelivered && !hasIssue}
-                      className="h-[260px] rounded-none border-0 sm:h-[320px] lg:h-[380px]"
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-border bg-card p-5">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-primary" />
-                      <h2 className="text-sm font-semibold text-foreground">Route</h2>
-                    </div>
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      Coordinates have not been recorded for this shipment yet, so a map cannot be drawn. The stop list below
-                      reflects the planned journey.
-                    </p>
-                  </div>
-                )}
-
-                {/* Route stop list */}
-                {(tracking.route.length > 0 || tracking.currentLocation) && (
-                  <div className="rounded-2xl border border-border bg-card p-5">
-                    <h2 className="text-sm font-semibold text-foreground">Journey</h2>
-                    <ol className="mt-4 space-y-4">
-                      {[
-                        ...(tracking.origin
-                          ? [{ label: cityCountry(tracking.origin), status: "origin", ts: tracking.shippedAt, kind: "origin" }]
-                          : []),
-                        ...tracking.route.map((s) => ({
-                          label: cityCountry({ city: s.city, country: s.country, label: s.label }),
-                          status: s.status,
-                          ts: s.departureAt ?? s.arrivalAt,
-                          kind: s.label,
-                        })),
-                        ...(tracking.destination
-                          ? [{ label: cityCountry(tracking.destination), status: isDelivered ? "arrived" : "destination", ts: tracking.actualDelivery, kind: "destination" }]
-                          : []),
-                      ].map((stop, i, arr) => {
-                        const Icon = STOP_ICONS[stop.kind] ?? MapPin;
-                        const done = stop.status === "arrived" || stop.status === "departed" || stop.status === "origin";
-                        return (
-                          <li key={i} className="flex gap-3">
-                            <div className="flex flex-col items-center">
-                              <span
-                                className={`flex h-8 w-8 items-center justify-center rounded-full border ${
-                                  done ? "border-primary bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground"
-                                }`}
-                              >
-                                <Icon className="h-4 w-4" />
-                              </span>
-                              {i < arr.length - 1 && <span className="mt-1 w-px flex-1 bg-border" />}
-                            </div>
-                            <div className="pb-1">
-                              <p className={`text-sm ${done ? "font-medium text-foreground" : "text-muted-foreground"}`}>{stop.label}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {stop.ts ? new Date(stop.ts).toLocaleString() : statusLabel(stop.status)}
-                              </p>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  </div>
-                )}
-              </div>
-
-              {/* Details + QR */}
-              <div className="space-y-6">
-                <div className="rounded-2xl border border-border bg-card p-5">
-                  <h2 className="text-sm font-semibold text-foreground">Shipment details</h2>
-                  <dl className="mt-4 space-y-3 text-sm">
-                    {[
-                      { label: "From", value: cityCountry(tracking.origin) },
-                      { label: "To", value: tracking.destination ? cityCountry(tracking.destination) : [tracking.destinationCity, tracking.destinationCountry].filter(Boolean).join(", ") || "—" },
-                      { label: "Service", value: tracking.serviceName ?? "—" },
-                      { label: "Carrier", value: tracking.carrierName ?? "—" },
-                      {
-                        label: "Weight",
-                        value: tracking.totalWeight ? `${tracking.totalWeight} ${tracking.weightUnit ?? ""}` : "—",
-                      },
-                      { label: "Contents", value: tracking.packageDescription ?? "—" },
-                      { label: "Shipped", value: fmtDate(tracking.shippedAt ?? tracking.createdAt) ?? "—" },
-                    ].map((row) => (
-                      <div key={row.label} className="flex items-start justify-between gap-4 border-b border-border/60 pb-2 last:border-0 last:pb-0">
-                        <dt className="text-muted-foreground">{row.label}</dt>
-                        <dd className="max-w-[60%] text-right font-medium text-foreground">{row.value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-
-                <div className="rounded-2xl border border-border bg-card p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="shrink-0 rounded-xl border border-border bg-background p-2">
-                      <QrCodeSvg value={trackingUrl(tracking.trackingNumber)} size={84} />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-semibold text-foreground">Share tracking</h2>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Scan to open this page on any device — useful for the recipient.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-
-              </div>
-            </section>
-
-            {/* ── Timeline ──────────────────────────────────────────────── */}
-            <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold text-foreground">Tracking history</h2>
-                <span className="text-xs text-muted-foreground">
-                  {tracking.events.length} update{tracking.events.length === 1 ? "" : "s"}
-                </span>
-              </div>
-
-              {tracking.events.length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">No events recorded yet.</p>
-              ) : (
-                <div className="mt-5 space-y-6">
-                  {visibleGroups.map((g, gi) => (
-                    <div key={g.day}>
-                      <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{g.day}</p>
-                      <div className="relative ml-2 space-y-5 border-l border-border pl-6">
-                        {g.items.map((e, i) => {
-                          const latest = gi === 0 && i === 0;
-                          return (
-                            <motion.div
-                              key={`${g.day}-${i}`}
-                              initial={{ opacity: 0, x: -6 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.2) }}
-                              className="relative"
-                            >
-                              <span
-                                className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full border-2 ${
-                                  latest ? "border-primary bg-primary" : "border-border bg-card"
-                                }`}
-                              />
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-sm font-medium text-foreground">{e.title}</p>
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadgeClass(e.status)}`}>
-                                  {statusLabel(e.status)}
-                                </span>
-                              </div>
-                              {e.description && <p className="mt-0.5 text-xs text-muted-foreground">{e.description}</p>}
-                              <div className="mt-1 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-                                <span>{new Date(e.eventTimestamp).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</span>
-                                {e.locationLabel && (
-                                  <span className="flex items-center gap-1">
-                                    <MapPin className="h-3 w-3" /> {e.locationLabel}
-                                  </span>
-                                )}
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-
-                  {groups.length > 2 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setShowAllEvents((v) => !v)}
-                    >
-                      <ChevronDown className={`mr-1.5 h-3.5 w-3.5 transition-transform ${showAllEvents ? "rotate-180" : ""}`} />
-                      {showAllEvents ? "Show less" : `Show all ${tracking.events.length} updates`}
-                    </Button>
-                  )}
-                </div>
-              )}
-            </section>
-          </motion.div>
-        )}
-      </main>
+      <footer className="mx-auto w-full max-w-[640px] px-4 pb-8 pt-2 text-center">
+        <p className="text-[11px] text-muted-foreground">Powered by {wordmark}</p>
+      </footer>
     </div>
+  );
+}
+
+/* ── Search (no tracking number in the URL) ────────────────────── */
+
+function TrackingSearch() {
+  const navigate = useNavigate();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="space-y-6 pt-6 text-center sm:pt-12"
+    >
+      <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+        <PackageSearch className="size-7 text-primary" aria-hidden />
+      </div>
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Track a shipment</h1>
+        <p className="text-xs text-muted-foreground sm:text-sm">
+          Enter the reference from your confirmation to follow the parcel.
+        </p>
+      </div>
+      <form
+        className="flex flex-col gap-2 sm:flex-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const data = new FormData(event.currentTarget);
+          const ref = String(data.get("ref") ?? "").trim();
+          if (ref) navigate(`/track/${encodeURIComponent(ref)}`);
+        }}
+      >
+        <Input
+          name="ref"
+          placeholder="TRK-XXXXXXXXXXXX"
+          aria-label="Tracking number"
+          className="h-11 flex-1 rounded-xl text-center font-mono text-xs sm:text-left"
+          autoFocus
+          required
+        />
+        <Button type="submit" className="h-11 gap-1.5 rounded-xl px-6">
+          <Search className="size-4" aria-hidden /> Track
+        </Button>
+      </form>
+      <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+        <ShieldCheck className="size-3.5" aria-hidden /> Public tracking never shows addresses or contact details.
+      </p>
+    </motion.div>
+  );
+}
+
+/* ── Tracking view ─────────────────────────────────────────────── */
+
+function TrackingView({ reference }: { reference: string }) {
+  const tracking = useQuery(api.trackingQueries.publicTracking, { trackingNumber: reference });
+  const [showAll, setShowAll] = useState(false);
+
+  if (tracking === undefined) return <TrackingSkeleton />;
+
+  // The adapter flags a 429 instead of a missing shipment, so the page can
+  // explain the wait rather than claiming the reference is unknown.
+  if (tracking && (tracking as { __rateLimited?: boolean }).__rateLimited) {
+    return (
+      <FailurePanel
+        error={{ message: "429 rate limit" }}
+        onRetry={() => notifyNeonQueries()}
+      />
+    );
+  }
+
+  if (!tracking) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-border bg-card p-6 text-center sm:p-8"
+      >
+        <Package className="mx-auto size-9 text-muted-foreground/40" aria-hidden />
+        <h1 className="mt-3 text-base font-semibold text-foreground">No shipment matches this reference</h1>
+        <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+          <span className="font-mono text-foreground">{reference.toUpperCase()}</span> isn't in our system yet.
+          References look like TRK-XXXXXXXXXXXX, and new labels can take a few minutes to register.
+        </p>
+        <Button asChild variant="outline" size="sm" className="mt-5 gap-1.5">
+          <Link to="/track">
+            <Search className="size-3.5" /> Try another reference
+          </Link>
+        </Button>
+      </motion.div>
+    );
+  }
+
+  const view = toViewShipment(tracking);
+  const delivered = view.status === "DELIVERED";
+  const trouble = TROUBLE.includes(view.status);
+  const stage = delivered ? 4 : stageFor(view.status);
+  const originCity = view.originCity || "Origin";
+  const destinationCity = view.destinationCity || "Destination";
+  const events = toViewEvents(tracking.events);
+  const visible = showAll ? events : events.slice(0, 6);
+
+  return (
+    <div className="space-y-4">
+      {/* Status hero */}
+      <motion.section
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className={cn(
+          "relative overflow-hidden rounded-2xl border p-5 sm:p-6",
+          delivered
+            ? "border-success/30 bg-success/[0.06]"
+            : trouble
+              ? "border-warning/40 bg-warning/[0.07]"
+              : "border-border bg-card",
+        )}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="rounded-md border border-border bg-background/70 px-2 py-1 font-mono text-[11px] tracking-tight text-foreground">
+            {tracking.trackingNumber}
+          </span>
+          <span className="text-[11px] text-muted-foreground">{view.service}</span>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {delivered ? (
+            <Trophy className="size-6 text-success" aria-hidden />
+          ) : trouble ? (
+            <TriangleAlert className="size-6 text-warning" aria-hidden />
+          ) : null}
+          <span
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold",
+              delivered
+                ? "border-success/30 bg-success/12 text-success"
+                : trouble
+                  ? "border-warning/40 bg-warning/12 text-warning"
+                  : "border-primary/30 bg-primary/10 text-primary",
+            )}
+          >
+            <span
+              className={cn(
+                "size-2 rounded-full",
+                delivered ? "bg-success" : trouble ? "bg-warning" : "bg-primary",
+              )}
+              aria-hidden
+            />
+            {statusLabel(view.status)}
+          </span>
+        </div>
+
+        <p className="mt-3 text-lg font-bold tracking-tight text-foreground">
+          {etaLabel(view.estimatedDelivery, delivered, view.deliveredAt)}
+        </p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          {delivered
+            ? "Signed for at the destination address"
+            : trouble
+              ? "The carrier has flagged this shipment — check the timeline below."
+              : "Updates are posted as the parcel is scanned"}
+        </p>
+
+        <RouteTrack origin={originCity} destination={destinationCity} stage={stage} />
+      </motion.section>
+
+      {/* Timeline */}
+      <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="section-label text-primary">Timeline</h2>
+          <p className="text-[11px] text-muted-foreground">
+            {view.recipientMasked ? (
+              <>
+                Recipient <span className="font-semibold text-foreground">{view.recipientMasked}</span>
+              </>
+            ) : (
+              "Recipient details are private"
+            )}
+          </p>
+        </div>
+
+        {events.length === 0 ? (
+          <p className="py-8 text-center text-xs text-muted-foreground">
+            No scans yet — the first update appears as soon as the carrier handles the parcel.
+          </p>
+        ) : (
+          <>
+            <ol className="mt-4">
+              {visible.map((event, index) => (
+                <ShipmentEvent
+                  key={event.id}
+                  status={event.status}
+                  title={event.title}
+                  description={event.description}
+                  locationLabel={event.location}
+                  timestamp={event.timestamp}
+                  latest={index === 0}
+                  last={index === visible.length - 1}
+                />
+              ))}
+            </ol>
+            {events.length > 6 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-1 w-full gap-1.5 text-[11px]"
+                onClick={() => setShowAll((value) => !value)}
+              >
+                <ChevronDown className={cn("size-3.5 transition-transform", showAll && "rotate-180")} aria-hidden />
+                {showAll ? "Show latest only" : `Show all ${events.length} updates`}
+              </Button>
+            )}
+          </>
+        )}
+      </section>
+
+      <p className="flex items-start gap-1.5 px-1 text-[10px] leading-relaxed text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-3 shrink-0" aria-hidden />
+        Public view: status, route and timeline only. No names, phone numbers, emails or addresses are shown.
+      </p>
+    </div>
+  );
+}
+
+/* ── Route progress ────────────────────────────────────────────── */
+
+function RouteTrack({ origin, destination, stage }: { origin: string; destination: string; stage: number }) {
+  const reduced = useReducedMotion();
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">{origin}</p>
+        <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <p className="min-w-0 flex-1 truncate text-right text-xs font-semibold text-foreground">{destination}</p>
+      </div>
+
+      <div className="relative mt-4">
+        <div className="absolute left-[10%] right-[10%] top-[5px] h-px bg-border" aria-hidden />
+        <motion.div
+          className="absolute left-[10%] top-[5px] h-px w-[80%] origin-left bg-primary"
+          initial={false}
+          animate={{ scaleX: stage / (STAGES.length - 1) }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          aria-hidden
+        />
+
+        <ol className="relative flex">
+          {STAGES.map((item, index) => {
+            const done = index < stage;
+            const current = index === stage;
+            return (
+              <li key={item.key} className="flex flex-1 flex-col items-center gap-2">
+                <span className="relative flex size-2.5 items-center justify-center">
+                  {current && !reduced && (
+                    <motion.span
+                      className="absolute inset-0 rounded-full bg-primary/50"
+                      animate={{ scale: [1, 2.4, 1], opacity: [0.55, 0, 0.55] }}
+                      transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+                      aria-hidden
+                    />
+                  )}
+                  <span
+                    className={cn(
+                      "relative size-2.5 rounded-full border transition-colors",
+                      done || current ? "border-primary bg-primary" : "border-border bg-card",
+                    )}
+                    aria-hidden
+                  />
+                </span>
+                <span
+                  className={cn(
+                    "px-0.5 text-center text-[9px] leading-tight sm:text-[10px]",
+                    current
+                      ? "font-semibold text-foreground"
+                      : done
+                        ? "text-foreground/80"
+                        : "text-muted-foreground",
+                  )}
+                >
+                  {item.label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+/* ── Loading / failure states ──────────────────────────────────── */
+
+function TrackingSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading tracking">
+      <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-6 w-40 rounded-md" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+        <Skeleton className="mt-4 h-8 w-36 rounded-full" />
+        <Skeleton className="mt-3 h-5 w-28" />
+        <div className="mt-7 flex justify-between">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="flex flex-col items-center gap-2">
+              <Skeleton className="size-2.5 rounded-full" />
+              <Skeleton className="h-2 w-12" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <Skeleton className="h-3 w-24" />
+        <div className="mt-5 space-y-5">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex gap-3">
+              <Skeleton className="size-8 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-3.5 w-48" />
+                <Skeleton className="h-3 w-full max-w-xs" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function isRateLimited(error: unknown): boolean {
+  const message = `${(error as Error)?.message ?? ""} ${JSON.stringify((error as { data?: unknown })?.data ?? "")}`.toLowerCase();
+  return message.includes("429") || message.includes("rate limit") || message.includes("too many");
+}
+
+function FailurePanel({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const limited = isRateLimited(error);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "rounded-2xl border p-6 text-center sm:p-8",
+        limited ? "border-warning/40 bg-warning/[0.07]" : "border-border bg-card",
+      )}
+    >
+      {limited ? (
+        <Clock className="mx-auto size-9 text-warning" aria-hidden />
+      ) : (
+        <CircleAlert className="mx-auto size-9 text-muted-foreground/50" aria-hidden />
+      )}
+      <h1 className="mt-3 text-base font-semibold text-foreground">
+        {limited ? "Too many tracking lookups" : "We couldn't load this shipment"}
+      </h1>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+        {limited
+          ? "Tracking is rate limited to keep the service fast for everyone. Wait a minute, then try again — your reference is unchanged."
+          : "Something went wrong while fetching this shipment. Try again in a moment."}
+      </p>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <Button size="sm" className="gap-1.5" onClick={onRetry}>
+          Try again
+        </Button>
+        <Button asChild variant="outline" size="sm" className="gap-1.5">
+          <Link to="/track">
+            <Search className="size-3.5" /> Search another reference
+          </Link>
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Catches query failures so a 429 or backend hiccup renders a friendly page. */
+class TrackingBoundary extends Component<
+  { resetKey: string; children: ReactNode },
+  { error: unknown | null }
+> {
+  state: { error: unknown | null } = { error: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  componentDidUpdate(previous: { resetKey: string }) {
+    if (previous.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return <FailurePanel error={this.state.error} onRetry={() => this.setState({ error: null })} />;
+    }
+    return this.props.children;
+  }
+}
+
+/* ── Page ──────────────────────────────────────────────────────── */
+
+export default function PublicTracking() {
+  const params = useParams<{ trackingNumber?: string; id?: string }>();
+  const reference = useMemo(
+    () => (params.trackingNumber ?? params.id ?? "").trim(),
+    [params.trackingNumber, params.id],
+  );
+
+  return (
+    <PublicShell>
+      {reference ? (
+        <TrackingBoundary resetKey={reference}>
+          <TrackingView reference={reference} />
+        </TrackingBoundary>
+      ) : (
+        <TrackingSearch />
+      )}
+    </PublicShell>
   );
 }
