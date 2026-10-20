@@ -636,14 +636,19 @@ app.patch("/api/shipments/:id", auth, async (c) => {
       const res = await client.query(query, values);
       updatedShipment = res.rows[0];
     }
-    if (parsed.data.status && parsed.data.status !== current.rows[0].status) {
+    // A customer note is its own event even when the status is unchanged.
+    const nextStatus = parsed.data.status ?? current.rows[0].status;
+    const shouldLog =
+      Boolean(parsed.data.event_description) ||
+      Boolean(parsed.data.status && parsed.data.status !== current.rows[0].status);
+    if (shouldLog) {
       await client.query(
         "INSERT INTO shipment_events (shipment_id, status, location, description) VALUES ($1, $2, $3, $4)",
         [
           id,
-          parsed.data.status,
+          nextStatus,
           parsed.data.location ?? null,
-          parsed.data.event_description ?? `Shipment status changed to ${parsed.data.status.replace(/_/g, " ")}`,
+          parsed.data.event_description ?? `Shipment status changed to ${nextStatus.replace(/_/g, " ")}`,
         ],
       );
     }
@@ -658,13 +663,22 @@ app.patch("/api/shipments/:id", auth, async (c) => {
 });
 
 // Public Tracking: safe milestone lookup by tracking number (unauthenticated)
+/** "John Okafor" → "J. O." — initials only, safe for the public tracker. */
+function maskRecipient(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const parts = name.trim().split(/\s+/).filter(Boolean).slice(0, 2);
+  if (parts.length === 0) return null;
+  return parts.map((part) => `${part.charAt(0).toUpperCase()}.`).join(" ");
+}
+
 app.get("/api/tracking/:trackingNumber", async (c) => {
   const trackingNumber = c.req.param("trackingNumber").trim().toUpperCase();
   const result = await pool.query(
     `SELECT id, tracking_number, status, service_type,
             sender_city, sender_country,
             recipient_city, recipient_country,
-            package_description, weight, estimated_delivery, created_at, updated_at
+            package_description, weight, estimated_delivery, created_at, updated_at,
+            recipient_name
      FROM shipments WHERE tracking_number=$1`,
     [trackingNumber],
   );
@@ -674,7 +688,9 @@ app.get("/api/tracking/:trackingNumber", async (c) => {
     "SELECT id, status, location, description, occurred_at FROM shipment_events WHERE shipment_id=$1 ORDER BY occurred_at DESC",
     [shipment.id],
   );
-  return c.json({ shipment, events: events.rows });
+  // Never leak the full recipient name or contact details on a public lookup.
+  const { recipient_name, ...safeShipment } = shipment;
+  return c.json({ shipment: { ...safeShipment, recipient_masked: maskRecipient(recipient_name) }, events: events.rows });
 });
 
 /* ════════════════════════════════════════════════════════════════════
