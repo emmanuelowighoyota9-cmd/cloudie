@@ -3,7 +3,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { SignJWT, jwtVerify } from "jose";
-import { Pool, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { promisify } from "node:util";
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
@@ -317,7 +317,7 @@ app.post("/api/auth/bootstrap-admin", async (c) => {
     return fail(c, 401, "Invalid bootstrap authorization");
   }
 
-  let client: Awaited<ReturnType<typeof pool.connect>> | undefined;
+  let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     await client.query("BEGIN");
