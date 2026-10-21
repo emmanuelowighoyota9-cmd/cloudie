@@ -3,6 +3,8 @@
 # Run only against a disposable Neon branch. No credentials are printed.
 set -Eeuo pipefail
 
+fail() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
+
 readonly PRODUCTION_BRANCH_ID="br-winter-snow-b5spd77h"
 readonly EXPECTED_BRANCH_NAME="test-migrations"
 readonly EXISTING_TEST_BRANCH_ID="br-nameless-morning-b5o1qitn"
@@ -16,8 +18,6 @@ fi
 
 PROD_BRANCH="${PROD_BRANCH:-$PRODUCTION_BRANCH_ID}"
 TEST_BRANCH="${TEST_BRANCH:-${NEON_TEST_BRANCH_ID:-}}"
-
-fail() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
 
 [[ -n "${TEST_DATABASE_URL:-}" ]] || fail "Set TEST_DATABASE_URL to the direct connection string for the disposable Neon test branch."
 [[ -z "${DATABASE_URL:-}" || "$DATABASE_URL" != "$TEST_DATABASE_URL" ]] || fail "TEST_DATABASE_URL equals DATABASE_URL; refusing a possibly production-targeted connection."
@@ -60,7 +60,7 @@ done
 
 printf '\n== Pass 2: rerun the full set to test idempotency ==\n'
 for file in "${migrations[@]}"; do
-  printf '\n--- %s ---\n' "$file"
+  printf '\n=== %s ===\n' "$file"
   psql "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$file" || {
     status=$?
     printf 'IDEMPOTENCY FAILURE: %s (psql exit %s).\n' "$file" "$status" >&2
