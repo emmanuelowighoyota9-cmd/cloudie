@@ -14,7 +14,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageTransition, Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
 import { ArrowRight, BadgeCheck, Coins, Search, ShieldCheck, ShoppingCart, Store } from "lucide-react";
-import { naira as moneyNaira, points as moneyPoints } from "@/components/money/FundsGate";
+import { fmtNaira, naira as moneyNaira, points as moneyPoints } from "@/components/money/FundsGate";
 import type { MarketplaceOrder } from "@/features/marketplace/orderState";
 import { PurchaseDialog } from "@/features/marketplace/PurchaseDialog";
 
@@ -27,7 +27,7 @@ const SORTS = [
 ];
 
 export function naira(minor: number) {
-  return `₦${(minor / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return fmtNaira(moneyNaira(minor));
 }
 
 type Package = FunctionReturnType<typeof api.pointMarket.listPackages>[number];
