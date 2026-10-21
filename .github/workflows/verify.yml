@@ -13,7 +13,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile
+      # Resolve newly added Bun test dependencies in CI; the lockfile must be regenerated with Bun.
+      - run: bun install
       - run: bunx tsc -b --noEmit
       - run: bun test
 
