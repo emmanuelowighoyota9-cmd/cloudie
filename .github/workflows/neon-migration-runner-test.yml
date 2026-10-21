@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 15
     env:
       TEST_DATABASE_URL: ${{ secrets.CLOUDIE_NEON_TEST_DATABASE_URL }}
-      NEON_TEST_BRANCH_ID: br-nameless-morning-b5o1qitn
+      NEON_TEST_BRANCH_ID: br-lively-rain-b5vq2oju
       NEON_PRODUCTION_BRANCH_ID: br-winter-snow-b5spd77h
     steps:
       - name: Check out repository
@@ -27,10 +27,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${TEST_DATABASE_URL:-}" || {
-            echo "::error::Add CLOUDIE_NEON_TEST_DATABASE_URL as a GitHub Actions secret. It must be the direct connection string for the disposable test-migrations branch."
+            echo "::error::Add CLOUDIE_NEON_TEST_DATABASE_URL as a GitHub Actions secret. It must be the direct connection string for the fresh disposable migration-runner-test-clean branch."
             exit 1
           }
-          test "$NEON_TEST_BRANCH_ID" = "br-nameless-morning-b5o1qitn" || {
+          test "$NEON_TEST_BRANCH_ID" = "br-lively-rain-b5vq2oju" || {
             echo "::error::Unexpected test branch ID; update this workflow only after independently verifying the replacement test branch."
             exit 1
           }
@@ -44,7 +44,7 @@ jobs:
               exit 1
               ;;
           esac
-          echo "Target guard passed for the configured disposable branch ID. The operator must ensure the secret is the direct URL for that exact branch; credentials are never printed."
+          echo "Target guard passed for the configured fresh disposable branch ID. The operator must ensure the secret is the direct URL for that exact branch; credentials are never printed."
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -54,6 +54,39 @@ jobs:
       - name: Install API dependencies
         working-directory: api
         run: npm ci
+
+      - name: Verify branch identity and clean starting schema
+        working-directory: api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import pg from "pg";
+          const client = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+          try {
+            await client.connect();
+            const marker = await client.query(
+              "SELECT guard_value FROM public.cloudie_migration_test_guard WHERE guard_key = 'branch_identity'"
+            );
+            if (marker.rows.length !== 1 || marker.rows[0].guard_value !== "cloudie-migration-runner-test-clean-br-lively-rain-b5vq2oju") {
+              throw new Error("Database branch identity marker is missing or does not match the approved disposable test branch.");
+            }
+            const tables = await client.query(
+              "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name"
+            );
+            const names = tables.rows.map((r) => r.table_name);
+            const unexpected = names.filter((name) => !["cloudie_migration_test_guard", "schema_migrations"].includes(name));
+            const history = await client.query(
+              "SELECT to_regclass('public.schema_migrations') IS NOT NULL AS exists"
+            );
+            if (!history.rows[0].exists && unexpected.length !== 0) {
+              throw new Error("Refusing to migrate: a fresh test database has unexpected public tables: " + unexpected.join(", "));
+            }
+            console.log("PASS: unique disposable-branch marker verified; initial schema is clean or migration history already exists.");
+          } finally {
+            await client.end().catch(() => {});
+          }
+          NODE
 
       - name: Run checksum-aware migration runner
         working-directory: api
