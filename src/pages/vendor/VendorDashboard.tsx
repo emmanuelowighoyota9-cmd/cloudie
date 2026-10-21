@@ -187,7 +187,7 @@ function DashboardBody({ data }: { data: Overview }) {
           </div>
           <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">{vendor.businessName}</h1>
           <div className="mt-1 flex items-center gap-2">
-            <StatusBadge status={vendor.status} />
+            <StatusBadge status={vendor.status} label={vendor.status === "pending" ? "Under review" : vendor.status === "applied" ? "Applied" : vendor.status.charAt(0).toUpperCase() + vendor.status.slice(1)} />
             <span className="text-[11px] text-muted-foreground">
               {vendor.totalSales.toLocaleString()} pts sold · {naira(Math.round(vendor.earnings * 100))} earned
             </span>
