@@ -11,11 +11,12 @@ type Props = {
   onConfirm: () => void;
   busy?: boolean;
   onRetry?: () => void;
+  onRefresh?: () => void;
   onViewOrder?: (reference: string) => void;
   onContactSupport?: (reference: string) => void;
 };
 
-export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = false, onRetry, onViewOrder, onContactSupport }: Props) {
+export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = false, onRetry, onRefresh, onViewOrder, onContactSupport }: Props) {
   const draft = order?.draft ?? null;
   const review = order?.status === "review";
   const pending = order?.status === "pending";
@@ -25,7 +26,7 @@ export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = fa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto border shadow-none sm:max-w-lg">
+      <DialogContent aria-describedby={undefined} className="max-h-[90dvh] overflow-y-auto border shadow-none sm:max-w-lg">
         <DialogHeader className="pr-7 text-left">
           <DialogTitle>{success ? "Purchase complete" : failed ? "Purchase failed" : ambiguous ? "Confirming your order" : pending ? "Order in escrow" : "Review your purchase"}</DialogTitle>
           <DialogDescription>
@@ -47,7 +48,7 @@ export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = fa
               <span className="text-muted-foreground">Wallet after purchase</span><span className="font-medium">{fmtNaira(draft.walletAfter)}</span>
             </div>
             <div className="flex items-center justify-between gap-3 text-sm">
-              <span className="text-muted-foreground">Points reward</span><span className="font-semibold text-success">{fmtPoints(draft.pointsReward)}</span>
+              <span className="text-muted-foreground">Points reward</span><span className="font-semibold text-success">+{fmtPoints(draft.pointsReward)}</span>
             </div>
           </section>
         )}
@@ -60,7 +61,7 @@ export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = fa
           </FundsGate>
         )}
 
-        {pending && order && <div role="status" className="flex gap-3 rounded-lg border p-3 text-sm"><Clock3 className="mt-0.5 size-4 shrink-0" /><div><p className="font-medium">Funds in escrow</p><p className="break-all text-muted-foreground">Order reference: {order.reference}</p><p className="mt-1 text-muted-foreground">This dialog can be closed safely. Track the order from your orders page.</p></div></div>}
+        {pending && order && <div role="status" className="flex gap-3 rounded-lg border p-3 text-sm"><Clock3 className="mt-0.5 size-4 shrink-0" /><div><p className="font-medium">Funds in escrow</p><p className="break-all text-muted-foreground">Order reference: <span className="font-mono">{order.reference}</span></p><p className="mt-1 text-muted-foreground">This dialog can be closed safely. Track the order from your orders page.</p></div></div>}
         {success && order && <div role="status" className="space-y-3 rounded-lg border p-4">
           <div className="flex items-center gap-2 font-semibold"><CheckCircle2 className="size-5 text-success" /> Receipt</div>
           <p className="text-sm">Order reference: <span className="break-all font-medium">{order.reference}</span></p>
@@ -79,9 +80,9 @@ export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = fa
 
         <DialogFooter className="gap-2 sm:gap-2">
           {review && <><Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button><Button onClick={onConfirm} disabled={busy || !draft || draft.walletBefore.kobo < draft.price.kobo}>{busy ? "Creating order…" : "Confirm purchase"}</Button></>}
-          {pending && order && <><Button variant="outline" onClick={() => onOpenChange(false)}>Close safely</Button><Button onClick={() => onViewOrder?.(order.reference)}>View order <ExternalLink className="size-4" /></Button></>}
+          {pending && order && <><Button variant="outline" onClick={() => onOpenChange(false)}>Close safely</Button><Button variant="outline" onClick={onRefresh}>Refresh</Button><Button onClick={() => onViewOrder?.(order.reference)}>View order <ExternalLink className="size-4" /></Button></>}
           {success && order && <><Button variant="outline" onClick={() => onViewOrder?.(order.reference)}>View order</Button><Button onClick={() => onOpenChange(false)}>Done</Button></>}
-          {failed && order && <><Button variant="outline" onClick={() => onContactSupport?.(order.reference)}>Contact support</Button><Button onClick={onRetry}>Try again</Button></>}
+          {failed && order && <><Button variant="outline" onClick={() => onContactSupport?.(order.reference)}>Contact support ({order.reference})</Button><Button onClick={onRetry}>Try again</Button></>}
           {ambiguous && order && <><Button variant="outline" onClick={() => onContactSupport?.(order.reference)}>Contact support</Button><Button onClick={() => onOpenChange(false)}>Close</Button></>}
         </DialogFooter>
       </DialogContent>
