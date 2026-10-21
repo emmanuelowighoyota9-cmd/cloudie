@@ -213,7 +213,7 @@ export default function PointMarketplace() {
         <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {packages.map((pkg) => (
             <StaggerItem key={pkg._id}>
-              <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
+              <Card className="flex h-full flex-col">
                 <CardContent className="flex flex-1 flex-col p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
