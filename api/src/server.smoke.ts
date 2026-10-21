@@ -445,3 +445,85 @@ test("refuses login for suspended and terminated accounts without issuing a sess
   }
 });
 
+
+
+test("validates points marketplace filters before database access", async () => {
+  const response = await app.request("/api/marketplace/packages?minPrice=-1");
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Marketplace filters must be non-negative numbers" });
+});
+
+test("rejects unsupported points marketplace sort values", async () => {
+  const response = await app.request("/api/marketplace/packages?sort=price;DROP%20TABLE");
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Unsupported marketplace sort" });
+});
+
+test("returns an empty public points marketplace list when the read model has no rows", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (sql: unknown, values: unknown[]) => {
+    assert.match(String(sql), /FROM point_market_packages/);
+    assert.match(String(sql), /v\.status = 'approved'/);
+    assert.deepEqual(values, [true, "", null, null, null, null]);
+    return { rows: [], rowCount: 0 };
+  };
+  try {
+    const response = await app.request("/api/marketplace/packages?verifiedOnly=true");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), []);
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("maps points marketplace database rows to the existing buyer response shape", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => ({
+    rows: [{
+      id: "pkg_1",
+      name: "Starter points",
+      points: "500",
+      price_minor: "125000",
+      currency: "NGN",
+      unit_price_minor: "250000",
+      total_sold: "7",
+      vendor_id: "vendor_1",
+      business_name: "Verified vendor",
+      is_verified: true,
+    }],
+    rowCount: 1,
+  });
+  try {
+    const response = await app.request("/api/marketplace/packages?verifiedOnly=true&sort=price_asc");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), [{
+      id: "pkg_1",
+      name: "Starter points",
+      points: 500,
+      priceMinor: 125000,
+      currency: "NGN",
+      unitPriceMinor: 250000,
+      totalSold: 7,
+      vendorId: "vendor_1",
+      vendorName: "Verified vendor",
+      vendorVerified: true,
+    }]);
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("returns a safe unavailable response when points marketplace tables are not ready", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => { throw new Error("simulated missing table"); };
+  try {
+    const response = await app.request("/api/marketplace/packages");
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "Marketplace data is not available yet" });
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
