@@ -1,6 +1,6 @@
 // Bun's built-in test runner; Convex hooks are replaced with an in-memory fake.
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, within } from "@testing-library/react";
 import { screen, waitFor } from "@testing-library/dom";
 import userEvent from "@testing-library/user-event";
 import { ConvexError } from "convex/values";
@@ -90,8 +90,9 @@ describe("PointMarketplace checkout integration", () => {
     const user = userEvent.setup();
     render(<PointMarketplace />);
     await user.click(screen.getByRole("button", { name: /Buy/i }));
-    expect(screen.getByText(fmtNaira(naira(packageRow.priceMinor)))).toBeTruthy();
-    expect(screen.getByText(fmtPoints(points(packageRow.points), { sign: true })).classList.contains("text-success")).toBe(true);
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText(fmtNaira(naira(packageRow.priceMinor)))).toBeTruthy();
+    expect(dialog.getByText(fmtPoints(points(packageRow.points), { sign: true })).classList.contains("text-success")).toBe(true);
   });
 
   test("confirm calls createOrder with the selected package id", async () => {
