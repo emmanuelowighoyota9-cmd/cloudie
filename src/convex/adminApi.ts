@@ -578,6 +578,64 @@ export const resolveDispute = mutation({
   },
 });
 
+/** Resolve a dispute with a partial buyer refund and release the remaining escrow to the vendor. */
+export const partialRefundDispute = mutation({
+  args: { disputeId: v.id("disputes"), amountNgn: v.number(), reason: v.string() },
+  handler: async (ctx, args) => {
+    const { adminId } = await requireAdmin(ctx);
+    const dispute = await ctx.db.get(args.disputeId);
+    if (!dispute) throw new Error("DISPUTE_NOT_FOUND");
+    if (dispute.status === "resolved" || dispute.status === "closed") throw new Error("DUPLICATE_OPERATION: dispute already resolved");
+    const order = await ctx.db.get(dispute.orderId);
+    if (!order) throw new Error("ORDER_NOT_FOUND");
+    const vendor = await ctx.db.get(order.vendorId);
+    if (!vendor) throw new Error("VENDOR_NOT_FOUND");
+    const vendorUser = await ctx.db.get(vendor.userId);
+    const buyer = await ctx.db.get(order.buyerId);
+    if (!vendorUser || !buyer) throw new Error("USER_NOT_FOUND");
+    const rate = await readPointRate(ctx);
+    const totalNgn = order.totalNgn ?? order.totalPoints * rate.ngnPerPoint;
+    const amountNgn = Math.round(args.amountNgn * 100) / 100;
+    if (!Number.isFinite(amountNgn) || amountNgn <= 0 || amountNgn >= totalNgn) throw new Error("PARTIAL_REFUND_MUST_BE_BETWEEN_ZERO_AND_ORDER_TOTAL");
+    if (args.reason.trim().length < 10) throw new Error("REASON_TOO_SHORT");
+    const remainingNgn = Math.round((totalNgn - amountNgn) * 100) / 100;
+    const product = await ctx.db.get(order.productId);
+    await debitWallet(ctx, {
+      userId: vendorUser._id, amountNgn,
+      description: `Partial dispute refund: ${product?.name ?? "order"}`,
+      type: "refund", referenceId: args.disputeId,
+      idempotencyKey: `dispute-partial-refund-${args.disputeId}`,
+    });
+    await creditWallet(ctx, {
+      userId: buyer._id, amountNgn,
+      description: `Partial dispute refund: ${product?.name ?? "order"}`,
+      type: "refund", referenceId: args.disputeId,
+      idempotencyKey: `dispute-partial-refund-${args.disputeId}-buyer`,
+    });
+    await creditWallet(ctx, {
+      userId: vendorUser._id, amountNgn: remainingNgn,
+      description: `Escrow release after partial refund: ${product?.name ?? "order"}`,
+      type: "vendor_transaction", referenceId: order._id,
+      idempotencyKey: `dispute-partial-release-${args.disputeId}`,
+    });
+    await ctx.db.patch(order._id, { status: "completed" });
+    await ctx.db.patch(vendor._id, {
+      earnings: vendor.earnings + remainingNgn,
+      totalSales: vendor.totalSales + order.quantity,
+    });
+    const now = Date.now();
+    await ctx.db.patch(args.disputeId, { status: "resolved", resolution: args.reason.trim(), resolvedBy: adminId, resolvedAt: now, updatedAt: now });
+    await auditLog(ctx, adminId, {
+      action: "DISPUTE_PARTIAL_REFUND",
+      resource: "dispute", resourceId: args.disputeId,
+      before: { disputeStatus: dispute.status, orderStatus: order.status },
+      after: { disputeStatus: "resolved", orderStatus: "completed", refundNgn: amountNgn, vendorReleaseNgn: remainingNgn },
+      reason: args.reason.trim(),
+    });
+    return { success: true, refundNgn: amountNgn, releasedNgn: remainingNgn };
+  },
+});
+
 // ─── Escrow / Orders ────────────────────────────────────────────────────────
 
 /**
