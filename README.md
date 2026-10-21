@@ -103,9 +103,9 @@ The frontend uses Bun's built-in test runner; no Vitest or Jest runner is config
 The script reports success only if all four commands exit zero. It does **not** prove live Convex purchase behavior. Separately verify a real buy → escrow → credited cycle and an insufficient-wallet rejection against a deployed Convex environment. A live deployment smoke check can also be run with `npm run smoke:live`.
 
 **Live backend verification** (manual only; not run in CI):
-1. Deploy a Convex dev environment and prepare a buyer test account with sufficient wallet balance and a separate approved vendor test account that owns the selected package.
-2. Set `CONVEX_URL`, `BUYER_AUTH_TOKEN`, `VENDOR_AUTH_TOKEN`, and `TEST_PACKAGE_ID` in your environment. The buyer token must belong to the buyer test user; the vendor token must belong to the approved vendor who owns the package.
-3. Before the insufficient-funds step, set the test user's wallet balance below the package price using the approved test setup/admin workflow.
-4. Run `bun run verify:convex`.
+1. Deploy a Convex dev environment and prepare a buyer test account with sufficient NGN wallet balance and a separate approved vendor test account that owns the selected package. The buyer and vendor must be different accounts because only the approved vendor can fulfill the order.
+2. Set `CONVEX_URL`, `BUYER_AUTH_TOKEN`, `VENDOR_AUTH_TOKEN`, and `TEST_PACKAGE_ID` in your environment. The buyer token must belong to the buyer test user; the vendor token must belong to the approved vendor who owns the package. The script resolves `TEST_PACKAGE_ID` against the typed package query instead of casting the environment string to a Convex ID.
+3. Run `bun run verify:convex`. The script uses the buyer client for `createOrder` and the vendor client for `fulfillOrder`; both clients verify the same order's escrow and credited states.
+4. When prompted for the insufficient-funds check, lower the buyer's wallet below the package price using the approved test setup/admin workflow, then press Enter. The script expects the error message `Insufficient NGN wallet balance`.
 
 This script requires credentials and mutable test data and is intentionally not run in CI.
