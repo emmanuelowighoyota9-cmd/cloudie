@@ -120,3 +120,10 @@ This is a **schema and endpoint scaffold**, not marketplace data parity. The new
 - [ ] No frontend or production cutover has occurred.
 
 Do not point the live buyer page at this endpoint until CI passes, migration 008 is applied and verified on a disposable branch, and source data reconciliation plus browser tests are complete.
+
+
+## Migration runner evidence update (2026-10-21)
+
+The dedicated workflow passed on disposable branch `migration-runner-full-clean` (branch ID `br-restless-rice-b531jufw`): [GitHub Actions run 39677864909](https://github.com/emmanuelowighoyota9-cmd/cloudie/actions/runs/39677864909). It verified the branch marker, ran the checksum-aware migration runner, performed the dry-run, and confirmed migration versions 001–008 with checksums. Pull-request CI also passed: [run 39676752844](https://github.com/emmanuelowighoyota9-cmd/cloudie/actions/runs/39676752844).
+
+This confirms the migration runner and additive schema on a disposable database. It does **not** prove marketplace data parity. The source-to-target export, validation, import, normalized count/hash comparison, and browser smoke test remain outstanding. The approved next step is documented in [marketplace-neon-data-reconciliation.md](marketplace-neon-data-reconciliation.md). Production routing and all financial writes remain on Convex.
