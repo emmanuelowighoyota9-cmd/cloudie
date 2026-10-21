@@ -17,6 +17,7 @@ import {
   fmtDate,
 } from "@/components/admin/shared";
 import { usePricing, formatNgn } from "@/lib/pricing";
+import { ReasonRequiredDialog } from "@/components/admin/ReasonRequiredDialog";
 
 export default function AdminUserDetail() {
   const { ngnPerPoint } = usePricing();
@@ -34,6 +35,7 @@ export default function AdminUserDetail() {
 
   const [action, setAction] = useState<null | { kind: "suspend" | "reactivate" | "terminate" | "role" | "credit" | "debit"; label: string }>(null);
   const [amount, setAmount] = useState("");
+  const [adjustPointsOpen, setAdjustPointsOpen] = useState(false);
   const [nextRole, setNextRole] = useState<"user" | "vendor" | "admin">("user");
 
   if (detail === undefined) {
@@ -49,6 +51,7 @@ export default function AdminUserDetail() {
 
   const { user, wallet, ledger, shipments, documents, orders, notifications, audit, sessions, referralsSent, referralsReceived } = detail;
   const status = user.isTerminated ? "terminated" : user.isSuspended ? "suspended" : "active";
+  const currentPoints = Number(user.pointsBalance ?? 0);
 
   const runAction = async (reason: string) => {
     if (!action) return;
@@ -164,11 +167,8 @@ export default function AdminUserDetail() {
           >
             Change role to {user.role === "vendor" ? "user" : "vendor"}
           </Button>
-          <Button variant="outline" className="text-green-700" onClick={() => setAction({ kind: "credit", label: "Credit wallet" })}>
-            <Coins className="mr-1 h-4 w-4" /> Credit
-          </Button>
-          <Button variant="outline" className="text-red-700" onClick={() => setAction({ kind: "debit", label: "Deduct wallet" })}>
-            <Coins className="mr-1 h-4 w-4" /> Deduct
+          <Button variant="outline" className="border-red-500/30 text-red-700 hover:bg-red-500/10" onClick={() => setAdjustPointsOpen(true)}>
+            <Coins className="mr-1 h-4 w-4" /> Adjust points
           </Button>
         </CardContent>
       </Card>
@@ -360,6 +360,21 @@ export default function AdminUserDetail() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ReasonRequiredDialog
+        open={adjustPointsOpen}
+        onClose={() => setAdjustPointsOpen(false)}
+        title="Adjust user points"
+        description="Apply a signed points adjustment. The reason is mandatory and the change is recorded in the audit trail."
+        currentBalance={`${currentPoints.toLocaleString()} points · ${formatNgn(user.walletBalanceNgn ?? currentPoints * ngnPerPoint)}`}
+        amountLabel="Signed amount (points)"
+        submitLabel="Apply adjustment"
+        minReasonLength={10}
+        onSubmit={async ({ amount: points, reason }) => {
+          if (!Number.isFinite(points) || points === 0) throw new Error("Enter a non-zero signed points amount.");
+          await adminAdjust({ userId: user._id, amountNgn: points * ngnPerPoint, reason });
+        }}
+      />
 
       {/* Destructive action confirmations */}
       {action && (action.kind === "credit" || action.kind === "debit") ? (
