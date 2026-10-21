@@ -462,7 +462,9 @@ test("rejects unsupported points marketplace sort values", async () => {
 test("returns an empty public points marketplace list when the read model has no rows", async () => {
   const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
   const originalQuery = mutablePool.query;
-  mutablePool.query = async (sql: unknown, values: unknown[]) => {
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = args[0];
+    const values = args[1] as unknown[];
     assert.match(String(sql), /FROM point_market_packages/);
     assert.match(String(sql), /v\.status = 'approved'/);
     assert.deepEqual(values, [true, "", null, null, null, null]);
