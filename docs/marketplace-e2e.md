@@ -30,7 +30,7 @@
 - The NGN price is formatted with `fmtNaira`, in a monospace/tabular-number presentation.
 - The points reward is formatted with `fmtPoints`, in monospace, with a leading `+` and success-green treatment.
 - The wallet-after amount is displayed in NGN.
-- No single line in the dialog contains both `₦` and the word “points” (case-insensitive).
+- No single rendered dialog line combines the NGN currency symbol with the reward-unit label (case-insensitive).
 - The displayed wallet-after amount equals the starting NGN wallet balance minus the package price, bounded by the UI's documented arithmetic.
 - Review copy clearly explains that NGN is held in escrow and points are credited only after vendor fulfillment.
 
