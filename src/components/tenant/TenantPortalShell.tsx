@@ -103,7 +103,6 @@ export function TenantPortalShell({
   useEffect(() => {
     if (!data) return;
     const root = document.documentElement;
-    const branding = data.tenant.branding ?? null;
     const fontFamily = data.tenant.fontFamily;
     const entries = Object.entries({
       ...bankThemeVars(theme),
