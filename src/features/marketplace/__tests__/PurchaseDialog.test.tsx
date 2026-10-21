@@ -65,7 +65,7 @@ describe("PurchaseDialog", () => {
     expect(screen.getByText(fmtNaira(draft.price))).toBeTruthy();
     expect(screen.getByText(fmtPoints(draft.pointsReward, { sign: true })).classList.contains("text-success")).toBe(true);
     expect(screen.getByRole("button", { name: "Confirm purchase" }).hasAttribute("disabled")).toBe(false);
-    expectNoMixedCurrencyAndPoints(container);
+    expectNoMixedCurrencyAndPoints(document.body);
   });
 
   test("pending keeps the order reference monospaced, closes safely, and refreshes", async () => {
