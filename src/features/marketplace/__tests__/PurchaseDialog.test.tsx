@@ -62,8 +62,10 @@ describe("PurchaseDialog", () => {
     renderDialog("review");
     expect(screen.getByText("Starter points bundle")).toBeTruthy();
     expect(screen.getByText("Vendor: Verified Vendor")).toBeTruthy();
-    expect(screen.getByText(fmtNaira(draft.price))).toBeTruthy();
-    expect(screen.getByText(fmtPoints(draft.pointsReward, { sign: true })).classList.contains("text-success")).toBe(true);
+    expect(fmtNaira(draft.price)).toBe("₦4,500.00");
+    expect(fmtPoints(draft.pointsReward, { sign: true })).toBe("+5,000 points");
+    expect(screen.getByText("₦4,500.00")).toBeTruthy();
+    expect(screen.getByText("+5,000 points").classList.contains("text-success")).toBe(true);
     expect(screen.getByRole("button", { name: "Confirm purchase" }).hasAttribute("disabled")).toBe(false);
     expectNoMixedCurrencyAndPoints(document.body);
   });
@@ -81,9 +83,11 @@ describe("PurchaseDialog", () => {
 
   test("success renders a receipt with paid amount, wallet balance, signed points, and no toast", () => {
     const { container } = renderDialog("success");
-    expect(screen.getAllByText(fmtNaira(draft.price)).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(fmtNaira(naira(550000))).length).toBeGreaterThan(0);
-    const credited = screen.getAllByText(fmtPoints(points(5000), { sign: true }));
+    expect(fmtNaira(draft.price)).toBe("₦4,500.00");
+    expect(fmtPoints(points(5000), { sign: true })).toBe("+5,000 points");
+    expect(screen.getAllByText("₦4,500.00").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₦5,500.00").length).toBeGreaterThan(0);
+    const credited = screen.getAllByText("+5,000 points");
     expect(credited.some((element) => element.classList.contains("text-success"))).toBe(true);
     expect(screen.getByText("order-abc123")).toBeTruthy();
     expectNoMixedCurrencyAndPoints(container);
