@@ -1,6 +1,7 @@
 // Bun's built-in test runner; Convex hooks are replaced with an in-memory fake.
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/dom";
 import userEvent from "@testing-library/user-event";
 import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
@@ -120,7 +121,7 @@ describe("PointMarketplace checkout integration", () => {
     queryState.liveOrder = { status: "credited", orderId: "order_test", points: 5000 };
     view.rerender(<PointMarketplace />);
     expect(await screen.findByText(/Points credited:/)).toBeTruthy();
-    expect(screen.getAllByText(fmtPoints(points(5000), { sign: true })).some((element) => element.classList.contains("text-success"))).toBe(true);
+    expect(screen.getAllByText(fmtPoints(points(5000), { sign: true })).some((element: HTMLElement) => element.classList.contains("text-success"))).toBe(true);
   });
 
   test("insufficient wallet rejection enters failed state with no-charge copy", async () => {
