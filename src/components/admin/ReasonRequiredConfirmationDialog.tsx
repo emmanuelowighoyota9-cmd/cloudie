@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -20,7 +20,7 @@ export interface ReasonRequiredDialogProps {
   minReasonLength?: number;
   /** Optional controlled visibility. Defaults to open when omitted. */
   open?: boolean;
-  /** Called when the dialog is dismissed. */
+  /** Called when the dialog is dismissed or successfully confirmed. */
   onOpenChange?: (open: boolean) => void;
   /** Called with the trimmed reason after valid confirmation. May be async. */
   onConfirm: (reason: string) => void | Promise<void>;
@@ -28,44 +28,65 @@ export interface ReasonRequiredDialogProps {
   className?: string;
 }
 
-/**
- * Confirmation modal for destructive or privileged overrides.
- * A non-empty reason meeting minReasonLength is required before confirming.
- */
+/** Confirmation modal for destructive or privileged overrides. */
 export function ReasonRequiredDialog({
   title,
   description,
   confirmLabel,
   destructive = false,
   minReasonLength = 10,
-  open = true,
+  open: controlledOpen,
   onOpenChange,
   onConfirm,
   cancelLabel = "Cancel",
   className,
 }: ReasonRequiredDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(controlledOpen ?? true);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
+  const open = controlledOpen ?? internalOpen;
   const trimmedReason = reason.trim();
   const requiredLength = Number.isFinite(minReasonLength)
     ? Math.max(0, Math.floor(minReasonLength))
     : 10;
   const isValid = trimmedReason.length >= requiredLength;
 
+  useEffect(() => {
+    if (controlledOpen !== undefined) setInternalOpen(controlledOpen);
+  }, [controlledOpen]);
+
+  useEffect(() => {
+    if (!open) {
+      setReason("");
+      setSubmitError("");
+    }
+  }, [open]);
+
+  function setVisibility(nextOpen: boolean) {
+    if (busy && !nextOpen) return;
+    if (controlledOpen === undefined) setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  }
+
   function dismiss() {
     if (busy) return;
-    setReason("");
-    onOpenChange?.(false);
+    setVisibility(false);
   }
 
   async function confirm() {
     if (!isValid || busy) return;
     setBusy(true);
+    setSubmitError("");
     try {
       await onConfirm(trimmedReason);
       setReason("");
-      onOpenChange?.(false);
+      setVisibility(false);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "The action could not be completed. Try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -74,10 +95,7 @@ export function ReasonRequiredDialog({
   return (
     <Dialog
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) dismiss();
-        else onOpenChange?.(true);
-      }}
+      onOpenChange={(nextOpen) => setVisibility(nextOpen)}
     >
       <DialogContent
         className={className ?? "sm:max-w-md"}
@@ -116,7 +134,10 @@ export function ReasonRequiredDialog({
             <Textarea
               id="reason-required-dialog-reason"
               value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              onChange={(event) => {
+                setReason(event.target.value);
+                setSubmitError("");
+              }}
               placeholder="Explain why this action is necessary…"
               className="min-h-24"
               maxLength={1000}
@@ -126,12 +147,18 @@ export function ReasonRequiredDialog({
             />
             <p
               id="reason-required-dialog-count"
-              className={`text-xs ${isValid ? "text-muted-foreground" : "text-muted-foreground"}`}
+              className="text-xs text-muted-foreground"
               aria-live="polite"
             >
               {trimmedReason.length} characters · {requiredLength} required
             </p>
           </div>
+
+          {submitError && (
+            <p role="alert" className="text-sm text-destructive">
+              {submitError}
+            </p>
+          )}
         </div>
 
         <DialogFooter>
