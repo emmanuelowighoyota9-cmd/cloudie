@@ -1,7 +1,9 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-GlobalRegistrator.register();
-import "@testing-library/jest-dom";
 import { afterEach } from "bun:test";
-import { cleanup } from "@testing-library/react";
+
+GlobalRegistrator.register();
+
+const { cleanup } = await import("@testing-library/react");
+await import("@testing-library/jest-dom");
 
 afterEach(() => cleanup());
