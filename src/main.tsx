@@ -179,6 +179,7 @@ const AdminTenants = lazyWithRetry(() => import("./pages/AdminTenants.tsx"));
 const AdminAnalytics = lazyWithRetry(() => import("./pages/AdminAnalytics.tsx"));
 const AdminAuditLogs = lazyWithRetry(() => import("./pages/AdminAuditLogs.tsx"));
 const AdminMarketplace = lazyWithRetry(() => import("./pages/AdminMarketplace.tsx"));
+const AdminStatusBadgeQA = lazyWithRetry(() => import("./pages/AdminStatusBadgeQA.tsx"));
 const AdminOrders = lazyWithRetry(() => import("./pages/AdminOrders.tsx"));
 const AdminDisputes = lazyWithRetry(() => import("./pages/AdminDisputes.tsx"));
 const AdminShipments = lazyWithRetry(() => import("./pages/AdminShipments.tsx"));
@@ -543,6 +544,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="kyc" element={<AdminKYC />} />
                   <Route path="notifications" element={<AdminNotifications />} />
                   <Route path="audit" element={<AdminAuditLogs />} />
+                  <Route path="status-badge-qa" element={<AdminStatusBadgeQA />} />
                   <Route path="audit-logs" element={<AdminAuditLogs />} />
                   <Route path="analytics" element={<AdminAnalytics />} />
                   <Route path="system-health" element={<AdminInfrastructure />} />
