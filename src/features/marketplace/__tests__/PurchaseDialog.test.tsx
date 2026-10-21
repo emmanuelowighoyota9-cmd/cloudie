@@ -59,7 +59,7 @@ describe("PurchaseDialog", () => {
   afterEach(() => cleanup());
 
   test("review shows package, vendor, typed currency values, and enabled confirmation", () => {
-    const { container } = renderDialog("review");
+    renderDialog("review");
     expect(screen.getByText("Starter points bundle")).toBeTruthy();
     expect(screen.getByText("Vendor: Verified Vendor")).toBeTruthy();
     expect(screen.getByText(fmtNaira(draft.price))).toBeTruthy();
