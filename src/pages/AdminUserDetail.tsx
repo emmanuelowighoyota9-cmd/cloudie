@@ -94,8 +94,8 @@ export default function AdminUserDetail() {
           <Link to="/admin/users" aria-label="Back to users"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{user.name || "Unnamed user"}</h1>
-          <p className="truncate text-sm text-slate-500 dark:text-slate-400">{user.email || "No email"}</p>
+          <h1 className="truncate text-xl font-bold tracking-tight text-foreground">{user.email || "No email"}</h1>
+          <p className="truncate text-xs text-muted-foreground">{user.name || "Unnamed user"} · User ID {String(user._id).slice(-10)}</p>
         </div>
         <div className="flex gap-1.5">
           <StatusBadge status={user.role ?? "user"} />
