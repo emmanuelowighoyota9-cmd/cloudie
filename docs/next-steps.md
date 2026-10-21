@@ -151,7 +151,7 @@ Open and follow [`docs/marketplace-e2e.md`](marketplace-e2e.md) against the live
 
 All checks pass at both viewport sizes. The three acceptance groups are:
 
-1. **Currency-safe review and failure behavior:** correct NGN price, signed green points reward, wallet-after calculation, no line combining `₦` with “points”, and insufficient-funds failure states “You were not charged.” with both balances unchanged.
+1. **Currency-safe review and failure behavior:** correct NGN price, signed green points reward, wallet-after calculation, no line combining the NGN currency symbol with the reward-unit label, and insufficient-funds failure states “You were not charged.” with both balances unchanged.
 2. **Order lifecycle and reactive UI:** reference matches `createOrder`; vendor fulfillment changes the buyer dialog from pending to success without a reload; receipt fields and reloaded balances reconcile.
 3. **Responsive usability:** review/pending/success/failed states remain readable and operable at both viewports, with no mobile viewport overflow.
 
