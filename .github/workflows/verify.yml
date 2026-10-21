@@ -20,24 +20,17 @@ jobs:
         id: check
         run: |
           set +e
-          bun install --frozen-lockfile --dry-run > /tmp/install.log 2>&1
+          output=$(bun install --frozen-lockfile 2>&1)
           status=$?
           set -e
-          cat /tmp/install.log
+          echo "$output"
+
           if [ "$status" -eq 0 ]; then
             echo "drift=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          echo "Frozen dry-run failed; checking whether this Bun version supports --dry-run."
-          echo "Retrying with a normal install, then comparing bun.lock to the checked-out commit."
-          if ! bun install --no-frozen-lockfile; then
-            echo "drift=unknown" >> "$GITHUB_OUTPUT"
-            echo "::error::Lockfile pre-check could not complete. Inspect the install output above."
-            exit 1
-          fi
-
-          if ! git diff --quiet -- bun.lock; then
+          if echo "$output" | grep -qi "lockfile had changes"; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
             echo "::error::bun.lock is out of date with package.json."
             echo "Run: gh workflow run regen-lock.yml --ref main"
@@ -45,8 +38,8 @@ jobs:
             exit 1
           fi
 
-          echo "The frozen dry-run failed, but the fallback install did not change bun.lock."
-          echo "drift=false" >> "$GITHUB_OUTPUT"
+          echo "::error::Install failed for a reason other than lockfile drift. Inspect the log above."
+          exit 1
 
   root:
     needs: lockfile-check
@@ -71,6 +64,8 @@ jobs:
           exit 1
       - run: bunx tsc -b --noEmit
       - run: bun test
+      - name: Typecheck manual scripts
+        run: bunx tsc -p tsconfig.scripts.json
 
   api:
     runs-on: ubuntu-latest
