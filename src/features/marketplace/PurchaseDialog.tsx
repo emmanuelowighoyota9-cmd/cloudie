@@ -83,7 +83,7 @@ export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = fa
           {pending && order && <><Button variant="outline" onClick={() => onOpenChange(false)}>Close safely</Button><Button variant="outline" onClick={onRefresh}>Refresh</Button><Button onClick={() => onViewOrder?.(order.reference)}>View order <ExternalLink className="size-4" /></Button></>}
           {success && order && <><Button variant="outline" onClick={() => onViewOrder?.(order.reference)}>View order</Button><Button onClick={() => onOpenChange(false)}>Done</Button></>}
           {failed && order && <><Button variant="outline" onClick={() => onContactSupport?.(order.reference)}>Contact support ({order.reference})</Button><Button onClick={onRetry}>Try again</Button></>}
-          {ambiguous && order && <><Button variant="outline" onClick={() => onContactSupport?.(order.reference)}>Contact support</Button><Button onClick={() => onOpenChange(false)}>Close</Button></>}
+          {ambiguous && order && <><Button variant="outline" onClick={() => onContactSupport?.(order.reference)}>Contact support ({order.reference})</Button><Button onClick={() => onOpenChange(false)}>Close</Button></>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
