@@ -124,6 +124,6 @@ describe("PointMarketplace checkout integration", () => {
     const user = userEvent.setup();
     const view = render(<PointMarketplace />);
     await user.click(screen.getByRole("button", { name: /Buy/i }));
-    noMixedCurrencyAndPoints(view.container);
+    noMixedCurrencyAndPoints(document.body);
   });
 });
