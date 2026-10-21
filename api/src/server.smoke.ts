@@ -447,6 +447,71 @@ test("refuses login for suspended and terminated accounts without issuing a sess
 
 
 
+test("keeps first-admin bootstrap disabled when its operator token is absent", async () => {
+  const previous = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  try {
+    const response = await app.request("/api/auth/bootstrap-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Initial Admin",
+        email: "admin@example.com",
+        password: "long-enough-test-password",
+        token: "x".repeat(40),
+      }),
+    });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "Administrator bootstrap is disabled" });
+  } finally {
+    if (previous === undefined) delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+    else process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = previous;
+  }
+});
+
+test("validates first-admin bootstrap payload before database access", async () => {
+  const previous = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = "test-bootstrap-token-that-is-long-enough";
+  try {
+    const response = await app.request("/api/auth/bootstrap-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "", email: "not-an-email", password: "short", token: "x" }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Invalid administrator bootstrap details" });
+  } finally {
+    if (previous === undefined) delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+    else process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = previous;
+  }
+});
+
+test("rejects an incorrect first-admin bootstrap token without database access", async () => {
+  const previous = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  const mutablePool = pool as unknown as { connect: (...args: unknown[]) => Promise<unknown> };
+  const originalConnect = mutablePool.connect;
+  process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = "test-bootstrap-token-that-is-long-enough";
+  mutablePool.connect = async () => { throw new Error("database must not be accessed"); };
+  try {
+    const response = await app.request("/api/auth/bootstrap-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Initial Admin",
+        email: "admin@example.com",
+        password: "long-enough-test-password",
+        token: "incorrect-bootstrap-token-value-000",
+      }),
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "Invalid bootstrap authorization" });
+  } finally {
+    mutablePool.connect = originalConnect;
+    if (previous === undefined) delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+    else process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = previous;
+  }
+});
+
 test("validates points marketplace filters before database access", async () => {
   const response = await app.request("/api/marketplace/packages?minPrice=-1");
   assert.equal(response.status, 400);
