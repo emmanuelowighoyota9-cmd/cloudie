@@ -56,8 +56,8 @@ export default function AdminMarketplace() {
   async function resolveCase(kind: "release" | "refund") {
     if (!selectedDispute || !selectedOrder || resolutionReason.trim().length < 10) { toast.error("Enter a reason of at least 10 characters."); return; }
     setResolving(true); try {
-      if (kind === "release") await releaseEscrow({ orderId: selectedOrder._id as never, reason: resolutionReason.trim() });
-      else await refundOrder({ orderId: selectedOrder._id as never, reason: resolutionReason.trim() });
+      if (kind === "release") await releaseEscrow({ orderId: selectedOrder._id as never, reason: resolutionReason.trim(), disputeId: selectedDispute._id as never });
+      else await refundOrder({ orderId: selectedOrder._id as never, reason: resolutionReason.trim(), disputeId: selectedDispute._id as never });
       toast.success(kind === "release" ? "Escrow released and action audited" : "Buyer refunded and action audited"); setResolutionReason(""); setSelectedDisputeId(null);
     } catch (e) { toast.error(e instanceof Error ? e.message : "Dispute action failed"); } finally { setResolving(false); }
   }
