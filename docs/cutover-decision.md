@@ -301,3 +301,28 @@ This appendix lists query, mutation, and action declarations matched directly in
 
 ### `catalog`
 `getCatalog` (query)
+
+
+### `cloudieClassifier`
+`classifyDeterministic` (query), `ingestClassifiedTemplate` (mutation), `listClassifiedTemplates` (query)
+
+### `cloudieClassifierAction`
+`classifyWithAi` (action)
+
+### `docTemplateAdmin`
+`adminListTemplates` (query), `adminSetTemplateStatus` (mutation), `adminSetTemplatePrice` (mutation), `adminPublishTemplateVersion` (mutation), `adminGetTemplate` (query), `adminCreateTemplate` (mutation), `adminDocumentStats` (query), `adminBulkImportTemplates` (mutation), `adminExportTemplates` (query)
+
+### `docTemplates`
+`listCategories` (query), `listTemplates` (query), `getTemplate` (query), `ensureStarterTemplates` (mutation), `createDocument` (mutation), `updateDocumentValues` (mutation), `finalizeDocument` (mutation), `listMyDocuments` (query), `getDocument` (query), `getStudioStats` (query), `getRenderQuote` (query), `shareDocument` (mutation), `revokeShare` (mutation), `archiveDocument` (mutation), `publicViewDocument` (mutation), `listMyTemplates` (query), `getMyTemplate` (query), `createMyTemplate` (mutation), `updateMyTemplate` (mutation)
+
+### `documents`
+`generate` (mutation), `list` (query), `get` (query), `adminList` (query)
+
+### `email`
+`saveApiKey` (action), `clearApiKey` (action), `saveTransportConfig` (action), `saveSmtpPassword` (action), `clearSmtpPassword` (action), `refreshEmailStatus` (action), `sendTestEmail` (action), `sendTransactional` (internalAction), `enqueueCampaign` (internalAction), `enqueueCampaignMessage` (internalAction), `dispatchQueued` (internalAction)
+
+### `emailAdmin`
+`getEmailSettings` (query), `listEmailLogs` (query), `getEmailDeliveryStats` (query), `getAdminUser` (internalQuery), `getSystemSecret` (internalQuery), `getConfigForSend` (internalQuery), `getDispatchReadiness` (internalQuery), `claimQueuedMessages` (internalQuery), `putSystemSecretIfAbsent` (internalMutation), `saveConfig` (mutation), `saveApiKeyRow` (internalMutation), `saveTransportRow` (internalMutation), `saveSmtpCredentialRow` (internalMutation), `clearSmtpCredentialRow` (internalMutation), `clearApiKeyRow` (internalMutation), `recordVerification` (internalMutation), `recordTest` (internalMutation), `enqueueMessage` (internalMutation), `markMessageSending` (internalMutation), `markMessageSent` (internalMutation), `markMessageFailed` (internalMutation), `markMessageBounced` (internalMutation), `finalizeCampaign` (internalMutation), `failCampaign` (internalMutation)
+
+### `jejelaye`
+`listNumberProducts` (action), `purchaseNumber` (action), `refreshNumberSession` (action)
