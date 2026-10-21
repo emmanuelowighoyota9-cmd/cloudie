@@ -27,6 +27,10 @@ export default function AdminUserDetail() {
     api.adminApi.adminUserDetail,
     id ? { userId: id as never } : "skip",
   );
+  const tenantContext = useQuery(
+    api.adminOverview.userContext,
+    id ? { userId: id as never } : "skip",
+  );
 
   const suspendUser = useMutation(api.admin.suspendUser);
   const terminateUser = useMutation(api.adminApi.terminateUser);
@@ -197,10 +201,14 @@ export default function AdminUserDetail() {
           </div>
         </TabsContent>
         <TabsContent value="tenant-sites" className="mt-4">
-          <AdminEmpty message="Tenant-site records are not exposed by this user detail query yet." hint="Connect the user-to-tenant relationship query to populate this tab." />
+          {tenantContext === undefined ? <AdminSkeleton rows={2} /> : !tenantContext || tenantContext.sites.length === 0 ? <AdminEmpty message="No tenant sites linked to this user." /> : (
+            <div className="overflow-x-auto rounded-lg border border-border"><table className="w-full text-left text-xs"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="p-3">Site</th><th className="p-3">Subdomain</th><th className="p-3">Role</th><th className="p-3">Status</th></tr></thead><tbody>{tenantContext.sites.map((site) => <tr key={site._id} className="border-t border-border"><td className="p-3 font-medium">{site.siteName || "Untitled site"}</td><td className="p-3 font-mono">{site.subdomain || "—"}</td><td className="p-3">{site.role || "member"}</td><td className="p-3"><StatusBadge status={site.status || "active"} /></td></tr>)}</tbody></table></div>
+          )}
         </TabsContent>
         <TabsContent value="vendor" className="mt-4">
-          <AdminEmpty message="Vendor profile is not available for this account." hint="Vendor details will appear here when the user is linked to a vendor profile." />
+          {tenantContext === undefined ? <AdminSkeleton rows={2} /> : !tenantContext.vendor ? <AdminEmpty message="No vendor profile linked to this user." /> : (
+            <Card><CardContent className="grid gap-4 p-4 sm:grid-cols-2"><div><p className="text-[11px] text-muted-foreground">Business</p><p className="mt-1 font-semibold">{tenantContext.vendor.businessName}</p></div><div><p className="text-[11px] text-muted-foreground">Status</p><div className="mt-1"><StatusBadge status={tenantContext.vendor.status} /></div></div><div><p className="text-[11px] text-muted-foreground">Total sales</p><p className="mt-1 font-mono">{formatNgn(tenantContext.vendor.totalSales ?? 0)}</p></div><div><p className="text-[11px] text-muted-foreground">Earnings</p><p className="mt-1 font-mono">{formatNgn(tenantContext.vendor.earnings ?? 0)}</p></div>{tenantContext.vendor.statusReason && <p className="text-xs text-muted-foreground sm:col-span-2">Status reason: {tenantContext.vendor.statusReason}</p>}</CardContent></Card>
+          )}
         </TabsContent>
 
         <TabsContent value="ledger" className="mt-4">
