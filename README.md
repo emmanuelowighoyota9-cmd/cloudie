@@ -81,19 +81,23 @@ VITE_NEON_API_URL=https://cloudie-operations-api-stage.onrender.com npm run buil
 
 ---
 
-## 4. Verification & Test Suite
+## 4. Verification
+
+Run the four local typecheck and unit-test commands in order with the repository script:
 
 ```bash
-# Frontend TypeScript check
+bash scripts/verify.sh
+```
+
+The script runs:
+
+```bash
 bunx tsc -b --noEmit
-
-# Frontend & domain unit tests (Vitest / Bun test runner)
 bun test
-
-# Backend API TypeScript check & security/smoke test suite
 npm --prefix api run typecheck
 npm --prefix api test
-
-# Live deployment smoke check against cloudie.wuaze.com & Render API
-npm run smoke:live
 ```
+
+The frontend uses Bun's built-in test runner; no Vitest or Jest runner is configured. To invoke the script directly after checkout, run `chmod +x scripts/verify.sh` once, then `./scripts/verify.sh`.
+
+The script reports success only if all four commands exit zero. It does **not** prove live Convex purchase behavior. Separately verify a real buy → escrow → credited cycle and an insufficient-wallet rejection against a deployed Convex environment. A live deployment smoke check can also be run with `npm run smoke:live`.
