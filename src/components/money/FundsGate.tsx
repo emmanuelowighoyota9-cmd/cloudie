@@ -15,7 +15,12 @@ export const points = (amount: number): Points => {
 
 export function fmtNaira(value: Naira): string {
   if (value.kind !== "naira") throw new TypeError("Expected Naira.");
-  return `₦${(value.kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value.kobo / 100);
 }
 
 export function fmtPoints(value: Points, options: { sign?: boolean } = {}): string {
