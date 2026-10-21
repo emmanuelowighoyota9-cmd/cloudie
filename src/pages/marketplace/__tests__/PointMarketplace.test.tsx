@@ -122,7 +122,7 @@ describe("PointMarketplace checkout integration", () => {
 
   test("rendered text never mixes NGN and points", async () => {
     const user = userEvent.setup();
-    const view = render(<PointMarketplace />);
+    render(<PointMarketplace />);
     await user.click(screen.getByRole("button", { name: /Buy/i }));
     noMixedCurrencyAndPoints(document.body);
   });
