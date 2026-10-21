@@ -326,3 +326,28 @@ This appendix lists query, mutation, and action declarations matched directly in
 
 ### `jejelaye`
 `listNumberProducts` (action), `purchaseNumber` (action), `refreshNumberSession` (action)
+
+
+### `logspanel`
+`listNumberCountries` (action), `listNumberServices` (action), `listNumberAreaCodes` (action), `listBoostCategories` (action), `listBoostServices` (action), `syncCatalog` (action), `purchase` (action), `refreshOrder` (action)
+
+### `marketplace`
+`registerVendor` (mutation), `getMyVendor` (query), `createProduct` (mutation), `listProducts` (query), `getProduct` (query), `createOrder` (mutation), `getMyOrders` (query), `getMyOrder` (query), `getVendorOrders` (query), `createDispute` (mutation), `listDisputes` (query), `adminApproveProduct` (mutation), `adminSetProductPrice` (mutation), `adminListVendors` (query), `adminUpdateVendor` (mutation), `adminListAllProducts` (query), `adminCreateProduct` (mutation), `adminBulkImportProducts` (mutation), `prepareLogspanelOrder` (internalMutation), `finalizeLogspanelOrder` (internalMutation), `getLogspanelProducts` (query), `getLogspanelAdminStatus` (query), `isLogspanelEnabled` (query), `setLogspanelSettings` (mutation), `syncLogspanelProducts` (internalMutation), `prepareJejelayeNumberOrder` (internalMutation), `finalizeJejelayeNumberOrder` (internalMutation)
+
+### `notifications`
+`list` (query), `listAll` (query), `unreadCount` (query), `markRead` (mutation), `markAllRead` (mutation)
+
+### `organization`
+`getMyOrganization` (query), `setMyOrganization` (mutation)
+
+### `pairgate`
+_RETRIEVAL ERROR: NOT_FOUND: Error code: NOT_FOUND; Error: GitHub API error 404: {"message":"Not Found","documentation_url":"https://docs.github.com/rest/repos/contents#get-repository-content","status":"404"}_
+
+### `paystack`
+`initializePayment` (action), `verifyAndCredit` (action), `recoverPendingCredits` (action), `verifyWebhookSignature` (action), `getPublicKey` (action)
+
+### `platform`
+`getPublicConfig` (query), `saveBrand` (mutation), `saveSupport` (mutation), `saveQuickActions` (mutation), `resetConfig` (mutation)
+
+### `points`
+`getPointsBalance` (query), `getPointLedger` (query), `creditPoints` (internalMutation)
