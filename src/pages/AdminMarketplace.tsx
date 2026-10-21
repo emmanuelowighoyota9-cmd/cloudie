@@ -132,7 +132,9 @@ export default function AdminMarketplace() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      <Tabs defaultValue="catalog" className="space-y-4"><TabsList><TabsTrigger value="catalog">Catalog</TabsTrigger><TabsTrigger value="disputes">Disputes</TabsTrigger></TabsList>
+      <TabsContent value="catalog"><div className="space-y-6">
       <AdminPageHeader
         title="Marketplace Administration"
         description="Manage the dual marketplace catalog, provider inventory, pricing and product visibility."
