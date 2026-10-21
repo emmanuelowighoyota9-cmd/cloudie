@@ -167,10 +167,14 @@ export const adminList = query({
     if (!userId) return [];
     const user = await ctx.db.get(userId);
     if (user?.role !== "admin") return [];
-    return await ctx.db
+    const sites = await ctx.db
       .query("tenantSites")
       .order("desc")
-      .take(args.limit ?? 50);
+      .take(Math.min(args.limit ?? 50, 300));
+    return await Promise.all(sites.map(async (site) => {
+      const owner = await ctx.db.get(site.ownerId);
+      return { ...site, ownerName: owner?.name ?? owner?.email ?? "Unknown owner", ownerEmail: owner?.email ?? "" };
+    }));
   },
 });
 
