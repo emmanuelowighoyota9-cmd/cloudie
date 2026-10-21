@@ -96,3 +96,27 @@ The inspected server currently contains generic catalog and commerce order route
 - [ ] Reconcile source/staging data and run browser smoke tests before any frontend routing change.
 
 This remains static source analysis. No deployed service, database contents, test suite, or browser session was exercised by this pass.
+
+
+## Implementation update — read-only Neon browse path (2026-10-21)
+
+A staging-only implementation has now been committed on `migration/marketplace-neon-readonly-assessment`:
+
+- `migrations/008_points_marketplace_read_model.sql` adds isolated `point_market_vendors` and `point_market_packages` tables. It is additive and does not modify generic catalog/order tables or wallet/financial data.
+- `GET /api/marketplace/packages` is registered in `api/src/server.ts`. It is public/read-only, restricts results to approved vendors, supports search, NGN price bounds, points bounds, verification filter and allowlisted sort orders, and returns the existing buyer browse response field names.
+- Five API smoke tests cover invalid filters, invalid sort, empty result set, response mapping and safe database-unavailable behavior.
+
+### Important boundary
+
+This is a **schema and endpoint scaffold**, not marketplace data parity. The new tables are expected to be empty until a separate reviewed reconciliation/import maps Convex vendors and packages. The frontend remains wired to Convex; no buyer UI routing was changed. Purchase creation, wallet debit, escrow, fulfillment, disputes, vendor onboarding, payouts and admin actions remain on their existing paths.
+
+### Verification status
+
+- [x] Changes committed to the isolated migration branch.
+- [ ] CI/API typecheck and smoke tests have not yet been observed passing.
+- [ ] Migration 008 has not been applied to a disposable Neon branch in this step.
+- [ ] No endpoint has been exercised against a live Neon database.
+- [ ] No source-to-Neon data reconciliation has been performed.
+- [ ] No frontend or production cutover has occurred.
+
+Do not point the live buyer page at this endpoint until CI passes, migration 008 is applied and verified on a disposable branch, and source data reconciliation plus browser tests are complete.
