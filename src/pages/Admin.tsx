@@ -33,7 +33,7 @@ function MetricCard({ title, value, note, icon: Icon, tone, trend, compact }: {
   const color = tone === "green" ? "text-emerald-600" : tone === "amber" ? "text-amber-600" : "text-red-600";
   return <Card className="rounded-lg shadow-none"><CardContent className={compact ? "p-2.5" : "p-3.5"}>
     <div className="flex items-start justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p><Icon className={`size-4 ${color}`} /></div>
-    <div className={`${compact ? "mt-1" : "mt-2"} flex items-end justify-between gap-2`}><p className={`font-mono ${compact ? "text-xl" : "text-2xl"} font-semibold tabular-nums"}>{value}</p>{trend && <Sparkline values={trend} tone={tone} />}</div>
+    <div className={`${compact ? "mt-1" : "mt-2"} flex items-end justify-between gap-2`}><p className={`font-mono ${compact ? "text-xl" : "text-2xl"} font-semibold tabular-nums`}>{value}</p>{trend && <Sparkline values={trend} tone={tone} />}</div>
     <p className="mt-1 text-[10px] text-muted-foreground">{note}</p>
   </CardContent></Card>;
 }
