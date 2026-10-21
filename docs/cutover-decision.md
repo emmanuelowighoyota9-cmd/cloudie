@@ -272,3 +272,32 @@ The `pairgate` module appears in the trace, but `src/convex/pairgate.ts` could n
 - **Acceptance evidence required before rollout:** ____________________
 - **Rollback trigger and responsible owner:** ____________________
 - **Decision owner and date:** ____________________
+
+
+## Exported stateful function inventory — source declarations
+
+This appendix lists query, mutation, and action declarations matched directly in source files. It complements the call-site trace above; functions that are helper exports, dynamically declared, or invoked indirectly may require manual review.
+
+### `admin`
+`savePaymentProviderKey` (mutation), `deletePaymentProviderKey` (mutation), `getPaymentProviderKeys` (query), `listUsers` (query), `getUser` (query), `suspendUser` (mutation), `terminateUser` (mutation), `getUserTransactions` (query), `adminExists` (query), `claimFirstAdmin` (mutation), `listAdministrators` (query), `resetAdminPassword` (action), `auditAdminPasswordReset` (internalMutation), `initializeUser` (mutation), `getAuditLogs` (query), `getAuditLogsPaged` (query), `adminListOrders` (query), `exportData` (query), `getAnalytics` (query), `getInfrastructure` (query)
+
+### `adminApi`
+`assertAdminSession` (internalQuery), `getPricing` (query), `upsertPricing` (mutation), `getPublicPricing` (query), `seedDefaultPricing` (mutation), `bulkUpsertPricing` (mutation), `getSettings` (query), `upsertSetting` (mutation), `getVendorAdmin` (query), `listVendorProducts` (query), `adminToggleProductActive` (mutation), `adminListDisputes` (query), `getDispute` (query), `addDisputeNote` (mutation), `setDisputePriority` (mutation), `resolveDispute` (mutation), `releaseEscrow` (mutation), `refundOrder` (mutation), `reviewVendor` (mutation), `terminateUser` (mutation), `changeUserRole` (mutation), `unlockTenant` (mutation), `listModerationFlags` (query), `createModerationFlag` (mutation), `reviewModerationFlag` (mutation), `sendNotification` (mutation), `broadcastNotificationBatch` (internalMutation), `adminListNotifications` (query), `globalSearch` (query), `adminUserDetail` (query), `logAdminSession` (mutation), `adminBadgeCounts` (query), `adminDashboard` (query), `auditTransactionReview` (mutation), `getFinancialRisk` (query), `getRiskCases` (query), `openRiskCase` (mutation), `assignRiskCase` (mutation), `addRiskCaseNote` (mutation), `transitionRiskCase` (mutation), `markDisputeUnderReview` (mutation), `getAnalyticsRange` (query), `getMaintenanceMode` (query), `setMaintenanceMode` (mutation)
+
+### `adminSeed`
+`seedAdminAccount` (action), `createAdministrator` (action)
+
+### `assets`
+`upload` (mutation), `listAssets` (query), `deleteAsset` (mutation), `getStorageUsage` (query), `createCampaign` (mutation), `listCampaigns` (query), `getCampaignDeliveries` (query)
+
+### `bankingAdmin`
+`adminDashboard` (query), `adminApproveAccount` (mutation), `adminFreezeAccount` (mutation), `adminUnfreezeAccount` (mutation), `adminOverrideTransfer` (mutation), `adminOverrideDeposit` (mutation), `adminOverrideWithdrawal` (mutation), `adminListCustomers` (query), `adminSetCustomerKyc` (mutation), `adminGetFeeConfig` (query), `adminSetFeeConfig` (mutation), `adminListBalances` (query), `adminAuditLog` (query)
+
+### `bankingCustomer`
+`memberTenant` (query), `memberAccounts` (query), `accountTransactions` (query), `onboardingMe` (query), `publicTenant` (query), `joinTenant` (mutation), `openAccount` (mutation), `adminOpenAccount` (mutation), `setAccountStatus` (mutation), `listBeneficiaries` (query), `addBeneficiary` (mutation), `removeBeneficiary` (mutation), `createDeposit` (mutation), `reconcileDeposit` (mutation), `createWithdrawal` (mutation), `createTransfer` (mutation), `bankingHistory` (query), `statement` (query), `adminTenantHistory` (query)
+
+### `bankingTenant`
+`listTemplates` (query), `ensureModernBankingTemplates` (internalMutation), `seedModernBankingTemplates` (mutation), `upsertTemplate` (mutation), `ensureCrestlineTemplate` (internalMutation), `createAdminTenant` (mutation), `createBankingTenant` (mutation), `updateBankingTenant` (mutation), `applyBankingTemplateToTenant` (mutation), `setTenantLifecycle` (mutation), `getTenantForAdmin` (query), `listBankingTenants` (query), `getBankingFeeConfig` (query), `health` (query)
+
+### `catalog`
+`getCatalog` (query)
