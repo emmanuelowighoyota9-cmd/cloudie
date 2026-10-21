@@ -63,7 +63,7 @@ This section records a fresh read-only inventory and an isolated schema exercise
 
 - Neon project: `cloudie` (`lively-sky-99526507`).
 - Production branch: `production` (`br-winter-snow-b5spd77h`). A read-only public-table inventory returned **zero application tables**. No SQL was executed against this branch during the schema exercise.
-- Disposable test branch: `test-migrations` (`br-nameless-morning-b5o1qitn`), a child of the production branch. Before applying schema files, its public-table inventory returned zero tables.
+- Earlier disposable schema-exercise branch: `test-migrations` (`br-nameless-morning-b5o1qitn`), a child of the production branch. It was used for direct SQL schema exercises and is not the target for the checksum-aware runner.
 - Applied migrations `001_foundation.sql` through `007_admin_audit_logs.sql` to the test branch using the SQL statements from the repository files. All seven files completed without SQL errors.
 - Re-applied the seven files on the test branch. The repeat pass completed without SQL errors, providing evidence that the DDL is repeatable on this branch.
 - Post-run inventory: 36 public base tables, 10 public triggers, and 483 public constraints.
@@ -85,10 +85,10 @@ This section records a fresh read-only inventory and an isolated schema exercise
 
 A manual GitHub Actions workflow is available at `.github/workflows/neon-migration-runner-test.yml`. To run it:
 
-1. In GitHub repository **Settings → Secrets and variables → Actions → Secrets**, add `CLOUDIE_NEON_TEST_DATABASE_URL` with the **direct** connection string for `neondb` on branch `br-nameless-morning-b5o1qitn`. Never commit or paste the connection string into an issue, PR, or chat.
-2. Confirm the secret belongs to that exact disposable test branch, not the production branch `br-winter-snow-b5spd77h`.
-3. Open **Actions → Verify Neon migration runner (test branch) → Run workflow**.
-4. Require the migration runner, second dry-run, and seven-version checksum assertion to pass. The workflow intentionally fails closed if the secret is missing and does not run automatically on pushes.
-5. Save the successful run URL and output before treating the repository migration runner as verified.
+1. The clean runner-test branch is `migration-runner-test-clean` (`br-lively-rain-b5vq2oju`). A branch-specific guard table was created there with marker `cloudie-migration-runner-test-clean-br-lively-rain-b5vq2oju`; the workflow verifies this marker before migrating.
+2. In GitHub repository **Settings → Secrets and variables → Actions → Secrets**, set `CLOUDIE_NEON_TEST_DATABASE_URL` to the **direct** connection string for `neondb` on that exact clean branch. Never commit or paste the connection string into an issue, PR, or chat.
+3. The workflow checks the branch marker and, on a fresh database, refuses unexpected public tables. Do not point the secret at production or the earlier manually migrated test branch.
+4. Open **Actions → Verify Neon migration runner (test branch) → Run workflow** only after the workflow change is merged or available on the default branch.
+5. Require the migration runner, second dry-run, and seven-version checksum assertion to pass. Save the successful run URL and output before treating the repository migration runner as verified.
 
 The workflow uses the repository runner and writes migration bookkeeping only to the disposable test branch. It does not deploy the API, change frontend routing, or migrate production data.
