@@ -293,6 +293,81 @@ app.get("/api/public-config", async (c) => {
    AUTHENTICATION ENDPOINTS
    ════════════════════════════════════════════════════════════════════ */
 
+const bootstrapAdminSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(12).max(128),
+  token: z.string().min(32).max(512),
+});
+
+// One-time, operator-gated bootstrap. Disabled unless a long random token is configured.
+app.post("/api/auth/bootstrap-admin", async (c) => {
+  if (!checkRateLimit(c, "auth:bootstrap-admin", 5, 60_000)) {
+    return fail(c, 429, "Too many bootstrap attempts. Please wait a minute and try again.");
+  }
+  const configuredToken = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  if (!configuredToken || Buffer.byteLength(configuredToken, "utf8") < 32) {
+    return fail(c, 503, "Administrator bootstrap is disabled");
+  }
+  const parsed = await readJson(c, bootstrapAdminSchema);
+  if ("error" in parsed) return fail(c, 400, "Invalid administrator bootstrap details");
+  const supplied = Buffer.from(parsed.data.token, "utf8");
+  const expected = Buffer.from(configuredToken, "utf8");
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    return fail(c, 401, "Invalid bootstrap authorization");
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(771901, 1)");
+    const existing = await client.query<{ count: number } & QueryResultRow>(
+      "SELECT COUNT(*)::int AS count FROM app_users WHERE role='admin'",
+    );
+    if (Number(existing.rows[0]?.count ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return fail(c, 409, "Administrator account already exists");
+    }
+
+    const email = parsed.data.email.toLowerCase();
+    const passwordHash = await hashPassword(parsed.data.password);
+    const inserted = await client.query<User & QueryResultRow>(
+      "INSERT INTO app_users (id,name,email,role,password_hash) VALUES ($1,$2,$3,'admin',$4) RETURNING id,email,name,role,is_suspended,is_terminated",
+      [uuid(), parsed.data.name, email, passwordHash],
+    );
+    const user = inserted.rows[0];
+    const sessionId = uuid();
+    const token = await signToken(user, sessionId);
+    await client.query(
+      "INSERT INTO api_sessions (id,user_id,expires_at) VALUES ($1,$2,NOW()+INTERVAL '8 hours')",
+      [sessionId, user.id],
+    );
+    await client.query(
+      "INSERT INTO admin_audit_logs (actor_user_id, action, target_type, target_id, details) VALUES ($1, $2, $3, $4, $5)",
+      [user.id, "admin.bootstrap", "user", user.id, JSON.stringify({ method: "one-time-bootstrap" })],
+    );
+    await client.query("COMMIT");
+    setCookie(c, "cloudie_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 8 * 60 * 60,
+    });
+    setCsrfCookie(c);
+    return c.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token }, 201);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+      return fail(c, 409, "An account with this email already exists");
+    }
+    console.error("Administrator bootstrap failed", error instanceof Error ? error.message : "unknown");
+    return fail(c, 500, "Unable to bootstrap administrator");
+  } finally {
+    client.release();
+  }
+});
+
 app.post("/api/auth/register", async (c) => {
   if (!checkRateLimit(c, "auth:register", 15, 60_000)) {
     return fail(c, 429, "Too many registration attempts. Please wait a minute and try again.");
