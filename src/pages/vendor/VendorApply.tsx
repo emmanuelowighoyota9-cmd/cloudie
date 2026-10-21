@@ -94,7 +94,7 @@ export default function VendorApply() {
                 <Store className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm font-medium text-foreground">{vendor.businessName}</span>
               </div>
-              <StatusBadge status={vendor.status} />
+              <StatusBadge status={vendor.status} label={vendor.status === "pending" ? "Under review" : vendor.status === "applied" ? "Applied" : vendor.status.charAt(0).toUpperCase() + vendor.status.slice(1)} />
             </div>
             <p className="text-xs text-muted-foreground">{meta?.tone}</p>
             <div className="rounded-lg border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-muted-foreground">
