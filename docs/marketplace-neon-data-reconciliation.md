@@ -70,3 +70,20 @@ Only after these checks should a separate staging branch be seeded and a human r
 - Pull-request CI passed on 2026-10-21: [run 39676752844](https://github.com/emmanuelowighoyota9-cmd/cloudie/actions/runs/39676752844).
 - The schema/runner evidence does **not** prove that Convex marketplace records have been exported, imported, or reconciled. No marketplace source data has been imported by this protocol.
 - No production branch writes or frontend cutover are authorized by this document.
+
+
+## Implemented local export validator
+
+The repository now includes `api/scripts/validate-marketplace-export.mjs`, a validation-only tool with no database connection and no write path, plus automated tests in `api/scripts/validate-marketplace-export.test.mjs`.
+
+Run it locally against private export files (keep both files outside the repository):
+
+```sh
+node api/scripts/validate-marketplace-export.mjs \
+  --vendors /private/path/vendors.jsonl \
+  --packages /private/path/pointPackages.jsonl
+```
+
+The command checks JSONL syntax, duplicate IDs, required fields, integer ranges, timestamps, supported vendor statuses, package-to-vendor references, and reports source-file SHA-256 hashes and aggregate counts only. It never prints source record values or opens a database connection. A non-NGN package causes a nonzero exit (2) so the read-model exclusion decision cannot be missed. Invalid data fails closed with exit 1. The API test command now includes validator regression tests.
+
+**This is not an importer.** No data has been loaded into Neon; do not treat a successful validator run as parity or cutover evidence.
