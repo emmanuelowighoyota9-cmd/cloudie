@@ -73,7 +73,7 @@ export function PurchaseDialog({ open, order, onOpenChange, onConfirm, busy = fa
           <div className="flex items-center gap-2 font-semibold"><AlertCircle className="size-4" /> Purchase failed</div>
           <p>{order.reason}</p><p className="font-semibold">You were not charged.</p><p className="break-all text-muted-foreground">Reference: {order.reference}</p>
         </div>}
-        {ambiguous && order && <div role="alert" className="space-y-2 rounded-lg border border-amber-500/40 p-4 text-sm">
+        {ambiguous && order && <div role="alert" className="space-y-2 rounded-lg border border-warning/40 p-4 text-sm">
           <div className="flex items-center gap-2 font-semibold"><AlertCircle className="size-4" /> Order outcome not fully confirmed</div>
           <p>Your payment was received, but points delivery is delayed. Ref {order.reference}. This will resolve automatically, or contact support.</p><p className="text-muted-foreground">{order.reason}</p>
         </div>}
