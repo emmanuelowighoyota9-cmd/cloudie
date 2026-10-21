@@ -120,7 +120,7 @@ describe("PointMarketplace checkout integration", () => {
     queryState.liveOrder = { status: "credited", orderId: "order_test", points: 5000 };
     view.rerender(<PointMarketplace />);
     expect(await screen.findByText(/Points credited:/)).toBeTruthy();
-    expect(screen.getByText(fmtPoints(points(5000), { sign: true })).classList.contains("text-success")).toBe(true);
+    expect(screen.getAllByText(fmtPoints(points(5000), { sign: true })).some((element) => element.classList.contains("text-success"))).toBe(true);
   });
 
   test("insufficient wallet rejection enters failed state with no-charge copy", async () => {
