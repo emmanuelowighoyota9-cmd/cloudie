@@ -856,6 +856,11 @@ export default function Marketplace() {
                           {buying === product._id ? "Processing..." : outOfStock ? "Unavailable" : "Buy now"}
                         </Button>
                       </div>
+                      {outOfStock ? (
+                        <p className="mt-2 text-xs text-muted-foreground">Unavailable: this item is out of stock.</p>
+                      ) : (balance ?? 0) < (product.priceNgn ?? product.pointsPrice * 15) ? (
+                        <p className="mt-2 text-xs text-destructive">Insufficient wallet balance. Add funds before purchasing.</p>
+                      ) : null}
                     </CardContent>
                   </Card>
                 );
@@ -961,7 +966,19 @@ function OrdersView({
   refreshLogspanelOrder: (args: { orderId: Id<"marketplaceOrders"> }) => Promise<{ status: string }>;
 }) {
   if (orders === undefined) {
-    return <div className="py-16 text-center text-sm text-muted-foreground">Loading orders...</div>;
+    return (
+      <div className="space-y-3" aria-label="Loading orders" aria-busy="true">
+        {[1, 2, 3].map((item) => (
+          <Card key={item} className="rounded-xl border-border">
+            <CardContent className="space-y-3 p-4">
+              <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-48 max-w-full animate-pulse rounded bg-muted" />
+              <div className="h-8 w-24 animate-pulse rounded bg-muted" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   if (orders.length === 0) {
