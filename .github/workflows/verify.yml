@@ -16,18 +16,22 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - id: check
+      - name: Detect lockfile drift
+        id: check
         run: |
-          bun install --no-frozen-lockfile --silent
-          if ! git diff --quiet -- bun.lock; then
+          set +e
+          bun install --frozen-lockfile --dry-run > /tmp/install.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/install.log
+          if [ "$status" -ne 0 ]; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
             echo "::error::bun.lock is out of date with package.json."
             echo "Run: gh workflow run regen-lock.yml --ref main"
             echo "Then: gh workflow run verify.yml --ref main"
             exit 1
-          else
-            echo "drift=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "drift=false" >> "$GITHUB_OUTPUT"
 
   root:
     needs: lockfile-check
