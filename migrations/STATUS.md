@@ -55,3 +55,40 @@ The prior document described the following API routes as verified on 2026-10-19.
 | Admin | `GET /api/admin/users`, `PATCH /api/admin/users/:id`, `POST /api/admin/users/:id/wallet-adjust`, `GET /api/admin/transactions`, `GET /api/admin/audit-logs`, `GET /api/admin/shipments`, `GET|POST /api/admin/settings`, `GET /api/admin/reports`, `POST /api/admin/catalog`, `PATCH /api/admin/catalog/:id`, `DELETE /api/admin/catalog/:id` |
 
 The API's actual feature parity and deployment state must be re-verified before any cutover. See `docs/convex-to-neon-cutover-gates.md` and `docs/neon-migration-trace.md`; the earlier trace described 373 Convex references across 37 modules without Neon API coverage.
+
+
+## Direct Neon verification — 2026-10-21
+
+This section records a fresh read-only inventory and an isolated schema exercise. It does not mark production as migrated.
+
+- Neon project: `cloudie` (`lively-sky-99526507`).
+- Production branch: `production` (`br-winter-snow-b5spd77h`). A read-only public-table inventory returned **zero application tables**. No SQL was executed against this branch during the schema exercise.
+- Earlier disposable schema-exercise branch: `test-migrations` (`br-nameless-morning-b5o1qitn`), a child of the production branch. It was used for direct SQL schema exercises and is not the target for the checksum-aware runner.
+- Applied migrations `001_foundation.sql` through `007_admin_audit_logs.sql` to the test branch using the SQL statements from the repository files. All seven files completed without SQL errors.
+- Re-applied the seven files on the test branch. The repeat pass completed without SQL errors, providing evidence that the DDL is repeatable on this branch.
+- Post-run inventory: 36 public base tables, 10 public triggers, and 483 public constraints.
+- Sample row counts after the schema exercise: `app_users` = 0, `wallet_ledger` = 0, `tenant_sites` = 0, `admin_audit_logs` = 0.
+- The `schema_migrations` table has zero rows. This is expected for the direct SQL exercise: it bypassed `api/scripts/migrate.mjs` and therefore does **not** verify checksum bookkeeping, advisory-lock behavior, or the repository runner's idempotency.
+- No production schema, customer records, credentials, wallets, or payments were changed by this exercise.
+
+### Remaining blockers
+
+1. Verify the deployed API's actual `DATABASE_URL` branch without revealing credentials. The healthy API endpoint only confirms a successful `SELECT 1`; it does not establish schema readiness.
+2. Run the repository's checksum-aware migration runner against the disposable branch and verify all seven checksums/versions are recorded. Do not run it against production until an explicit data/schema plan and recovery path are approved.
+3. Implement and verify feature parity, authentication/session transport, existing-user recovery/mapping, tenant and admin authorization, and complete marketplace/financial behavior.
+4. Keep production traffic on the existing working path until the cutover and rollback gates in `docs/convex-to-neon-cutover-gates.md` are satisfied.
+
+**Status: test-branch schema applied and repeat-applied; production cutover blocked.**
+
+
+### Checksum-aware runner verification workflow
+
+A manual GitHub Actions workflow is available at `.github/workflows/neon-migration-runner-test.yml`. To run it:
+
+1. The clean runner-test branch is `migration-runner-test-clean` (`br-lively-rain-b5vq2oju`). A branch-specific guard table was created there with marker `cloudie-migration-runner-test-clean-br-lively-rain-b5vq2oju`; the workflow verifies this marker before migrating.
+2. In GitHub repository **Settings → Secrets and variables → Actions → Secrets**, set `CLOUDIE_NEON_TEST_DATABASE_URL` to the **direct** connection string for `neondb` on that exact clean branch. Never commit or paste the connection string into an issue, PR, or chat.
+3. The workflow checks the branch marker and, on a fresh database, refuses unexpected public tables. Do not point the secret at production or the earlier manually migrated test branch.
+4. Open **Actions → Verify Neon migration runner (test branch) → Run workflow** only after the workflow change is merged or available on the default branch.
+5. Require the migration runner, second dry-run, and seven-version checksum assertion to pass. Save the successful run URL and output before treating the repository migration runner as verified.
+
+The workflow uses the repository runner and writes migration bookkeeping only to the disposable test branch. It does not deploy the API, change frontend routing, or migrate production data.
