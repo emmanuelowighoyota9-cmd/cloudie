@@ -4,6 +4,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConvexError } from "convex/values";
 import { api } from "@/convex/_generated/api";
+import type { ReactNode } from "react";
 import { fmtNaira, fmtPoints, naira, points } from "@/components/money/FundsGate";
 
 const packageRow = {
@@ -42,7 +43,7 @@ mock.module("convex/react", () => ({
 }));
 
 mock.module("react-router", () => ({
-  Link: ({ to, children }: { to: string; children: React.ReactNode }) => <a href={to}>{children}</a>,
+  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
   useNavigate: () => navigate,
 }));
 
