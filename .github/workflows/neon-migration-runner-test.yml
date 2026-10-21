@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 15
     env:
       TEST_DATABASE_URL: ${{ secrets.CLOUDIE_NEON_TEST_DATABASE_URL }}
-      NEON_TEST_BRANCH_ID: br-icy-term-b5w2sc9o
+      NEON_TEST_BRANCH_ID: br-restless-rice-b531jufw
       NEON_PRODUCTION_BRANCH_ID: br-winter-snow-b5spd77h
     steps:
       - name: Check out repository
@@ -27,10 +27,10 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${TEST_DATABASE_URL:-}" || {
-            echo "::error::Add CLOUDIE_NEON_TEST_DATABASE_URL as a GitHub Actions secret. It must be the direct connection string for the fresh disposable marketplace-runner-008-test branch."
+            echo "::error::Add CLOUDIE_NEON_TEST_DATABASE_URL as a GitHub Actions secret. It must be the direct connection string for the fresh disposable migration-runner-full-clean branch."
             exit 1
           }
-          test "$NEON_TEST_BRANCH_ID" = "br-icy-term-b5w2sc9o" || {
+          test "$NEON_TEST_BRANCH_ID" = "br-restless-rice-b531jufw" || {
             echo "::error::Unexpected test branch ID; update this workflow only after independently verifying the replacement test branch."
             exit 1
           }
@@ -68,7 +68,7 @@ jobs:
             const marker = await client.query(
               "SELECT guard_value FROM public.cloudie_migration_test_guard WHERE guard_key = 'branch_identity'"
             );
-            if (marker.rows.length !== 1 || marker.rows[0].guard_value !== "cloudie-migration-runner-test-clean-br-icy-term-b5w2sc9o") {
+            if (marker.rows.length !== 1 || marker.rows[0].guard_value !== "cloudie-migration-runner-test-clean-br-restless-rice-b531jufw") {
               throw new Error("Database branch identity marker is missing or does not match the approved disposable test branch.");
             }
             const tables = await client.query(
