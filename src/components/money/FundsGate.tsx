@@ -15,12 +15,12 @@ export const points = (amount: number): Points => {
 
 export function fmtNaira(value: Naira): string {
   if (value.kind !== "naira") throw new TypeError("Expected Naira.");
-  return `₦${(value.kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: value.kobo % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+  return `₦${(value.kobo / 100).toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-export function fmtPoints(value: Points): string {
+export function fmtPoints(value: Points, options: { sign?: boolean } = {}): string {
   if (value.kind !== "points") throw new TypeError("Expected Points.");
-  return `${value.amount.toLocaleString("en-NG")} points`;
+  return `${options.sign && value.amount > 0 ? "+" : ""}${value.amount.toLocaleString("en-NG")} points`;
 }
 
 export function FundsGate({ children, balance, cost, fallback }: {
