@@ -140,54 +140,38 @@ export function getStatusDefinition(domain: StatusDomain, value: string): Status
   return DOMAIN_OVERRIDES[domain][key] ?? SHARED[key] ?? { tone: "neutral" };
 }
 
-export function StatusBadge({
-  domain,
-  value,
-  className = "",
-  showIcon = true,
-  // Backwards-compatible props for existing admin screens while they migrate.
-  status,
-  label,
-}: {
-  domain: StatusDomain;
-  value: string;
+type StatusBadgeProps = {
   className?: string;
   showIcon?: boolean;
-} | {
-  status: string;
-  label?: string;
-  className?: string;
-  showIcon?: boolean;
-  domain?: StatusDomain;
-  value?: string;
-}) {
-  const rawValue = "value" in arguments[0] && arguments[0].value !== undefined
-    ? arguments[0].value
-    : ("status" in arguments[0] ? arguments[0].status : "");
-  const domain = "domain" in arguments[0] && arguments[0].domain ? arguments[0].domain : "order";
-  const label = "label" in arguments[0] ? arguments[0].label : undefined;
-  const className = arguments[0].className ?? "";
-  const showIcon = arguments[0].showIcon ?? true;
+} & (
+  | { domain: StatusDomain; value: string; status?: never; label?: string }
+  | { status: string; label?: string; domain?: StatusDomain; value?: string }
+);
+
+export function StatusBadge(props: StatusBadgeProps) {
+  const rawValue = props.value ?? props.status ?? "";
+  const domain = props.domain ?? "order";
   const definition = getStatusDefinition(domain, rawValue);
   const color = TONE_COLOR[definition.tone];
-  const Icon = showIcon ? definition.icon : undefined;
+  const Icon = props.showIcon === false ? undefined : definition.icon;
   const style = {
     "--status-color": color,
     backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`,
     borderColor: `color-mix(in srgb, ${color} 30%, transparent)`,
   } as CSSProperties;
+  const text = props.label ?? definition.label ?? (humanize(rawValue) || "Unknown");
 
   return (
     <span
-      className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none text-foreground ${className}`}
+      className={`inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none text-foreground ${props.className ?? ""}`}
       style={style}
       data-status-domain={domain}
       data-status-value={normalize(rawValue)}
-      aria-label={`${domain}: ${label ?? definition.label ?? humanize(rawValue)}`}
+      aria-label={`${domain}: ${text}`}
     >
       <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
       {Icon && <Icon aria-hidden="true" className="size-3 shrink-0" />}
-      <span>{label ?? definition.label ?? humanize(rawValue) || "Unknown"}</span>
+      <span>{text}</span>
     </span>
   );
 }
