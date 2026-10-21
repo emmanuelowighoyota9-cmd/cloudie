@@ -42,9 +42,9 @@ Capture a screenshot of the review dialog at each viewport.
 2. Confirm the dialog transitions to `pending` / “Order in escrow”.
 3. Record the order reference shown in the dialog.
 4. Confirm the reference is monospace and exactly matches the `orderId` returned by `api.pointMarket.createOrder` (use browser network/devtools or server-side test instrumentation available to the operator; do not guess based only on a similar-looking ID).
-5. Press **Escape** and confirm the dialog can be dismissed. Use the order-page navigation to reopen/inspect the order and verify its reference and escrow state.
+5. Press **Escape** and confirm the dialog can be dismissed. Navigate to the order page using the same reference, then verify the order can be reopened in the purchase dialog from that page and that its reference and escrow state are preserved. If the order page only displays a separate detail page and does not reopen the dialog, record this criterion as FAIL rather than treating navigation alone as equivalent.
 
-**Pass:** the order is created once, the reference matches, and the pending state accurately explains that points are not yet credited. Record any inability to reopen or re-identify the same order as a failure; do not create a replacement order just to reopen the UI.
+**Pass:** the order is created once, the reference matches, and the pending state accurately explains that points are not yet credited. The same order can be re-opened from its order page without creating a replacement. Record any inability to reopen or re-identify the same order as a failure.
 
 ### 4. Fulfill as the vendor and prove Convex reactivity
 
