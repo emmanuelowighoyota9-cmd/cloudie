@@ -15,9 +15,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun --version
-      # TODO: switch to --frozen-lockfile once bun.lock is committed
-      # (see .github/workflows/regen-lock.yml)
-      - run: bun install
+      - run: bun install --frozen-lockfile
       - run: bunx tsc -b --noEmit
       - run: bun test
 
