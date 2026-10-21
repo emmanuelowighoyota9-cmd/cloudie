@@ -33,11 +33,11 @@ const createOrder = mock(async (_args: { packageId: string }) => ({ orderId: "or
 const navigate = mock((_path: string) => {});
 
 mock.module("convex/react", () => ({
-  useQuery: (query: unknown): unknown => {
-    if (query === api.pointMarket.listPackages) return queryState.packages;
-    if (query === api.wallet.getBalance) return queryState.wallet;
-    if (query === api.pointMarket.getMyOrder) return queryState.liveOrder;
-    return undefined;
+  useQuery: (_query: unknown, args?: unknown): unknown => {
+    if (args && typeof args === "object" && "verifiedOnly" in args) return queryState.packages;
+    if (args === "skip") return undefined;
+    if (args && typeof args === "object" && "orderId" in args) return queryState.liveOrder;
+    return queryState.wallet;
   },
   useMutation: () => createOrder,
 }));
@@ -54,7 +54,9 @@ function noMixedCurrencyAndPoints(container: HTMLElement) {
   const violations: string[] = [];
   while (walker.nextNode()) {
     const text = walker.currentNode.textContent ?? "";
-    if (text.includes("₦") && /point/i.test(text)) violations.push(text);
+    const hasNaira = text.includes("₦");
+    const hasPoints = /point/i.test(text);
+    if (hasNaira && hasPoints) violations.push(text);
   }
   expect(violations).toEqual([]);
 }
