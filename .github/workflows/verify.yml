@@ -24,13 +24,28 @@ jobs:
           status=$?
           set -e
           cat /tmp/install.log
-          if [ "$status" -ne 0 ]; then
+          if [ "$status" -eq 0 ]; then
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Frozen dry-run failed; checking whether this Bun version supports --dry-run."
+          echo "Retrying with a normal install, then comparing bun.lock to the checked-out commit."
+          if ! bun install --no-frozen-lockfile; then
+            echo "drift=unknown" >> "$GITHUB_OUTPUT"
+            echo "::error::Lockfile pre-check could not complete. Inspect the install output above."
+            exit 1
+          fi
+
+          if ! git diff --quiet -- bun.lock; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
             echo "::error::bun.lock is out of date with package.json."
             echo "Run: gh workflow run regen-lock.yml --ref main"
             echo "Then: gh workflow run verify.yml --ref main"
             exit 1
           fi
+
+          echo "The frozen dry-run failed, but the fallback install did not change bun.lock."
           echo "drift=false" >> "$GITHUB_OUTPUT"
 
   root:
