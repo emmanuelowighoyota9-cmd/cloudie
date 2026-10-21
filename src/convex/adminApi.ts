@@ -644,7 +644,7 @@ export const partialRefundDispute = mutation({
  * Idempotent: re-running on a completed order throws DUPLICATE_OPERATION.
  */
 export const releaseEscrow = mutation({
-  args: { orderId: v.id("marketplaceOrders"), reason: v.string() },
+  args: { orderId: v.id("marketplaceOrders"), reason: v.string(), disputeId: v.optional(v.id("disputes")) },
   handler: async (ctx, args) => {
     const { adminId } = await requireAdmin(ctx);
     const order = await ctx.db.get(args.orderId);
@@ -673,6 +673,13 @@ export const releaseEscrow = mutation({
     });
 
     await ctx.db.patch(order._id, { status: "completed" });
+    if (args.disputeId) {
+      const dispute = await ctx.db.get(args.disputeId);
+      if (dispute && dispute.status !== "resolved" && dispute.status !== "closed") {
+        await ctx.db.patch(args.disputeId, { status: "resolved", resolution: args.reason, resolvedBy: adminId, resolvedAt: now, updatedAt: now });
+        await auditLog(ctx, adminId, { action: "DISPUTE_RESOLVED_VENDOR_RELEASE", resource: "dispute", resourceId: args.disputeId, before: { status: dispute.status }, after: { status: "resolved", outcome: "release_to_vendor" }, reason: args.reason });
+      }
+    }
     await ctx.db.patch(vendorDoc._id, {
       earnings: vendorDoc.earnings + amountNgn,
       totalSales: vendorDoc.totalSales + order.quantity,
@@ -703,7 +710,7 @@ export const releaseEscrow = mutation({
 
 /** Refund an order to the buyer (points move vendor → buyer). */
 export const refundOrder = mutation({
-  args: { orderId: v.id("marketplaceOrders"), reason: v.string() },
+  args: { orderId: v.id("marketplaceOrders"), reason: v.string(), disputeId: v.optional(v.id("disputes")) },
   handler: async (ctx, args) => {
     const { adminId } = await requireAdmin(ctx);
     const order = await ctx.db.get(args.orderId);
@@ -741,6 +748,13 @@ export const refundOrder = mutation({
     });
 
     await ctx.db.patch(order._id, { status: "refunded" });
+    if (args.disputeId) {
+      const dispute = await ctx.db.get(args.disputeId);
+      if (dispute && dispute.status !== "resolved" && dispute.status !== "closed") {
+        await ctx.db.patch(args.disputeId, { status: "resolved", resolution: args.reason, resolvedBy: adminId, resolvedAt: now, updatedAt: now });
+        await auditLog(ctx, adminId, { action: "DISPUTE_RESOLVED_BUYER_REFUND", resource: "dispute", resourceId: args.disputeId, before: { status: dispute.status }, after: { status: "resolved", outcome: "refund_buyer", amountNgn }, reason: args.reason });
+      }
+    }
     await auditLog(ctx, adminId, {
       action: "ORDER_REFUNDED",
       resource: "marketplaceOrder",
