@@ -505,7 +505,7 @@ export default function Shipments() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <StatusBadge status={shipment.status} />
+                          <StatusBadge domain="shipment" value={shipment.status} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                           {formatRelativeTime(shipment.createdAt)}
@@ -532,7 +532,7 @@ export default function Shipments() {
                         <span className="truncate font-mono text-xs font-semibold text-foreground">
                           {shipment.trackingNumber || "—"}
                         </span>
-                        <StatusBadge status={shipment.status} />
+                        <StatusBadge domain="shipment" value={shipment.status} />
                       </div>
                       <p className="mt-1 truncate text-xs text-muted-foreground">
                         <span className="font-medium text-foreground">

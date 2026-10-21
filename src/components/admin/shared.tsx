@@ -94,78 +94,7 @@ export function StatCard({
   );
 }
 
-/**
- * Status tones on the enterprise palette.
- *
- * Four tones carry every record state: settled (green), in progress (amber),
- * blocked (red), moving (blue), and inert (grey). Each is a tinted chip with a
- * hairline of the same hue, so it reads on the black card surface without
- * shouting.
- */
-const TONE = {
-  settled: "border-success/30 bg-success/12 text-success",
-  progress: "border-warning/30 bg-warning/12 text-warning",
-  blocked: "border-error/30 bg-error/12 text-error",
-  moving: "border-info/30 bg-info/12 text-info",
-  inert: "border-border bg-surface-2 text-muted-foreground",
-} as const;
-
-const BADGE_STYLES: Record<string, string> = {
-  active: TONE.settled,
-  approved: TONE.settled,
-  verified: TONE.settled,
-  completed: TONE.settled,
-  delivered: TONE.settled,
-  resolved: TONE.settled,
-  dismissed: TONE.inert,
-  closed: TONE.inert,
-  pending: TONE.progress,
-  under_review: TONE.progress,
-  reviewing: TONE.progress,
-  processing: TONE.progress,
-  escrow: TONE.progress,
-  more_information_required: TONE.progress,
-  out_for_delivery: TONE.moving,
-  in_transit: TONE.moving,
-  picked_up: TONE.moving,
-  open: TONE.blocked,
-  rejected: TONE.blocked,
-  suspended: TONE.blocked,
-  refunded: TONE.progress,
-  disputed: TONE.blocked,
-  failed: TONE.blocked,
-  cancelled: TONE.inert,
-  draft: TONE.inert,
-  // Tracking lifecycle states (shipment timelines, public tracker).
-  created: TONE.inert,
-  booked: TONE.progress,
-  at_origin_facility: TONE.moving,
-  departed_origin: TONE.moving,
-  arrived_destination_country: TONE.moving,
-  customs_clearance: TONE.progress,
-  customs_cleared: TONE.progress,
-  at_destination_facility: TONE.moving,
-  delivery_attempted: TONE.blocked,
-  exception: TONE.blocked,
-  on_hold: TONE.blocked,
-  returned: TONE.blocked,
-};
-
-/**
- * A status pill.
- *
- * The status NAME is always printed — colour is never the only signal, so the
- * badge still means something in greyscale, in a screenshot, and to a
- * colour-blind reader.
- */
-export function StatusBadge({ status, label }: { status: string; label?: string }) {
-  const style = BADGE_STYLES[status] ?? TONE.inert;
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${style}`}>
-      {label ?? status.replace(/_/g, " ")}
-    </span>
-  );
-}
+export { StatusBadge } from "./StatusBadge";
 
 /**
  * Confirmation dialog for destructive admin actions. Requires a typed-free
