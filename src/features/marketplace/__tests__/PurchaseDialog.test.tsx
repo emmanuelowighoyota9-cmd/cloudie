@@ -50,7 +50,9 @@ function expectNoMixedCurrencyAndPoints(container: HTMLElement) {
   const violations: string[] = [];
   while (walker.nextNode()) {
     const value = walker.currentNode.textContent ?? "";
-    if (value.includes("₦") && /point/i.test(value)) violations.push(value);
+    const hasNaira = value.includes("₦");
+    const hasPoints = /point/i.test(value);
+    if (hasNaira && hasPoints) violations.push(value);
   }
   expect(violations).toEqual([]);
 }
