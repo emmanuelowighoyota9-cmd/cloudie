@@ -1372,7 +1372,9 @@ option {
     transform: none;
   }
   .pdf-preview-card, .pdf-preview-surface, .document-preview-card,
-  .preview-surface, .pdf-viewer-card {
+  .preview-surface, .pdf-viewer-card,
+  iframe[src*='.pdf' i], iframe[title*='pdf' i], iframe[title*='preview' i],
+  embed[type='application/pdf'], object[type='application/pdf'] {
     background: #ffffff !important;
     color: #111827 !important;
     border: 1px solid #d1d5db !important;
