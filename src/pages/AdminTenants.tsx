@@ -1,278 +1,63 @@
+import { useMemo, useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { AdminPageHeader, AdminEmpty, AdminSkeleton, StatusBadge, fmtDate } from "@/components/admin/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Ban, Flag, Lock, LockOpen, Search, ShieldAlert } from "lucide-react";
-import { useMemo, useState } from "react";
-import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, ConfirmDialog, fmtDate } from "@/components/admin/shared";
+import { Eye, Lock, LockOpen, Search, ShieldAlert } from "lucide-react";
 
+type Site = { _id:string; siteName:string; subdomain:string; siteType:string; isActive:boolean; ownerId:string; ownerName?:string; ownerEmail?:string; renewalDate?:number; contactEmail?:string; contactPhone?:string };
 export default function AdminTenants() {
-  const tenants = useQuery(api.tenants.adminList, { limit: 300 });
+  const tenants = useQuery(api.tenants.adminList, { limit: 300 }) as Site[] | undefined;
   const flags = useQuery(api.adminApi.listModerationFlags, { limit: 100 });
   const lockdown = useMutation(api.tenants.adminLockdown);
   const unlock = useMutation(api.adminApi.unlockTenant);
-  const createFlag = useMutation(api.adminApi.createModerationFlag);
-  const reviewFlag = useMutation(api.adminApi.reviewModerationFlag);
-
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [locking, setLocking] = useState<null | { id: string; name: string }>(null);
-  const [unlocking, setUnlocking] = useState<null | { id: string; name: string }>(null);
-  const [flagging, setFlagging] = useState<null | { id: string; name: string }>(null);
-  const [flagRule, setFlagRule] = useState("");
-  const [flagSeverity, setFlagSeverity] = useState<"low" | "medium" | "high" | "critical">("medium");
-  const [flagDetails, setFlagDetails] = useState("");
-  const [reviewingFlag, setReviewingFlag] = useState<null | { id: string; rule: string }>(null);
-  const [reviewStatus, setReviewStatus] = useState<"resolved" | "dismissed">("resolved");
-  const [reviewNotes, setReviewNotes] = useState("");
-
-  const tenantName = (id: string) => (tenants ?? []).find((t) => t._id === id)?.siteName ?? "Tenant";
-
-  const filtered = useMemo(() => {
-    if (!tenants) return undefined;
-    let list = [...tenants];
-    if (statusFilter === "active") list = list.filter((t) => t.isActive);
-    if (statusFilter === "locked") list = list.filter((t) => !t.isActive);
-    if (search.trim()) {
-      const s = search.toLowerCase();
-      list = list.filter(
-        (t) => t.siteName.toLowerCase().includes(s) || t.subdomain.toLowerCase().includes(s),
-      );
-    }
-    return list;
-  }, [tenants, search, statusFilter]);
-
-  const submitFlag = async () => {
-    if (!flagging || !flagRule.trim()) {
-      toast.error("Rule name is required");
-      return;
-    }
-    try {
-      await createFlag({ tenantId: flagging.id as never, rule: flagRule.trim(), severity: flagSeverity, details: flagDetails || undefined });
-      toast.success("Flag created");
-      setFlagging(null);
-      setFlagRule("");
-      setFlagDetails("");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Operation failed");
-    }
-  };
-
-  const submitFlagReview = async () => {
-    if (!reviewingFlag || reviewNotes.trim().length < 5) {
-      toast.error("Review notes of at least 5 characters are required");
-      return;
-    }
-    try {
-      await reviewFlag({ flagId: reviewingFlag.id as never, status: reviewStatus, reviewNotes: reviewNotes.trim() });
-      toast.success(`Flag ${reviewStatus}`);
-      setReviewingFlag(null);
-      setReviewNotes("");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Operation failed");
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <AdminPageHeader title="Business Tenant Management" description="Global tenant oversight, moderation, and lockdown controls." />
-
-      {/* Moderation flags */}
-      <Card className="rounded-xl border-amber-200 dark:border-amber-900">
-        <CardContent className="p-4">
-          <p className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
-            <ShieldAlert className="h-4 w-4 text-amber-500" /> Moderation flags
-          </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Rule-based flags on tenant sites. Automated rules assist review but are not guaranteed to detect all fraud or malicious activity.
-          </p>
-          {flags === undefined ? (
-            <p className="mt-3 animate-pulse text-sm text-slate-400">Loading flags…</p>
-          ) : flags.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-400">No flags open.</p>
-          ) : (
-            <div className="mt-3 space-y-2">
-              {flags.map((f) => (
-                <div key={f._id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 p-2.5 dark:border-slate-700">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                      {tenantName(f.tenantId)} — {f.rule}
-                    </p>
-                    <p className="truncate text-[11px] text-slate-400">
-                      Severity: {f.severity} · {f.details || "no details"} · {fmtDate(f.createdAt)}
-                    </p>
-                  </div>
-                  <StatusBadge status={f.status} />
-                  {f.status === "open" && (
-                    <Button size="sm" variant="outline" onClick={() => setReviewingFlag({ id: f._id, rule: f.rule })}>
-                      Review
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-          <Input placeholder="Search tenants…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="locked">Locked</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {filtered === undefined ? (
-        <AdminSkeleton rows={5} />
-      ) : filtered.length === 0 ? (
-        <AdminEmpty message="No tenants match." />
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((t) => (
-            <Card key={t._id} className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
-              <CardContent className="flex flex-wrap items-center gap-3 p-4">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-slate-900 dark:text-white">{t.siteName}</p>
-                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-                    {t.subdomain} · {t.siteType} · renews {fmtDate(t.renewalDate)}
-                  </p>
-                </div>
-                <StatusBadge status={t.isActive ? "active" : "locked"} />
-                <div className="flex shrink-0 gap-1">
-                  {t.isActive ? (
-                    <Button size="sm" variant="outline" className="text-red-600" onClick={() => setLocking({ id: t._id, name: t.siteName })}>
-                      <Lock className="mr-1 h-3 w-3" /> Lock
-                    </Button>
-                  ) : (
-                    <Button size="sm" variant="outline" onClick={() => setUnlocking({ id: t._id, name: t.siteName })}>
-                      <LockOpen className="mr-1 h-3 w-3" /> Unlock
-                    </Button>
-                  )}
-                  <Button size="sm" variant="ghost" onClick={() => setFlagging({ id: t._id, name: t.siteName })} aria-label={`Flag ${t.siteName}`}>
-                    <Flag className="h-3.5 w-3.5 text-amber-500" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Lock confirmation */}
-      {locking && (
-        <ConfirmDialog
-          open
-          onClose={() => setLocking(null)}
-          onConfirm={async (reason) => {
-            try {
-              await lockdown({ tenantId: locking.id as never, reason });
-              toast.success("Tenant locked down");
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Operation failed");
-              throw e;
-            }
-          }}
-          title="One-click tenant lockdown"
-          description="The public tenant site shows a maintenance page, tenant users cannot perform restricted operations, and existing data is preserved. Fully reversible via Unlock."
-          resource={locking.name}
-          actionLabel="Lock tenant"
-        />
-      )}
-
-      {unlocking && (
-        <ConfirmDialog
-          open
-          onClose={() => setUnlocking(null)}
-          onConfirm={async (reason) => {
-            try {
-              await unlock({ tenantId: unlocking.id as never, reason });
-              toast.success("Tenant unlocked");
-            } catch (e) {
-              toast.error(e instanceof Error ? e.message : "Operation failed");
-              throw e;
-            }
-          }}
-          title="Unlock tenant"
-          description="Restores public access and tenant operations."
-          resource={unlocking.name}
-          actionLabel="Unlock"
-          destructive={false}
-        />
-      )}
-
-      {/* Flag creation */}
-      <Dialog open={!!flagging} onOpenChange={(o) => !o && setFlagging(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Flag tenant — {flagging?.name}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="flag-rule">Rule / indicator</Label>
-              <Input id="flag-rule" value={flagRule} onChange={(e) => setFlagRule(e.target.value)} placeholder="e.g. suspicious_content, domain_misuse" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Severity</Label>
-              <Select value={flagSeverity} onValueChange={(v) => setFlagSeverity(v as typeof flagSeverity)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="flag-details">Details</Label>
-              <Textarea id="flag-details" value={flagDetails} onChange={(e) => setFlagDetails(e.target.value)} rows={3} placeholder="What did you observe?" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFlagging(null)}>Cancel</Button>
-            <Button onClick={submitFlag}><Flag className="mr-1 h-4 w-4" /> Create flag</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Flag review */}
-      <Dialog open={!!reviewingFlag} onOpenChange={(o) => !o && setReviewingFlag(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Review flag — {reviewingFlag?.rule}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Outcome</Label>
-              <Select value={reviewStatus} onValueChange={(v) => setReviewStatus(v as typeof reviewStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="resolved">Resolved (action taken)</SelectItem>
-                  <SelectItem value="dismissed">Dismissed (false positive)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="review-notes">Review notes (required)</Label>
-              <Textarea id="review-notes" value={reviewNotes} onChange={(e) => setReviewNotes(e.target.value)} rows={3} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReviewingFlag(null)}>Cancel</Button>
-            <Button onClick={submitFlagReview}><Ban className="mr-1 h-4 w-4" /> Submit review</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
+  const [search,setSearch]=useState("");
+  const [status,setStatus]=useState("all");
+  const [view,setView]=useState<Site|null>(null);
+  const [locking,setLocking]=useState<Site|null>(null);
+  const [typedName,setTypedName]=useState("");
+  const [reason,setReason]=useState("");
+  const [unlocking,setUnlocking]=useState<Site|null>(null);
+  const [unlockReason,setUnlockReason]=useState("");
+  const [busy,setBusy]=useState(false);
+  const filtered=useMemo(()=> (tenants??[]).filter(t=>
+    (status==="all"||(status==="active"&&t.isActive)||(status==="locked"&&!t.isActive)) &&
+    (!search.trim()||[t.siteName,t.subdomain,t.ownerName,t.ownerEmail].some(v=>String(v??"").toLowerCase().includes(search.trim().toLowerCase())))
+  ),[tenants,status,search]);
+  const flagsFor=(id:string)=> (flags??[]).filter(f=>String(f.tenantId)===id && f.status==="open");
+  const doLock=async()=>{ if(!locking||typedName!==locking.siteName||reason.trim().length<10)return;setBusy(true);try{await lockdown({tenantId:locking._id as never,reason:reason.trim()});toast.success("Site locked down and audit logged");setLocking(null);setTypedName("");setReason("");}catch(e){toast.error(e instanceof Error?e.message:"Lockdown failed");}finally{setBusy(false)} };
+  const doUnlock=async()=>{if(!unlocking||unlockReason.trim().length<10)return;setBusy(true);try{await unlock({tenantId:unlocking._id as never,reason:unlockReason.trim()});toast.success("Site reactivated and audit logged");setUnlocking(null);setUnlockReason("");}catch(e){toast.error(e instanceof Error?e.message:"Reactivation failed");}finally{setBusy(false)}};
+  return <div className="space-y-4">
+    <AdminPageHeader title="Tenant sites" description="Sub-tenant inventory, ownership, compliance flags, renewal dates, and audited availability controls."/>
+    <Card className="rounded-lg shadow-none"><CardContent className="flex flex-wrap items-center gap-2 p-3">
+      <div className="relative min-w-52 flex-1"><Search className="absolute left-3 top-2.5 size-4 text-muted-foreground"/><Input value={search} onChange={e=>setSearch(e.target.value)} className="pl-9" placeholder="Search site, owner, subdomain"/></div>
+      <select value={status} onChange={e=>setStatus(e.target.value)} aria-label="Filter tenant status" className="h-9 rounded-md border border-input bg-background px-3 text-sm"><option value="all">All statuses</option><option value="active">Active</option><option value="locked">Locked down</option></select>
+      <span className="text-xs text-muted-foreground">{tenants===undefined?"Loading sites…":`${filtered.length} of ${tenants.length} sites`}</span>
+    </CardContent></Card>
+    {tenants===undefined?<AdminSkeleton rows={6}/>:!filtered.length?<AdminEmpty message="No tenant sites match your filters."/>:
+    <Card className="overflow-hidden rounded-lg shadow-none"><div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-xs">
+      <thead className="border-b bg-muted/40 text-muted-foreground"><tr>{["Site","Owner","Subdomain","Status","Compliance flags","Renewal","Actions"].map(h=><th key={h} className="px-3 py-3 font-medium">{h}</th>)}</tr></thead>
+      <tbody>{filtered.map(t=>{const openFlags=flagsFor(t._id);return <tr key={t._id} className="border-b last:border-0 hover:bg-muted/20">
+        <td className="px-3 py-3"><p className="font-semibold">{t.siteName}</p><p className="mt-0.5 text-muted-foreground">{t.siteType}</p></td>
+        <td className="px-3 py-3"><p>{t.ownerName??"Unknown owner"}</p><p className="mt-0.5 text-muted-foreground">{t.ownerEmail||String(t.ownerId).slice(-10)}</p></td>
+        <td className="px-3 py-3 font-mono">{t.subdomain}</td><td className="px-3 py-3"><StatusBadge status={t.isActive?"active":"locked"}/></td>
+        <td className="px-3 py-3">{openFlags.length?<div className="flex flex-wrap gap-1">{openFlags.slice(0,3).map(f=><Badge key={f._id} variant="outline" className="border-amber-500/40 text-amber-700">{f.rule}</Badge>)}{openFlags.length>3&&<Badge variant="outline">+{openFlags.length-3}</Badge>}</div>:<span className="text-muted-foreground">No open flags</span>}</td>
+        <td className="whitespace-nowrap px-3 py-3">{t.renewalDate?fmtDate(t.renewalDate):"Not scheduled"}</td>
+        <td className="px-3 py-3"><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={()=>setView(t)}><Eye className="mr-1 size-3.5"/>View</Button>{t.isActive?<Button size="sm" variant="outline" className="text-destructive" onClick={()=>{setLocking(t);setTypedName("");setReason("")}}><Lock className="mr-1 size-3.5"/>Lockdown</Button>:<Button size="sm" variant="outline" onClick={()=>{setUnlocking(t);setUnlockReason("")}}><LockOpen className="mr-1 size-3.5"/>Reactivate</Button>}</div></td>
+      </tr>})}</tbody>
+    </table></div></Card>}
+    {locking&&<Dialog open onOpenChange={open=>{if(!open&&!busy)setLocking(null)}}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><ShieldAlert className="size-5"/>Confirm site lockdown</DialogTitle><DialogDescription>This privileged action is immediate and will be recorded in the audit trail.</DialogDescription></DialogHeader>
+      <div className="space-y-3"><div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm"><p className="font-semibold text-destructive">Site will be immediately unreachable. This action is audited.</p><p className="mt-1 text-xs text-muted-foreground">Site: {locking.siteName} · {locking.subdomain}</p></div>
+      <div className="space-y-1"><label className="text-xs font-medium">Type the exact site name to confirm</label><Input value={typedName} onChange={e=>setTypedName(e.target.value)} placeholder={locking.siteName} autoComplete="off"/></div>
+      <div className="space-y-1"><label className="text-xs font-medium">Reason (minimum 10 characters)</label><Textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain why this site must be taken offline" rows={3}/></div></div>
+      <DialogFooter><Button variant="outline" disabled={busy} onClick={()=>setLocking(null)}>Cancel</Button><Button variant="destructive" disabled={busy||typedName!==locking.siteName||reason.trim().length<10} onClick={doLock}>{busy?"Locking down…":"Confirm lockdown"}</Button></DialogFooter></DialogContent></Dialog>}
+    {unlocking&&<Dialog open onOpenChange={open=>{if(!open&&!busy)setUnlocking(null)}}><DialogContent><DialogHeader><DialogTitle>Reactivate tenant site</DialogTitle><DialogDescription>Restore availability for {unlocking.siteName}. This action is audit logged.</DialogDescription></DialogHeader><div className="space-y-1"><label className="text-xs font-medium">Reason (minimum 10 characters)</label><Textarea value={unlockReason} onChange={e=>setUnlockReason(e.target.value)} placeholder="Reason for restoring the site" rows={3}/></div><DialogFooter><Button variant="outline" onClick={()=>setUnlocking(null)}>Cancel</Button><Button disabled={busy||unlockReason.trim().length<10} onClick={doUnlock}>{busy?"Reactivating…":"Reactivate site"}</Button></DialogFooter></DialogContent></Dialog>}
+    {view&&<Dialog open onOpenChange={open=>!open&&setView(null)}><DialogContent><DialogHeader><DialogTitle>{view.siteName}</DialogTitle><DialogDescription>Tenant site inventory details</DialogDescription></DialogHeader><div className="space-y-3 text-sm"><div className="flex justify-between gap-3"><span className="text-muted-foreground">Subdomain</span><span className="font-mono">{view.subdomain}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Owner</span><span>{view.ownerName??"Unknown owner"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Owner email</span><span>{view.ownerEmail||"Not provided"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Type / status</span><span>{view.siteType} · {view.isActive?"Active":"Locked"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Renewal</span><span>{view.renewalDate?fmtDate(view.renewalDate):"Not scheduled"}</span></div><div className="flex justify-between gap-3"><span className="text-muted-foreground">Contact</span><span>{view.contactEmail??"—"} {view.contactPhone??""}</span></div></div><DialogFooter><Button onClick={()=>setView(null)}>Close</Button></DialogFooter></DialogContent></Dialog>}
+  </div>;
 }
