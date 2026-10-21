@@ -56,6 +56,13 @@ export function JobProgress({
         : status === "failed"
           ? "text-destructive"
           : "text-primary";
+    const compactProgress = status === "succeeded" ? 100 : value;
+    const progressClass =
+      status === "succeeded"
+        ? "bg-emerald-600"
+        : status === "failed"
+          ? "bg-destructive"
+          : "bg-primary";
 
     return (
       <div
@@ -70,25 +77,19 @@ export function JobProgress({
         <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={label}>
           {label}
         </span>
-        {status === "pending" ? (
+        <div
+          className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted sm:w-20"
+          role="progressbar"
+          aria-label={`${label} progress`}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={compactProgress}
+        >
           <div
-            className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted sm:w-20"
-            role="progressbar"
-            aria-label={`${label} progress`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={value}
-          >
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-300"
-              style={{ width: `${value}%` }}
-            />
-          </div>
-        ) : (
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {status === "succeeded" ? "Done" : "Failed"}
-          </span>
-        )}
+            className={cn("h-full rounded-full transition-[width] duration-300", progressClass)}
+            style={{ width: `${compactProgress}%` }}
+          />
+        </div>
       </div>
     );
   }
