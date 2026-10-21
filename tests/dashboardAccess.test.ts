@@ -7,7 +7,7 @@
  *
  *   Landing.tsx   the visitor is offered a link to `/dashboard` at all
  *   main.tsx      `/dashboard` is registered INSIDE the `RequireAuth` layout
- *   RequireAuth   a signed-out visitor is sent to `/auth?returnTo=<intended>`
+ *   RequireAuth   a signed-out visitor is sent to `/login?returnTo=<intended>`
  *   Auth.tsx      the `returnTo` is honoured after sign-in, and the fallback
  *                 (used when there is no returnTo) is the dashboard too
  *
@@ -138,7 +138,7 @@ describe("a signed-out visitor is returned to the dashboard after signing in", (
       "const returnTo = `${location.pathname}${location.search}`;",
     );
     expect(guard).toContain(
-      "to={`/auth?returnTo=${encodeURIComponent(returnTo)}`}",
+      "to={`/login?returnTo=${encodeURIComponent(returnTo)}`}",
     );
   });
 
