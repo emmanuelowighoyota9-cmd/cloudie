@@ -317,8 +317,9 @@ app.post("/api/auth/bootstrap-admin", async (c) => {
     return fail(c, 401, "Invalid bootstrap authorization");
   }
 
-  const client = await pool.connect();
+  let client: Awaited<ReturnType<typeof pool.connect>> | undefined;
   try {
+    client = await pool.connect();
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock(771901, 1)");
     const existing = await client.query<{ count: number } & QueryResultRow>(
@@ -357,14 +358,14 @@ app.post("/api/auth/bootstrap-admin", async (c) => {
     setCsrfCookie(c);
     return c.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token }, 201);
   } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
+    if (client) await client.query("ROLLBACK").catch(() => undefined);
     if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
       return fail(c, 409, "An account with this email already exists");
     }
     console.error("Administrator bootstrap failed", error instanceof Error ? error.message : "unknown");
     return fail(c, 500, "Unable to bootstrap administrator");
   } finally {
-    client.release();
+    client?.release();
   }
 });
 
