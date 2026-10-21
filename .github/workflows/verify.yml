@@ -7,7 +7,31 @@ on:
   workflow_dispatch:
 
 jobs:
+  lockfile-check:
+    runs-on: ubuntu-latest
+    outputs:
+      drift: ${{ steps.check.outputs.drift }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - id: check
+        run: |
+          bun install --no-frozen-lockfile --silent
+          if ! git diff --quiet -- bun.lock; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+            echo "::error::bun.lock is out of date with package.json."
+            echo "Run: gh workflow run regen-lock.yml --ref main"
+            echo "Then: gh workflow run verify.yml --ref main"
+            exit 1
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          fi
+
   root:
+    needs: lockfile-check
+    if: needs.lockfile-check.outputs.drift == 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +39,17 @@ jobs:
         with:
           bun-version: latest
       - run: bun --version
-      - run: bun install --frozen-lockfile
+      - name: Install (frozen)
+        id: install
+        continue-on-error: true
+        run: bun install --frozen-lockfile
+      - name: Explain lockfile drift
+        if: steps.install.outcome == 'failure'
+        run: |
+          echo "::error::bun.lock is out of date with package.json."
+          echo "Run: gh workflow run regen-lock.yml --ref main"
+          echo "Then: gh workflow run verify.yml --ref main"
+          exit 1
       - run: bunx tsc -b --noEmit
       - run: bun test
 
