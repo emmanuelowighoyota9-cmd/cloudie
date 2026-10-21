@@ -55,8 +55,8 @@ export default function Admin() {
     <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard title="Points minted · 24h" value={money(data.minted24h)} note="Positive ledger entries in the last 24 hours" icon={Coins} tone="green" trend={mintedTrend} />
       <MetricCard title="Points burned · 24h" value={money(data.burned24h)} note="Negative ledger entries in the last 24 hours" icon={Coins} tone="red" trend={burnedTrend} />
-      <MetricCard title="WebSocket subscribers" value="—" note="Realtime connection telemetry is not instrumented" icon={Users} tone="amber" />
-      <MetricCard title="Queued jobs" value={money(data.queuedJobs)} note="Pending email deliveries and unsettled deposits" icon={Workflow} tone="amber" />
+      <MetricCard title="WebSocket subscribers" value="—" note="Realtime connection telemetry is not instrumented" icon={Users} tone="amber" trend={[]} />
+      <MetricCard title="Queued jobs" value={money(data.queuedJobs)} note="Pending email deliveries and unsettled deposits" icon={Workflow} tone="amber" trend={[]} />
     </section>
 
     <section className="grid gap-3 xl:grid-cols-2">
