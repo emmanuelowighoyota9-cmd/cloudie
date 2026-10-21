@@ -1,6 +1,7 @@
 // Bun's built-in test runner with happy-dom registered by src/__tests__/setup.ts.
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render } from "@testing-library/react";
+import { screen } from "@testing-library/dom";
 import userEvent from "@testing-library/user-event";
 import { fmtNaira, fmtPoints, naira, points } from "@/components/money/FundsGate";
 import { PurchaseDialog } from "../PurchaseDialog";
@@ -90,7 +91,7 @@ describe("PurchaseDialog", () => {
     expect(screen.getAllByText("₦4,500.00").length).toBeGreaterThan(0);
     expect(screen.getAllByText("₦5,500.00").length).toBeGreaterThan(0);
     const credited = screen.getAllByText("+5,000 points");
-    expect(credited.some((element) => element.classList.contains("text-success"))).toBe(true);
+    expect(credited.some((element: HTMLElement) => element.classList.contains("text-success"))).toBe(true);
     expect(screen.getByText("order-abc123")).toBeTruthy();
     expectNoMixedCurrencyAndPoints(container);
     expect(screen.queryByRole("status", { name: /success/i })).toBeNull();
