@@ -468,6 +468,7 @@ export default function Marketplace() {
   const [view, setView] = useState<View>("products");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Id<"marketplaceProducts"> | null>(null);
   const [buying, setBuying] = useState<string | null>(null);
 
@@ -567,10 +568,10 @@ export default function Marketplace() {
             <Store className="h-3.5 w-3.5" />
             Cloudie Marketplace
           </div>
-          <h1 className="break-words text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">
+          <h1 className="break-words text-xl font-bold tracking-tight sm:text-2xl">
             Digital marketplace
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             Browse real digital products by category, price and live stock.
           </p>
         </div>
@@ -626,7 +627,7 @@ export default function Marketplace() {
               ))}
             </div>
           ) : (
-            <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
+            <Card className="rounded-xl border-border">
               <CardContent className="flex items-center justify-between gap-3 p-3 sm:p-4">
                 <div>
                   <p className="text-sm font-semibold">{effectiveCatalog === "numbers" ? "Numbers" : "Social Boost"}</p>
@@ -641,8 +642,8 @@ export default function Marketplace() {
             </Card>
           )}
 
-          <Card className="rounded-xl border-slate-200 shadow-sm dark:border-slate-700">
-            <CardContent className="p-4">
+          <Card className="rounded-xl border-border">
+            <CardContent className="p-3 sm:p-4">
               <div className="flex min-w-0 flex-col gap-3 lg:flex-row">
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -654,7 +655,7 @@ export default function Marketplace() {
                     className="h-11 w-full min-w-0 rounded-lg border bg-background pl-9 pr-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-primary"
                   />
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-2 sm:flex">
                   <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
                   <select
                     aria-label="Filter by category"
@@ -667,6 +668,10 @@ export default function Marketplace() {
                     ))}
                   </select>
                 </div>
+                <Button type="button" variant="outline" className="w-full sm:hidden" onClick={() => setFiltersOpen(true)}>
+                  <SlidersHorizontal className="mr-2 h-4 w-4" />
+                  Filters{category !== "All" ? " · 1 active" : ""}
+                </Button>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -681,6 +686,29 @@ export default function Marketplace() {
               </div>
             </CardContent>
           </Card>
+
+          {filtersOpen && (
+            <div className="fixed inset-0 z-[60] sm:hidden" role="dialog" aria-modal="true" aria-labelledby="marketplace-filter-title">
+              <button type="button" aria-label="Close filters" className="absolute inset-0 h-full w-full bg-background/70" onClick={() => setFiltersOpen(false)} />
+              <section className="absolute inset-x-0 bottom-0 rounded-t-2xl border border-border bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 id="marketplace-filter-title" className="text-lg font-semibold">Filter products</h2>
+                    <p className="text-sm text-muted-foreground">Narrow the catalog by category.</p>
+                  </div>
+                  <Button type="button" variant="ghost" onClick={() => setFiltersOpen(false)}>Close</Button>
+                </div>
+                <label htmlFor="marketplace-mobile-category" className="mb-2 block text-sm font-medium">Category</label>
+                <select id="marketplace-mobile-category" aria-label="Filter by category" value={category} onChange={(event) => setCategory(event.target.value)} className="h-12 w-full rounded-lg border border-border bg-background px-3 text-sm">
+                  {categories.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
+                <div className="mt-5 flex gap-2">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setCategory("All")}>Reset</Button>
+                  <Button type="button" className="flex-1" onClick={() => setFiltersOpen(false)}>Show {filteredProducts.length} products</Button>
+                </div>
+              </section>
+            </div>
+          )}
 
           {products === undefined ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -711,7 +739,7 @@ export default function Marketplace() {
                 const stock = stockFor(product);
                 const outOfStock = stock !== undefined && stock <= 0;
                 return (
-                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-xl border-slate-200 bg-card shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700">
+                  <Card key={product._id} className="group min-w-0 max-w-full overflow-hidden rounded-xl border-border bg-card transition duration-200 sm:hover:border-primary/40">
                     <button
                       type="button"
                       onClick={() => setSelectedProduct(product._id)}
@@ -784,7 +812,7 @@ export default function Marketplace() {
                         onClick={() => setSelectedProduct(product._id)}
                         className="block w-full min-w-0 text-left"
                       >
-                        <h3 className="line-clamp-2 break-words text-sm font-semibold leading-5 text-slate-900 dark:text-white">
+                        <h3 className="line-clamp-2 break-words text-left text-sm font-semibold leading-5 text-foreground">
                           {product.name}
                         </h3>
                         <p className="mt-1 line-clamp-2 break-words text-xs leading-4 text-muted-foreground">
@@ -828,12 +856,31 @@ export default function Marketplace() {
                           {buying === product._id ? "Processing..." : outOfStock ? "Unavailable" : "Buy now"}
                         </Button>
                       </div>
+                      {outOfStock ? (
+                        <p className="mt-2 text-xs text-muted-foreground">Unavailable: this item is out of stock.</p>
+                      ) : (balance ?? 0) < (product.priceNgn ?? product.pointsPrice * 15) ? (
+                        <p className="mt-2 text-xs text-destructive">Insufficient wallet balance. Add funds before purchasing.</p>
+                      ) : null}
                     </CardContent>
                   </Card>
                 );
               })}
             </div>
           )}
+
+          <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+            <div className="mx-auto flex max-w-2xl items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{selected ? selected.name : "Choose a product"}</p>
+                <p className="text-xs text-muted-foreground">{selected ? `Balance after charge: ${formatNgn((balance ?? 0) - (selected.priceNgn ?? selected.pointsPrice * 15))}` : `Available balance: ${formatNgn(balance ?? 0)}`}</p>
+                {selected && (balance ?? 0) < (selected.priceNgn ?? selected.pointsPrice * 15) && <p className="text-xs text-destructive">Insufficient balance. Fund your wallet to continue.</p>}
+              </div>
+              <Button className="shrink-0" disabled={!selected || stockFor(selected) !== undefined && stockFor(selected)! <= 0 || buying === selected?._id || (balance ?? 0) < (selected?.priceNgn ?? (selected?.pointsPrice ?? 0) * 15)} onClick={() => selected && handleBuy(selected._id, selected.name, selected.priceNgn ?? selected.pointsPrice * 15, selected.provider)}>
+                {selected ? "Buy now" : "Select item"}
+              </Button>
+            </div>
+            {!selected && <p className="mx-auto mt-1 max-w-2xl text-xs text-muted-foreground">Select a product card to enable checkout.</p>}
+          </div>
 
           {selected && (
             <ProductDetails
@@ -919,7 +966,19 @@ function OrdersView({
   refreshLogspanelOrder: (args: { orderId: Id<"marketplaceOrders"> }) => Promise<{ status: string }>;
 }) {
   if (orders === undefined) {
-    return <div className="py-16 text-center text-sm text-muted-foreground">Loading orders...</div>;
+    return (
+      <div className="space-y-3" aria-label="Loading orders" aria-busy="true">
+        {[1, 2, 3].map((item) => (
+          <Card key={item} className="rounded-xl border-border">
+            <CardContent className="space-y-3 p-4">
+              <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-48 max-w-full animate-pulse rounded bg-muted" />
+              <div className="h-8 w-24 animate-pulse rounded bg-muted" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   if (orders.length === 0) {
