@@ -174,9 +174,12 @@ export default function AdminUserDetail() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="ledger">
+      <Tabs defaultValue="overview">
         <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="ledger">Ledger</TabsTrigger>
+          <TabsTrigger value="tenant-sites">Tenant sites</TabsTrigger>
+          <TabsTrigger value="vendor">Vendor</TabsTrigger>
           <TabsTrigger value="shipments">Shipments ({shipments.length})</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
           <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
@@ -185,6 +188,20 @@ export default function AdminUserDetail() {
           <TabsTrigger value="referrals">Referrals ({referralsSent.length + referralsReceived.length})</TabsTrigger>
           <TabsTrigger value="audit">Audit ({audit.length})</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview" className="mt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Account status</p><div className="mt-2"><StatusBadge status={status} /></div></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Role</p><div className="mt-2"><StatusBadge status={user.role ?? "user"} /></div></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Audit events</p><p className="mt-2 text-xl font-semibold tabular-nums">{audit.length.toLocaleString()}</p></CardContent></Card>
+          </div>
+        </TabsContent>
+        <TabsContent value="tenant-sites" className="mt-4">
+          <AdminEmpty message="Tenant-site records are not exposed by this user detail query yet." hint="Connect the user-to-tenant relationship query to populate this tab." />
+        </TabsContent>
+        <TabsContent value="vendor" className="mt-4">
+          <AdminEmpty message="Vendor profile is not available for this account." hint="Vendor details will appear here when the user is linked to a vendor profile." />
+        </TabsContent>
 
         <TabsContent value="ledger" className="mt-4">
           {ledger.length === 0 ? (
