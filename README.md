@@ -103,8 +103,8 @@ The frontend uses Bun's built-in test runner; no Vitest or Jest runner is config
 The script reports success only if all four commands exit zero. It does **not** prove live Convex purchase behavior. Separately verify a real buy → escrow → credited cycle and an insufficient-wallet rejection against a deployed Convex environment. A live deployment smoke check can also be run with `npm run smoke:live`.
 
 **Live backend verification** (manual only; not run in CI):
-1. Deploy a Convex dev environment and prepare an authenticated test account that is an approved vendor and has access to a test package.
-2. Set `CONVEX_URL`, `CONVEX_AUTH_TOKEN`, and `TEST_PACKAGE_ID` in your environment. The auth token must belong to the test user; the test user must be permitted to fulfill the order as an approved vendor.
+1. Deploy a Convex dev environment and prepare a buyer test account with sufficient wallet balance and a separate approved vendor test account that owns the selected package.
+2. Set `CONVEX_URL`, `BUYER_AUTH_TOKEN`, `VENDOR_AUTH_TOKEN`, and `TEST_PACKAGE_ID` in your environment. The buyer token must belong to the buyer test user; the vendor token must belong to the approved vendor who owns the package.
 3. Before the insufficient-funds step, set the test user's wallet balance below the package price using the approved test setup/admin workflow.
 4. Run `bun run verify:convex`.
 
