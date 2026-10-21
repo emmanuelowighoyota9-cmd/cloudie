@@ -7,6 +7,7 @@ import type { Naira, Points } from "@/components/money/FundsGate";
 export type MarketplaceOrderDraft = {
   productId: string;
   productName: string;
+  vendorName: string;
   quantity: number;
   price: Naira;
   pointsReward: Points;
