@@ -17,6 +17,7 @@ import {
   fmtDate,
 } from "@/components/admin/shared";
 import { usePricing, formatNgn } from "@/lib/pricing";
+import { ReasonRequiredDialog } from "@/components/admin/ReasonRequiredDialog";
 
 export default function AdminUserDetail() {
   const { ngnPerPoint } = usePricing();
@@ -24,6 +25,10 @@ export default function AdminUserDetail() {
   const id = params.id ?? params.userId;
   const detail = useQuery(
     api.adminApi.adminUserDetail,
+    id ? { userId: id as never } : "skip",
+  );
+  const tenantContext = useQuery(
+    api.adminOverview.userContext,
     id ? { userId: id as never } : "skip",
   );
 
@@ -34,6 +39,7 @@ export default function AdminUserDetail() {
 
   const [action, setAction] = useState<null | { kind: "suspend" | "reactivate" | "terminate" | "role" | "credit" | "debit"; label: string }>(null);
   const [amount, setAmount] = useState("");
+  const [adjustPointsOpen, setAdjustPointsOpen] = useState(false);
   const [nextRole, setNextRole] = useState<"user" | "vendor" | "admin">("user");
 
   if (detail === undefined) {
@@ -49,6 +55,7 @@ export default function AdminUserDetail() {
 
   const { user, wallet, ledger, shipments, documents, orders, notifications, audit, sessions, referralsSent, referralsReceived } = detail;
   const status = user.isTerminated ? "terminated" : user.isSuspended ? "suspended" : "active";
+  const currentPoints = Number(user.pointsBalance ?? 0);
 
   const runAction = async (reason: string) => {
     if (!action) return;
@@ -91,8 +98,8 @@ export default function AdminUserDetail() {
           <Link to="/admin/users" aria-label="Back to users"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{user.name || "Unnamed user"}</h1>
-          <p className="truncate text-sm text-slate-500 dark:text-slate-400">{user.email || "No email"}</p>
+          <h1 className="truncate text-xl font-bold tracking-tight text-foreground">{user.email || "No email"}</h1>
+          <p className="truncate text-xs text-muted-foreground">{user.name || "Unnamed user"} · User ID {String(user._id).slice(-10)}</p>
         </div>
         <div className="flex gap-1.5">
           <StatusBadge status={user.role ?? "user"} />
@@ -164,27 +171,41 @@ export default function AdminUserDetail() {
           >
             Change role to {user.role === "vendor" ? "user" : "vendor"}
           </Button>
-          <Button variant="outline" className="text-green-700" onClick={() => setAction({ kind: "credit", label: "Credit wallet" })}>
-            <Coins className="mr-1 h-4 w-4" /> Credit
-          </Button>
-          <Button variant="outline" className="text-red-700" onClick={() => setAction({ kind: "debit", label: "Deduct wallet" })}>
-            <Coins className="mr-1 h-4 w-4" /> Deduct
+          <Button variant="outline" className="border-red-500/30 text-red-700 hover:bg-red-500/10" onClick={() => setAdjustPointsOpen(true)}>
+            <Coins className="mr-1 h-4 w-4" /> Adjust points
           </Button>
         </CardContent>
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="ledger">
+      <Tabs defaultValue="overview">
         <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="ledger">Ledger</TabsTrigger>
+          <TabsTrigger value="tenant-sites">Tenant sites</TabsTrigger>
+          <TabsTrigger value="vendor">Vendor</TabsTrigger>
           <TabsTrigger value="shipments">Shipments ({shipments.length})</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
-          <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications ({notifications.length})</TabsTrigger>
-          <TabsTrigger value="security">Security ({sessions.length})</TabsTrigger>
-          <TabsTrigger value="referrals">Referrals ({referralsSent.length + referralsReceived.length})</TabsTrigger>
           <TabsTrigger value="audit">Audit ({audit.length})</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="overview" className="mt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Account status</p><div className="mt-2"><StatusBadge status={status} /></div></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Role</p><div className="mt-2"><StatusBadge status={user.role ?? "user"} /></div></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">Audit events</p><p className="mt-2 text-xl font-semibold tabular-nums">{audit.length.toLocaleString()}</p></CardContent></Card>
+          </div>
+        </TabsContent>
+        <TabsContent value="tenant-sites" className="mt-4">
+          {tenantContext === undefined ? <AdminSkeleton rows={2} /> : !tenantContext || tenantContext.sites.length === 0 ? <AdminEmpty message="No tenant sites linked to this user." /> : (
+            <div className="overflow-x-auto rounded-lg border border-border"><table className="w-full text-left text-xs"><thead className="bg-muted/40 text-muted-foreground"><tr><th className="p-3">Site</th><th className="p-3">Subdomain</th><th className="p-3">Role</th><th className="p-3">Status</th></tr></thead><tbody>{tenantContext.sites.map((site) => <tr key={site._id} className="border-t border-border"><td className="p-3 font-medium">{site.siteName || "Untitled site"}</td><td className="p-3 font-mono">{site.subdomain || "—"}</td><td className="p-3">{site.role || "member"}</td><td className="p-3"><StatusBadge status={site.status || "active"} /></td></tr>)}</tbody></table></div>
+          )}
+        </TabsContent>
+        <TabsContent value="vendor" className="mt-4">
+          {tenantContext === undefined ? <AdminSkeleton rows={2} /> : !tenantContext.vendor ? <AdminEmpty message="No vendor profile linked to this user." /> : (
+            <Card><CardContent className="grid gap-4 p-4 sm:grid-cols-2"><div><p className="text-[11px] text-muted-foreground">Business</p><p className="mt-1 font-semibold">{tenantContext.vendor.businessName}</p></div><div><p className="text-[11px] text-muted-foreground">Status</p><div className="mt-1"><StatusBadge status={tenantContext.vendor.status} /></div></div><div><p className="text-[11px] text-muted-foreground">Total sales</p><p className="mt-1 font-mono">{formatNgn(tenantContext.vendor.totalSales ?? 0)}</p></div><div><p className="text-[11px] text-muted-foreground">Earnings</p><p className="mt-1 font-mono">{formatNgn(tenantContext.vendor.earnings ?? 0)}</p></div>{tenantContext.vendor.statusReason && <p className="text-xs text-muted-foreground sm:col-span-2">Status reason: {tenantContext.vendor.statusReason}</p>}</CardContent></Card>
+          )}
+        </TabsContent>
 
         <TabsContent value="ledger" className="mt-4">
           {ledger.length === 0 ? (
@@ -360,6 +381,21 @@ export default function AdminUserDetail() {
           )}
         </TabsContent>
       </Tabs>
+
+      <ReasonRequiredDialog
+        open={adjustPointsOpen}
+        onClose={() => setAdjustPointsOpen(false)}
+        title="Adjust user points"
+        description="Apply a signed points adjustment. The reason is mandatory and the change is recorded in the audit trail."
+        currentBalance={`${currentPoints.toLocaleString()} points · ${formatNgn(user.walletBalanceNgn ?? currentPoints * ngnPerPoint)}`}
+        amountLabel="Signed amount (points)"
+        submitLabel="Apply adjustment"
+        minReasonLength={10}
+        onSubmit={async ({ amount: points, reason }) => {
+          if (!Number.isFinite(points) || points === 0) throw new Error("Enter a non-zero signed points amount.");
+          await adminAdjust({ userId: user._id, amountNgn: points * ngnPerPoint, reason });
+        }}
+      />
 
       {/* Destructive action confirmations */}
       {action && (action.kind === "credit" || action.kind === "debit") ? (

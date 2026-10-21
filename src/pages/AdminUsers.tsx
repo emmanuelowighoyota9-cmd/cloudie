@@ -33,7 +33,7 @@ export default function AdminUsers() {
         .filter((u: any) => {
           if (search.trim()) {
             const q = search.toLowerCase();
-            if (!(u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))) return false;
+            if (!String(u.name ?? "").toLowerCase().includes(q) && !String(u.email ?? "").toLowerCase().includes(q)) return false;
           }
           if (role !== "all" && u.role !== role) return false;
           if (status !== "all" && u.status !== status) return false;
@@ -57,11 +57,11 @@ export default function AdminUsers() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 text-sm">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h1 className="font-display text-xl font-semibold tracking-tight">Users</h1>
+          <p className="mt-1 text-xs text-muted-foreground">
             Search, filter and manage platform users.
           </p>
         </div>
@@ -145,7 +145,7 @@ export default function AdminUsers() {
                 </TableHeader>
                 <TableBody>
                   {filtered.map((user: any) => (
-                    <TableRow key={user._id}>
+                    <TableRow key={user._id} className="cursor-pointer" onClick={() => void navigate(`/admin/users/${user._id}`)}>
                       <TableCell className="pl-3">
                         <div className="min-w-0">
                           <Link to={`/admin/users/${user._id}`} className="block truncate text-sm font-medium hover:text-primary">
@@ -160,7 +160,7 @@ export default function AdminUsers() {
                       <TableCell>
                         <StatusBadge status={user.status} />
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs">
+                      <TableCell className="text-right font-mono tabular-nums text-xs">
                         <span className="text-foreground">{MONEY(user.balanceNgn || user.points * 100)}</span>
                         {user.points > 0 && (
                           <span className="text-muted-foreground">

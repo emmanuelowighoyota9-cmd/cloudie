@@ -1,230 +1,103 @@
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { AdminPageHeader, StatCard, AdminSkeleton } from "@/components/admin/shared";
-import {
-  Activity, AlertTriangle, ArrowRight, BadgeDollarSign, Boxes, Building2,
-  LockKeyhole, Server, Shield, WalletCards, Workflow, CircleCheck, CircleAlert, Eye,
-  ClipboardCheck, Coins, CreditCard, FileText, Gavel, Package, Settings,
-  ShieldAlert, ShieldCheck, ShoppingCart, Truck, UserCheck, UserX, Users, Zap
-} from "lucide-react";
 import { Link } from "react-router";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AdminPageHeader, AdminSkeleton } from "@/components/admin/shared";
+import { Activity, AlertTriangle, ArrowRight, CheckCircle2, CircleAlert, Clock3, Coins, ShieldAlert, Users, Workflow } from "lucide-react";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+type Point = { day: number; minted: number; burned: number };
+
+function Sparkline({ values, tone = "red" }: { values: number[]; tone?: "red" | "green" | "amber" }) {
+  if (values.length < 2) return <span className="text-[10px] text-muted-foreground">Trend unavailable</span>;
+  const max = Math.max(1, ...values);
+  const points = values.map((v, i) => `${(i / (values.length - 1)) * 100},${26 - (v / max) * 22}`).join(" ");
+  const stroke = tone === "green" ? "#16a34a" : tone === "amber" ? "#d97706" : "#dc2626";
+  return <svg viewBox="0 0 100 28" className="h-7 w-24" role="img" aria-label="Seven-day trend"><polyline points={points} fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+}
+
+function relativeTime(timestamp: number) {
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+function MetricCard({ title, value, note, icon: Icon, tone, trend, compact }: {
+  title: string; value: string; note: string; icon: typeof Coins; tone: "red" | "green" | "amber"; trend?: number[]; compact: boolean;
+}) {
+  const color = tone === "green" ? "text-emerald-600" : tone === "amber" ? "text-amber-600" : "text-red-600";
+  return <Card className="rounded-lg shadow-none"><CardContent className={compact ? "p-2.5" : "p-3.5"}>
+    <div className="flex items-start justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{title}</p><Icon className={`size-4 ${color}`} /></div>
+    <div className={`${compact ? "mt-1" : "mt-2"} flex items-end justify-between gap-2`}><p className={`font-mono ${compact ? "text-xl" : "text-2xl"} font-semibold tabular-nums`}>{value}</p>{trend && <Sparkline values={trend} tone={tone} />}</div>
+    <p className="mt-1 text-[10px] text-muted-foreground">{note}</p>
+  </CardContent></Card>;
+}
 
 export default function Admin() {
-  const data = useQuery(api.adminApi.adminDashboard);
-  const risk = useQuery(api.adminApi.getFinancialRisk, { hours: 24, limit: 5 });
-  const ngnValue = (amountNgn: number) => `₦${Math.round(amountNgn).toLocaleString("en-NG")}`;
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
+  const compact = density === "compact";
+  const data = useQuery(api.adminOverview.overview);
+  if (data === undefined) return <div className="space-y-4"><AdminPageHeader title="Operations overview" description="Loading privileged platform telemetry…" /><AdminSkeleton rows={5} /></div>;
+  if (data === null) return <Card><CardContent className="flex items-center gap-4 p-6"><ShieldAlert className="size-6 text-red-600" /><div><h2 className="font-semibold">Admin access required</h2><p className="text-sm text-muted-foreground">Use an active administrator account.</p></div><Link className="ml-auto" to="/dashboard"><Button variant="outline">Back to app</Button></Link></CardContent></Card>;
 
-  if (data === undefined) return <div className="space-y-6"><AdminPageHeader title="Cloudie Command Center" description="Loading live platform controls…" /><AdminSkeleton rows={5} /></div>;
+  const series: Point[] = data.series;
+  const mintedTrend = series.map((row) => row.minted);
+  const burnedTrend = series.map((row) => row.burned);
+  const maxJobs = Math.max(1, data.jobs.pending, data.jobs.failed, data.jobs.dlq);
+  const money = (n: number) => n.toLocaleString("en-NG");
+  const dayLabel = (value: number) => new Date(value).toLocaleDateString(undefined, { weekday: "short" });
 
-  if (data === null) return (
-    <div className="space-y-6">
-      <AdminPageHeader title="Cloudie Command Center" description="Privileged platform control." />
-      <Card><CardContent className="flex items-center gap-4 p-6"><ShieldAlert className="h-6 w-6 text-destructive" /><div><h2 className="font-semibold">Admin access required</h2><p className="text-sm text-muted-foreground">Use an active administrator account.</p></div><Link className="ml-auto" to="/dashboard"><Button variant="outline">Back to app</Button></Link></CardContent></Card>
-    </div>
-  );
+  return <div className="space-y-4">
+    <AdminPageHeader title="Operations overview" description="Points movement, queue health, privileged actions, and platform alerts." actions={<div className="flex flex-wrap items-center gap-2"><div role="group" aria-label="Screen density" className="inline-flex items-center rounded-md border border-border p-0.5"><Button type="button" size="sm" variant={!compact ? "secondary" : "ghost"} aria-pressed={!compact} onClick={() => setDensity("comfortable")} className="h-7 px-2 text-[11px]">Comfortable</Button><Button type="button" size="sm" variant={compact ? "secondary" : "ghost"} aria-pressed={compact} onClick={() => setDensity("compact")} className="h-7 px-2 text-[11px]">Compact</Button></div><Badge variant="outline" className="gap-1 border-red-500/30 text-red-600"><Activity className="size-3" /> Live query</Badge></div>} />
 
-  const metrics = [
-    { label: "Users", value: data.users.total, sub: `${data.users.active.toLocaleString()} active`, to: "/admin/users" },
-    { label: "Wallet credits", value: ngnValue(data.points.minted), sub: `${data.points.velocity24h.toLocaleString()} events / 24h`, to: "/admin/transactions" },
-    { label: "Marketplace orders", value: data.marketplace.orders, sub: `${data.marketplace.escrowPending.toLocaleString()} in escrow`, to: "/admin/orders" },
-    { label: "Active shipments", value: data.shipments.active, sub: `${data.shipments.delivered.toLocaleString()} delivered`, to: "/admin/shipments" },
-  ];
+    <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard title="Points minted · 24h" value={money(data.minted24h)} note="Positive ledger entries in the last 24 hours" icon={Coins} tone="green" trend={mintedTrend} compact={compact} />
+      <MetricCard title="Points burned · 24h" value={money(data.burned24h)} note="Negative ledger entries in the last 24 hours" icon={Coins} tone="red" trend={burnedTrend} compact={compact} />
+      <MetricCard title="WebSocket subscribers" value="—" note="Realtime connection telemetry is not instrumented" icon={Users} tone="amber" trend={[]} compact={compact} />
+      <MetricCard title="Queued jobs" value={money(data.queuedJobs)} note="Pending email deliveries and unsettled deposits" icon={Workflow} tone="amber" trend={[]} compact={compact} />
+    </section>
 
-  const actions = [
-    { label: "Administrators", description: "Privileged access and operators", to: "/admin/administrators", icon: ShieldCheck },
-    { label: "Wallet & Ledger", description: "Credits, debits and reconciliation", to: "/admin/transactions", icon: BadgeDollarSign },
-    { label: "System Health", description: "Infrastructure and provider status", to: "/admin/system-health", icon: Activity },
-    { label: "Platform Settings", description: "Global configuration and controls", to: "/admin/settings", icon: Settings },
-    { label: "VTU Providers", description: "Provider routing and catalog", to: "/admin/vtu/providers", icon: Zap },
-    { label: "Business Tenants", description: "Tenant lifecycle and controls", to: "/admin/tenants", icon: Building2 },
-  ];
+    <section className="grid gap-3 xl:grid-cols-2">
+      <Card className="rounded-lg shadow-none">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 p-4 pb-1"><div><CardTitle className="text-sm">Points velocity (7d)</CardTitle><p className="mt-1 text-[10px] text-muted-foreground">Daily minted vs burned points, based on the latest 2,000 ledger rows.</p></div><div className="flex gap-3 text-[10px]"><span className="flex items-center gap-1"><i className="size-2 rounded-full bg-emerald-600" />Minted</span><span className="flex items-center gap-1"><i className="size-2 rounded-full bg-red-600" />Burned</span></div></CardHeader>
+        <CardContent className={`${compact ? "h-56" : "h-64"} px-2 pb-3 pt-3`}>
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={series} margin={{ top: 8, right: 12, bottom: 0, left: -14 }}><CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.12} /><XAxis dataKey="day" tickFormatter={dayLabel} tick={{ fontSize: 10 }} /><YAxis tick={{ fontSize: 10 }} /><Tooltip labelFormatter={(value) => new Date(Number(value)).toLocaleDateString()} formatter={(value) => [money(Number(value)), "Points"]} /><Line type="monotone" dataKey="minted" name="Minted" stroke="#16a34a" strokeWidth={2} dot={false} /><Line type="monotone" dataKey="burned" name="Burned" stroke="#dc2626" strokeWidth={2} dot={false} /></LineChart></ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-  const attention = [
-    { label: "Pending KYC", value: data.kyc.pending, to: "/admin/kyc", danger: false },
-    { label: "Open disputes", value: data.disputes.open, to: "/admin/disputes", danger: true },
-    { label: "Pending vendors", value: data.vendors.pending, to: "/admin/vendors", danger: false },
-    { label: "Locked tenants", value: data.tenants.locked, to: "/admin/tenants", danger: true },
-  ];
+      <Card className="rounded-lg shadow-none">
+        <CardHeader className="p-4 pb-2"><CardTitle className="text-sm">Job health</CardTitle><p className="mt-1 text-[10px] text-muted-foreground">Bounded recent window across email deliveries and banking settlements.</p></CardHeader>
+        <CardContent className={`${compact ? "space-y-3 p-3" : "space-y-5 p-4"} pt-2`}>
+          {([{ label: "Pending", count: data.jobs.pending, color: "bg-amber-500" }, { label: "Failed", count: data.jobs.failed, color: "bg-red-600" }, { label: "Dead-letter queue", count: data.jobs.dlq, color: "bg-purple-600" }] as const).map((item) => <div key={item.label} className="space-y-1.5"><div className="flex items-center justify-between text-xs"><span className="text-muted-foreground">{item.label}</span><span className="font-mono font-semibold tabular-nums">{money(item.count)}</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${item.color}`} style={{ width: `${Math.max(item.count > 0 ? 2 : 0, (item.count / maxJobs) * 100)}%` }} /></div></div>)}
+          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-[11px] text-muted-foreground"><Clock3 className="size-4 shrink-0" /> Queue counts are based on recent records, not a full queue broker scan.</div>
+        </CardContent>
+      </Card>
+    </section>
 
-  const groups = [
-    { title: "Users", items: [
-      { title: "Total Users", value: data.users.total, icon: Users, color: "blue" as const, to: "/admin/users" },
-      { title: "Active Users", value: data.users.active, icon: UserCheck, color: "green" as const, to: "/admin/users" },
-      { title: "Suspended", value: data.users.suspended, icon: UserX, color: "red" as const, to: "/admin/users" },
-    ]},
-    { title: "Wallet Economy", items: [
-      { title: "Wallet Credits", value: data.points.minted, icon: Coins, color: "blue" as const, to: "/admin/transactions", hint: ngnValue(data.points.minted) },
-      { title: "Wallet Debits", value: data.points.burned, icon: Coins, color: "amber" as const, to: "/admin/transactions", hint: ngnValue(data.points.burned) },
-      { title: "Velocity (24h)", value: data.points.velocity24h, icon: Zap, color: "purple" as const, to: "/admin/transactions" },
-    ]},
-    { title: "Marketplace", items: [
-      { title: "Vendors", value: data.vendors.total, icon: Boxes, color: "purple" as const, to: "/admin/vendors" },
-      { title: "Orders", value: data.marketplace.orders, icon: ShoppingCart, color: "blue" as const, to: "/admin/orders" },
-      { title: "Escrow Pending", value: data.marketplace.escrowPending, icon: Package, color: "amber" as const, to: "/admin/orders" },
-      { title: "Open Disputes", value: data.disputes.open, icon: Gavel, color: "red" as const, to: "/admin/disputes" },
-    ]},
-    { title: "Operations", items: [
-      { title: "Active Shipments", value: data.shipments.active, icon: Truck, color: "blue" as const, to: "/admin/shipments" },
-      { title: "Delivered", value: data.shipments.delivered, icon: Truck, color: "green" as const, to: "/admin/shipments" },
-      { title: "Documents (24h)", value: data.documents.last24h, icon: FileText, color: "indigo" as const, to: "/admin/documents" },
-      { title: "Pending KYC", value: data.kyc.pending, icon: ClipboardCheck, color: "amber" as const, to: "/admin/kyc" },
-    ]},
-  ];
+    <section className="grid gap-3 xl:grid-cols-2">
+      <Card className="rounded-lg shadow-none">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2"><CardTitle className="text-sm">Recent admin actions</CardTitle><Link to="/admin/audit" className="text-xs text-red-600 hover:underline">Open audit <ArrowRight className="ml-1 inline size-3" /></Link></CardHeader>
+        <CardContent className="p-0">
+          {data.actions.length === 0 ? <p className="p-4 text-xs text-muted-foreground">No recent privileged actions.</p> : <div className="divide-y divide-border">{data.actions.map((action) => <div key={action._id} className={`grid min-h-10 grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 ${compact ? "py-3" : "py-3.5"}`}><div className="min-w-0"><p className="truncate text-xs font-semibold">{action.action}</p><p className="mt-0.5 truncate text-[10px] text-muted-foreground">{action.actor}{action.reason ? ` · ${action.reason}` : " · No reason recorded"}</p></div><span className="whitespace-nowrap text-[10px] text-muted-foreground">{relativeTime(action.at)}</span></div>)}</div>}
+        </CardContent>
+      </Card>
+      <Card className="rounded-lg shadow-none">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 p-4 pb-2"><CardTitle className="text-sm">Alerts</CardTitle><span className="text-[10px] text-muted-foreground">{data.alerts.length} signal(s)</span></CardHeader>
+        <CardContent className={`space-y-2 ${compact ? "p-2" : "p-3"}`}>
+          {data.alerts.map((alert, index) => <div key={`${alert.title}-${index}`} className={`flex items-start gap-2.5 rounded-md border border-border ${compact ? "p-2" : "p-3"}`}><span className={`mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full ${alert.level === "error" ? "bg-red-500/10 text-red-600" : alert.level === "warning" ? "bg-amber-500/10 text-amber-600" : "bg-emerald-500/10 text-emerald-600"}`}>{alert.level === "info" ? <CheckCircle2 className="size-3.5" /> : alert.level === "warning" ? <CircleAlert className="size-3.5" /> : <AlertTriangle className="size-3.5" />}</span><div className="min-w-0"><p className="text-xs font-semibold">{alert.title}</p><p className="mt-0.5 text-[11px] leading-5 text-muted-foreground">{alert.detail}</p></div></div>)}
+        </CardContent>
+      </Card>
+    </section>
 
-  return (
-    <div className="space-y-7 sm:space-y-9">
-      <section className="relative overflow-hidden rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/[0.12] via-card to-card p-5 shadow-sm sm:p-7">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Badge className="border-0 bg-primary text-primary-foreground">MASTER SUPER ADMIN</Badge>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> LIVE CONTROL PLANE</span>
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Cloudie Command Center</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">One control surface for users, money movement, marketplace operations, tenants, VTU infrastructure and privileged access.</p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex">
-            <Link to="/admin/administrators"><Button variant="outline" className="w-full gap-2"><ShieldCheck className="h-4 w-4" /> Admins</Button></Link>
-            <Link to="/admin/system-health"><Button className="w-full gap-2"><Activity className="h-4 w-4" /> Health</Button></Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Link to="/admin/transactions" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Wallet control</span><WalletCards className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">{ngnValue(data.points.minted)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Credits processed</p>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-full rounded-full bg-primary" /></div>
-        </Link>
-        <Link to="/admin/orders" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Order control</span><Workflow className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">{data.marketplace.orders.toLocaleString()}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{data.marketplace.escrowPending.toLocaleString()} awaiting escrow resolution</p>
-          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> LIVE ORDER QUEUE</div>
-        </Link>
-        <Link to="/admin/system-health" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Platform signals</span><Server className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">LIVE</p>
-          <p className="mt-1 text-xs text-muted-foreground">{data.documents.last24h.toLocaleString()} documents processed in 24h</p>
-          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> DATA LAYER RESPONDING</div>
-        </Link>
-        <Link to="/admin/audit" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Security control</span><LockKeyhole className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">{data.users.suspended.toLocaleString()}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Suspended accounts under control</p>
-          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-primary"><Eye className="h-3.5 w-3.5" /> AUDIT READY</div>
-        </Link>
-      </section>
-
-      <section className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /><h2 className="font-semibold">Master control room</h2></div><p className="mt-1 text-xs text-muted-foreground">Prioritized signals for the administrator responsible for the whole platform.</p></div>
-          <Link to="/admin/audit" className="text-xs font-semibold text-primary hover:underline">Open audit trail →</Link>
-        </div>
-        <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <Link to="/admin/kyc" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Identity queue</span><CircleAlert className={data.kyc.pending > 0 ? "h-4 w-4 text-amber-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.kyc.pending.toLocaleString()}</p><p className="text-xs text-muted-foreground">KYC reviews pending</p></Link>
-          <Link to="/admin/disputes" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Risk queue</span><CircleAlert className={data.disputes.open > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.disputes.open.toLocaleString()}</p><p className="text-xs text-muted-foreground">Open marketplace disputes</p></Link>
-          <Link to="/admin/tenants" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Tenant controls</span><CircleAlert className={data.tenants.locked > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.tenants.locked.toLocaleString()}</p><p className="text-xs text-muted-foreground">Locked business tenants</p></Link>
-        </div>
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Link to="/admin/transactions" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Wallet control</span><WalletCards className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">{ngnValue(data.points.minted)}</p><p className="mt-1 text-xs text-muted-foreground">Credits processed</p>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-full rounded-full bg-primary" /></div>
-        </Link>
-        <Link to="/admin/orders" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Order control</span><Workflow className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">{data.marketplace.orders.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">{data.marketplace.escrowPending.toLocaleString()} awaiting escrow resolution</p>
-          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> LIVE ORDER QUEUE</div>
-        </Link>
-        <Link to="/admin/system-health" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Platform signals</span><Server className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">LIVE</p><p className="mt-1 text-xs text-muted-foreground">{data.documents.last24h.toLocaleString()} documents processed in 24h</p>
-          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-600"><CircleCheck className="h-3.5 w-3.5" /> DATA LAYER RESPONDING</div>
-        </Link>
-        <Link to="/admin/audit" className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:border-primary/30 hover:shadow-md">
-          <div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Security control</span><LockKeyhole className="h-4 w-4 text-primary" /></div>
-          <p className="mt-3 text-2xl font-bold tracking-tight">{data.users.suspended.toLocaleString()}</p><p className="mt-1 text-xs text-muted-foreground">Suspended accounts under control</p>
-          <div className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold text-primary"><Eye className="h-3.5 w-3.5" /> AUDIT READY</div>
-        </Link>
-      </section>
-
-      <section className="rounded-3xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div><div className="flex items-center gap-2"><Shield className="h-4 w-4 text-primary" /><h2 className="font-semibold">Master control room</h2></div><p className="mt-1 text-xs text-muted-foreground">Prioritized signals for the administrator responsible for the whole platform.</p></div>
-          <Link to="/admin/audit" className="text-xs font-semibold text-primary hover:underline">Open audit trail →</Link>
-        </div>
-        <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <Link to="/admin/kyc" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Identity queue</span><CircleAlert className={data.kyc.pending > 0 ? "h-4 w-4 text-amber-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.kyc.pending.toLocaleString()}</p><p className="text-xs text-muted-foreground">KYC reviews pending</p></Link>
-          <Link to="/admin/disputes" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Risk queue</span><CircleAlert className={data.disputes.open > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.disputes.open.toLocaleString()}</p><p className="text-xs text-muted-foreground">Open marketplace disputes</p></Link>
-          <Link to="/admin/tenants" className="p-5 transition hover:bg-muted/40"><div className="flex items-center justify-between"><span className="text-xs font-semibold text-muted-foreground">Tenant controls</span><CircleAlert className={data.tenants.locked > 0 ? "h-4 w-4 text-red-500" : "h-4 w-4 text-emerald-500"} /></div><p className="mt-3 text-xl font-bold">{data.tenants.locked.toLocaleString()}</p><p className="text-xs text-muted-foreground">Locked business tenants</p></Link>
-        </div>
-      </section>
-
-      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <div><div className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-primary" /><h2 className="font-semibold">Financial risk engine</h2></div><p className="mt-1 text-xs text-muted-foreground">Explainable, advisory monitoring of recent wallet movement. No funds are automatically frozen.</p></div>
-          <Link to="/admin/transactions" className="text-xs font-semibold text-primary hover:underline">Open monitor →</Link>
-        </div>
-        {risk === undefined ? <div className="h-24 animate-pulse rounded-2xl bg-muted" /> : risk.alerts.length === 0 ? <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-sm"><span className="font-semibold text-emerald-600">No elevated wallet risk detected.</span><span className="ml-2 text-muted-foreground">{risk.scannedTransactions.toLocaleString()} transactions scanned.</span></div> : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{risk.alerts.map((a) => <Link key={a.userId} to="/admin/transactions" className="rounded-2xl border border-border p-4 transition hover:border-primary/30 hover:bg-muted/30"><div className="flex items-center justify-between gap-2"><span className="font-mono text-[10px] text-muted-foreground">{a.userId.slice(-12)}</span><Badge variant={a.severity === "critical" ? "destructive" : "outline"}>{a.severity.toUpperCase()} · {a.score}</Badge></div><p className="mt-3 text-sm font-semibold">₦{Math.round(a.debitTotal).toLocaleString("en-NG")} debited</p><p className="mt-1 text-xs text-muted-foreground">{a.transactionCount} transactions · largest ₦{Math.round(a.largestDebit).toLocaleString("en-NG")}</p><p className="mt-2 text-xs">{a.reasons[0]}</p></Link>)}</div>}
-      </section>
-
-      <section className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
-        <div className="mb-5 flex flex-col gap-1"><div className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-primary" /><h2 className="font-semibold">Finance & risk command center</h2></div><p className="text-xs text-muted-foreground">Live financial movement and risk queues requiring privileged review.</p></div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            ["Credits · 24h", ngnValue(data.points.minted), data.points.mintedCount24h.toLocaleString()+" credit events", "/admin/transactions"],
-            ["Debits · 24h", ngnValue(data.points.debited24h), data.points.debitedCount24h.toLocaleString()+" debit events", "/admin/transactions"],
-            ["Net movement · 24h", ngnValue(data.points.velocity24h), data.points.velocity24h >= 0 ? "Net positive" : "Net negative", "/admin/transactions"],
-            ["Risk queues", (data.disputes.open + data.kyc.pending + data.tenants.locked).toLocaleString(), "disputes + KYC + locked tenants", "/admin/audit"],
-          ].map(([label,value,sub,to]) => <Link key={label} to={to} className="rounded-2xl border border-border p-4 transition hover:border-primary/30 hover:bg-primary/[0.03]"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</p><p className="mt-2 text-xl font-bold tracking-tight">{value}</p><p className="mt-1 text-[11px] text-muted-foreground">{sub}</p></Link>)}
-        </div>
-      </section>
-
-      <AdminPageHeader title="Platform overview" description="Live metrics from the current production data layer." />
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((m) => <Link key={m.label} to={m.to} className="group rounded-2xl border border-border bg-card p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{m.label}</p><p className="mt-2 text-2xl font-bold tracking-tight text-foreground">{typeof m.value === "number" ? m.value.toLocaleString() : m.value}</p><p className="mt-1 text-xs text-muted-foreground">{m.sub}</p></Link>)}
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-2">
-        <Card className="rounded-2xl border-border shadow-sm"><CardContent className="p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Wallet activity</h2><p className="text-xs text-muted-foreground">Ledger activity tracked in the current production data layer.</p></div><Link to="/admin/transactions" className="text-xs font-semibold text-primary">View ledger</Link></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-border p-4"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Ledger events · 7d</p><p className="mt-2 text-2xl font-bold">{data.activity.ledger7d.toLocaleString()}</p></div>
-            <div className="rounded-xl border border-border p-4"><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net movement · 24h</p><p className="mt-2 text-2xl font-bold">{ngnValue(data.points.velocity24h)}</p></div>
-          </div>
-        </CardContent></Card>
-        <Card className="rounded-2xl border-border shadow-sm"><CardContent className="p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold">Admin activity</h2><p className="text-xs text-muted-foreground">Use the audit trail for privileged actions.</p></div><Link to="/admin/audit" className="text-xs font-semibold text-primary">Audit trail</Link></div>
-          <div className="rounded-xl border border-border p-5"><p className="text-sm text-muted-foreground">Audit events are available in the dedicated audit workspace.</p><p className="mt-2 text-2xl font-bold">{data.users.admins.toLocaleString()} administrators</p></div>
-        </CardContent></Card>
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
-        <Card className="rounded-2xl border-border shadow-sm"><CardContent className="p-5 sm:p-6">
-          <div className="mb-4"><h2 className="font-semibold">Operations pulse</h2><p className="mt-1 text-xs text-muted-foreground">Current workload and recent platform movement.</p></div>
-          <div className="space-y-3">
-            {[["New users · 7d", data.activity.newUsers7d.toLocaleString(), "/admin/users"], ["Ledger events · 7d", data.activity.ledger7d.toLocaleString(), "/admin/transactions"]].map(([label,value,to]) => <Link key={label} to={to} className="flex items-center justify-between rounded-xl border border-border px-4 py-3 hover:bg-muted/50"><span className="text-sm">{label}</span><span className="font-bold">{value}</span></Link>)}
-          </div>
-        </CardContent></Card>
-        <Card className="rounded-2xl border-border shadow-sm"><CardContent className="p-5 sm:p-6">
-          <h2 className="font-semibold">Administrator coverage</h2><p className="mt-1 text-xs text-muted-foreground">Active admin accounts available for privileged operations.</p>
-          <p className="mt-5 text-3xl font-bold">{data.users.admins.toLocaleString()}</p>
-          <Link to="/admin/administrators" className="mt-3 inline-block text-xs font-semibold text-primary">Manage administrators →</Link>
-        </CardContent></Card>
-      </section>
-
-
-
-      {groups.map((group) => <section key={group.title} className="space-y-3"><h2 className="section-label">{group.title}</h2><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{group.items.map((m) => <Link key={m.title} to={m.to}><StatCard title={m.title} value={m.value} icon={m.icon} color={m.color} hint={"hint" in m ? m.hint : undefined} /></Link>)}</div></section>)}
-    </div>
-  );
+    <section className="grid gap-3 sm:grid-cols-3">
+      <Link to="/admin/users" className={`rounded-lg border border-border bg-card ${compact ? "p-2" : "p-3"} transition hover:border-red-500/40`}><div className="flex items-center gap-2 text-xs font-semibold"><Users className="size-4 text-red-600" /> User administration</div><p className="mt-1 text-[11px] text-muted-foreground">{money(data.users)} users in the recent bounded scan</p></Link>
+      <Link to="/admin/system-health" className="rounded-lg border border-border bg-card p-3 transition hover:border-red-500/40"><div className="flex items-center gap-2 text-xs font-semibold"><Activity className="size-4 text-red-600" /> System health</div><p className="mt-1 text-[11px] text-muted-foreground">Inspect infrastructure and provider health</p></Link>
+      <Link to="/admin/audit" className="rounded-lg border border-border bg-card p-3 transition hover:border-red-500/40"><div className="flex items-center gap-2 text-xs font-semibold"><ShieldAlert className="size-4 text-red-600" /> Audit trail</div><p className="mt-1 text-[11px] text-muted-foreground">Review privileged actions and recorded reasons</p></Link>
+    </section>
+  </div>;
 }

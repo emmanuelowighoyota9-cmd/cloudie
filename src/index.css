@@ -101,7 +101,7 @@
 
   /* Ink */
   --foreground: #ffffff; /* primary text */
-  --muted-foreground: #a1a1aa; /* secondary text */
+  --muted-foreground: #b4b4bd; /* secondary text */
   --card-foreground: #ffffff;
   --popover-foreground: #ffffff;
 
@@ -110,10 +110,10 @@
   --input: #27272a;
 
   /* Brand accent — emerald */
-  --primary: #10b981;
-  --primary-hover: #059669;
+  --primary: #27c493;
+  --primary-hover: #10b981;
   --primary-foreground: #04120c;
-  --ring: #10b981;
+  --ring: #27c493;
 
   /* Interaction fills. `accent` is the hover/selected surface, not a brand
      colour — that is what `primary` is for. */
@@ -133,15 +133,15 @@
 
   /* Sidebar */
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #10b981;
+  --sidebar-primary: #27c493;
   --sidebar-primary-foreground: #04120c;
   --sidebar-accent: #181818;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #27272a;
-  --sidebar-ring: #10b981;
+  --sidebar-ring: #27c493;
 
   /* Data visualisation */
-  --chart-1: #10b981;
+  --chart-1: #27c493;
   --chart-2: #3b82f6;
   --chart-3: #22c55e;
   --chart-4: #a1a1aa;
@@ -155,18 +155,18 @@
   --vtu-canvas: #000000;
   --vtu-card: #111111;
   --vtu-text: #ffffff;
-  --vtu-muted: #a1a1aa;
+  --vtu-muted: #b4b4bd;
   --vtu-line: #27272a;
   --vtu-chip: #181818;
   --vtu-band: #0a0a0a;
   --vtu-band-fg: #ffffff;
-  --vtu-accent: #10b981;
+  --vtu-accent: #27c493;
   --vtu-accent-ink: #04120c;
   /* Network brands are content, not chrome — they stay recognisable. */
   --vtu-brand-mtn: #e8c31c;
   --vtu-brand-airtel: #d62828;
   --vtu-brand-glo: #2f8b40;
-  --vtu-brand-9mobile: #10b981;
+  --vtu-brand-9mobile: #27c493;
 
   /* Aliases older surfaces still read. */
   --nb-bg: var(--background);
@@ -347,35 +347,26 @@
   }
 
   .surface-lift {
-    box-shadow: 0 18px 48px -30px
-      color-mix(in srgb, var(--primary) 45%, transparent);
+    box-shadow: none;
   }
 
   /* ── Elevation scale ──
      Tinted with the theme's own shadow colour so surfaces sit on the
      background instead of floating above a grey haze. */
   .elev-1 {
-    box-shadow:
-      0 1px 2px hsl(var(--shadow-color) / 0.06),
-      0 1px 3px hsl(var(--shadow-color) / 0.04);
+    box-shadow: none;
   }
 
   .elev-2 {
-    box-shadow:
-      0 2px 4px hsl(var(--shadow-color) / 0.05),
-      0 4px 12px hsl(var(--shadow-color) / 0.06);
+    box-shadow: none;
   }
 
   .elev-3 {
-    box-shadow:
-      0 4px 8px hsl(var(--shadow-color) / 0.05),
-      0 12px 28px hsl(var(--shadow-color) / 0.09);
+    box-shadow: none;
   }
 
   .elev-4 {
-    box-shadow:
-      0 8px 16px hsl(var(--shadow-color) / 0.06),
-      0 24px 48px hsl(var(--shadow-color) / 0.12);
+    box-shadow: none;
   }
 
   /* Interactive surface: lifts and brightens on hover, settles on press. */
@@ -387,10 +378,8 @@
   }
 
   .interactive-card:hover {
-    transform: translateY(-2px);
-    box-shadow:
-      0 4px 8px hsl(var(--shadow-color) / 0.05),
-      0 16px 32px hsl(var(--shadow-color) / 0.1);
+    transform: none;
+    box-shadow: none;
     border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
   }
 
@@ -456,9 +445,7 @@
     background-color: var(--vtu-card);
     border: 1px solid var(--vtu-line);
     border-radius: 1.25rem;
-    box-shadow:
-      0 1px 2px hsl(var(--shadow-color) / 0.04),
-      0 16px 34px -24px hsl(var(--shadow-color) / 0.34);
+    box-shadow: none;
     transition:
       transform 180ms var(--ease-out-quint),
       box-shadow 180ms var(--ease-out-quint),
@@ -510,7 +497,7 @@
   }
 
   .vtu-chip:active {
-    transform: translateY(1px);
+    transform: none;
   }
 
   .vtu-chip[aria-pressed="true"] {
@@ -520,7 +507,7 @@
       var(--vtu-card)
     );
     border-color: var(--vtu-accent);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--vtu-accent) 45%, transparent);
+    box-shadow: none;
   }
 
   @media (max-width: 639px) {
@@ -573,7 +560,7 @@
   .glass-surface {
     background: color-mix(in srgb, var(--card) 86%, transparent);
     border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-    box-shadow: 0 18px 50px -38px hsl(var(--shadow-color) / 0.5);
+    box-shadow: none;
     backdrop-filter: blur(18px);
   }
 
@@ -606,7 +593,7 @@
     flex: 0 0 auto;
     border-radius: 999px;
     background: var(--primary);
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 10%, transparent);
+    box-shadow: none;
   }
 
   .page-divider {
@@ -633,7 +620,7 @@
   textarea:focus {
     border-color: var(--ring);
     outline: none;
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 15%, transparent);
+    box-shadow: none;
   }
 
   /* Consistent mobile rhythm across long pages. */
@@ -675,7 +662,7 @@ option {
     scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
   }
   [data-slot="card"] {
-    box-shadow: 0 8px 28px -20px hsl(var(--shadow-color) / 0.8);
+    box-shadow: none;
     border-color: color-mix(in srgb, var(--border) 82%, transparent);
   }
   button,
@@ -711,7 +698,7 @@ option {
       var(--card)
     );
     border: 1px solid var(--border);
-    box-shadow: 0 14px 35px -26px hsl(var(--shadow-color) / 0.9);
+    box-shadow: none;
     transition:
       transform 180ms var(--ease-out-quint),
       box-shadow 180ms var(--ease-out-quint),
@@ -719,7 +706,7 @@ option {
   }
   .mobile-app-card:active {
     transform: scale(0.985);
-    box-shadow: 0 7px 20px -18px hsl(var(--shadow-color) / 0.9);
+    box-shadow: none;
   }
   .mobile-sticky-action {
     position: sticky;
@@ -731,7 +718,7 @@ option {
     background: color-mix(in srgb, var(--background) 82%, transparent);
     backdrop-filter: blur(18px);
     border-radius: 1rem;
-    box-shadow: 0 16px 40px -20px hsl(var(--shadow-color) / 0.8);
+    box-shadow: none;
   }
 }
 @keyframes cloudie-page-in {
@@ -965,7 +952,7 @@ option {
         transparent 34%
       ),
       var(--card);
-    box-shadow: 0 28px 70px -44px hsl(var(--primary) / 0.72);
+    box-shadow: none;
   }
   .cloudie-dashboard .cloudie-wallet-strip {
     background: linear-gradient(
@@ -986,7 +973,7 @@ option {
   }
   .cloudie-dashboard .interactive-card:hover {
     border-color: color-mix(in srgb, var(--primary) 34%, var(--border));
-    box-shadow: 0 18px 42px -30px hsl(var(--primary) / 0.45);
+    box-shadow: none;
   }
 
   @media (max-width: 639px) {
@@ -1036,7 +1023,7 @@ option {
   }
   .cloudie-marketplace .group:hover {
     border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-    box-shadow: 0 20px 48px -34px hsl(var(--primary) / 0.42);
+    box-shadow: none;
   }
   .cloudie-marketplace .group button:first-child {
     background:
@@ -1086,7 +1073,7 @@ option {
         transparent 38%
       ),
       var(--card);
-    box-shadow: 0 26px 64px -44px hsl(var(--primary) / 0.7);
+    box-shadow: none;
   }
   .cloudie-wallet-page .cloudie-activity-row,
   .cloudie-transactions-page .cloudie-transaction-row {
@@ -1152,28 +1139,28 @@ option {
   }
   .cloudie-doc-shell .interactive-card {
     border-color: var(--border);
-    box-shadow: 0 8px 24px -20px hsl(var(--shadow-color) / 0.28);
+    box-shadow: none;
   }
   .cloudie-doc-shell .interactive-card:hover {
     border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
-    box-shadow: 0 20px 42px -30px hsl(var(--primary) / 0.25);
+    box-shadow: none;
   }
   .cloudie-doc-hero {
     background: var(--card);
     color: var(--foreground);
     border: 1px solid var(--border);
-    box-shadow: 0 28px 60px -40px hsl(var(--shadow-color) / 0.9);
+    box-shadow: none;
   }
   .cloudie-doc-balance {
     background: var(--surface-2);
     color: var(--foreground);
     border: 1px solid var(--border);
-    box-shadow: 0 26px 58px -38px hsl(var(--shadow-color) / 0.9);
+    box-shadow: none;
   }
   .cloudie-doc-bottom-dock {
     background: color-mix(in srgb, var(--card) 94%, transparent);
     border: 1px solid var(--border);
-    box-shadow: 0 18px 42px -24px rgb(15 23 42 / 0.28);
+    box-shadow: none;
     backdrop-filter: blur(18px);
   }
   @media (max-width: 639px) {
@@ -1369,5 +1356,48 @@ option {
   [class*="border-blue-3"]:not(:where(.paper-surface *)),
   [class*="border-blue-5"]:not(:where(.paper-surface *)) {
     border-color: color-mix(in srgb, var(--info) 30%, transparent);
+  }
+}
+
+
+/* Dark-token refinements: borders define hierarchy; shadows do not. */
+@layer components {
+  .elev-1, .elev-2, .elev-3, .elev-4, .surface-lift,
+  .interactive-card, .glass-surface, .vtu-panel, .cloudie-doc-hero,
+  .cloudie-doc-balance, .cloudie-doc-bottom-dock {
+    box-shadow: none !important;
+  }
+  .interactive-card:hover {
+    border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
+    transform: none;
+  }
+  .pdf-preview-card, .pdf-preview-surface, .document-preview-card,
+  .preview-surface, .pdf-viewer-card,
+  iframe[src*='.pdf' i], iframe[title*='pdf' i], iframe[title*='preview' i],
+  embed[type='application/pdf'], object[type='application/pdf'] {
+    background: #ffffff !important;
+    color: #111827 !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+    border-radius: 0.75rem;
+    padding: 1rem;
+    color-scheme: light;
+  }
+  .paper-surface {
+    background: #ffffff !important;
+    color: #111827 !important;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+  }
+  .paper-surface * {
+    color-scheme: light;
+  }
+}
+
+
+/* Utility-level elevation is disabled too; hierarchy is expressed with borders. */
+@layer utilities {
+  :where([class~="shadow"], [class*="shadow-"]) {
+    box-shadow: none !important;
   }
 }
