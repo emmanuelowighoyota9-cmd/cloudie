@@ -17,7 +17,8 @@
     "deploy:convex": "npx convex deploy",
     "migrate": "node api/scripts/migrate.mjs",
     "migrate:dry-run": "node api/scripts/migrate.mjs --dry-run",
-    "verify:local": "bash scripts/verify.sh"
+    "verify:local": "bash scripts/verify.sh",
+    "verify:convex": "bun run scripts/verify-convex.ts"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
