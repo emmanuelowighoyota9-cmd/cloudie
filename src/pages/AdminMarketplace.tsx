@@ -4,9 +4,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Ban, Check, RotateCcw, X, RefreshCw, Store, Boxes, PackageCheck, type LucideIcon } from "lucide-react";
+import { Ban, Check, RotateCcw, X, RefreshCw, Store, Boxes, PackageCheck, FileText, type LucideIcon } from "lucide-react";
 import { AdminPageHeader, StatusBadge, AdminEmpty, AdminSkeleton, fmtDate } from "@/components/admin/shared";
 import { useEffect, useMemo, useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { formatNgn } from "@/lib/pricing";
 
 const MARKETPLACE_I = [
@@ -35,6 +38,35 @@ export default function AdminMarketplace() {
   const [syncing, setSyncing] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [markup, setMarkup] = useState("0");
+  const disputes = useQuery(api.adminApi.adminListDisputes, { limit: 100 });
+  const orders = useQuery(api.admin.adminListOrders, { limit: 500 });
+  const releaseEscrow = useMutation(api.adminApi.releaseEscrow);
+  const refundOrder = useMutation(api.adminApi.refundOrder);
+  const partialRefund = useMutation(api.adminApi.partialRefundDispute);
+  const [selectedDisputeId, setSelectedDisputeId] = useState<string | null>(null);
+  const [partialTarget, setPartialTarget] = useState<any>(null);
+  const [partialAmount, setPartialAmount] = useState("");
+  const [partialReason, setPartialReason] = useState("");
+  const [resolutionReason, setResolutionReason] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const orderMap = new Map<string, any>((orders ?? []).map((o: any) => [String(o._id), o]));
+  const openDisputes = (disputes ?? []).filter((d: any) => d.status === "open" || d.status === "under_review");
+  const selectedDispute = openDisputes.find((d: any) => String(d._id) === selectedDisputeId) ?? openDisputes[0] ?? null;
+  const selectedOrder = selectedDispute ? orderMap.get(String(selectedDispute.orderId)) : null;
+  async function resolveCase(kind: "release" | "refund") {
+    if (!selectedDispute || !selectedOrder || resolutionReason.trim().length < 10) { toast.error("Enter a reason of at least 10 characters."); return; }
+    setResolving(true); try {
+      if (kind === "release") await releaseEscrow({ orderId: selectedOrder._id as never, reason: resolutionReason.trim() });
+      else await refundOrder({ orderId: selectedOrder._id as never, reason: resolutionReason.trim() });
+      toast.success(kind === "release" ? "Escrow released and action audited" : "Buyer refunded and action audited"); setResolutionReason(""); setSelectedDisputeId(null);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Dispute action failed"); } finally { setResolving(false); }
+  }
+  async function submitPartialRefund() {
+    if (!partialTarget || !Number.isFinite(Number(partialAmount)) || Number(partialAmount) <= 0 || partialReason.trim().length < 10) return;
+    setResolving(true); try { await partialRefund({ disputeId: partialTarget._id as never, amountNgn: Number(partialAmount), reason: partialReason.trim() });
+      toast.success("Partial refund completed and audit logged"); setPartialTarget(null); setPartialAmount(""); setPartialReason(""); setSelectedDisputeId(null);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Partial refund failed"); } finally { setResolving(false); }
+  }
 
   useEffect(() => {
     if (provider) {
@@ -227,7 +259,25 @@ export default function AdminMarketplace() {
             </div>
           </CardContent>
         </Card>
-      )}
+      </div></TabsContent>
+      <TabsContent value="disputes" className="space-y-3">
+        <AdminPageHeader title="Marketplace disputes" description="Split-pane case review with audited escrow release and refund decisions." />
+        {disputes === undefined || orders === undefined ? <AdminSkeleton rows={5} /> : openDisputes.length === 0 ? <Card className="rounded-xl shadow-none"><CardContent className="p-10 text-center text-sm text-muted-foreground">No open marketplace disputes.</CardContent></Card> :
+          <div className="grid min-h-[560px] gap-3 lg:grid-cols-[minmax(240px,0.75fr)_minmax(0,1.7fr)]">
+            <Card className="overflow-hidden rounded-xl shadow-none"><div className="border-b p-3"><p className="text-sm font-semibold">Open cases</p><p className="text-[11px] text-muted-foreground">{openDisputes.length} awaiting resolution</p></div><div className="max-h-[650px] overflow-y-auto">
+              {openDisputes.map((d: any) => { const o = orderMap.get(String(d.orderId)); const age = Math.max(0, Math.floor((Date.now()-d.createdAt)/3600000)); return <button key={d._id} onClick={() => { setSelectedDisputeId(String(d._id)); setResolutionReason(""); }} className={"w-full border-b p-3 text-left hover:bg-muted/40 " + (String(selectedDispute?._id)===String(d._id) ? "bg-muted/60" : "")}><div className="flex items-center justify-between gap-2"><span className="truncate text-xs font-semibold">Order #{String(d.orderId).slice(-8)}</span><StatusBadge status={d.status}/></div><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{d.reason}</p><div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>{age < 24 ? age+"h old" : Math.floor(age/24)+"d old"}</span><span>{o ? formatNgn(o.totalNgn ?? (o.totalPoints ?? 0)*15) : "Order unavailable"}</span></div></button>; })}
+            </div></Card>
+            <Card className="rounded-xl shadow-none"><CardContent className="space-y-4 p-4">{!selectedDispute ? <p className="text-sm text-muted-foreground">Select a dispute.</p> : <>
+              <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Dispute / order</p><h2 className="mt-1 text-lg font-semibold">#{String(selectedDispute.orderId).slice(-10)}</h2><p className="mt-1 text-sm text-muted-foreground">{selectedDispute.reason}</p></div><StatusBadge status={selectedDispute.status}/></div>
+              <div className="grid gap-2 sm:grid-cols-3"><div className="rounded-md border p-3"><p className="text-[10px] text-muted-foreground">Order total</p><p className="mt-1 font-mono font-semibold">{selectedOrder ? formatNgn(selectedOrder.totalNgn ?? (selectedOrder.totalPoints ?? 0)*15) : "Unavailable"}</p></div><div className="rounded-md border p-3"><p className="text-[10px] text-muted-foreground">Order status</p><p className="mt-1 text-sm font-semibold">{selectedOrder?.status ?? "Not found"}</p></div><div className="rounded-md border p-3"><p className="text-[10px] text-muted-foreground">Opened</p><p className="mt-1 text-sm font-semibold">{fmtDate(selectedDispute.createdAt)}</p></div></div>
+              <div className="grid gap-3 md:grid-cols-2"><section><h3 className="mb-2 text-xs font-semibold">Evidence files</h3><div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground"><FileText className="mx-auto mb-2 size-4"/>No evidence files attached to this dispute record.</div></section><section><h3 className="mb-2 text-xs font-semibold">Buyer / vendor history</h3><div className="space-y-2 rounded-md border p-3"><p className="text-xs font-semibold">Buyer</p><p className="break-all font-mono text-[10px] text-muted-foreground">{selectedOrder?.buyerId ?? selectedDispute.raisedBy}</p><p className="mt-2 text-xs font-semibold">Vendor</p><p className="break-all font-mono text-[10px] text-muted-foreground">{selectedOrder?.vendorId ?? "Unavailable"}</p><p className="text-[10px] text-muted-foreground">Historical activity summaries are not exposed by the current dispute query.</p></div></section></div>
+              <section><h3 className="mb-2 text-xs font-semibold">Case notes</h3><div className="max-h-32 space-y-2 overflow-y-auto">{(selectedDispute.notes ?? []).length ? selectedDispute.notes.map((n:any,i:number)=><div key={i} className="rounded-md border p-2"><p className="text-[10px] text-muted-foreground">{n.authorEmail ?? "Admin"} · {fmtDate(n.createdAt)}</p><p className="mt-1 text-xs">{n.text}</p></div>) : <p className="text-xs text-muted-foreground">No notes recorded.</p>}</div></section>
+              {selectedOrder && <div className="space-y-2 border-t pt-3"><label className="text-xs font-medium">Resolution reason (10+ characters, audited)</label><Textarea value={resolutionReason} onChange={e=>setResolutionReason(e.target.value)} rows={2} placeholder="Document the decision rationale."/><div className="flex flex-wrap justify-end gap-2"><Button className="bg-emerald-600 text-white hover:bg-emerald-700" disabled={resolving || resolutionReason.trim().length<10} onClick={()=>void resolveCase("release")}><Check className="mr-1 size-3.5"/>Release to vendor</Button><Button variant="destructive" disabled={resolving || resolutionReason.trim().length<10} onClick={()=>void resolveCase("refund")}><RotateCcw className="mr-1 size-3.5"/>Refund buyer</Button><Button variant="outline" disabled={resolving} onClick={()=>{setPartialTarget(selectedDispute);setPartialAmount("");setPartialReason("");}}><RefreshCw className="mr-1 size-3.5"/>Partial refund</Button></div></div>}
+            </>}</CardContent></Card>
+          </div>
+        }
+      </TabsContent></Tabs>
+      <Dialog open={Boolean(partialTarget)} onOpenChange={open=>!open&&!resolving&&setPartialTarget(null)}><DialogContent><DialogHeader><DialogTitle>Partial refund</DialogTitle><DialogDescription>Refund part of the order and release remaining escrow. This is audit logged.</DialogDescription></DialogHeader><div className="space-y-3"><div className="space-y-1"><label className="text-xs font-medium">Refund amount (NGN)</label><input type="number" min="0.01" step="0.01" value={partialAmount} onChange={e=>setPartialAmount(e.target.value)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm" placeholder="2500"/></div><div className="space-y-1"><label className="text-xs font-medium">Reason (10+ characters)</label><Textarea rows={3} value={partialReason} onChange={e=>setPartialReason(e.target.value)} placeholder="Explain the partial refund decision"/></div></div><DialogFooter><Button variant="outline" disabled={resolving} onClick={()=>setPartialTarget(null)}>Cancel</Button><Button disabled={resolving || Number(partialAmount)<=0 || partialReason.trim().length<10} onClick={()=>void submitPartialRefund()}>{resolving?"Processing…":"Confirm partial refund"}</Button></DialogFooter></DialogContent></Dialog>
     </div>
   );
 }
