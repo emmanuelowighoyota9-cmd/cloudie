@@ -158,11 +158,11 @@ const BADGE_STYLES: Record<string, string> = {
  * badge still means something in greyscale, in a screenshot, and to a
  * colour-blind reader.
  */
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const style = BADGE_STYLES[status] ?? TONE.inert;
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${style}`}>
-      {status.replace(/_/g, " ")}
+      {label ?? status.replace(/_/g, " ")}
     </span>
   );
 }
