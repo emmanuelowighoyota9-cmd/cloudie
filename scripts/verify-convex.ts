@@ -1,99 +1,123 @@
-// Manual verification against a live Convex deployment.
+// Manual verification against a live Convex deployment; intentionally not run in CI.
 // Run: bun run verify:convex
-// Requires CONVEX_URL, BUYER_AUTH_TOKEN, VENDOR_AUTH_TOKEN, TEST_PACKAGE_ID.
-// The buyer needs sufficient NGN wallet balance to create the order. The vendor
-// token must belong to the approved owner of the package. Separate clients are
-// required because only the approved vendor can fulfill an order. This script
-// is NOT run in CI.
+// Use separate buyer/vendor accounts and a disposable test package in a non-production deployment.
 
-import { ConvexHttpClient } from "convex/browser";
-import { api } from "../src/convex/_generated/api";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
+import { ConvexHttpClient } from "convex/browser";
+import type { Id } from "../src/convex/_generated/dataModel";
+import { api } from "../src/convex/_generated/api";
 
-const url = process.env.CONVEX_URL;
-const buyerToken = process.env.BUYER_AUTH_TOKEN;
-const vendorToken = process.env.VENDOR_AUTH_TOKEN;
-const packageId = process.env.TEST_PACKAGE_ID;
+const requiredEnv = [
+  "CONVEX_URL",
+  "BUYER_AUTH_TOKEN",
+  "VENDOR_AUTH_TOKEN",
+  "TEST_PACKAGE_ID",
+] as const;
 
-if (!url || !buyerToken || !vendorToken || !packageId) {
-  console.error("CONVEX_URL, BUYER_AUTH_TOKEN, VENDOR_AUTH_TOKEN, and TEST_PACKAGE_ID are required.");
-  process.exit(1);
+for (const name of requiredEnv) {
+  if (!process.env[name]?.trim()) {
+    console.error(`Missing required environment variable: ${name}`);
+    process.exit(1);
+  }
 }
 
-const buyerClient = new ConvexHttpClient(url);
-buyerClient.setAuth(buyerToken);
+const url = process.env.CONVEX_URL!;
+const buyerToken = process.env.BUYER_AUTH_TOKEN!;
+const vendorToken = process.env.VENDOR_AUTH_TOKEN!;
+const requestedPackageId = process.env.TEST_PACKAGE_ID!;
 
-const vendorClient = new ConvexHttpClient(url);
-vendorClient.setAuth(vendorToken);
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
-async function main() {
-  // Resolve the environment string to a generated Convex Id from a typed query,
-  // avoiding a cast from an arbitrary string to Id<"pointPackages">.
+async function main(): Promise<void> {
+  const buyerClient = new ConvexHttpClient(url);
+  buyerClient.setAuth(buyerToken);
+
+  const vendorClient = new ConvexHttpClient(url);
+  vendorClient.setAuth(vendorToken);
+
+  // Resolve the environment value to the generated Id<"pointPackages"> type.
   const packages = await buyerClient.query(api.pointMarket.listPackages, {});
-  const selectedPackage = packages.find((item) => item._id === packageId);
+  const selectedPackage = packages.find((item) => item._id === requestedPackageId);
   if (!selectedPackage) {
     throw new Error("TEST_PACKAGE_ID must identify an active package visible to the buyer.");
   }
-  const typedPackageId = selectedPackage._id;
+  const packageId: Id<"pointPackages"> = selectedPackage._id;
 
-  console.log("1. Buyer purchases → escrow");
-  const order = await buyerClient.mutation(api.pointMarket.createOrder, {
-    packageId: typedPackageId,
+  console.log("1. Verify buyer authentication with a nonexistent order ID");
+  // A package ID has a valid Convex ID shape but cannot identify a pointOrders row.
+  const nonexistentOrderId = packageId as unknown as Id<"pointOrders">;
+  const nonexistentOrder = await buyerClient.query(api.pointMarket.getMyOrder, {
+    orderId: nonexistentOrderId,
   });
-  console.log("   orderId:", order.orderId);
-
-  console.log("2. Buyer confirms order is in escrow");
-  const escrow = await buyerClient.query(api.pointMarket.getMyOrder, { orderId: order.orderId });
-  if (!escrow || escrow.status !== "escrow") {
-    throw new Error(`Expected escrow, got ${escrow?.status ?? "no order"}`);
+  if (nonexistentOrder !== null) {
+    throw new Error("Expected getMyOrder to return null for a nonexistent order.");
   }
-  console.log("   buyer status:", escrow.status, "✓");
-
-  const vendorEscrow = await vendorClient.query(api.pointMarket.getMyOrder, { orderId: order.orderId });
-  if (!vendorEscrow || vendorEscrow.status !== "escrow") {
-    throw new Error(`Expected vendor to see escrow, got ${vendorEscrow?.status ?? "no order"}`);
+  // getMyOrder also returns null for an unauthenticated caller; successful query
+  // execution plus currentUser below provides the explicit authentication check.
+  const currentUser = await buyerClient.query(api.users.currentUser, {});
+  if (!currentUser) {
+    throw new Error("Buyer authentication failed: api.users.currentUser returned no user.");
   }
-  console.log("   vendor status:", vendorEscrow.status, "✓");
+  console.log("   Buyer authenticated; nonexistent order returned null ✓");
 
-  console.log("3. Approved vendor fulfills → credited");
-  await vendorClient.mutation(api.pointMarket.fulfillOrder, { orderId: order.orderId });
+  console.log("2. Buyer creates order → escrow");
+  const { orderId } = await buyerClient.mutation(api.pointMarket.createOrder, { packageId });
+  console.log("   orderId:", orderId);
 
-  const buyerCredited = await buyerClient.query(api.pointMarket.getMyOrder, { orderId: order.orderId });
-  if (!buyerCredited || buyerCredited.status !== "credited") {
-    throw new Error(`Expected buyer to see credited, got ${buyerCredited?.status ?? "no order"}`);
+  console.log("3. Buyer verifies escrow status");
+  const escrowOrder = await buyerClient.query(api.pointMarket.getMyOrder, { orderId });
+  if (!escrowOrder || escrowOrder.status !== "escrow") {
+    throw new Error(`Expected order status "escrow"; received "${escrowOrder?.status ?? "no order"}".`);
   }
-  const vendorCredited = await vendorClient.query(api.pointMarket.getMyOrder, { orderId: order.orderId });
-  if (!vendorCredited || vendorCredited.status !== "credited") {
-    throw new Error(`Expected vendor to see credited, got ${vendorCredited?.status ?? "no order"}`);
-  }
-  console.log("   buyer status:", buyerCredited.status, "✓");
-  console.log("   vendor status:", vendorCredited.status, "✓");
+  console.log("   status:", escrowOrder.status, "✓");
 
-  console.log("4. Insufficient-funds path");
-  console.log("Reduce the buyer test account's wallet below this package's price using your approved dev/admin workflow.");
+  console.log("4. Approved vendor fulfills order");
+  await vendorClient.mutation(api.pointMarket.fulfillOrder, { orderId });
+
+  console.log("5. Buyer verifies credited status");
+  const creditedOrder = await buyerClient.query(api.pointMarket.getMyOrder, { orderId });
+  if (!creditedOrder || creditedOrder.status !== "credited") {
+    throw new Error(`Expected order status "credited"; received "${creditedOrder?.status ?? "no order"}".`);
+  }
+  console.log("   status:", creditedOrder.status, "✓");
+
+  console.log("6. Prepare insufficient-funds assertion");
+  console.log("Lower the buyer test account's NGN wallet balance below the selected package price.");
+  console.log("Use your approved development/admin workflow; do not adjust a production account.");
   const prompt = createInterface({ input, output });
-  await prompt.question("Press Enter when the buyer wallet is below the package price... ");
-  prompt.close();
-
   try {
-    await buyerClient.mutation(api.pointMarket.createOrder, { packageId: typedPackageId });
-  } catch (err: unknown) {
-    const message =
-      (err as { data?: string })?.data ??
-      (err as Error)?.message ??
-      String(err);
-    if (message.includes("Insufficient NGN wallet balance")) {
-      console.log("   rejected with Insufficient NGN wallet balance ✓");
-      console.log("\nAll manual Convex checks passed.");
-      return;
-    }
-    throw new Error(`Expected insufficient-funds error, got: ${message}`);
+    await prompt.question("Press Enter after confirming the buyer balance is below the package price... ");
+  } finally {
+    prompt.close();
   }
-  throw new Error("Expected insufficient-funds rejection, but the order succeeded.");
+
+  console.log("7. Verify insufficient funds rejects the next order");
+  let rejectedForInsufficientFunds = false;
+  try {
+    const unexpectedOrder = await buyerClient.mutation(api.pointMarket.createOrder, { packageId });
+    throw new Error(`Expected insufficient-funds rejection, but createOrder succeeded with orderId ${unexpectedOrder.orderId}.`);
+  } catch (error: unknown) {
+    const message = errorMessage(error);
+    if (message.startsWith("Expected insufficient-funds rejection")) {
+      throw error;
+    }
+    if (!message.includes("Insufficient NGN wallet balance")) {
+      throw new Error(`Expected error message containing "Insufficient NGN wallet balance"; received: ${message}`);
+    }
+    rejectedForInsufficientFunds = true;
+    console.log("   Rejected with Insufficient NGN wallet balance ✓");
+  }
+  if (!rejectedForInsufficientFunds) {
+    throw new Error("Insufficient-funds assertion did not pass.");
+  }
+
+  console.log("\nAll manual Convex verification assertions passed.");
 }
 
-main().catch((err: unknown) => {
-  console.error(err);
-  process.exit(1);
+main().catch((error: unknown) => {
+  console.error("Convex verification FAILED:", errorMessage(error));
+  process.exitCode = 1;
 });
