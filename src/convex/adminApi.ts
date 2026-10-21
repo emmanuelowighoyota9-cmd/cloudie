@@ -613,7 +613,7 @@ export const partialRefundDispute = mutation({
       idempotencyKey: `dispute-partial-refund-${args.disputeId}-buyer`,
     });
     await creditWallet(ctx, {
-      userId: vendorUser._id, amountNgn: remainingNgn,
+      userId: vendorUser._id, amountNgn: totalNgn,
       description: `Escrow release after partial refund: ${product?.name ?? "order"}`,
       type: "vendor_transaction", referenceId: order._id,
       idempotencyKey: `dispute-partial-release-${args.disputeId}`,
