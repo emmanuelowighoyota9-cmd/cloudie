@@ -5,19 +5,33 @@ set -Eeuo pipefail
 
 readonly PRODUCTION_BRANCH_ID="br-winter-snow-b5spd77h"
 readonly EXPECTED_BRANCH_NAME="test-migrations"
+readonly EXISTING_TEST_BRANCH_ID="br-nameless-morning-b5o1qitn"
+
+# Existing-branch mode reuses the known disposable branch; it never creates a branch.
+if [[ -n "${TEST_BRANCH_EXISTING:-}" ]]; then
+  [[ "$TEST_BRANCH_EXISTING" == "$EXPECTED_BRANCH_NAME" ]] || fail "Only the confirmed existing branch name $EXPECTED_BRANCH_NAME is accepted by this convenience mode."
+  NEON_TEST_BRANCH_NAME="$TEST_BRANCH_EXISTING"
+  NEON_TEST_BRANCH_ID="${NEON_TEST_BRANCH_ID:-$EXISTING_TEST_BRANCH_ID}"
+fi
+
+PROD_BRANCH="${PROD_BRANCH:-$PRODUCTION_BRANCH_ID}"
+TEST_BRANCH="${TEST_BRANCH:-${NEON_TEST_BRANCH_ID:-}}"
 
 fail() { printf 'ERROR: %s\n' "$*" >&2; exit 2; }
 
 [[ -n "${TEST_DATABASE_URL:-}" ]] || fail "Set TEST_DATABASE_URL to the direct connection string for the disposable Neon test branch."
 [[ -z "${DATABASE_URL:-}" || "$DATABASE_URL" != "$TEST_DATABASE_URL" ]] || fail "TEST_DATABASE_URL equals DATABASE_URL; refusing a possibly production-targeted connection."
 [[ "${NEON_TEST_BRANCH_NAME:-}" == "$EXPECTED_BRANCH_NAME" ]] || fail "Set NEON_TEST_BRANCH_NAME=$EXPECTED_BRANCH_NAME only after confirming the connection belongs to that disposable branch."
-[[ -n "${NEON_TEST_BRANCH_ID:-}" ]] || fail "Set NEON_TEST_BRANCH_ID to the branch ID returned by Neon for the disposable branch."
+[[ -n "${NEON_TEST_BRANCH_ID:-}" ]] || fail "Set NEON_TEST_BRANCH_ID to the branch ID returned by Neon for the disposable branch, or use TEST_BRANCH_EXISTING=test-migrations."
 [[ "$NEON_TEST_BRANCH_ID" != "$PRODUCTION_BRANCH_ID" ]] || fail "Refusing known production branch ID $PRODUCTION_BRANCH_ID."
+[[ "$NEON_TEST_BRANCH_ID" != "$PROD_BRANCH" ]] || fail "TEST_BRANCH equals PROD_BRANCH; refusing to run against production."
+[[ "$TEST_BRANCH" != "$PROD_BRANCH" ]] || fail "TEST_BRANCH equals PROD_BRANCH; refusing to run against production."
 command -v psql >/dev/null 2>&1 || fail "psql is required but was not found."
 [[ -d migrations ]] || fail "Run this script from the repository root (migrations/ not found)."
 
 # Reject common Neon pooler forms. Do not print the URL (it contains credentials).
-if [[ "$TEST_DATABASE_URL" == *"-pooler."* ]] || [[ "$TEST_DATABASE_URL" == *"pgbouncer=true"* ]] || [[ "$TEST_DATABASE_URL" == *"pool_mode="* ]]; then
+url_lower="${TEST_DATABASE_URL,,}"
+if [[ "$url_lower" == *"-pooler"* ]] || [[ "$url_lower" == *"pgbouncer=true"* ]] || [[ "$url_lower" == *"pool_mode="* ]]; then
   fail "Pooled connection strings are not allowed. Use the direct Neon endpoint."
 fi
 if [[ "$TEST_DATABASE_URL" != postgresql://* && "$TEST_DATABASE_URL" != postgres://* ]]; then
@@ -28,7 +42,7 @@ fi
 db_name="$(psql "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 -Atqc 'SELECT current_database()')"
 [[ "$db_name" == "neondb" ]] || fail "Connected database is '$db_name', expected 'neondb'. No migrations were run."
 printf 'Connected database: %s\n' "$db_name"
-printf 'Declared Neon test branch: %s (%s)\n' "$NEON_TEST_BRANCH_NAME" "$NEON_TEST_BRANCH_ID"
+printf 'Target Neon test branch: %s (%s)\n' "$NEON_TEST_BRANCH_NAME" "$NEON_TEST_BRANCH_ID"
 printf 'Safety note: branch name/ID are operator-supplied; verify them against Neon Console before running. The script rejects the known production ID but cannot cryptographically bind a URL to a branch ID.\n'
 
 mapfile -t migrations < <(find migrations -maxdepth 1 -type f -regextype posix-extended -regex 'migrations/[0-9]{3}_.+\.sql' -print | sort)
@@ -36,7 +50,7 @@ mapfile -t migrations < <(find migrations -maxdepth 1 -type f -regextype posix-e
 
 printf '\n== Pass 1: execute every migration in lexical/numeric order ==\n'
 for file in "${migrations[@]}"; do
-  printf '\n--- %s ---\n' "$file"
+  printf '\n=== %s ===\n' "$file"
   psql "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 -f "$file" || {
     status=$?
     printf 'FAILED: %s (psql exit %s). Stop here; capture the exact server error and line above.\n' "$file" "$status" >&2
