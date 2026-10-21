@@ -1,8 +1,17 @@
+> **Unverified.** The claims below have not been confirmed against the live  
+> Neon database. As of this writing, `neondb` on branch `br-winter-snow-b5spd77h`  
+> reports zero application tables. The migration history in this file is  
+> retained for audit only. Treat every "applied" marker below as historical,  
+> not current, until `scripts/neon-diagnose.sh` has been run and its output  
+> committed alongside this file.
+
 # Neon Migration Status & Inventory
 
 ## Current verification status — NOT CONFIRMED
 
 The migrations in this directory have not been confirmed to apply cleanly against the live Neon database. Run `scripts/neon-diagnose.sh` to establish the actual state before treating this file as a record of applied migrations.
+
+## Unverified historical claim (audit-only)
 
 **Unverified — retained for audit.** The prior version of this document claimed that all seven migrations were applied to the connected Neon database (`neondb`) on 2026-10-19; that `schema_migrations` contained checksums; that re-running `npm run migrate` was a no-op (0 applied, 7 up-to-date); that the 005 ledger-integrity behavior test passed; and that `api/scripts/e2e-live.ts` passed. Those claims are preserved below as historical context only. They are not accepted as current live-database evidence because a subsequent read-only table inventory returned zero application tables. The mismatch must be resolved against the exact Neon branch/endpoint before anyone treats migration state as verified.
 
