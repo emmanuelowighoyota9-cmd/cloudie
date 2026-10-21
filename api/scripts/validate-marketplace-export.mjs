@@ -97,7 +97,7 @@ function validateMarketplaceExport(vendorRows, packageRows) {
     }
     safeInteger(row.points, "pointPackages points", index, { min: 1 });
     safeInteger(row.priceMinor, "pointPackages priceMinor", index);
-    safeInteger(row.totalSold ?? 0, "pointPackages totalSold", index);
+    safeInteger(row.totalSold, "pointPackages totalSold", index);
     if (typeof row.isActive !== "boolean") throw new Error(`pointPackages row ${index + 1}: isActive must be boolean`);
     if (!Number.isSafeInteger(row.createdAt) || row.createdAt < 0) {
       throw new Error(`pointPackages row ${index + 1}: createdAt must be epoch milliseconds`);
