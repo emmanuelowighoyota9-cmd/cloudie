@@ -16,7 +16,8 @@
     "build:freebuff": "npx convex deploy --cmd \"npm run build\" --cmd-url-env-var-name VITE_CONVEX_URL",
     "deploy:convex": "npx convex deploy",
     "migrate": "node api/scripts/migrate.mjs",
-    "migrate:dry-run": "node api/scripts/migrate.mjs --dry-run"
+    "migrate:dry-run": "node api/scripts/migrate.mjs --dry-run",
+    "verify:local": "bash scripts/verify.sh"
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
