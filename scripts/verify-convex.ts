@@ -8,6 +8,8 @@
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "../src/convex/_generated/api";
 import type { Id } from "../src/convex/_generated/dataModel";
+import { createInterface } from "node:readline/promises";
+import { stdin as input, stdout as output } from "node:process";
 
 const url = process.env.CONVEX_URL;
 const token = process.env.CONVEX_AUTH_TOKEN;
@@ -45,7 +47,10 @@ async function main() {
   console.log("   status:", credited.status, "✓");
 
   console.log("4. Insufficient-funds path");
-  // Manually reduce this test user's wallet below the package price first.
+  console.log("Pause here and reduce the test user's wallet below this package's price using your approved dev/admin workflow.");
+  const prompt = createInterface({ input, output });
+  await prompt.question("Press Enter when the test wallet is below the package price... ");
+  prompt.close();
   try {
     await client.mutation(api.pointMarket.createOrder, { packageId: typedPackageId });
   } catch (err: unknown) {
