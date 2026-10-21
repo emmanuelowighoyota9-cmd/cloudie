@@ -47,6 +47,18 @@ mock.module("react-router", () => ({
   useNavigate: () => navigate,
 }));
 
+const PassThrough = ({ children }: { children: ReactNode }) => <>{children}</>;
+const MotionContainer = ({ children, className }: { children: ReactNode; className?: string }) => (
+  <div className={className}>{children}</div>
+);
+
+mock.module("@/components/motion", () => ({
+  PageTransition: MotionContainer,
+  Reveal: PassThrough,
+  StaggerGroup: MotionContainer,
+  StaggerItem: PassThrough,
+}));
+
 const { default: PointMarketplace } = await import("../PointMarketplace");
 
 function noMixedCurrencyAndPoints(container: HTMLElement) {
