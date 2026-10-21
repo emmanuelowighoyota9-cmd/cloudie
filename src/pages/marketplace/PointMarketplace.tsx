@@ -337,6 +337,14 @@ function CheckoutDialog({ pkg, onClose }: { pkg: Package | null; onClose: () => 
       onConfirm={() => void confirm()}
       busy={busy}
       onRetry={() => setOrderState(draft ? { status: "review", draft } : null)}
+      onRefresh={() => {
+        if (!orderId || !draft || !liveOrder) return;
+        if (liveOrder.status === "credited") {
+          setOrderState({ status: "success", reference: String(orderId), draft, pointsCredited: moneyPoints(liveOrder.points), walletAfter: balance });
+        } else {
+          setOrderState({ status: "pending", reference: String(orderId), draft });
+        }
+      }}
       onViewOrder={(reference) => navigate(`/app/marketplace/orders/${reference}`)}
       onContactSupport={() => navigate("/app/support")}
     />
