@@ -59,7 +59,7 @@ export default function AdminKYC() {
                   </p>
                   {k.notes && <p className="mt-1 truncate text-[11px] text-slate-500">Notes: {k.notes}</p>}
                 </div>
-                <StatusBadge status={k.status} />
+                <StatusBadge domain="kyc" value={k.status} />
                 {k.status !== "approved" && k.status !== "rejected" && (
                   <div className="flex shrink-0 gap-1">
                     <Button
