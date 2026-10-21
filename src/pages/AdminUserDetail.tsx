@@ -186,10 +186,6 @@ export default function AdminUserDetail() {
           <TabsTrigger value="vendor">Vendor</TabsTrigger>
           <TabsTrigger value="shipments">Shipments ({shipments.length})</TabsTrigger>
           <TabsTrigger value="documents">Documents ({documents.length})</TabsTrigger>
-          <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications ({notifications.length})</TabsTrigger>
-          <TabsTrigger value="security">Security ({sessions.length})</TabsTrigger>
-          <TabsTrigger value="referrals">Referrals ({referralsSent.length + referralsReceived.length})</TabsTrigger>
           <TabsTrigger value="audit">Audit ({audit.length})</TabsTrigger>
         </TabsList>
 
