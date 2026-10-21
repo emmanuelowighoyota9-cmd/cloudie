@@ -79,3 +79,16 @@ This section records a fresh read-only inventory and an isolated schema exercise
 4. Keep production traffic on the existing working path until the cutover and rollback gates in `docs/convex-to-neon-cutover-gates.md` are satisfied.
 
 **Status: test-branch schema applied and repeat-applied; production cutover blocked.**
+
+
+### Checksum-aware runner verification workflow
+
+A manual GitHub Actions workflow is available at `.github/workflows/neon-migration-runner-test.yml`. To run it:
+
+1. In GitHub repository **Settings → Secrets and variables → Actions → Secrets**, add `CLOUDIE_NEON_TEST_DATABASE_URL` with the **direct** connection string for `neondb` on branch `br-nameless-morning-b5o1qitn`. Never commit or paste the connection string into an issue, PR, or chat.
+2. Confirm the secret belongs to that exact disposable test branch, not the production branch `br-winter-snow-b5spd77h`.
+3. Open **Actions → Verify Neon migration runner (test branch) → Run workflow**.
+4. Require the migration runner, second dry-run, and seven-version checksum assertion to pass. The workflow intentionally fails closed if the secret is missing and does not run automatically on pushes.
+5. Save the successful run URL and output before treating the repository migration runner as verified.
+
+The workflow uses the repository runner and writes migration bookkeeping only to the disposable test branch. It does not deploy the API, change frontend routing, or migrate production data.
