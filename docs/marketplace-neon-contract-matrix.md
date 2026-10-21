@@ -62,3 +62,37 @@ Do not add `createOrder`, wallet debit/credit, escrow, fulfillment, disputes, pa
 ## Gate
 
 **Current decision: do not switch marketplace UI or financial writes to Neon.** Finish the dedicated read-only contract and test implementation on staging, prove data parity, and preserve the existing Convex path. Financial-write migration requires a separate review of idempotency, transactional wallet/points ledger integrity, escrow, payout, audit, reconciliation, failure/retry behavior, and rollback.
+
+
+## Additional source checks: wallet and API boundary
+
+### Wallet balance contract
+
+Inspection of `src/convex/wallet.ts` confirms `wallet.getBalance` returns `null` when unauthenticated, `0` if the authenticated user record is missing, the stored `walletBalanceNgn` when present, or a legacy converted balance derived from points balance and the configured NGN-per-point rate. Values are NGN major units, not minor units. The read can therefore depend on legacy conversion logic; a Neon implementation must not substitute `app_users.wallet_balance_ngn` without a reconciled migration/defaulting policy.
+
+The same file shows wallet debits use idempotency/reference checks, reject conflicting replay, reject non-positive amounts and insufficient balance, update the user balance, and insert a wallet ledger row. This is additional evidence that a future financial-write port needs transactional and ledger-level parity; it is not part of the browse endpoint.
+
+### API route and session boundary
+
+Inspection of `api/src/server.ts` confirms:
+- The API requires `DATABASE_URL` and a `JWT_SECRET` of at least 32 bytes at startup.
+- Cookie/bearer auth validates JWT issuer/audience, checks the active `api_sessions` row and expiry/revocation, then reloads the user and rejects suspended or terminated accounts.
+- `adminOnly` is a separate role check. A new marketplace endpoint must deliberately choose public-vs-authenticated access and cannot assume authentication from the frontend.
+- CORS is restricted to exact configured origins. Cookie-authenticated state changes require origin validation and a double-submit CSRF token.
+- `/ready` runs `SELECT 1`; it demonstrates database connectivity only, not that the endpoint points to the intended Neon branch or has marketplace-compatible data.
+
+The inspected server currently contains generic catalog and commerce order routes, not a dedicated points-marketplace package/order contract. No new endpoint was added in this step.
+
+## Status after this pass
+
+- [x] Inspect buyer marketplace page and purchase dialog.
+- [x] Inspect `pointMarket.ts` browse/order/vendor contracts at source level.
+- [x] Inspect wallet balance/debit semantics.
+- [x] Inspect API startup, authentication middleware, CORS/CSRF boundary, and health/readiness semantics.
+- [ ] Repository-wide inventory of every buyer/vendor/admin `api.pointMarket.*` call site remains incomplete.
+- [ ] Inspect the complete Neon schema/migrations and run tests against a disposable staging database.
+- [ ] Verify deployed API database target using secret-safe evidence.
+- [ ] Implement a dedicated read-only endpoint and contract tests on a staging-only path.
+- [ ] Reconcile source/staging data and run browser smoke tests before any frontend routing change.
+
+This remains static source analysis. No deployed service, database contents, test suite, or browser session was exercised by this pass.
