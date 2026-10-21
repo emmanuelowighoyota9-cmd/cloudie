@@ -1393,3 +1393,11 @@ option {
     color-scheme: light;
   }
 }
+
+
+/* Utility-level elevation is disabled too; hierarchy is expressed with borders. */
+@layer utilities {
+  :where([class~="shadow"], [class*="shadow-"]) {
+    box-shadow: none !important;
+  }
+}
