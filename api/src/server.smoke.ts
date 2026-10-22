@@ -445,3 +445,152 @@ test("refuses login for suspended and terminated accounts without issuing a sess
   }
 });
 
+
+
+test("keeps first-admin bootstrap disabled when its operator token is absent", async () => {
+  const previous = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  try {
+    const response = await app.request("/api/auth/bootstrap-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Initial Admin",
+        email: "admin@example.com",
+        password: "long-enough-test-password",
+        token: "x".repeat(40),
+      }),
+    });
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "Administrator bootstrap is disabled" });
+  } finally {
+    if (previous === undefined) delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+    else process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = previous;
+  }
+});
+
+test("validates first-admin bootstrap payload before database access", async () => {
+  const previous = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = "test-bootstrap-token-that-is-long-enough";
+  try {
+    const response = await app.request("/api/auth/bootstrap-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "", email: "not-an-email", password: "short", token: "x" }),
+    });
+    assert.equal(response.status, 400);
+    assert.deepEqual(await response.json(), { error: "Invalid administrator bootstrap details" });
+  } finally {
+    if (previous === undefined) delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+    else process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = previous;
+  }
+});
+
+test("rejects an incorrect first-admin bootstrap token without database access", async () => {
+  const previous = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  const mutablePool = pool as unknown as { connect: (...args: unknown[]) => Promise<unknown> };
+  const originalConnect = mutablePool.connect;
+  process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = "test-bootstrap-token-that-is-long-enough";
+  mutablePool.connect = async () => { throw new Error("database must not be accessed"); };
+  try {
+    const response = await app.request("/api/auth/bootstrap-admin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "Initial Admin",
+        email: "admin@example.com",
+        password: "long-enough-test-password",
+        token: "incorrect-bootstrap-token-value-000",
+      }),
+    });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { error: "Invalid bootstrap authorization" });
+  } finally {
+    mutablePool.connect = originalConnect;
+    if (previous === undefined) delete process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+    else process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN = previous;
+  }
+});
+
+test("validates points marketplace filters before database access", async () => {
+  const response = await app.request("/api/marketplace/packages?minPrice=-1");
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Marketplace filters must be non-negative numbers" });
+});
+
+test("rejects unsupported points marketplace sort values", async () => {
+  const response = await app.request("/api/marketplace/packages?sort=price;DROP%20TABLE");
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: "Unsupported marketplace sort" });
+});
+
+test("returns an empty public points marketplace list when the read model has no rows", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = args[0];
+    const values = args[1] as unknown[];
+    assert.match(String(sql), /FROM point_market_packages/);
+    assert.match(String(sql), /v\.status = 'approved'/);
+    assert.deepEqual(values, [true, "", null, null, null, null]);
+    return { rows: [], rowCount: 0 };
+  };
+  try {
+    const response = await app.request("/api/marketplace/packages?verifiedOnly=true");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), []);
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("maps points marketplace database rows to the existing buyer response shape", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => ({
+    rows: [{
+      id: "pkg_1",
+      name: "Starter points",
+      points: "500",
+      price_minor: "125000",
+      currency: "NGN",
+      unit_price_minor: "250000",
+      total_sold: "7",
+      vendor_id: "vendor_1",
+      business_name: "Verified vendor",
+      is_verified: true,
+    }],
+    rowCount: 1,
+  });
+  try {
+    const response = await app.request("/api/marketplace/packages?verifiedOnly=true&sort=price_asc");
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), [{
+      id: "pkg_1",
+      name: "Starter points",
+      points: 500,
+      priceMinor: 125000,
+      currency: "NGN",
+      unitPriceMinor: 250000,
+      totalSold: 7,
+      vendorId: "vendor_1",
+      vendorName: "Verified vendor",
+      vendorVerified: true,
+    }]);
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("returns a safe unavailable response when points marketplace tables are not ready", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => { throw new Error("simulated missing table"); };
+  try {
+    const response = await app.request("/api/marketplace/packages");
+    assert.equal(response.status, 503);
+    assert.deepEqual(await response.json(), { error: "Marketplace data is not available yet" });
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});

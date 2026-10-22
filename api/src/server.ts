@@ -3,7 +3,7 @@ import { Hono, type Context, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { SignJWT, jwtVerify } from "jose";
-import { Pool, type QueryResultRow } from "pg";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { promisify } from "node:util";
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
@@ -93,7 +93,7 @@ function setCsrfCookie(c: Context) {
   });
 }
 
-function fail(c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 500, message: string) {
+function fail(c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503, message: string) {
   return c.json({ error: message }, status);
 }
 
@@ -292,6 +292,82 @@ app.get("/api/public-config", async (c) => {
 /* ════════════════════════════════════════════════════════════════════
    AUTHENTICATION ENDPOINTS
    ════════════════════════════════════════════════════════════════════ */
+
+const bootstrapAdminSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(12).max(128),
+  token: z.string().min(32).max(512),
+});
+
+// One-time, operator-gated bootstrap. Disabled unless a long random token is configured.
+app.post("/api/auth/bootstrap-admin", async (c) => {
+  if (!checkRateLimit(c, "auth:bootstrap-admin", 5, 60_000)) {
+    return fail(c, 429, "Too many bootstrap attempts. Please wait a minute and try again.");
+  }
+  const configuredToken = process.env.CLOUDIE_ADMIN_BOOTSTRAP_TOKEN;
+  if (!configuredToken || Buffer.byteLength(configuredToken, "utf8") < 32) {
+    return fail(c, 503, "Administrator bootstrap is disabled");
+  }
+  const parsed = await readJson(c, bootstrapAdminSchema);
+  if ("error" in parsed) return fail(c, 400, "Invalid administrator bootstrap details");
+  const supplied = Buffer.from(parsed.data.token, "utf8");
+  const expected = Buffer.from(configuredToken, "utf8");
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    return fail(c, 401, "Invalid bootstrap authorization");
+  }
+
+  let client: PoolClient | undefined;
+  try {
+    client = await pool.connect();
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(771901, 1)");
+    const existing = await client.query<{ count: number } & QueryResultRow>(
+      "SELECT COUNT(*)::int AS count FROM app_users WHERE role='admin'",
+    );
+    if (Number(existing.rows[0]?.count ?? 0) > 0) {
+      await client.query("ROLLBACK");
+      return fail(c, 409, "Administrator account already exists");
+    }
+
+    const email = parsed.data.email.toLowerCase();
+    const passwordHash = await hashPassword(parsed.data.password);
+    const inserted = await client.query<User & QueryResultRow>(
+      "INSERT INTO app_users (id,name,email,role,password_hash) VALUES ($1,$2,$3,'admin',$4) RETURNING id,email,name,role,is_suspended,is_terminated",
+      [uuid(), parsed.data.name, email, passwordHash],
+    );
+    const user = inserted.rows[0];
+    const sessionId = uuid();
+    const token = await signToken(user, sessionId);
+    await client.query(
+      "INSERT INTO api_sessions (id,user_id,expires_at) VALUES ($1,$2,NOW()+INTERVAL '8 hours')",
+      [sessionId, user.id],
+    );
+    await client.query(
+      "INSERT INTO admin_audit_logs (actor_user_id, action, target_type, target_id, details) VALUES ($1, $2, $3, $4, $5)",
+      [user.id, "admin.bootstrap", "user", user.id, JSON.stringify({ method: "one-time-bootstrap" })],
+    );
+    await client.query("COMMIT");
+    setCookie(c, "cloudie_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Lax",
+      path: "/",
+      maxAge: 8 * 60 * 60,
+    });
+    setCsrfCookie(c);
+    return c.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role }, token }, 201);
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => undefined);
+    if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") {
+      return fail(c, 409, "An account with this email already exists");
+    }
+    console.error("Administrator bootstrap failed", error instanceof Error ? error.message : "unknown");
+    return fail(c, 500, "Unable to bootstrap administrator");
+  } finally {
+    client?.release();
+  }
+});
 
 app.post("/api/auth/register", async (c) => {
   if (!checkRateLimit(c, "auth:register", 15, 60_000)) {
@@ -696,6 +772,90 @@ app.get("/api/tracking/:trackingNumber", async (c) => {
 /* ════════════════════════════════════════════════════════════════════
    CATALOG & COMMERCE ORDERS
    ════════════════════════════════════════════════════════════════════ */
+
+// Dedicated read-only points marketplace endpoint. Financial writes remain on Convex.
+app.get("/api/marketplace/packages", async (c) => {
+  const query = c.req.query();
+  const numeric = (key: string) => {
+    const raw = query[key];
+    if (raw === undefined || raw.trim() === "") return { ok: true as const, value: undefined };
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0
+      ? { ok: true as const, value }
+      : { ok: false as const, value: undefined };
+  };
+  const minPrice = numeric("minPrice");
+  const maxPrice = numeric("maxPrice");
+  const minPoints = numeric("minPoints");
+  const maxPoints = numeric("maxPoints");
+  if (!minPrice.ok || !maxPrice.ok || !minPoints.ok || !maxPoints.ok) {
+    return fail(c, 400, "Marketplace filters must be non-negative numbers");
+  }
+  const verifiedRaw = query.verifiedOnly;
+  if (verifiedRaw !== undefined && verifiedRaw !== "true" && verifiedRaw !== "false") {
+    return fail(c, 400, "verifiedOnly must be true or false");
+  }
+  const sort = query.sort ?? "recommended";
+  const sortOrders: Record<string, string> = {
+    recommended: "unit_price_minor ASC, total_sold DESC",
+    unit_asc: "unit_price_minor ASC, total_sold DESC",
+    price_asc: "price_minor ASC, total_sold DESC",
+    price_desc: "price_minor DESC, total_sold DESC",
+    points_desc: "points DESC, total_sold DESC",
+  };
+  if (!Object.hasOwn(sortOrders, sort)) return fail(c, 400, "Unsupported marketplace sort");
+  const search = (query.search ?? "").trim().slice(0, 120);
+  try {
+    // The source query takes a bounded active-package candidate set before filtering.
+    const result = await pool.query(
+      `WITH candidates AS (
+         SELECT p.id, p.vendor_id, p.name, p.points, p.price_minor, p.currency,
+                p.total_sold, p.created_at
+         FROM point_market_packages p
+         WHERE p.is_active = TRUE
+         ORDER BY p.created_at ASC, p.id ASC
+         LIMIT 200
+       ),
+       eligible AS (
+         SELECT p.id, p.name, p.points, p.price_minor, p.currency, p.total_sold,
+                v.id AS vendor_id, v.business_name, v.is_verified,
+                ROUND((p.price_minor::numeric / p.points) * 1000)::bigint AS unit_price_minor
+         FROM candidates p
+         JOIN point_market_vendors v ON v.id = p.vendor_id
+         WHERE v.status = 'approved'
+           AND ($1::boolean IS NOT TRUE OR v.is_verified = TRUE)
+           AND ($2::text = '' OR strpos(lower(p.name), lower($2)) > 0 OR strpos(lower(v.business_name), lower($2)) > 0)
+           AND ($3::numeric IS NULL OR p.price_minor >= $3 * 100)
+           AND ($4::numeric IS NULL OR p.price_minor <= $4 * 100)
+           AND ($5::numeric IS NULL OR p.points >= $5)
+           AND ($6::numeric IS NULL OR p.points <= $6)
+       )
+       SELECT * FROM eligible
+       ORDER BY ${sortOrders[sort]}
+       LIMIT 200`,
+      [verifiedRaw === "true", search, minPrice.value ?? null, maxPrice.value ?? null, minPoints.value ?? null, maxPoints.value ?? null],
+    );
+    return c.json(result.rows.map((row: QueryResultRow & {
+      id: string; name: string; points: string | number; price_minor: string | number;
+      currency: string; unit_price_minor: string | number; total_sold: string | number;
+      vendor_id: string; business_name: string; is_verified: boolean;
+    }) => ({
+      id: row.id,
+      name: row.name,
+      points: Number(row.points),
+      priceMinor: Number(row.price_minor),
+      currency: row.currency,
+      unitPriceMinor: Number(row.unit_price_minor),
+      totalSold: Number(row.total_sold),
+      vendorId: row.vendor_id,
+      vendorName: row.business_name,
+      vendorVerified: row.is_verified,
+    })));
+  } catch (error) {
+    console.error("Points marketplace read failed", error instanceof Error ? error.message : "unknown");
+    return fail(c, 503, "Marketplace data is not available yet");
+  }
+});
 
 app.get("/api/catalog", async (c) => {
   const limit = parseLimit(c.req.query("limit"));
