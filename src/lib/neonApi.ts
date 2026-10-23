@@ -1,4 +1,6 @@
-const DEFAULT_API_URL = "https://cloudie-operations-api-stage.onrender.com";
+// Production API. The staging service is opt-in via VITE_NEON_API_URL, never a
+// silent default: a build without configuration must still reach production.
+const DEFAULT_API_URL = "https://cloudie-glaa.onrender.com";
 const API_BASE_URL = (
   (import.meta.env.VITE_NEON_API_URL as string | undefined) ||
   (import.meta.env.VITE_API_URL as string | undefined) ||

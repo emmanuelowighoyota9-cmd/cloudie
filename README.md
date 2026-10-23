@@ -33,13 +33,14 @@ DATABASE_URL="postgresql://<user>:<password>@<neon-host>/<dbname>?sslmode=requir
 
 ---
 
-## 2. Backend API (Render: `cloudie-operations-api-stage`)
+## 2. Backend API (Render: `cloudie-glaa`)
 
 The backend service is defined in [`render.yaml`](./render.yaml) with `rootDir: api`.
 
-- **Build command:** `npm install && npm run build`
-- **Start command:** `npm run start`
-- **Health check endpoint:** `/healthz` (database readiness at `/readyz`)
+- **Build command:** `npm ci && npm run build`
+- **Start command:** `npm start`
+- **Liveness endpoint:** `/health` (process only; never touches PostgreSQL)
+- **Readiness endpoint:** `/ready` (real `SELECT 1` against Neon; `503` when the database is unreachable)
 
 ### Required Render Environment Variables
 
@@ -47,8 +48,26 @@ The backend service is defined in [`render.yaml`](./render.yaml) with `rootDir: 
 | --- | --- |
 | `NODE_ENV` | `production` |
 | `DATABASE_URL` | Neon PostgreSQL connection string (`sslmode=require`) |
-| `JWT_SECRET` | Random 32+ byte secret used to sign session tokens |
-| `CORS_ORIGINS` | `https://cloudie.wuaze.com,http://localhost:5173,http://localhost:3000` |
+| `JWT_SECRET` | Random 32+ byte secret used to sign session tokens (32 bytes minimum) |
+| `CORS_ORIGINS` | `https://cloudie.wuaze.com` |
+| `ADMIN_BOOTSTRAP_TOKEN` | Optional, one-time. Random 32+ byte secret that enables `POST /api/admin/bootstrap` until the first administrator exists. Remove it after use. |
+
+### First administrator (one-time bootstrap)
+
+No administrator is created automatically and no default password exists.
+
+1. Register the owner account normally (`POST /api/auth/register` or the sign-up page).
+2. Set `ADMIN_BOOTSTRAP_TOKEN` to a fresh random secret in Render (never commit it).
+3. Call the bootstrap endpoint once with that account's email and the token:
+
+   ```bash
+   curl -X POST https://cloudie-glaa.onrender.com/api/admin/bootstrap \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"owner@example.com","token":"<ADMIN_BOOTSTRAP_TOKEN>"}'
+   ```
+
+   It returns `201` once, `409` after an administrator exists, and `403` for a wrong token. The promotion and its audit-log row commit in one transaction.
+4. Delete `ADMIN_BOOTSTRAP_TOKEN` from Render and redeploy. With the variable unset the endpoint returns `503` and can never promote anyone.
 
 ### Local API Verification
 
@@ -66,7 +85,8 @@ InfinityFree serves the compiled static SPA from `htdocs/` while all API request
 ### Build Command
 
 ```bash
-VITE_NEON_API_URL=https://cloudie-operations-api-stage.onrender.com npm run build
+# Optional: the default already targets the production API.
+VITE_NEON_API_URL=https://cloudie-glaa.onrender.com npm run build
 ```
 
 ### InfinityFree Upload Checklist

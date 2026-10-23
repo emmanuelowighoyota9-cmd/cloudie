@@ -137,8 +137,10 @@ describe("a signed-out visitor is returned to the dashboard after signing in", (
     expect(guard).toContain(
       "const returnTo = `${location.pathname}${location.search}`;",
     );
+    // `/login` is the canonical sign-in route; `/auth` remains a legacy alias.
+    // Both honour returnTo, but the guard must send visitors to `/login`.
     expect(guard).toContain(
-      "to={`/auth?returnTo=${encodeURIComponent(returnTo)}`}",
+      "to={`/login?returnTo=${encodeURIComponent(returnTo)}`}",
     );
   });
 

@@ -29,6 +29,8 @@ type User = { id: string; email: string; name: string | null; role: "admin" | "u
 type Variables = { user: User };
 export const app = new Hono<{ Variables: Variables }>();
 
+const ADMIN_BOOTSTRAP_LOCK_KEY = 918273645;
+
 const isProduction = process.env.NODE_ENV === "production";
 const defaultOrigins = [
   "https://cloudie.wuaze.com",
@@ -93,7 +95,7 @@ function setCsrfCookie(c: Context) {
   });
 }
 
-function fail(c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 500, message: string) {
+function fail(c: Context, status: 400 | 401 | 403 | 404 | 409 | 429 | 500 | 503, message: string) {
   return c.json({ error: message }, status);
 }
 
@@ -230,17 +232,30 @@ async function recordAuditLog(actorUserId: string, action: string, targetType: s
    PUBLIC & HEALTH ENDPOINTS
    ════════════════════════════════════════════════════════════════════ */
 
-const healthHandler = async (c: Context) => {
+// Liveness: proves the process is up. It must not depend on PostgreSQL, or a
+// database outage would make the platform kill an otherwise healthy instance.
+const livenessHandler = (c: Context) =>
+  c.json({
+    ok: true,
+    service: "cloudie-neon-api",
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+
+// Readiness: a real database round-trip. Reporting "ok" here means the API can
+// actually serve data, not merely that the Node process started.
+const readinessHandler = async (c: Context) => {
   try {
     const result = await pool.query("SELECT 1 AS ok");
-    return c.json({ ok: result.rows[0]?.ok === 1, service: "cloudie-neon-api", database: "connected", timestamp: new Date().toISOString() });
+    if (result.rows[0]?.ok !== 1) throw new Error("unexpected database response");
+    return c.json({ ok: true, service: "cloudie-neon-api", database: "connected", timestamp: new Date().toISOString() });
   } catch {
     return c.json({ ok: false, service: "cloudie-neon-api", database: "unavailable" }, 503);
   }
 };
 
-app.get("/health", healthHandler);
-app.get("/ready", healthHandler);
+app.get("/health", livenessHandler);
+app.get("/ready", readinessHandler);
 app.get("/api/health", (c) => c.redirect("/health", 307));
 app.get("/api/ready", (c) => c.redirect("/ready", 307));
 
@@ -375,6 +390,86 @@ app.post("/api/auth/logout", async (c) => {
 app.get("/api/me", auth, (c) => {
   const user = c.get("user");
   return c.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+});
+
+/**
+ * One-time administrator bootstrap.
+ *
+ * The owner registers a normal account, then promotes it once by presenting the
+ * operator-supplied ADMIN_BOOTSTRAP_TOKEN. Rules enforced here:
+ * - the token comes only from the server environment; no default exists, so the
+ *   endpoint is inert until an operator configures it;
+ * - the comparison is length-checked and timing-safe;
+ * - it closes permanently once any administrator exists (advisory-locked, so
+ *   two concurrent requests cannot both promote);
+ * - the promoted account must already exist and be able to sign in normally —
+ *   no password is created or returned here;
+ * - the role is decided server-side; a client-supplied role is ignored;
+ * - success is audited, and the token is never logged.
+ */
+const bootstrapSchema = z.object({
+  email: z.string().trim().email(),
+  token: z.string().min(1).max(512),
+});
+
+app.post("/api/admin/bootstrap", async (c) => {
+  const configuredToken = process.env.ADMIN_BOOTSTRAP_TOKEN;
+  if (!configuredToken) return fail(c, 503, "Administrator bootstrap is not configured");
+  if (!checkRateLimit(c, "auth:admin-bootstrap", 5, 60_000)) {
+    return fail(c, 429, "Too many bootstrap attempts. Please wait a minute and try again.");
+  }
+
+  const parsed = await readJson(c, bootstrapSchema);
+  if ("error" in parsed) return fail(c, 400, "Invalid bootstrap request");
+
+  const presented = Buffer.from(parsed.data.token, "utf8");
+  const expected = Buffer.from(configuredToken, "utf8");
+  if (
+    presented.length !== expected.length ||
+    !timingSafeEqual(presented, expected)
+  ) {
+    return fail(c, 403, "Invalid bootstrap token");
+  }
+
+  const email = parsed.data.email.toLowerCase();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock($1)", [ADMIN_BOOTSTRAP_LOCK_KEY]);
+
+    const existingAdmin = await client.query("SELECT id FROM app_users WHERE role='admin' LIMIT 1");
+    if (existingAdmin.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return fail(c, 409, "An administrator already exists; bootstrap is closed");
+    }
+
+    const promoted = await client.query<User & QueryResultRow>(
+      `UPDATE app_users SET role='admin', updated_at=NOW()
+       WHERE lower(email)=lower($1) AND is_terminated = FALSE
+       RETURNING id,email,name,role`,
+      [email],
+    );
+    const user = promoted.rows[0];
+    if (!user) {
+      await client.query("ROLLBACK");
+      return fail(c, 404, "No eligible account for that email. Register it first, then bootstrap.");
+    }
+
+    await client.query(
+      `INSERT INTO admin_audit_logs (actor_user_id, action, target_type, target_id, details)
+       VALUES ($1, 'admin.bootstrap', 'user', $1, $2)`,
+      [user.id, JSON.stringify({ mechanism: "bootstrap-token" })],
+    );
+    await client.query("COMMIT");
+    console.log("Administrator bootstrap completed for user", user.id);
+    return c.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } }, 201);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("Administrator bootstrap failed", error instanceof Error ? error.message : "unknown");
+    return fail(c, 500, "Unable to complete administrator bootstrap");
+  } finally {
+    client.release();
+  }
 });
 
 /* ════════════════════════════════════════════════════════════════════

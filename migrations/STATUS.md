@@ -16,6 +16,19 @@ All migrations are ordered, transactional, and verified via SHA-256 checksums in
 
 > The migration runner also normalizes legacy bookkeeping tables: databases created before the runner adopted a `filename` column (migration 001 itself creates `schema_migrations` with a `description` column instead) get the `filename` column added additively, with a backfill — no data is dropped or rewritten.
 
+### Transaction semantics (fixed 2026-10-23)
+
+Every migration file in this directory is wrapped in its own `BEGIN; ... COMMIT;`. The runner used to detect that wrapper and then insert the `schema_migrations` row *after* the file had already committed, so a failed history insert left applied objects with no history record. The runner now:
+
+- strips the outer `BEGIN;`/`COMMIT;` from the file (statement-aware, so PL/pgSQL `BEGIN ... END;` bodies, string literals and dollar-quoted blocks are untouched) and owns one transaction per migration;
+- runs the schema statements **and** the `INSERT INTO schema_migrations` inside that single transaction, then `COMMIT`s once;
+- `ROLLBACK`s and rethrows on any failure, leaving neither partial schema nor a history row;
+- rejects `CREATE INDEX CONCURRENTLY`, `VACUUM`, `CREATE DATABASE`, `ALTER TYPE ... ADD VALUE` and similar statements up front, because they cannot run inside a transaction block and would silently break atomicity;
+- keeps ordering, the advisory lock, checksum validation and legacy-table normalization unchanged;
+- makes `--dry-run` strictly read-only: it takes a shared advisory lock, reads history and reports pending migrations, and performs no `CREATE`/`ALTER`/`INSERT`/`UPDATE` at all.
+
+Regression coverage: `bun test tests/migrationRunner.test.ts` (14 tests: wrapper stripping, PL/pgSQL preservation, atomic commit ordering, rollback on statement failure, rollback when the history insert fails, idempotent rerun, checksum drift, read-only dry-run, non-transactional statement rejection).
+
 ### Running Migrations
 
 ```bash

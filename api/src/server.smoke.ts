@@ -176,12 +176,17 @@ test("rejects malformed registration and login payloads before database access",
   assert.equal(login.status, 400);
 });
 
-test("returns 503 when the configured PostgreSQL database is unavailable", async () => {
+test("returns 503 on readiness, but stays live, when the configured PostgreSQL database is unavailable", async () => {
   const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
   const originalQuery = mutablePool.query;
   mutablePool.query = async () => { throw new Error("simulated database outage"); };
   try {
-    const response = await app.request("/health");
+    const liveness = await app.request("/health");
+    assert.equal(liveness.status, 200);
+    const liveBody = await liveness.json() as { ok?: boolean };
+    assert.equal(liveBody.ok, true);
+
+    const response = await app.request("/ready");
     assert.equal(response.status, 503);
     assert.deepEqual(await response.json(), {
       ok: false,
@@ -442,6 +447,140 @@ test("refuses login for suspended and terminated accounts without issuing a sess
     }
   } finally {
     mutablePool.query = originalQuery;
+  }
+});
+
+/**
+ * First-administrator bootstrap. The endpoint must be inert without an
+ * operator-supplied token, must never trust a client-supplied role, must close
+ * after one success, and must audit the promotion in the same transaction.
+ */
+test("administrator bootstrap is inert when no bootstrap token is configured", async () => {
+  delete process.env.ADMIN_BOOTSTRAP_TOKEN;
+  const response = await app.request("/api/admin/bootstrap", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Origin: "http://localhost:5173",
+      "X-Forwarded-For": "203.0.113.201",
+    },
+    body: JSON.stringify({ email: "owner@example.com", token: "anything" }),
+  });
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "Administrator bootstrap is not configured" });
+});
+
+test("administrator bootstrap rejects a wrong token without touching the database", async () => {
+  process.env.ADMIN_BOOTSTRAP_TOKEN = "bootstrap-token-for-tests-0123456789";
+  const mutablePool = pool as unknown as { connect: () => Promise<unknown> };
+  const originalConnect = mutablePool.connect;
+  let connectCalls = 0;
+  mutablePool.connect = async () => {
+    connectCalls += 1;
+    throw new Error("database must not be reached for a wrong token");
+  };
+  try {
+    const response = await app.request("/api/admin/bootstrap", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.202",
+      },
+      body: JSON.stringify({ email: "owner@example.com", token: "wrong-token" }),
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: "Invalid bootstrap token" });
+    assert.equal(connectCalls, 0);
+  } finally {
+    mutablePool.connect = originalConnect;
+    delete process.env.ADMIN_BOOTSTRAP_TOKEN;
+  }
+});
+
+test("administrator bootstrap promotes one existing account and audits it atomically", async () => {
+  process.env.ADMIN_BOOTSTRAP_TOKEN = "bootstrap-token-for-tests-0123456789";
+  const calls: { sql: string; params?: unknown[] }[] = [];
+  const txClient = {
+    async query(sql: string, params?: unknown[]) {
+      calls.push({ sql, params });
+      if (sql.startsWith("SELECT id FROM app_users WHERE role='admin'")) return { rows: [] };
+      if (sql.startsWith("UPDATE app_users SET role='admin'")) {
+        return { rows: [{ id: "owner-1", email: "owner@example.com", name: "Owner", role: "admin" }] };
+      }
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const mutablePool = pool as unknown as { connect: () => Promise<unknown> };
+  const originalConnect = mutablePool.connect;
+  mutablePool.connect = async () => txClient;
+  try {
+    const response = await app.request("/api/admin/bootstrap", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.203",
+      },
+      // A client-supplied role must be ignored; the server decides.
+      body: JSON.stringify({ email: "owner@example.com", token: process.env.ADMIN_BOOTSTRAP_TOKEN, role: "user" }),
+    });
+    assert.equal(response.status, 201);
+    const body = await response.json() as { ok?: boolean; user?: { role?: string } };
+    assert.equal(body.ok, true);
+    assert.equal(body.user?.role, "admin");
+
+    const sqls = calls.map((call) => call.sql);
+    assert.equal(sqls[0], "BEGIN");
+    assert.ok(sqls[1].includes("pg_advisory_xact_lock"));
+    assert.ok(sqls.some((sql) => sql.includes("INSERT INTO admin_audit_logs") && sql.includes("'admin.bootstrap'")));
+    assert.equal(sqls[sqls.length - 1], "COMMIT");
+    assert.equal(sqls.includes("ROLLBACK"), false);
+    // The audit row is written before COMMIT, i.e. in the same transaction.
+    const auditIndex = sqls.findIndex((sql) => sql.includes("INSERT INTO admin_audit_logs"));
+    assert.ok(auditIndex > 0 && auditIndex < sqls.indexOf("COMMIT"));
+    // No response ever echoes the bootstrap token.
+    assert.equal(JSON.stringify(body).includes("bootstrap-token"), false);
+  } finally {
+    mutablePool.connect = originalConnect;
+    delete process.env.ADMIN_BOOTSTRAP_TOKEN;
+  }
+});
+
+test("administrator bootstrap closes permanently once an administrator exists", async () => {
+  process.env.ADMIN_BOOTSTRAP_TOKEN = "bootstrap-token-for-tests-0123456789";
+  const calls: string[] = [];
+  const txClient = {
+    async query(sql: string) {
+      calls.push(sql);
+      if (sql.startsWith("SELECT id FROM app_users WHERE role='admin'")) {
+        return { rows: [{ id: "existing-admin" }] };
+      }
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const mutablePool = pool as unknown as { connect: () => Promise<unknown> };
+  const originalConnect = mutablePool.connect;
+  mutablePool.connect = async () => txClient;
+  try {
+    const response = await app.request("/api/admin/bootstrap", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.204",
+      },
+      body: JSON.stringify({ email: "attacker@example.com", token: process.env.ADMIN_BOOTSTRAP_TOKEN }),
+    });
+    assert.equal(response.status, 409);
+    assert.ok(calls.includes("ROLLBACK"));
+    assert.equal(calls.includes("COMMIT"), false);
+    assert.equal(calls.some((sql) => sql.startsWith("UPDATE app_users")), false);
+  } finally {
+    mutablePool.connect = originalConnect;
+    delete process.env.ADMIN_BOOTSTRAP_TOKEN;
   }
 });
 
