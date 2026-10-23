@@ -32,6 +32,7 @@ export const app = new Hono<{ Variables: Variables }>();
 const isProduction = process.env.NODE_ENV === "production";
 const defaultOrigins = [
   "https://cloudie.wuaze.com",
+  "https://cloudie.freebuff.app",
   ...(isProduction ? [] : ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"]),
 ];
 const envOrigins = (process.env.CORS_ORIGINS ?? "").split(",").map((x) => x.trim()).filter(Boolean);
