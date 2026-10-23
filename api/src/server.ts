@@ -273,9 +273,29 @@ const readinessHandler = async (c: Context) => {
     const missing = REQUIRED_SCHEMA_TABLES.filter((table) => !present.has(table));
     const timestamp = new Date().toISOString();
     if (missing.length > 0) {
-      // Table names are not sensitive; a misconfigured deployment should say so.
+      // Table names and counts are not sensitive, and they are what tells an
+      // operator which bad case they are in: 0 public tables is a brand-new
+      // database, a lone migration-test guard table is the disposable branch,
+      // a partial set is a half-applied migration run.
+      const inventory = await pool.query<{ count: string; guard: boolean } & QueryResultRow>(
+        `SELECT count(*)::text AS count,
+                bool_or(c.relname = 'cloudie_migration_test_guard') AS guard
+         FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'public' AND c.relkind = 'r'`,
+      );
+      const publicTableCount = Number(inventory.rows[0]?.count ?? 0);
+      const migrationGuardPresent = inventory.rows[0]?.guard === true;
       return c.json(
-        { ok: false, service: "cloudie-neon-api", database: "connected", schema: "incomplete", missing, timestamp },
+        {
+          ok: false,
+          service: "cloudie-neon-api",
+          database: "connected",
+          schema: "incomplete",
+          missing,
+          publicTableCount,
+          migrationGuardPresent,
+          timestamp,
+        },
         503,
       );
     }

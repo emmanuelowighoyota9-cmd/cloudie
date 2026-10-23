@@ -320,21 +320,32 @@ test("refuses readiness when the database answers but the required schema is mis
   const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
   const originalQuery = mutablePool.query;
   mutablePool.query = async (sql: unknown) => {
+    const text = String(sql);
     // A fresh or wrong database: ping works, every table query would 500.
-    if (String(sql).includes("information_schema.tables")) {
+    if (text.includes("information_schema.tables")) {
       return { rows: [], rowCount: 0 };
+    }
+    if (text.includes("pg_class c JOIN pg_namespace")) {
+      return { rows: [{ count: "2", guard: true }], rowCount: 1 };
     }
     return { rows: [{ ok: 1 }], rowCount: 1 };
   };
   try {
     const response = await app.request("/ready");
     assert.equal(response.status, 503);
-    const data = await response.json() as { ok?: boolean; database?: string; schema?: string; missing?: string[] };
+    const data = await response.json() as {
+      ok?: boolean; database?: string; schema?: string; missing?: string[];
+      publicTableCount?: number; migrationGuardPresent?: boolean;
+    };
     assert.equal(data.ok, false);
     assert.equal(data.database, "connected");
     assert.equal(data.schema, "incomplete");
     assert.ok(Array.isArray(data.missing) && data.missing.includes("app_users"));
     assert.ok(data.missing.includes("api_sessions"));
+    // The inventory line is what distinguishes a brand-new database from the
+    // disposable migration-test branch (guard table present).
+    assert.equal(data.publicTableCount, 2);
+    assert.equal(data.migrationGuardPresent, true);
   } finally {
     mutablePool.query = originalQuery;
   }
