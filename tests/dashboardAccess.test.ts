@@ -7,7 +7,7 @@
  *
  *   Landing.tsx   the visitor is offered a link to `/dashboard` at all
  *   main.tsx      `/dashboard` is registered INSIDE the `RequireAuth` layout
- *   RequireAuth   a signed-out visitor is sent to `/auth?returnTo=<intended>`
+ *   RequireAuth   a signed-out visitor is sent to `/login?returnTo=<intended>`
  *   Auth.tsx      the `returnTo` is honoured after sign-in, and the fallback
  *                 (used when there is no returnTo) is the dashboard too
  *

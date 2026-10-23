@@ -1,44 +1,39 @@
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Card, CardContent } from "@/components/ui/card";
+import type { Id } from "@/convex/_generated/dataModel";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/admin/shared";
+import { ReasonRequiredDialog } from "@/components/admin/ReasonRequiredDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { Users } from "lucide-react";
 
 const MONEY = (minor: number) => `₦${(minor / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-type AdminUserRow = {
-  _id: string;
-  name?: string | null;
-  email: string;
-  role: string;
-  status: string;
-  points: number;
-  balanceNgn: number;
-  workspaces: number;
-  createdAt: number;
-};
-
 export default function AdminUsers() {
-  const rows = (useQuery as any)(api.adminOverview.userRows) as AdminUserRow[] | undefined;
+  const rows = (useQuery as any)(api.adminOverview.userRows);
+  const toggleSuspend = useMutation(api.admin.suspendUser);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("all");
   const [status, setStatus] = useState("all");
   const [balanceSel, setBalanceSel] = useState<"all" | "has" | "zero">("all");
+  const [busyId, setBusyId] = useState<Id<"users"> | null>(null);
   const navigate = useNavigate();
 
   const filtered = rows
-    ? rows.slice(0)
-        .filter((u) => {
+    ? ([] as typeof rows)
+        .slice(0)
+        .concat(rows)
+        .filter((u: any) => {
           if (search.trim()) {
             const q = search.toLowerCase();
-            if (!((u.name ?? "").toLowerCase().includes(q) || u.email.toLowerCase().includes(q))) return false;
+            if (!(u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))) return false;
           }
           if (role !== "all" && u.role !== role) return false;
           if (status !== "all" && u.status !== status) return false;
@@ -46,8 +41,20 @@ export default function AdminUsers() {
           if (balanceSel === "zero" && (u.points !== 0 || u.balanceNgn !== 0)) return false;
           return true;
         })
-        .sort((a, b) => b.createdAt - a.createdAt)
+        .sort((a: any, b: any) => Number(b.createdAt) - Number(a.createdAt))
     : undefined;
+
+  async function toggleUser(id: Id<"users">, suspended: boolean, reason: string) {
+    setBusyId(id);
+    try {
+      await toggleSuspend({ userId: id as never, suspend: !suspended, reason });
+      toast.success(suspended ? "User reactivated" : "User suspended");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Operation failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -137,7 +144,7 @@ export default function AdminUsers() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((user) => (
+                  {filtered.map((user: any) => (
                     <TableRow key={user._id}>
                       <TableCell className="pl-3">
                         <div className="min-w-0">
