@@ -240,15 +240,55 @@ const livenessHandler = (c: Context) =>
     timestamp: new Date().toISOString(),
   });
 
-// Readiness: a real database round-trip. Reporting "ok" here means the API can
-// actually serve data, not merely that the Node process started.
+// Readiness: a real database round-trip, then a real schema check. A fresh or
+// wrong database answers `SELECT 1` happily while every table query returns
+// 500, so process-level pings are not enough to call the service ready.
+// Only tables created by migrations 001-007 are required; migration 008 may
+// legitimately still be pending, so its tables are not listed.
+const REQUIRED_SCHEMA_TABLES = [
+  "app_users",
+  "api_sessions",
+  "platform_settings",
+  "tenant_sites",
+  "wallet_ledger",
+  "shipments",
+  "user_notifications",
+  "admin_audit_logs",
+];
+
 const readinessHandler = async (c: Context) => {
   try {
     const result = await pool.query("SELECT 1 AS ok");
     if (result.rows[0]?.ok !== 1) throw new Error("unexpected database response");
-    return c.json({ ok: true, service: "cloudie-neon-api", database: "connected", timestamp: new Date().toISOString() });
   } catch {
     return c.json({ ok: false, service: "cloudie-neon-api", database: "unavailable" }, 503);
+  }
+
+  try {
+    const schema = await pool.query<{ table_name: string } & QueryResultRow>(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name = ANY($1)",
+      [REQUIRED_SCHEMA_TABLES],
+    );
+    const present = new Set(schema.rows.map((row) => row.table_name));
+    const missing = REQUIRED_SCHEMA_TABLES.filter((table) => !present.has(table));
+    const timestamp = new Date().toISOString();
+    if (missing.length > 0) {
+      // Table names are not sensitive; a misconfigured deployment should say so.
+      return c.json(
+        { ok: false, service: "cloudie-neon-api", database: "connected", schema: "incomplete", missing, timestamp },
+        503,
+      );
+    }
+    return c.json({
+      ok: true,
+      service: "cloudie-neon-api",
+      database: "connected",
+      schema: "complete",
+      requiredTables: REQUIRED_SCHEMA_TABLES.length,
+      timestamp,
+    });
+  } catch {
+    return c.json({ ok: false, service: "cloudie-neon-api", database: "connected", schema: "unknown" }, 503);
   }
 };
 

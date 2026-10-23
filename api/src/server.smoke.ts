@@ -289,16 +289,52 @@ test("returns 404 for nonexistent tracking number", async () => {
   }
 });
 
-test("responds on /ready when database is reachable", async () => {
+test("responds on /ready when database and schema are reachable", async () => {
   const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
   const originalQuery = mutablePool.query;
-  mutablePool.query = async () => ({ rows: [{ ok: 1 }], rowCount: 1 });
+  mutablePool.query = async (sql: unknown) => {
+    if (String(sql).includes("information_schema.tables")) {
+      return {
+        rows: [
+          "app_users", "api_sessions", "platform_settings", "tenant_sites",
+          "wallet_ledger", "shipments", "user_notifications", "admin_audit_logs",
+        ].map((table_name) => ({ table_name })),
+        rowCount: 8,
+      };
+    }
+    return { rows: [{ ok: 1 }], rowCount: 1 };
+  };
   try {
     const response = await app.request("/ready");
     assert.equal(response.status, 200);
-    const data = await response.json() as { ok?: boolean; database?: string };
+    const data = await response.json() as { ok?: boolean; database?: string; schema?: string };
     assert.equal(data.ok, true);
     assert.equal(data.database, "connected");
+    assert.equal(data.schema, "complete");
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("refuses readiness when the database answers but the required schema is missing", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (sql: unknown) => {
+    // A fresh or wrong database: ping works, every table query would 500.
+    if (String(sql).includes("information_schema.tables")) {
+      return { rows: [], rowCount: 0 };
+    }
+    return { rows: [{ ok: 1 }], rowCount: 1 };
+  };
+  try {
+    const response = await app.request("/ready");
+    assert.equal(response.status, 503);
+    const data = await response.json() as { ok?: boolean; database?: string; schema?: string; missing?: string[] };
+    assert.equal(data.ok, false);
+    assert.equal(data.database, "connected");
+    assert.equal(data.schema, "incomplete");
+    assert.ok(Array.isArray(data.missing) && data.missing.includes("app_users"));
+    assert.ok(data.missing.includes("api_sessions"));
   } finally {
     mutablePool.query = originalQuery;
   }
