@@ -200,6 +200,69 @@ test("returns 503 on readiness, but stays live, when the configured PostgreSQL d
   }
 });
 
+test("reports a missing database schema as 503 provisioning, not 500, on sign-in", async () => {
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async () => {
+    const error = new Error('relation "app_users" does not exist') as Error & { code: string };
+    error.code = "42P01";
+    throw error;
+  };
+  try {
+    const response = await app.request("/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.205",
+      },
+      body: JSON.stringify({ email: "owner@example.com", password: "long-enough-password" }),
+    });
+    assert.equal(response.status, 503);
+    const data = await response.json() as { error?: string; code?: string };
+    assert.equal(data.code, "schema_missing");
+    assert.match(String(data.error), /database schema is missing or incomplete/);
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("reports a missing database schema as 503 provisioning, not 500, on registration", async () => {
+  const mutablePool = pool as unknown as { connect: () => Promise<unknown> };
+  const originalConnect = mutablePool.connect;
+  mutablePool.connect = async () => {
+    const error = new Error('relation "app_users" does not exist') as Error & { code: string };
+    error.code = "42P01";
+    return {
+      async query() {
+        throw error;
+      },
+      release() {},
+    };
+  };
+  try {
+    const response = await app.request("/api/auth/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "http://localhost:5173",
+        "X-Forwarded-For": "203.0.113.206",
+      },
+      body: JSON.stringify({
+        name: "Provisioning Probe",
+        email: "provisioning-probe@example.com",
+        password: "a-long-enough-password",
+      }),
+    });
+    assert.equal(response.status, 503);
+    const data = await response.json() as { error?: string; code?: string };
+    assert.equal(data.code, "schema_missing");
+    assert.match(String(data.error), /database schema is missing or incomplete/);
+  } finally {
+    mutablePool.connect = originalConnect;
+  }
+});
+
 test("denies a non-admin session from administrator-only user management", async () => {
   const secret = new TextEncoder().encode(process.env.JWT_SECRET);
   const token = await new SignJWT({ email: "user@example.com", role: "user" })

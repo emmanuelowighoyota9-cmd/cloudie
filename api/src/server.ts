@@ -478,6 +478,16 @@ app.post("/api/auth/register", async (c) => {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     if (typeof error === "object" && error !== null && "code" in error && error.code === "23505") return fail(c, 409, "An account with this email already exists");
+    if (isSchemaProvisioningError(error)) {
+      console.error("Registration blocked: database schema missing or incomplete");
+      return c.json(
+        {
+          error: "Service not ready: the database schema is missing or incomplete. Finish the Neon migration, then retry.",
+          code: "schema_missing",
+        },
+        503,
+      );
+    }
     console.error("Registration failed", error instanceof Error ? error.message : "unknown");
     return fail(c, 500, "Unable to create account");
   } finally {
@@ -1294,7 +1304,32 @@ app.get("/api/admin/reports", auth, adminOnly, async (c) => {
 app.get("/api/admin/analytics", auth, adminOnly, (c) => c.redirect("/api/admin/reports", 307));
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
+
+// PostgreSQL error codes that mean the database exists but the application
+// schema does not (or is half-migrated). Those are configuration failures, not
+// server bugs, and saying "internal server error" hides the actual fix.
+const SCHEMA_PROVISIONING_CODES = new Set(["42P01", "42P03", "42703", "42704", "42501"]);
+function isSchemaProvisioningError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    SCHEMA_PROVISIONING_CODES.has(error.code)
+  );
+}
+
 app.onError((error: Error, c) => {
+  if (isSchemaProvisioningError(error)) {
+    console.error("API not ready: database schema missing or incomplete", error.message);
+    return c.json(
+      {
+        error: "Service not ready: the database schema is missing or incomplete. Finish the Neon migration, then retry.",
+        code: "schema_missing",
+      },
+      503,
+    );
+  }
   console.error("Unhandled API error", error.message);
   return c.json({ error: "Internal server error" }, 500);
 });

@@ -65,6 +65,9 @@ export function describeAuthError(err: unknown, mode: "login" | "register"): str
       : "Those registration details aren't valid. Check the fields and try again.";
   }
   const status = (err as { status?: number })?.status;
+  if (status === 503 || /schema is missing|schema_missing|not ready|finish the neon migration|provision/i.test(text)) {
+    return "Cloudie isn't fully set up yet — the service isn't ready. Please try again shortly.";
+  }
   if (status === 500 || status === 502 || status === 503 || status === 504 ||
       /internal server error|service unavailable|server error|bad gateway/i.test(text)) {
     // The API answered, but something behind it failed. Saying so is accurate;
