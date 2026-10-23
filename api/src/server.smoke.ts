@@ -65,6 +65,17 @@ test("adds baseline security headers to ordinary API responses", async () => {
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
+test("allows the configured production frontend origin", async () => {
+  const response = await app.request("/api/auth/logout", {
+    method: "POST",
+    headers: { Origin: "https://cloudie.freebuff.app", "Content-Type": "application/json" },
+    body: "{}",
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://cloudie.freebuff.app");
+});
+
 test("allows a trusted origin for a non-cookie logout request", async () => {
   const response = await app.request("/api/auth/logout", {
     method: "POST",
