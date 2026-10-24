@@ -5,6 +5,8 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { SignJWT, jwtVerify } from "jose";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { promisify } from "node:util";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 
@@ -256,6 +258,139 @@ const REQUIRED_SCHEMA_TABLES = [
   "admin_audit_logs",
 ];
 
+/* ════════════════════════════════════════════════════════════════════
+   STARTUP SCHEMA PROVISIONING
+   ════════════════════════════════════════════════════════════════════
+   A freshly created Neon branch answers `SELECT 1` happily while every
+   table query fails, so "the connection works" is not the same as "the
+   app works". Production was serving auth failures purely because nobody
+   had run the migrations on the database DATABASE_URL points at, so the
+   service now provisions itself on boot under strict rules:
+
+   - only when required tables are genuinely missing, so a healthy
+     database (and its data) is never touched;
+   - never on the disposable migration-test branch, which carries a unique
+     guard-table marker;
+   - through the audited runner in scripts/migrate.mjs, so migrations stay
+     ordered, advisory-locked, checksum-verified and atomic;
+   - failures are logged and surfaced by /ready instead of crash-looping
+     the process, so liveness stays green while readiness tells the truth.
+*/
+export type AutoMigrationStatus = {
+  enabled: boolean;
+  attempted: boolean;
+  ok: boolean;
+  applied: number;
+  error: string | null;
+};
+
+const autoMigration: AutoMigrationStatus = {
+  enabled: process.env.NODE_ENV !== "test" && process.env.CLOUDIE_AUTO_MIGRATE !== "false",
+  attempted: false,
+  ok: false,
+  applied: 0,
+  error: null,
+};
+
+/** Pure decision so the rule is testable without a live database. */
+export function shouldProvisionSchema({
+  enabled,
+  missingTableCount,
+  guardTablePresent,
+}: {
+  enabled: boolean;
+  missingTableCount: number;
+  guardTablePresent: boolean;
+}): boolean {
+  return enabled && missingTableCount > 0 && !guardTablePresent;
+}
+
+export function autoMigrationStatus(): AutoMigrationStatus {
+  return { ...autoMigration };
+}
+
+async function provisionSchemaOnBoot(): Promise<void> {
+  try {
+    const inventory = await pool.query<{ table_name: string; guard: boolean } & QueryResultRow>(
+      `SELECT c.relname AS table_name, false AS guard
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind = 'r'
+         AND c.relname = ANY($1)
+       UNION ALL
+       SELECT NULL AS table_name, true AS guard
+       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relkind = 'r'
+         AND c.relname = 'cloudie_migration_test_guard'`,
+      [REQUIRED_SCHEMA_TABLES],
+    );
+    const present = new Set(inventory.rows.map((row) => row.table_name).filter(Boolean));
+    const guardTablePresent = inventory.rows.some((row) => row.guard === true);
+    // A guard table means this is the disposable branch, so boot must never
+    // start writing tables there.
+    if (!shouldProvisionSchema({
+      enabled: autoMigration.enabled,
+      missingTableCount: REQUIRED_SCHEMA_TABLES.filter((table) => !present.has(table)).length,
+      guardTablePresent,
+    })) {
+      return;
+    }
+
+    autoMigration.attempted = true;
+    const runnerPath = fileURLToPath(new URL("../scripts/migrate.mjs", import.meta.url));
+    // The runner prefers TEST_DATABASE_URL; boot provisioning must only ever
+    // target the application's own database.
+    const { TEST_DATABASE_URL: _ignored, ...inherited } = process.env;
+    const directUrl = process.env.DIRECT_DATABASE_URL;
+    if (!directUrl && /-pooler|pgbouncer=true|pool_mode=/.test(String(databaseUrl))) {
+      // The runner wants a single session for its advisory lock and per-migration
+      // transaction; a transaction-mode pooler can drop that session between
+      // statements. Set DIRECT_DATABASE_URL to the direct Neon string to avoid it.
+      console.warn("Boot schema provisioning is using a pooled DATABASE_URL; set DIRECT_DATABASE_URL for reliable migrations.");
+    }
+    const migrationEnv = {
+      ...inherited,
+      DATABASE_URL: directUrl || databaseUrl,
+    };
+
+    const outcome = await new Promise<{ code: number | null; output: string }>((resolve) => {
+      const child = spawn(process.execPath, [runnerPath], {
+        env: migrationEnv,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let output = "";
+      const collect = (chunk: Buffer) => {
+        output = `${output}${chunk.toString("utf8")}`.slice(-4000);
+      };
+      child.stdout?.on("data", collect);
+      child.stderr?.on("data", collect);
+      const timer = setTimeout(() => child.kill("SIGKILL"), 180_000);
+      child.on("error", (error: Error) => {
+        clearTimeout(timer);
+        resolve({ code: null, output: `${output}\n${error.message}` });
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ code, output });
+      });
+    });
+
+    // The runner prints only versions and counts, never the connection string.
+    console.log(outcome.output.trim().split("\n").slice(-12).join("\n"));
+    const appliedMatch = /Applied: (\d+)/.exec(outcome.output);
+    autoMigration.applied = appliedMatch ? Number(appliedMatch[1]) : 0;
+    autoMigration.ok = outcome.code === 0;
+    autoMigration.error = outcome.code === 0 ? null : "Migration runner failed; see server logs.";
+    if (!autoMigration.ok) {
+      console.error("Boot schema provisioning failed. Run `npm run migrate` with a direct DATABASE_URL.");
+    }
+  } catch (error) {
+    autoMigration.attempted = true;
+    autoMigration.ok = false;
+    autoMigration.error = error instanceof Error ? error.message : "Schema provisioning failed.";
+    console.error("Boot schema provisioning could not run", autoMigration.error);
+  }
+}
+
 const readinessHandler = async (c: Context) => {
   try {
     const result = await pool.query("SELECT 1 AS ok");
@@ -294,6 +429,7 @@ const readinessHandler = async (c: Context) => {
           missing,
           publicTableCount,
           migrationGuardPresent,
+          autoMigration: autoMigrationStatus(),
           timestamp,
         },
         503,
@@ -1339,6 +1475,10 @@ app.onError((error: Error, c) => {
 const server = process.env.NODE_ENV === "test" ? undefined : serve({ fetch: app.fetch, port }, (info) => {
   console.log(`Cloudie Neon API listening on ${info.port}`);
 });
+
+// Bind the port first (liveness), then bring the schema up in the background so
+// a brand-new database is usable without a manual migration step.
+if (server && autoMigration.enabled) void provisionSchemaOnBoot();
 
 let shuttingDown = false;
 const shutdown = async () => {

@@ -18,7 +18,18 @@ process.env.DATABASE_URL = "postgres://cloudie_test:cloudie_test@127.0.0.1:5432/
 process.env.JWT_SECRET = "test-only-secret-that-is-longer-than-thirty-two-bytes";
 process.env.CORS_ORIGINS = "http://localhost:5173";
 
-const { app, pool } = await import("./server.js");
+const { app, pool, shouldProvisionSchema } = await import("./server.js");
+
+test("boot provisioning only touches a database that is missing required tables", () => {
+  // Brand-new database behind a working connection string: provision it.
+  assert.equal(shouldProvisionSchema({ enabled: true, missingTableCount: 8, guardTablePresent: false }), true);
+  // Healthy database: never rewrite or migrate it on boot.
+  assert.equal(shouldProvisionSchema({ enabled: true, missingTableCount: 0, guardTablePresent: false }), false);
+  // Disposable migration-test branch: never write there, even though it is bare.
+  assert.equal(shouldProvisionSchema({ enabled: true, missingTableCount: 8, guardTablePresent: true }), false);
+  // Operator disabled it on purpose.
+  assert.equal(shouldProvisionSchema({ enabled: false, missingTableCount: 8, guardTablePresent: false }), false);
+});
 
 test("rejects unsafe requests from an untrusted browser origin", async () => {
   const response = await app.request("/api/auth/logout", {
