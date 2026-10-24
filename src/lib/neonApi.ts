@@ -49,6 +49,25 @@ function readCsrfCookie() {
   return entry ? decodeURIComponent(entry.slice(prefix.length)) : null;
 }
 
+/**
+ * The Neon API protects cookie-authenticated unsafe requests with a
+ * double-submit token: the value of the readable `cloudie_csrf` cookie must be
+ * echoed in the `X-CSRF-Token` header. Sign-out is the one nav action that
+ * calls an unsafe endpoint, so it must always carry this header.
+ */
+export const CSRF_HEADER = "X-CSRF-Token";
+
+/** Current double-submit token, or null before `GET /api/auth/csrf` has run. */
+export function getCsrfToken() {
+  return readCsrfCookie();
+}
+
+/** Fetches the CSRF cookie when the browser does not have one yet. */
+export async function ensureCsrfToken() {
+  await ensureCsrfCookie();
+  return readCsrfCookie();
+}
+
 export function getNeonToken() {
   try { return window.sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
