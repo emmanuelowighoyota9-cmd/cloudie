@@ -1,15 +1,37 @@
-> **Unverified.** The claims below have not been confirmed against the live  
-> Neon database. As of this writing, `neondb` on branch `br-winter-snow-b5spd77h`  
-> reports zero application tables. The migration history in this file is  
-> retained for audit only. Treat every "applied" marker below as historical,  
-> not current, until `scripts/neon-diagnose.sh` has been run and its output  
-> committed alongside this file.
+> **Updated 2026-10-24.** The deployed API's database is now schema-complete and
+> the migrations were applied by the repository runner during the API's boot
+> (see "Production provisioning — 2026-10-24" below). Everything below that
+> section is retained as audit history and describes an earlier state.
 
 # Neon Migration Status & Inventory
 
-## Current verification status — NOT CONFIRMED
+## Current verification status — PRODUCTION SCHEMA COMPLETE
 
-The migrations in this directory have not been confirmed to apply cleanly against the live Neon database. Run `scripts/neon-diagnose.sh` to establish the actual state before treating this file as a record of applied migrations.
+The database behind `https://cloudie-glaa.onrender.com` now answers `GET /ready`
+with `200 {"schema":"complete","requiredTables":8}`. Registration, sign-in,
+session lookup and admin authorization were exercised against that deployment
+(read-only except for one controlled QA account).
+
+## Production provisioning — 2026-10-24
+
+Before this change, the production service answered `GET /ready` with `503`,
+`publicTableCount: 0`, `migrationGuardPresent: false` — a reachable database with
+no application tables, which is why every sign-in and registration failed.
+
+- Commit `0b7b1ca` added boot-time schema provisioning to `api/src/server.ts`:
+  when required tables are missing, the API runs `api/scripts/migrate.mjs` once
+  in the background, using the audited runner (ordering, advisory lock, checksum
+  validation, one transaction per migration).
+- It never runs when the required schema is already present, and it refuses a
+  database carrying the disposable branch's `cloudie_migration_test_guard` table.
+- A pooled `DATABASE_URL` is tolerated with a warning; `DIRECT_DATABASE_URL` is
+  the recommended source for migrations.
+- `GET /ready` reports the attempt under `autoMigration` whenever the schema is
+  still incomplete, so a failed provisioning is visible without reading logs.
+- Verified after deploy: `GET /ready` → `200 schema complete`; `POST /api/auth/register` → `201`; `POST /api/auth/login` → `200`; `GET /api/me` with the session cookie → `200`; `GET /api/admin/users` as an ordinary user → `403`; wrong password → `401`; duplicate registration → `409`.
+- The exact branch of the deployed `DATABASE_URL` still cannot be confirmed from
+  outside without credentials. Check it in the Render dashboard; the guard table
+  check above is what prevents the disposable branch from being provisioned.
 
 ## Unverified historical claim (audit-only)
 
