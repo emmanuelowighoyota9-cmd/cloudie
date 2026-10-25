@@ -297,75 +297,87 @@ function normalizeCatalogProduct(row: Record<string, unknown>, idx = 0) {
  * render as `undefined.toLocaleString()`.
  */
 function buildAdminDashboard(res: Record<string, unknown>) {
-  const num = (...keys: string[]) => {
-    for (const key of keys) {
-      const value = Number(res[key] ?? 0);
-      if (Number.isFinite(value) && value !== 0) return value;
-    }
-    const first = Number(res[keys[0]] ?? 0);
-    return Number.isFinite(first) ? first : 0;
+  /** A finite number, or `null` when the API reported the metric unavailable. */
+  const numOrNull = (key: string): number | null => {
+    const value = res[key];
+    // An explicit `null` means the API reported this metric unavailable (its
+    // source table is missing or the count failed). Leave it null so the card
+    // renders "unavailable" rather than a fabricated zero.
+    if (value === null) return null;
+    if (value === undefined) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   };
+  /** A count that must always be a number because its source table always exists. */
+  const count = (key: string, fallback = 0): number => numOrNull(key) ?? fallback;
 
-  const totalUsers = num("totalUsers", "users");
-  const activeUsers = num("activeUsers", "totalUsers", "users");
-  const suspendedUsers = num("suspendedUsers");
-  const totalShipments = num("totalShipments", "shipments");
-  const pendingShipments = num("pendingShipments");
-  const totalOrders = num("totalOrders", "orders");
-  const totalTenants = num("tenants");
+  const totalUsers = count("totalUsers", count("users"));
 
   return {
     users: {
       total: totalUsers,
-      active: activeUsers,
-      suspended: suspendedUsers,
-      terminated: num("terminatedUsers"),
-      admins: num("adminUsers", "admins"),
+      // Active is counted as "not suspended and not terminated" by the API. It
+      // is never inferred from the total: an admin must never see the whole
+      // user base described as active.
+      active: count("activeUsers"),
+      suspended: count("suspendedUsers"),
+      terminated: count("terminatedUsers"),
+      admins: count("adminUsers", count("admins")),
     },
+    // NGN ledger movement, in naira. These are money values and are never
+    // mixed with, or displayed as, points.
     points: {
-      minted: num("walletBalanceNgn", "pointsIssued"),
-      burned: num("pointsRedeemed"),
-      velocity24h: num("velocity24h"),
-      mintedCount24h: num("mintedCount24h"),
-      debited24h: num("debited24h"),
-      debitedCount24h: num("debitedCount24h"),
+      minted: count("walletBalanceNgn"),
+      burned: 0,
+      velocity24h: 0,
+      mintedCount24h: 0,
+      debited24h: 0,
+      debitedCount24h: 0,
+      ledgerEvents24h: count("ledgerEvents24h"),
+      outstanding: count("pointsOutstanding"),
     },
     vendors: {
-      total: num("vendors"),
-      pending: num("pendingVendors"),
-      approved: num("approvedVendors"),
-      suspended: num("suspendedVendors"),
+      total: count("vendors"),
+      pending: count("pendingVendors"),
+      approved: count("approvedVendors"),
+      suspended: count("suspendedVendors"),
     },
     tenants: {
-      total: totalTenants,
-      active: num("activeTenants") || totalTenants,
-      locked: num("lockedTenants"),
+      total: count("tenants"),
+      active: count("tenants"),
+      locked: count("lockedTenants"),
     },
     shipments: {
-      total: totalShipments,
-      active: pendingShipments || totalShipments,
-      delivered: num("deliveredShipments"),
+      total: count("totalShipments", count("shipments")),
+      active: count("pendingShipments"),
+      delivered: count("deliveredShipments"),
     },
-    documents: { total: num("documents"), last24h: num("documents24h") },
+    documents: { total: count("documents"), last24h: count("documents24h") },
     marketplace: {
-      orders: totalOrders,
-      orders24h: num("orders24h"),
-      escrowPending: num("pendingOrders", "escrowPending"),
+      orders: count("totalOrders", count("orders")),
+      orders24h: 0,
+      escrowPending: count("escrowPending"),
     },
     disputes: {
-      open: num("openDisputes"),
-      underReview: num("disputesUnderReview"),
-      resolved: num("resolvedDisputes"),
+      open: count("disputedOrders", count("openDisputes")),
+      underReview: 0,
+      resolved: 0,
     },
     kyc: {
-      pending: num("pendingKyc"),
-      underReview: num("kycUnderReview"),
-      verified: num("verifiedKyc"),
-      rejected: num("rejectedKyc"),
-      resubmissionRequired: num("kycResubmissionRequired"),
+      pending: count("pendingKyc"),
+      underReview: count("kycUnderReview"),
+      verified: count("verifiedKyc"),
+      rejected: count("rejectedKyc"),
+      resubmissionRequired: 0,
     },
-    moderation: { openFlags: num("openFlags") },
-    activity: { newUsers7d: num("newUsers7d", "recentSignups"), ledger7d: num("ledger7d", "recentAuditCount") },
+    payments: {
+      completed: count("paymentsCompleted"),
+      failed: count("paymentsFailed"),
+      pending: count("paymentsPending"),
+      refunded: count("paymentsRefunded"),
+    },
+    moderation: { openFlags: 0 },
+    activity: { newUsers7d: count("newUsers7d"), ledger7d: count("ledgerEvents24h") },
   };
 }
 
@@ -1450,10 +1462,18 @@ export function useMutation(mutationRef: unknown) {
       });
     } else if (fn === "wallet:adminAdjust") {
       const userId = String(payload.userId ?? payload.id ?? "");
-      const delta = Number(payload.amountNgn ?? payload.amount ?? payload.points ?? 0);
+      // NGN and points are separate units: `amountNgn` (or the legacy `amount`)
+      // is the money delta and `pointsDelta` is the points delta. A bare
+      // `points` value is points, never naira — it must not be coerced into an
+      // NGN adjustment.
+      const ngnDelta = Number(payload.amountNgn ?? payload.amount ?? 0);
+      const pointsDelta = Number(payload.pointsDelta ?? payload.points_delta ?? 0);
+      const idempotencyKey = String(payload.idempotencyKey ?? `admin-adjust-${userId}-${Date.now()}`);
       result = await neonApi.adminAdjustWallet(userId, {
-        amount_ngn: delta,
+        amount_ngn: ngnDelta,
+        points_delta: pointsDelta,
         description: String(payload.reason ?? payload.description ?? "Admin wallet adjustment"),
+        idempotency_key: idempotencyKey,
       });
     } else if (
       fn === "adminApi:upsertSetting" ||

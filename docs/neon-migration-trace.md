@@ -15,12 +15,12 @@ Scope and meaning:
 | Metric | Value |
 | --- | --- |
 | Frontend files importing Convex | 109 |
-| Distinct Convex functions referenced | 429 |
+| Distinct Convex functions referenced | 432 |
 | Convex modules referenced | 53 |
 | …of which have ≥1 API route | 10 |
 | …with **no** API route at all | 43 |
-| Referenced functions in modules with no API route | 255 |
-| API routes in `api/src/server.ts` | 66 |
+| Referenced functions in modules with no API route | 256 |
+| API routes in `api/src/server.ts` | 67 |
 
 ## Modules with no matching API route (migration not started for this domain)
 
@@ -95,7 +95,7 @@ Scope and meaning:
 - `admin:listAdministrators` ← `src/pages/AdminAdministrators.tsx`, `src/pages/AdminRisk.tsx`
 - `admin:listUsers` ← `src/pages/AdminTransactions.tsx`
 - `admin:savePaymentProviderKey` ← `src/pages/AdminPaymentProviders.tsx`
-- `admin:suspendUser` ← `src/pages/AdminUserDetail.tsx`
+- `admin:suspendUser` ← `src/pages/AdminUserDetail.tsx`, `src/pages/AdminUsers.tsx`
 
 ### `adminApi` — has API routes
 
@@ -331,7 +331,7 @@ Scope and meaning:
 - `pointMarket:createPackage` ← `src/pages/vendor/VendorDashboard.tsx`
 - `pointMarket:deletePackage` ← `src/pages/vendor/VendorDashboard.tsx`
 - `pointMarket:fulfillOrder` ← `src/pages/marketplace/PointOrderDetail.tsx`
-- `pointMarket:getMyOrder` ← `src/pages/marketplace/PointOrderDetail.tsx`
+- `pointMarket:getMyOrder` ← `src/pages/marketplace/PointMarketplace.tsx`, `src/pages/marketplace/PointOrderDetail.tsx`
 - `pointMarket:listPackages` ← `src/pages/marketplace/PointMarketplace.tsx`
 - `pointMarket:raiseDispute` ← `src/pages/marketplace/PointOrderDetail.tsx`
 - `pointMarket:setPackageActive` ← `src/pages/vendor/VendorDashboard.tsx`
@@ -569,7 +569,7 @@ Scope and meaning:
 
 - `wallet:adminAdjust` ← `src/pages/AdminUserDetail.tsx`
 - `wallet:getAdminLedger` ← `src/pages/AdminRisk.tsx`, `src/pages/AdminTransactions.tsx`
-- `wallet:getBalance` ← `src/components/Header.tsx`, `src/pages/BuyPoints.tsx`, `src/pages/Dashboard.tsx`, `src/pages/EmailComposer.tsx`, `src/pages/ImageStudio.tsx`, `src/pages/Marketplace.tsx`, `src/pages/NewShipment.tsx`, `src/pages/Personal.tsx`, `src/pages/ShipmentDetail.tsx`, `src/pages/VtuAirtime.tsx`, `src/pages/VtuBills.tsx`, `src/pages/Wallet.tsx`
+- `wallet:getBalance` ← `src/components/Header.tsx`, `src/pages/BuyPoints.tsx`, `src/pages/Dashboard.tsx`, `src/pages/EmailComposer.tsx`, `src/pages/ImageStudio.tsx`, `src/pages/Marketplace.tsx`, `src/pages/NewShipment.tsx`, `src/pages/Personal.tsx`, `src/pages/ShipmentDetail.tsx`, `src/pages/VtuAirtime.tsx`, `src/pages/VtuBills.tsx`, `src/pages/Wallet.tsx`, `src/pages/marketplace/PointMarketplace.tsx`
 - `wallet:getLedger` ← `src/pages/Dashboard.tsx`, `src/pages/Ledger.tsx`, `src/pages/Personal.tsx`, `src/pages/Transactions.tsx`, `src/pages/Wallet.tsx`
 
 ## API route inventory (`api/src/server.ts`)
@@ -586,6 +586,7 @@ Scope and meaning:
 - `GET /api/catalog`
 - `GET /api/documents`
 - `GET /api/health`
+- `GET /api/marketplace/packages`
 - `GET /api/me`
 - `GET /api/notifications`
 - `GET /api/orders`
@@ -628,10 +629,10 @@ Scope and meaning:
 - `PATCH /api/notifications/:id/read`
 - `PATCH /api/profile`
 - `PATCH /api/shipments/:id`
-- `POST /api/admin/bootstrap`
 - `POST /api/admin/catalog`
 - `POST /api/admin/settings`
 - `POST /api/admin/users/:id/wallet-adjust`
+- `POST /api/auth/bootstrap-admin`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `POST /api/auth/register`

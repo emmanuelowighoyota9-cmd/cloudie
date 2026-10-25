@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { applyWalletAdjustment, parseWalletAdjustInput } from "./walletAdjust.js";
 
 const scrypt = promisify(scryptCallback);
 const port = Number(process.env.PORT ?? 8787);
@@ -1273,34 +1274,36 @@ app.patch("/api/admin/users/:id", auth, adminOnly, async (c) => {
   return c.json({ user: result.rows[0] });
 });
 
+/**
+ * POST /api/admin/users/:id/wallet-adjust
+ *
+ * Body: { amount_ngn?: number, points_delta?: number, description?: string, idempotency_key?: string }
+ *
+ * NGN and points are independent: a NGN delta never touches points and vice
+ * versa. All validation, locking, idempotency and in-transaction audit
+ * behaviour lives in ./walletAdjust.ts so it can be tested without a database.
+ */
 app.post("/api/admin/users/:id/wallet-adjust", auth, adminOnly, async (c) => {
   const targetId = c.req.param("id");
-  const raw = await c.req.json().catch(() => ({})) as Record<string, unknown>;
-  const delta = Number(raw.amount_ngn ?? raw.amountNgn ?? raw.amount ?? 0);
-  const description = String(raw.description ?? raw.reason ?? "Admin wallet adjustment").trim();
-  if (!Number.isFinite(delta) || delta === 0) return fail(c, 400, "Non-zero amount required");
+  const raw = await c.req.json().catch(() => ({})) as unknown;
+  const parsed = parseWalletAdjustInput(raw);
+  if (!parsed.ok) return fail(c, 400, parsed.message);
+
   const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    const updated = await client.query(
-      "UPDATE app_users SET wallet_balance_ngn = GREATEST(0, wallet_balance_ngn + $1), points_balance = GREATEST(0, points_balance + $1), updated_at=NOW() WHERE id=$2 RETURNING wallet_balance_ngn",
-      [delta, targetId],
-    );
-    if (!updated.rows[0]) {
-      await client.query("ROLLBACK");
-      return fail(c, 404, "User not found");
+    const outcome = await applyWalletAdjustment(client, {
+      actorId: c.get("user").id,
+      targetId,
+      input: parsed.input,
+    });
+    if (outcome.ok) {
+      return c.json({
+        balance_after_ngn: outcome.balanceAfterNgn,
+        points_balance: outcome.pointsAfter,
+        replayed: outcome.replayed,
+      });
     }
-    const balanceAfter = Number(updated.rows[0].wallet_balance_ngn);
-    await client.query(
-      "INSERT INTO wallet_ledger (user_id, amount_ngn, balance_after_ngn, description, transaction_type) VALUES ($1, $2, $3, $4, 'admin_adjust')",
-      [targetId, delta, balanceAfter, description],
-    );
-    await client.query("COMMIT");
-    await recordAuditLog(c.get("user").id, "wallet.adjust", "user", targetId, { delta, balanceAfter, description });
-    return c.json({ balance_after_ngn: balanceAfter });
-  } catch {
-    await client.query("ROLLBACK").catch(() => undefined);
-    return fail(c, 500, "Failed to adjust wallet");
+    return fail(c, outcome.status, outcome.message);
   } finally {
     client.release();
   }
@@ -1409,31 +1412,126 @@ app.post("/api/admin/settings", auth, adminOnly, async (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * GET /api/admin/reports — dashboard metrics for the admin command center.
+ *
+ * Every number is counted from the table that actually defines it. The old
+ * version reported total users as the active-user count, hard-coded suspended
+ * users to zero and fell back to an empty object on failure, which made a dead
+ * or partial database indistinguishable from a healthy empty one.
+ *
+ * Each metric is independently guarded: a table that is missing (migration not
+ * yet applied) reports `null`, never `0`, so the frontend can render an
+ * "unavailable" state instead of presenting a fabricated zero as real data.
+ * The overall request only fails when the users table itself is unreachable.
+ */
 app.get("/api/admin/reports", auth, adminOnly, async (c) => {
-  const [usersCount, shipmentsCount, ordersCount, pendingShipments, tenantsCount, walletSum] = await Promise.all([
-    pool.query("SELECT COUNT(*) AS count FROM app_users"),
-    pool.query("SELECT COUNT(*) AS count FROM shipments"),
-    pool.query("SELECT COUNT(*) AS count FROM commerce_orders"),
-    pool.query("SELECT COUNT(*) AS count FROM shipments WHERE status='pending'"),
-    pool.query("SELECT COUNT(*) AS count FROM tenant_sites").catch(() => ({ rows: [{ count: 0 }] })),
-    pool.query("SELECT COALESCE(SUM(wallet_balance_ngn), 0) AS total FROM app_users").catch(() => ({ rows: [{ total: 0 }] })),
+  // Runs `sql`, returning `null` when the underlying table is absent or the
+  // query errors. This is a per-metric guard, not a way to hide failures: the
+  // caller receives `null` and must show the metric as unavailable.
+  const optional = async (sql: string, params: unknown[] = []): Promise<Record<string, unknown>[] | null> => {
+    try {
+      const result = await pool.query(sql, params);
+      return result.rows;
+    } catch {
+      return null;
+    }
+  };
+  const count = (rows: Record<string, unknown>[] | null): number | null =>
+    rows && rows[0] ? Number(rows[0].count ?? 0) : null;
+
+  // Users is the one table the platform cannot run without, so its failure is
+  // a real 503 rather than a masked zero.
+  let userRows: Record<string, unknown>[];
+  try {
+    userRows = (await pool.query(
+      `SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE NOT is_suspended AND NOT is_terminated) AS active,
+              COUNT(*) FILTER (WHERE is_suspended) AS suspended,
+              COUNT(*) FILTER (WHERE is_terminated) AS terminated,
+              COUNT(*) FILTER (WHERE role = 'admin') AS admins,
+              COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_7d,
+              COALESCE(SUM(wallet_balance_ngn), 0) AS wallet_ngn,
+              COALESCE(SUM(points_balance), 0) AS points
+       FROM app_users`,
+    )).rows;
+  } catch {
+    return fail(c, 503, "Reporting database is unavailable");
+  }
+
+  const users = userRows[0] ?? {};
+  const totalUsers = Number(users.total ?? 0);
+
+  const [
+    vendors, pendingVendors, approvedVendors, suspendedVendors,
+    tenants, lockedTenants,
+    shipments, pendingShipments, deliveredShipments,
+    orders, escrowOrders, disputedOrders,
+    kycPending, kycUnderReview, kycApproved, kycRejected,
+    documents, documents24h,
+    paymentsCompleted, paymentsFailed, paymentsPending, paymentsRefunded,
+    ledger24h,
+  ] = await Promise.all([
+    optional("SELECT COUNT(*) AS count FROM point_market_vendors"),
+    optional("SELECT COUNT(*) AS count FROM point_market_vendors WHERE status = 'pending'"),
+    optional("SELECT COUNT(*) AS count FROM point_market_vendors WHERE status = 'approved'"),
+    optional("SELECT COUNT(*) AS count FROM point_market_vendors WHERE status = 'suspended'"),
+    optional("SELECT COUNT(*) AS count FROM tenant_sites"),
+    optional("SELECT COUNT(*) AS count FROM tenant_sites WHERE lifecycle_status <> 'active'"),
+    optional("SELECT COUNT(*) AS count FROM shipments"),
+    optional("SELECT COUNT(*) AS count FROM shipments WHERE status = 'pending'"),
+    optional("SELECT COUNT(*) AS count FROM shipments WHERE status = 'delivered'"),
+    optional("SELECT COUNT(*) AS count FROM commerce_orders"),
+    optional("SELECT COUNT(*) AS count FROM commerce_orders WHERE status IN ('pending','paid','escrow')"),
+    optional("SELECT COUNT(*) AS count FROM commerce_orders WHERE status = 'disputed'"),
+    optional("SELECT COUNT(*) AS count FROM kyc_records WHERE status = 'submitted'"),
+    optional("SELECT COUNT(*) AS count FROM kyc_records WHERE status = 'under_review'"),
+    optional("SELECT COUNT(*) AS count FROM kyc_records WHERE status = 'approved'"),
+    optional("SELECT COUNT(*) AS count FROM kyc_records WHERE status = 'rejected'"),
+    optional("SELECT COUNT(*) AS count FROM user_documents"),
+    optional("SELECT COUNT(*) AS count FROM user_documents WHERE created_at > NOW() - INTERVAL '24 hours'"),
+    optional("SELECT COUNT(*) AS count FROM payment_records WHERE status = 'completed'"),
+    optional("SELECT COUNT(*) AS count FROM payment_records WHERE status = 'failed'"),
+    optional("SELECT COUNT(*) AS count FROM payment_records WHERE status = 'pending'"),
+    optional("SELECT COUNT(*) AS count FROM payment_records WHERE status = 'refunded'"),
+    optional("SELECT COUNT(*) AS count FROM wallet_ledger WHERE created_at > NOW() - INTERVAL '24 hours'"),
   ]);
-  const totalUsers = Number(usersCount.rows[0]?.count ?? 0);
-  const totalShipments = Number(shipmentsCount.rows[0]?.count ?? 0);
-  const totalOrders = Number(ordersCount.rows[0]?.count ?? 0);
-  const walletBalanceNgn = Number(walletSum.rows[0]?.total ?? 0);
+
   return c.json({
     totalUsers,
     users: totalUsers,
-    activeUsers: totalUsers,
-    suspendedUsers: 0,
-    totalShipments,
-    shipments: totalShipments,
-    totalOrders,
-    orders: totalOrders,
-    pendingShipments: Number(pendingShipments.rows[0]?.count ?? 0),
-    tenants: Number(tenantsCount.rows[0]?.count ?? 0),
-    walletBalanceNgn,
+    activeUsers: Number(users.active ?? 0),
+    suspendedUsers: Number(users.suspended ?? 0),
+    terminatedUsers: Number(users.terminated ?? 0),
+    adminUsers: Number(users.admins ?? 0),
+    newUsers7d: Number(users.new_7d ?? 0),
+    walletBalanceNgn: Number(users.wallet_ngn ?? 0),
+    pointsOutstanding: Number(users.points ?? 0),
+    vendors: count(vendors),
+    pendingVendors: count(pendingVendors),
+    approvedVendors: count(approvedVendors),
+    suspendedVendors: count(suspendedVendors),
+    tenants: count(tenants),
+    lockedTenants: count(lockedTenants),
+    totalShipments: count(shipments),
+    shipments: count(shipments),
+    pendingShipments: count(pendingShipments),
+    deliveredShipments: count(deliveredShipments),
+    totalOrders: count(orders),
+    orders: count(orders),
+    escrowPending: count(escrowOrders),
+    disputedOrders: count(disputedOrders),
+    pendingKyc: count(kycPending),
+    kycUnderReview: count(kycUnderReview),
+    verifiedKyc: count(kycApproved),
+    rejectedKyc: count(kycRejected),
+    documents: count(documents),
+    documents24h: count(documents24h),
+    paymentsCompleted: count(paymentsCompleted),
+    paymentsFailed: count(paymentsFailed),
+    paymentsPending: count(paymentsPending),
+    paymentsRefunded: count(paymentsRefunded),
+    ledgerEvents24h: count(ledger24h),
   });
 });
 

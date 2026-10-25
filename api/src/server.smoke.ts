@@ -722,3 +722,182 @@ test("returns a safe unavailable response when points marketplace tables are not
     mutablePool.query = originalQuery;
   }
 });
+
+/* ── Dashboard metric accuracy ───────────────────────────────────────────── */
+
+test("admin reports count active and suspended users instead of fabricating them", async () => {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  const token = await new SignJWT({ email: "admin@example.com", role: "admin" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("admin-user")
+    .setJti("reports-session")
+    .setIssuedAt()
+    .setIssuer("cloudie-neon-api")
+    .setAudience("cloudie-web")
+    .setExpirationTime("5m")
+    .sign(secret);
+
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = String(args[0] ?? "");
+    if (sql.includes("FROM api_sessions")) return { rows: [{ id: "reports-session" }], rowCount: 1 };
+    if (sql.includes("FROM app_users WHERE id")) {
+      return {
+        rows: [{ id: "admin-user", email: "admin@example.com", name: "Admin", role: "admin", is_suspended: false, is_terminated: false }],
+        rowCount: 1,
+      };
+    }
+    if (sql.includes("COUNT(*) FILTER (WHERE NOT is_suspended")) {
+      // 40 users: 25 active, 11 suspended, 4 terminated.
+      return {
+        rows: [{ total: "40", active: "25", suspended: "11", terminated: "4", admins: "2", new_7d: "3", wallet_ngn: "1500000", points: "8200" }],
+        rowCount: 1,
+      };
+    }
+    if (sql.includes("FROM point_market_vendors WHERE status = 'pending'")) return { rows: [{ count: "2" }], rowCount: 1 };
+    if (sql.includes("FROM point_market_vendors")) return { rows: [{ count: "9" }], rowCount: 1 };
+    if (sql.includes("FROM shipments WHERE status = 'delivered'")) return { rows: [{ count: "5" }], rowCount: 1 };
+    if (sql.includes("FROM shipments WHERE status = 'pending'")) return { rows: [{ count: "3" }], rowCount: 1 };
+    if (sql.includes("FROM shipments")) return { rows: [{ count: "12" }], rowCount: 1 };
+    if (sql.includes("FROM commerce_orders WHERE status IN")) return { rows: [{ count: "4" }], rowCount: 1 };
+    if (sql.includes("FROM commerce_orders")) return { rows: [{ count: "7" }], rowCount: 1 };
+    if (sql.includes("FROM kyc_records WHERE status = 'submitted'")) return { rows: [{ count: "6" }], rowCount: 1 };
+    if (sql.includes("FROM kyc_records")) return { rows: [{ count: "0" }], rowCount: 1 };
+    // Simulate the points marketplace tables not existing yet on this branch.
+    if (sql.includes("FROM payment_records")) throw new Error("simulated missing table");
+    if (sql.includes("FROM tenant_sites")) return { rows: [{ count: "8" }], rowCount: 1 };
+    if (sql.includes("FROM user_documents")) return { rows: [{ count: "0" }], rowCount: 1 };
+    if (sql.includes("FROM wallet_ledger")) return { rows: [{ count: "14" }], rowCount: 1 };
+    throw new Error(`Unexpected query: ${sql}`);
+  };
+
+  try {
+    const response = await app.request("/api/admin/reports", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as Record<string, number | null>;
+    assert.equal(body.totalUsers, 40);
+    assert.equal(body.activeUsers, 25, "active users must not equal the total");
+    assert.equal(body.suspendedUsers, 11, "suspended users must be counted, not zeroed");
+    assert.equal(body.terminatedUsers, 4);
+    assert.equal(body.adminUsers, 2);
+    assert.equal(body.vendors, 9);
+    assert.equal(body.pendingVendors, 2);
+    assert.equal(body.tenants, 8);
+    assert.equal(body.totalShipments, 12);
+    assert.equal(body.pendingShipments, 3);
+    assert.equal(body.deliveredShipments, 5);
+    assert.equal(body.totalOrders, 7);
+    assert.equal(body.escrowPending, 4);
+    assert.equal(body.pendingKyc, 6);
+    assert.equal(body.ledgerEvents24h, 14);
+    assert.equal(
+      body.paymentsCompleted,
+      null,
+      "a metric whose table is unavailable must be null, never a fabricated zero",
+    );
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+/* ── P0: administrative wallet adjustment ───────────────────────────────── */
+
+test("non-administrators cannot reach the wallet adjustment endpoint", async () => {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  const token = await new SignJWT({ email: "user@example.com", role: "user" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("test-user")
+    .setJti("wallet-session")
+    .setIssuedAt()
+    .setIssuer("cloudie-neon-api")
+    .setAudience("cloudie-web")
+    .setExpirationTime("5m")
+    .sign(secret);
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = String(args[0] ?? "");
+    if (sql.includes("FROM api_sessions")) return { rows: [{ id: "wallet-session" }], rowCount: 1 };
+    if (sql.includes("FROM app_users")) {
+      return {
+        rows: [{
+          id: "test-user",
+          email: "user@example.com",
+          name: "Test User",
+          role: "user",
+          is_suspended: false,
+          is_terminated: false,
+        }],
+        rowCount: 1,
+      };
+    }
+    throw new Error("Unexpected database query in wallet authorization test");
+  };
+  try {
+    const response = await app.request("/api/admin/users/some-user/wallet-adjust", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ amount_ngn: -5000 }),
+    });
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: "Administrator access required" });
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("wallet adjustment rejects malformed amounts before touching the database", async () => {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  const token = await new SignJWT({ email: "admin@example.com", role: "admin" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("admin-user")
+    .setJti("wallet-admin-session")
+    .setIssuedAt()
+    .setIssuer("cloudie-neon-api")
+    .setAudience("cloudie-web")
+    .setExpirationTime("5m")
+    .sign(secret);
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = String(args[0] ?? "");
+    if (sql.includes("FROM api_sessions")) return { rows: [{ id: "wallet-admin-session" }], rowCount: 1 };
+    if (sql.includes("FROM app_users")) {
+      return {
+        rows: [{
+          id: "admin-user",
+          email: "admin@example.com",
+          name: "Admin",
+          role: "admin",
+          is_suspended: false,
+          is_terminated: false,
+        }],
+        rowCount: 1,
+      };
+    }
+    throw new Error("Database must not be reached for a rejected amount");
+  };
+  try {
+    const zero = await app.request("/api/admin/users/some-user/wallet-adjust", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ amount_ngn: 0 }),
+    });
+    assert.equal(zero.status, 400);
+
+    const absurd = await app.request("/api/admin/users/some-user/wallet-adjust", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ amount_ngn: -1e12 }),
+    });
+    assert.equal(absurd.status, 400);
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});

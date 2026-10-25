@@ -87,3 +87,52 @@ describe("admin dashboard shim", () => {
     expect((await screen.findByTestId("risk")).textContent).toBe("0 alerts, 0 scanned");
   });
 });
+
+/**
+ * The reports endpoint used to fabricate metrics: it reported total users as
+ * the active count and hard-coded suspended users to zero. The API now counts
+ * each metric from its own predicate, so an admin must never see the whole user
+ * base described as active, and a real suspended count must not be masked.
+ */
+describe("admin dashboard metric accuracy", () => {
+  test("active is never inferred from the total user count", async () => {
+    const previous = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          totalUsers: 40,
+          activeUsers: 25,
+          suspendedUsers: 11,
+          terminatedUsers: 4,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )) as unknown as typeof fetch;
+    try {
+      render(<DashboardProbe />);
+      expect((await screen.findByTestId("users-total")).textContent).toBe("40");
+      expect(screen.getByTestId("users-active").textContent).toBe("25");
+      expect(screen.getByTestId("users-suspended").textContent).toBe("11");
+    } finally {
+      globalThis.fetch = previous;
+      cleanup();
+    }
+  });
+
+  test("a missing active count does not fall back to the total", async () => {
+    const previous = globalThis.fetch;
+    // Legacy payload: only a total. Active must not silently become the total.
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ totalUsers: 40 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as unknown as typeof fetch;
+    try {
+      render(<DashboardProbe />);
+      expect((await screen.findByTestId("users-total")).textContent).toBe("40");
+      expect(screen.getByTestId("users-active").textContent).toBe("0");
+    } finally {
+      globalThis.fetch = previous;
+      cleanup();
+    }
+  });
+});
