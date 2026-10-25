@@ -289,6 +289,86 @@ function normalizeCatalogProduct(row: Record<string, unknown>, idx = 0) {
   };
 }
 
+/**
+ * `/api/admin/reports` returns a flat counter payload, but the admin screens are
+ * written against `adminApi.adminDashboard`'s nested shape (`users.active`,
+ * `points.velocity24h`, `kyc.pending`, …). Map one onto the other here so every
+ * field a screen formats is always a number — an absent field used to reach the
+ * render as `undefined.toLocaleString()`.
+ */
+function buildAdminDashboard(res: Record<string, unknown>) {
+  const num = (...keys: string[]) => {
+    for (const key of keys) {
+      const value = Number(res[key] ?? 0);
+      if (Number.isFinite(value) && value !== 0) return value;
+    }
+    const first = Number(res[keys[0]] ?? 0);
+    return Number.isFinite(first) ? first : 0;
+  };
+
+  const totalUsers = num("totalUsers", "users");
+  const activeUsers = num("activeUsers", "totalUsers", "users");
+  const suspendedUsers = num("suspendedUsers");
+  const totalShipments = num("totalShipments", "shipments");
+  const pendingShipments = num("pendingShipments");
+  const totalOrders = num("totalOrders", "orders");
+  const totalTenants = num("tenants");
+
+  return {
+    users: {
+      total: totalUsers,
+      active: activeUsers,
+      suspended: suspendedUsers,
+      terminated: num("terminatedUsers"),
+      admins: num("adminUsers", "admins"),
+    },
+    points: {
+      minted: num("walletBalanceNgn", "pointsIssued"),
+      burned: num("pointsRedeemed"),
+      velocity24h: num("velocity24h"),
+      mintedCount24h: num("mintedCount24h"),
+      debited24h: num("debited24h"),
+      debitedCount24h: num("debitedCount24h"),
+    },
+    vendors: {
+      total: num("vendors"),
+      pending: num("pendingVendors"),
+      approved: num("approvedVendors"),
+      suspended: num("suspendedVendors"),
+    },
+    tenants: {
+      total: totalTenants,
+      active: num("activeTenants") || totalTenants,
+      locked: num("lockedTenants"),
+    },
+    shipments: {
+      total: totalShipments,
+      active: pendingShipments || totalShipments,
+      delivered: num("deliveredShipments"),
+    },
+    documents: { total: num("documents"), last24h: num("documents24h") },
+    marketplace: {
+      orders: totalOrders,
+      orders24h: num("orders24h"),
+      escrowPending: num("pendingOrders", "escrowPending"),
+    },
+    disputes: {
+      open: num("openDisputes"),
+      underReview: num("disputesUnderReview"),
+      resolved: num("resolvedDisputes"),
+    },
+    kyc: {
+      pending: num("pendingKyc"),
+      underReview: num("kycUnderReview"),
+      verified: num("verifiedKyc"),
+      rejected: num("rejectedKyc"),
+      resubmissionRequired: num("kycResubmissionRequired"),
+    },
+    moderation: { openFlags: num("openFlags") },
+    activity: { newUsers7d: num("newUsers7d", "recentSignups"), ledger7d: num("ledger7d", "recentAuditCount") },
+  };
+}
+
 // Reactive query invalidation bus so mutations immediately refresh mounted queries
 let queryVersion = 0;
 const queryListeners = new Set<() => void>();
@@ -1034,27 +1114,7 @@ export function useQuery(queryRef: unknown, args?: unknown): any {
         // 15. Admin Dashboard, Analytics, Users, Settings, Infrastructure
         if (fn === "adminApi:adminDashboard" || fn === "adminDashboard:getDashboardAnalytics") {
           const res: Record<string, unknown> = await neonApi.adminReports().catch(() => ({}));
-          if (!cancelled) {
-            setState({
-              users: Number(res.users ?? res.totalUsers ?? 0),
-              activeUsers: Number(res.activeUsers ?? res.users ?? res.totalUsers ?? 0),
-              suspendedUsers: Number(res.suspendedUsers ?? 0),
-              vendors: Number(res.vendors ?? 0),
-              pendingVendors: Number(res.pendingVendors ?? 0),
-              tenants: Number(res.tenants ?? 0),
-              shipments: Number(res.shipments ?? res.totalShipments ?? 0),
-              orders: Number(res.orders ?? res.totalOrders ?? 0),
-              openDisputes: Number(res.openDisputes ?? 0),
-              openFlags: Number(res.openFlags ?? 0),
-              pendingKyc: Number(res.pendingKyc ?? 0),
-              pointsCirculating: Number(res.walletBalanceNgn ?? res.pointsCirculating ?? 0),
-              pointsIssued: Number(res.pointsIssued ?? res.walletBalanceNgn ?? 0),
-              pointsRedeemed: Number(res.pointsRedeemed ?? 0),
-              recentSignups: Number(res.recentSignups ?? res.users ?? 0),
-              recentOrders: Number(res.recentOrders ?? res.orders ?? 0),
-              recentAuditCount: Number(res.recentAuditCount ?? 0),
-            });
-          }
+          if (!cancelled) setState(buildAdminDashboard(res));
           return;
         }
 
@@ -1082,8 +1142,11 @@ export function useQuery(queryRef: unknown, args?: unknown): any {
         }
 
         if (fn === "adminApi:getFinancialRisk") {
+          // Same shape as `adminApi.getFinancialRisk`: no automated monitoring runs
+          // against the Neon ledger yet, so report a clean scan rather than an
+          // unrelated object the risk card cannot read.
           if (!cancelled) {
-            setState({ highVelocityUsers: [], largeAdjustments: [], disputedOrders: [], summary: { openCases: 0, flaggedTransactions: 0 } });
+            setState({ windowHours: Number(parsedArgs.hours ?? 24), generatedAt: Date.now(), scannedTransactions: 0, alerts: [] });
           }
           return;
         }
@@ -1097,15 +1160,14 @@ export function useQuery(queryRef: unknown, args?: unknown): any {
 
         if (fn === "admin:getInfrastructure") {
           const health = await neonApi.request<{ ok: boolean; database: string }>("/health", {}, false).catch(() => ({ ok: true, database: "connected" }));
+          const status = health.ok ? "healthy" : "degraded";
+          const transactions = await neonApi.adminTransactions(1).catch(() => ({ entries: [] }));
           if (!cancelled) {
             setState({
-              status: health.ok ? "healthy" : "degraded",
-              database: health.database ?? "connected",
-              services: [
-                { name: "Neon PostgreSQL", status: "operational", latencyMs: 12 },
-                { name: "Render API Service", status: "operational", latencyMs: 18 },
-                { name: "Authentication & Session Store", status: "operational", latencyMs: 8 },
-              ],
+              totalTransactions: Array.isArray(transactions?.entries) ? transactions.entries.length : 0,
+              pendingNotifications: 0,
+              totalAssets: 0,
+              health: { database: status, storage: status, auth: status },
             });
           }
           return;
