@@ -1332,8 +1332,13 @@ app.get("/api/admin/audit-logs", auth, adminOnly, async (c) => {
       [limit],
     );
     return c.json({ logs: result.rows });
-  } catch {
-    return c.json({ logs: [] });
+  } catch (error) {
+    // An outage must never look like an empty trail. Returning { logs: [] } with
+    // a 200 let an administrator read "no privileged actions happened" during a
+    // period when audit reads (and possibly writes) were failing. 503 tells the
+    // client to render an explicit "unavailable" state instead.
+    console.error("Audit log read failed", error instanceof Error ? error.message : "unknown error");
+    return fail(c, 503, "Audit log storage is unavailable");
   }
 });
 

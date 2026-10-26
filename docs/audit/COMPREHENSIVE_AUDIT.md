@@ -25,10 +25,13 @@ claim is backed by a named test in this repository.
 
 | Suite | Command | Result |
 | --- | --- | --- |
-| Frontend + shared | `bun test` | **631 pass / 0 fail** (35 files) |
-| API | `npm --prefix api test` | **56 pass / 0 fail** |
+| Frontend + shared | `bun test` | **635 pass / 0 fail** (36 files) |
+| API | `npm --prefix api test` | **58 pass / 0 fail** |
 | Frontend types | `bunx tsc -b --noEmit` | exit 0 |
 | API types | `npm --prefix api run typecheck` | exit 0 |
+
+*(Totals refreshed 2026-10-26 after the P1-1 and migration-008 fixes; the audit
+body above describes commit `c1ea2f9`.)*
 
 ---
 
@@ -167,13 +170,19 @@ genuinely empty audit trail were identical to the administrator: an empty log
 page. An admin could conclude "no privileged actions happened" during a period
 when audit writes were failing.
 
-**Status.** The read path still degrades to an empty list; the more serious
-*write* path (P0-1) is fixed so that critical mutations cannot succeed without
-their audit record. The read path should distinguish "unavailable" from
-"empty" — tracked as remaining work (see §6).
+**Status. Fixed (2026-10-26).** The read path returned `{ logs: [] }` with a 200,
+and the frontend shim swallowed the rejection into `[]` as well, so an outage
+reached the administrator as "No audit records match your filters."
 
-**Regression coverage.** Indirect: audit-write failure now aborts the mutation
-(`api/src/walletAdjust.test.ts`). The read-path distinction is not yet tested.
+The API now answers `503 "Audit log storage is unavailable"`, the shim maps a
+failed read to `null` (never `[]`), and the page renders a three-state view:
+`undefined` loading, `null` outage, array = records.
+
+**Regression coverage.** Write path: audit-write failure aborts the mutation
+(`api/src/walletAdjust.test.ts`). Read path: "an unreadable audit trail reports
+503 unavailable, never an empty list" and "a readable audit trail still returns
+its records with 200" (`api/src/server.smoke.ts`), plus the four cases in
+`src/__tests__/adminAuditLogsState.test.tsx`.
 
 ---
 
@@ -260,9 +269,14 @@ every list endpoint applies `LIMIT`.
 | SQL injection | every query uses `$n` parameters; no string-built SQL found | full `server.ts` review |
 | Secrets | none committed; `.env` excluded; JWT secret required ≥32 bytes at boot | repo inspection |
 
-**Not verified:** dependency CVE scan (`npm audit` was not run against a
-lockfile-resolved production set in this environment), and no penetration test
-was performed.
+**Verified 2026-10-26:** `npm --prefix api audit --omit=dev` → **0
+vulnerabilities**, so the Render backend that owns auth and money is clean.
+`bun audit` reports 39 advisories (1 critical, 12 high) but `bun audit fix`
+resolves **0 of 39** — every fix is blocked by a published version range. Each
+cluster was traced to its importers and none is reachable from the browser
+bundle or the API; the full reachability table and the reasoning for not
+forcing major bumps are in `docs/audit/REMEDIATION_STATUS.md`. No penetration
+test was performed.
 
 ---
 

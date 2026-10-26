@@ -1217,7 +1217,16 @@ export function useQuery(queryRef: unknown, args?: unknown): any {
         }
 
         if (fn === "admin:getAuditLogs") {
-          const res = await neonApi.adminAuditLogs(Number(parsedArgs.limit ?? 100)).catch(() => ({ logs: [] }));
+          let res: { logs: Array<Record<string, unknown>> };
+          try {
+            res = await neonApi.adminAuditLogs(Number(parsedArgs.limit ?? 100));
+          } catch {
+            // `null` means "the trail could not be read" — never `[]`. An empty
+            // array would render as "No audit records match your filters" and
+            // tell an administrator that nothing happened during an outage.
+            if (!cancelled) setState(null);
+            return;
+          }
           if (!cancelled) {
             const logs = Array.isArray(res?.logs)
               ? res.logs.map((l, i) => ({

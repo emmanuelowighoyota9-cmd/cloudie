@@ -49,6 +49,15 @@ no application tables, which is why every sign-in and registration failed.
 
 8. `008_points_marketplace_read_model.sql` — Dedicated points marketplace read model (`point_market_vendors`, `point_market_packages`, and related read tables). Additive only; no existing catalog, order, wallet or production data is rewritten.
 
+**Applied 2026-10-26.** The runner reported `Applied: 1, Already up-to-date: 7`
+and a follow-up `npm run migrate:dry-run` reported zero pending. Before this,
+`GET /api/marketplace/packages` returned `503` on every call because it queried
+`point_market_packages` / `point_market_vendors`, which did not exist: boot-time
+provisioning only fires when a *required* table is missing, and migration 008 is
+deliberately excluded from `REQUIRED_SCHEMA_TABLES`, so a healthy database never
+converged on its own. 008 only creates two tables and their indexes; no existing
+row was read or rewritten.
+
 The repository runner is `api/scripts/migrate.mjs` (root scripts: `npm run migrate` and `npm run migrate:dry-run`). It sorts the numbered SQL files lexically, takes a PostgreSQL advisory lock, and executes each migration's statements inside one runner-owned transaction. The numbered dependency order is 001 → 002 → 003 → 004 → 005 → 006 → 007 → 008. The direct diagnostic script below intentionally uses `psql -v ON_ERROR_STOP=1 -f` to localize SQL-file errors; it does not replace the checksum-aware migration runner or prove that runner bookkeeping is correct.
 
 ### Transaction semantics (fixed 2026-10-23)

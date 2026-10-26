@@ -901,3 +901,87 @@ test("wallet adjustment rejects malformed amounts before touching the database",
     mutablePool.query = originalQuery;
   }
 });
+
+/* ── P1: audit-log reads must not disguise an outage as an empty trail ──── */
+
+async function adminAuditToken(jti: string) {
+  const secret = new TextEncoder().encode(process.env.JWT_SECRET);
+  return new SignJWT({ email: "admin@example.com", role: "admin" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject("admin-user")
+    .setJti(jti)
+    .setIssuedAt()
+    .setIssuer("cloudie-neon-api")
+    .setAudience("cloudie-web")
+    .setExpirationTime("5m")
+    .sign(secret);
+}
+
+test("an unreadable audit trail reports 503 unavailable, never an empty list", async () => {
+  const token = await adminAuditToken("audit-outage-session");
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = String(args[0] ?? "");
+    if (sql.includes("FROM api_sessions")) return { rows: [{ id: "audit-outage-session" }], rowCount: 1 };
+    if (sql.includes("FROM app_users")) {
+      return {
+        rows: [{ id: "admin-user", email: "admin@example.com", name: "Admin", role: "admin", is_suspended: false, is_terminated: false }],
+        rowCount: 1,
+      };
+    }
+    if (sql.includes("FROM admin_audit_logs")) throw new Error("simulated audit storage outage");
+    throw new Error(`Unexpected query: ${sql}`);
+  };
+
+  try {
+    const response = await app.request("/api/admin/audit-logs", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(
+      response.status,
+      503,
+      "an outage must not be reported as a successful empty read",
+    );
+    const body = (await response.json()) as { logs?: unknown[]; error?: string };
+    assert.equal(body.logs, undefined, "no fabricated logs array");
+    assert.equal(body.error, "Audit log storage is unavailable");
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
+
+test("a readable audit trail still returns its records with 200", async () => {
+  const token = await adminAuditToken("audit-ok-session");
+  const mutablePool = pool as unknown as { query: (...args: unknown[]) => Promise<unknown> };
+  const originalQuery = mutablePool.query;
+  mutablePool.query = async (...args: unknown[]) => {
+    const sql = String(args[0] ?? "");
+    if (sql.includes("FROM api_sessions")) return { rows: [{ id: "audit-ok-session" }], rowCount: 1 };
+    if (sql.includes("FROM app_users")) {
+      return {
+        rows: [{ id: "admin-user", email: "admin@example.com", name: "Admin", role: "admin", is_suspended: false, is_terminated: false }],
+        rowCount: 1,
+      };
+    }
+    if (sql.includes("FROM admin_audit_logs")) {
+      return {
+        rows: [{ id: "aud_1", action: "USER_SUSPENDED", target_type: "user", target_id: "u1", details: {}, created_at: "2026-10-26T00:00:00Z" }],
+        rowCount: 1,
+      };
+    }
+    throw new Error(`Unexpected query: ${sql}`);
+  };
+
+  try {
+    const response = await app.request("/api/admin/audit-logs", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    assert.equal(response.status, 200);
+    const body = (await response.json()) as { logs?: Array<{ action?: string }> };
+    assert.equal(body.logs?.length, 1);
+    assert.equal(body.logs?.[0]?.action, "USER_SUSPENDED");
+  } finally {
+    mutablePool.query = originalQuery;
+  }
+});
