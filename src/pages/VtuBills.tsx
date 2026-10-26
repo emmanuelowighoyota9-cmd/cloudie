@@ -37,7 +37,9 @@ import {
   Lock,
   Plus,
   ScanLine,
+  ShieldCheck,
   Sparkles,
+  TriangleAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -129,11 +131,20 @@ export default function VtuBills({
   );
   const balance = useQuery(api.wallet.getBalance);
   const purchase = useAction(api.vtuHttp.purchaseVtu);
+  const validateRecipient = useAction(api.vtuProviderCall.validateVtuRecipient);
   const ngnPerPoint = catalog?.ngnPerPoint ?? 1;
 
   const [category, setCategory] = useState<string | null>(
     initialCategory ?? searchParams.get("category"),
   );
+  const [recipientCheck, setRecipientCheck] = useState<{
+    checked: boolean;
+    valid: boolean;
+    customerName?: string;
+    message?: string;
+    reason?: string;
+  } | null>(null);
+  const [checkingRecipient, setCheckingRecipient] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [amount, setAmount] = useState("");
   const [quantity, setQuantity] = useState(1);
@@ -262,8 +273,75 @@ export default function VtuBills({
     return AMOUNT_PRESETS.filter((value) => value >= min && value <= max);
   }, [detail]);
 
+  /**
+   * Pre-purchase account lookup.
+   *
+   * A meter or smartcard number is the one field on this page the customer
+   * cannot verify by eye, and a wrong one delivers the top-up to a stranger
+   * with nothing to refund. The provider can name the account holder, so it is
+   * asked once the destination LOOKS well-formed — debounced, with superseded
+   * results discarded, so typing a twelve-digit number costs one call rather
+   * than twelve.
+   *
+   * Every outcome is non-blocking EXCEPT a provider that positively says the
+   * account does not exist. "We could not ask" leaves the purchase exactly as
+   * it was: the provider remains the authority at dispatch, and refusing a sale
+   * because a LOOKUP was unavailable would be a worse failure than the typo
+   * this guards against.
+   *
+   * The dependencies are primitives on purpose. `detail` is a fresh object each
+   * time its query re-runs, so depending on it would re-ask the provider for a
+   * number the customer had not touched.
+   */
+  const serviceType = detail?.serviceType ?? null;
+  useEffect(() => {
+    // No product, no priceable code, or a destination that is not yet a valid
+    // shape: nothing to ask about.
+    if (!serviceType || !serviceCode) {
+      setRecipientCheck(null);
+      setCheckingRecipient(false);
+      return;
+    }
+    const local = validateCustomerIdentifier(serviceType, identifier);
+    if (!local.ok) {
+      setRecipientCheck(null);
+      setCheckingRecipient(false);
+      return;
+    }
+
+    let cancelled = false;
+    setCheckingRecipient(true);
+    const timer = setTimeout(() => {
+      validateRecipient({ serviceCode, customerIdentifier: local.value })
+        .then((result) => {
+          if (!cancelled) setRecipientCheck(result);
+        })
+        .catch(() => {
+          if (!cancelled) setRecipientCheck(null);
+        })
+        .finally(() => {
+          if (!cancelled) setCheckingRecipient(false);
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [serviceType, serviceCode, identifier, validateRecipient]);
+
+  /**
+   * A destination the provider positively rejected.
+   *
+   * Only this blocks. An unchecked destination is not a rejected one, and
+   * treating a failed lookup as a rejection would stop customers buying
+   * because a provider endpoint was slow.
+   */
+  const recipientRejected = recipientCheck?.checked === true && recipientCheck.valid === false;
+
   function choose(code: string) {
     setIdentifier("");
+    setRecipientCheck(null);
     setAmount("");
     setConfirmed(false);
     setSearchParams({ product: code }, { replace: false });
@@ -304,6 +382,16 @@ export default function VtuBills({
     }
     if (!affordable) {
       toast.error("Insufficient NGN wallet balance.");
+      return;
+    }
+    // Last line of defence before a confirm screen that charges. The effect
+    // above has usually already answered; this catches the case where the
+    // customer edits the number and taps Continue inside the debounce window.
+    if (recipientRejected) {
+      toast.error(
+        recipientCheck?.message ??
+          "The provider does not recognise that number. Check it and try again.",
+      );
       return;
     }
     setConfirmed(true);
@@ -769,13 +857,37 @@ export default function VtuBills({
                       </div>
                     </div>
 
-                    <p className="text-[11px] text-muted-foreground">
-                      {detail.serviceType === "data"
-                        ? "Verify recipient phone number before submitting."
-                        : detail.serviceType === "electricity"
-                          ? "Check the meter number carefully — it cannot be changed after payment. The token appears on your receipt."
-                          : `Delivery is sent to this ${detail.customerIdentifierLabel.toLowerCase()}.`}
-                    </p>
+                    {checkingRecipient ? (
+                      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Checking that number with the provider…
+                      </p>
+                    ) : recipientCheck?.checked && recipientCheck.valid ? (
+                      <p className="flex items-center gap-1.5 rounded-xl border border-vtu-accent/40 bg-vtu-accent/20 px-3 py-2 text-[11px] font-semibold text-vtu-accent-ink">
+                        <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 truncate">
+                          {recipientCheck.customerName
+                            ? `Account: ${recipientCheck.customerName}`
+                            : "The provider recognised this number."}
+                        </span>
+                      </p>
+                    ) : recipientRejected ? (
+                      <p className="flex items-start gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] font-semibold text-destructive">
+                        <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0">
+                          {recipientCheck?.message ??
+                            `The provider does not recognise that ${detail.customerIdentifierLabel.toLowerCase()}. Check it and try again — nothing has been charged.`}
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">
+                        {detail.serviceType === "data"
+                          ? "Verify recipient phone number before submitting."
+                          : detail.serviceType === "electricity"
+                            ? "Check the meter number carefully — it cannot be changed after payment. The token appears on your receipt."
+                            : `Delivery is sent to this ${detail.customerIdentifierLabel.toLowerCase()}.`}
+                      </p>
+                    )}
                   </div>
 
                   {/* AMOUNT INPUT FOR METERED BILLS */}
@@ -866,7 +978,11 @@ export default function VtuBills({
                       !detail.providerAvailable ||
                       !serviceCode ||
                       !affordable ||
-                      !identifier.trim()
+                      !identifier.trim() ||
+                      // A destination the provider positively rejected cannot be
+                      // paid for — the money would go to an account that does
+                      // not exist. A FAILED LOOKUP does not disable this.
+                      recipientRejected
                     }
                     className="min-h-12 w-full rounded-2xl text-sm font-bold shadow-md active:scale-98"
                   >
