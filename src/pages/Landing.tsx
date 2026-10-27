@@ -4,6 +4,8 @@ import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CloudieMascot } from "@/components/CloudieMascot";
+import { EASE_OUT_QUINT } from "@/components/motion";
 import { buildPreviewSvg, categoryDef, defaultValues, svgToDataUrl } from "@/lib/docTemplateEngine";
 import { PLATFORM_TEMPLATES } from "@/lib/platformTemplates";
 import { PwaInstallBanner, PwaInstallButton } from "@/components/PwaInstallPrompt";
@@ -233,97 +235,107 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Workspace notice, visible before visitors enter any workspace. */}
-      <div className="border-b border-amber-500/25 bg-amber-500/[0.07]">
-        <div className="mx-auto flex max-w-6xl items-start gap-2 px-4 py-2.5 text-xs leading-relaxed text-muted-foreground sm:items-center">
-          <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 sm:mt-0" />
-          <span><strong className="text-foreground">Important:</strong> Workspace records and generated documents are based on user input. They do not independently book, ship, bank, or verify transactions.</span>
+      {/* Workspace notice, visible before visitors enter any workspace. A pill
+          banner here — the same shape as the hero's calls to action. */}
+      <div className="border-b border-border/70 bg-background">
+        <div className="mx-auto flex max-w-6xl justify-center px-4 py-3">
+          <div className="flex items-start gap-2 rounded-3xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-2 text-xs leading-relaxed text-muted-foreground sm:items-center sm:rounded-full">
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 sm:mt-0" />
+            <span><strong className="text-foreground">Important:</strong> Workspace records and generated documents are based on user input. They do not independently book, ship, bank, or verify transactions.</span>
+          </div>
         </div>
       </div>
 
       {/* Hero */}
       <section className="landing-hero relative overflow-hidden border-b border-border">
-        <div className="mx-auto grid min-h-[82vh] max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-[1fr_0.9fr] md:py-24">
+        <div className="landing-grid pointer-events-none absolute inset-0 -z-10 opacity-70" />
+        <div className="mx-auto flex max-w-3xl flex-col items-center px-4 pt-12 text-center sm:pt-16">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0, scale: 0.92, y: 18 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.65, ease: EASE_OUT_QUINT }}
           >
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-4 py-1.5 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              One account. Five workspaces. All connected.
+            <CloudieMascot className="w-48 sm:w-60 lg:w-72" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, delay: 0.08, ease: EASE_OUT_QUINT }}
+            className="flex flex-col items-center"
+          >
+            <div className="mt-8 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              One account. Five workspaces. One balance.
             </div>
-            <h1 className="max-w-3xl font-display text-3xl font-bold leading-[1.1] tracking-tight text-foreground sm:text-5xl md:text-6xl lg:text-7xl">
+            <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.03] tracking-tight text-foreground sm:text-6xl lg:text-7xl">
               Everything your business runs on, <span className="text-primary">in one workspace</span>
             </h1>
-            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:mt-6 sm:text-lg">
+            <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-lg">
               {brand.name} brings shipments, travel documents, invoices, customer-facing portal layouts, and everyday tools together behind one sign-in. The workspace organizes records and generates documents; it does not by itself book travel, dispatch parcels, or provide regulated financial services.
             </p>
-            <form onSubmit={handleTrack} className="mt-6 flex max-w-md flex-col gap-2 sm:mt-8 sm:flex-row">
+            <div className="mt-8 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row sm:justify-center">
+              <Link to="/register" className="w-full sm:w-auto">
+                <Button size="lg" className="h-12 w-full gap-2 px-8 text-[15px] font-bold sm:w-auto">
+                  Start for Free <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link to="/dashboard" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="h-12 w-full gap-2 px-7 font-semibold sm:w-auto">
+                  <LayoutDashboard className="h-4 w-4" /> Open dashboard
+                </Button>
+              </Link>
+            </div>
+            <form onSubmit={handleTrack} className="mt-6 flex w-full max-w-md flex-col gap-2 sm:flex-row">
               <Input
                 value={trackingNumber}
                 onChange={(e) => setTrackingNumber(e.target.value)}
-                placeholder="Track a shipment · e.g. TRK-nGkx2V20260210"
+                placeholder="Track a shipment · TRK-nGkx2V20260210"
                 aria-label="Tracking number"
-                className="h-12 rounded-2xl px-4 text-sm flex-1"
+                className="h-12 flex-1 rounded-full px-5 text-sm"
               />
-              <Button type="submit" size="lg" className="h-12 min-h-12 gap-2 rounded-2xl px-6 font-semibold active:scale-95">
+              <Button type="submit" size="lg" className="h-12 min-h-12 gap-2 px-6 font-semibold active:scale-95">
                 <Search className="h-4 w-4" />
                 Track
               </Button>
             </form>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link to="/login?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl">Logistics suite</Button></Link>
-              <Link to="/login?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9 rounded-xl border-sidebar bg-sidebar text-sidebar-foreground hover:bg-sidebar-accent">Business banking</Button></Link>
-            </div>
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <Link to="/register" className="w-full sm:w-auto">
-                <Button size="lg" className="h-12 min-h-12 w-full gap-2 rounded-2xl px-8 font-semibold active:scale-95 sm:w-auto">
-                  Start for Free <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link to="/login" className="w-full sm:w-auto">
-                <Button variant="outline" size="lg" className="h-12 min-h-12 w-full rounded-2xl font-semibold active:scale-95 sm:w-auto">Sign In</Button>
-              </Link>
-              <Link to="/dashboard" className="w-full sm:w-auto">
-                <Button variant="outline" size="lg" className="h-12 min-h-12 w-full gap-2 rounded-2xl font-semibold active:scale-95 sm:w-auto">
-                  <LayoutDashboard className="h-4 w-4" /> Open dashboard
-                </Button>
-              </Link>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Link to="/login?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9">Logistics suite</Button></Link>
+              <Link to="/login?returnTo=/business"><Button variant="outline" size="sm" className="min-h-9">Business banking</Button></Link>
             </div>
             {/* Capabilities, not metrics. The previous version of this block
                 showed numbers like "12 shipments need review" — invented
                 operational data on a page nobody can sign into yet, which is
                 both dishonest and the first thing a real customer would spot. */}
-            <div className="mt-8 grid max-w-xl grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-2">
               {[
-                { icon: Layers, value: "5", label: "Workspaces" },
-                { icon: Wallet, value: "One", label: "Credits ledger" },
-                { icon: Truck, value: "Live", label: "Tracking page" },
-                { icon: FileStack, value: "PDF", label: "Document export" },
+                { icon: Layers, text: "5 workspaces" },
+                { icon: Wallet, text: "One credits ledger" },
+                { icon: Truck, text: "Live tracking" },
+                { icon: FileStack, text: "PDF + PNG export" },
               ].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-xl border border-border bg-card/70 p-3 transition-colors duration-200 hover:border-primary/30"
+                <span
+                  key={item.text}
+                  className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 px-4 py-2 text-xs font-medium text-muted-foreground backdrop-blur transition-colors duration-200 hover:border-primary/30 hover:text-foreground"
                 >
-                  <item.icon className="size-4 text-primary" />
-                  <p className="mt-2.5 text-sm font-semibold text-foreground">{item.value}</p>
-                  <p className="text-[11px] leading-tight text-muted-foreground">{item.label}</p>
-                </div>
+                  <item.icon className="size-3.5 text-primary" />
+                  {item.text}
+                </span>
               ))}
             </div>
           </motion.div>
+        </div>
 
+          {/* A real artefact rather than a mocked-up dashboard: this preview
+              is produced by the same template engine that renders exports, so
+              nothing in the hero is a promise the product cannot keep. */}
           <motion.div
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.15, duration: 0.55 }}
-            className="relative"
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.6, ease: EASE_OUT_QUINT }}
+            className="relative mx-auto mt-14 w-full max-w-4xl px-4 pb-16"
           >
-            {/* A real artefact rather than a mocked-up dashboard: this preview
-                is produced by the same template engine that renders exports, so
-                nothing in the hero is a promise the product cannot keep. */}
-            <div className="surface-lift sheen rounded-2xl border border-border bg-card p-4">
+            <div className="surface-lift sheen rounded-3xl border border-border bg-card p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3 border-b border-border pb-3">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -343,27 +355,28 @@ export default function Landing() {
                 <img
                   src={documentShowcase[0].src}
                   alt={`${documentShowcase[0].name} — preview rendered by the Cloudie template engine`}
-                  className="mx-auto mt-4 h-auto w-full rounded-lg border border-border bg-surface"
-                  style={{ maxHeight: 400, objectFit: "contain" }}
+                  className="mx-auto mt-4 h-auto w-full rounded-xl border border-border bg-surface"
+                  style={{ maxHeight: 380, objectFit: "contain" }}
                 />
               ) : null}
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-border bg-surface p-3">
-                  <p className="text-[11px] text-muted-foreground">Preview and export</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">One render engine</p>
-                </div>
-                <div className="rounded-xl border border-border bg-surface p-3">
-                  <p className="text-[11px] text-muted-foreground">Share links</p>
-                  <p className="mt-1 text-sm font-semibold text-foreground">Expiry and revocation</p>
-                </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { label: "Preview and export", value: "One render engine" },
+                  { label: "Share links", value: "Expiry and revocation" },
+                  { label: "Tracking extras", value: "QR + Code 128" },
+                  { label: "Output", value: "PDF, PNG" },
+                ].map((tile) => (
+                  <div key={tile.label} className="rounded-2xl border border-border bg-surface p-3">
+                    <p className="text-[11px] text-muted-foreground">{tile.label}</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{tile.value}</p>
+                  </div>
+                ))}
               </div>
             </div>
           </motion.div>
-        </div>
 
-        <div className="landing-grid pointer-events-none absolute inset-0 -z-10 opacity-80" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-px landing-rule" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-px landing-rule" />
       </section>
 
       {/* Stats */}

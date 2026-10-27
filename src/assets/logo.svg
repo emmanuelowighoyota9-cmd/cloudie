@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Crestline Express">
-  <rect width="512" height="512" rx="116" fill="#10233f"/>
-  <path d="M345 164c-38-35-86-52-137-45-65 9-114 63-117 129-3 69 47 125 116 127 48 2 92-17 124-51" fill="none" stroke="#f0fffb" stroke-width="34" stroke-linecap="round"/>
-  <path d="M165 258h176" fill="none" stroke="#5eead4" stroke-width="28" stroke-linecap="round"/>
-  <path d="m316 220 42 38-42 38" fill="none" stroke="#5eead4" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="165" cy="258" r="17" fill="#f59e0b"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Cloudie">
+  <rect width="512" height="512" rx="116" fill="#000000"/>
+  <path d="M345 164c-38-35-86-52-137-45-65 9-114 63-117 129-3 69 47 125 116 127 48 2 92-17 124-51" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+  <path d="M165 258h176" fill="none" stroke="#10b981" stroke-width="28" stroke-linecap="round"/>
+  <path d="m316 220 42 38-42 38" fill="none" stroke="#10b981" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="165" cy="258" r="17" fill="#6ee7b7"/>
 </svg>

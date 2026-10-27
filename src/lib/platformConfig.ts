@@ -77,13 +77,13 @@ export const QUICK_ACTION_CATALOG: QuickActionCatalogItem[] = [
 ];
 
 export const DEFAULT_BRAND: BrandConfig = {
-  name: "Cloudie Operations",
+  name: "Cloudie",
   tagline: "Shipment, document & payments workspace",
   // Both modes carry the enterprise emerald. The product ships dark-only, so
   // `accent` and `accentDark` are kept in step rather than drifting apart.
   accent: "#10b981",
   accentDark: "#10b981",
-  footerNote: "Move every shipment with confidence.",
+  footerNote: "One account. Five workspaces. One balance.",
   logoUrl: "",
   defaultMode: "dark",
 };
@@ -96,13 +96,13 @@ export const DEFAULT_QUICK_ACTIONS: QuickActionConfig[] = [
 ];
 
 export const DEFAULT_SUPPORT: SupportConfig = {
-  email: "support@crestlineexpress.com",
+  email: "support@cloudie.app",
   phone: "+1 (800) 555-0142",
   whatsapp: "",
   hours: "Mon–Fri · 08:00–20:00 UTC",
   helpCenterUrl: "",
   widgetEnabled: true,
-  widgetTitle: "Crestline Express Support",
+  widgetTitle: "Cloudie Support",
   widgetMessage: "Questions about a shipment, route or delivery update? Our operations desk replies within one business day.",
   faqs: [
     {
@@ -162,7 +162,10 @@ function phoneDigits(value: unknown): string {
 export function sanitizeBrand(input: unknown): BrandConfig {
   const raw = (input ?? {}) as Record<string, unknown>;
   const mode = raw.defaultMode;
-  const legacyName = raw.name === "Cloudie" || raw.name === "Cloudie Operations Platform";
+  // Names shipped by earlier builds resolve to the current default so a stored
+  // config cannot resurrect an old wordmark.
+  const legacyName =
+    raw.name === "Cloudie Operations" || raw.name === "Cloudie Operations Platform";
   const legacyTagline = raw.tagline === "Operations platform";
   return {
     name: legacyName ? DEFAULT_BRAND.name : text(raw.name, DEFAULT_BRAND.name, 60),

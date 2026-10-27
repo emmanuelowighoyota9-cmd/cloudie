@@ -1,7 +1,7 @@
 {
-  "name": "Cloudie Operations",
+  "name": "Cloudie",
   "short_name": "Cloudie",
-  "description": "Cloudie Operations is a unified operations platform for shipments, tracking, documents, payments and airtime.",
+  "description": "Cloudie is the unified operations platform for shipments, tracking, documents, payments and airtime.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -38,7 +38,7 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "url": "/dashboard",
-      "description": "Open the Cloudie Operations dashboard"
+      "description": "Open the Cloudie dashboard"
     },
     {
       "name": "Create shipment",

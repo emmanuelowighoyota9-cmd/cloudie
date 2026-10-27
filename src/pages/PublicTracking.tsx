@@ -143,11 +143,11 @@ function TrackingSearch() {
           name="ref"
           placeholder="TRK-XXXXXXXXXXXX"
           aria-label="Tracking number"
-          className="h-11 flex-1 rounded-xl text-center font-mono text-xs sm:text-left"
+          className="h-11 flex-1 rounded-full text-center font-mono text-xs sm:text-left"
           autoFocus
           required
         />
-        <Button type="submit" className="h-11 gap-1.5 rounded-xl px-6">
+        <Button type="submit" className="h-11 gap-1.5 px-6">
           <Search className="size-4" aria-hidden /> Track
         </Button>
       </form>

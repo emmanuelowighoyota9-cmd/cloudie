@@ -6,18 +6,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Reveal, StaggerGroup, StaggerItem } from "@/components/motion";
+import { CloudieMascot } from "@/components/CloudieMascot";
 import { usePlatformConfig } from "@/hooks/use-platform-config";
 import logo from "@/assets/logo.svg";
 
 /**
  * Split-screen authentication shell shared by `/login` and `/register`.
  *
- * Left (45%) is the brand panel — one quiet emerald wash over the black
- * surface, a tilted preview of the product, and the three proofs the product
- * actually stands behind. Right (55%) holds a single 400px card, vertically
- * centred, so the form never stretches on wide screens.
+ * Left (45%) is the brand panel: the landing hero's composition — one emerald
+ * bloom over true black, the mascot above the headline, a tilted preview of
+ * the product and the three proofs as pill chips. Right (55%) holds a single
+ * 400px card, vertically centred, so the form never stretches on wide screens.
  *
- * On small screens the brand panel collapses to a 120px logo header and the
+ * On small screens the brand panel collapses to a centred mascot lockup and the
  * card takes the full width: nothing about the form changes, only its frame.
  */
 
@@ -218,20 +219,19 @@ export function RedirectSkeleton({ title, hint }: { title: string; hint: string 
   return (
     <div role="status" aria-live="polite" className="space-y-5">
       <div className="flex items-center gap-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
           <Loader2 className="size-4 animate-spin" aria-hidden />
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">{title}</p>
           <p className="text-xs text-muted-foreground">{hint}</p>
         </div>
-      </div>
-      <div className="space-y-3 animate-pulse">
+      </div>          <div className="space-y-3 animate-pulse">
         <div className="h-3 w-1/3 rounded-full bg-muted" />
-        <div className="h-11 w-full rounded-xl bg-muted" />
+        <div className="h-11 w-full rounded-full bg-muted" />
         <div className="h-3 w-1/4 rounded-full bg-muted" />
-        <div className="h-11 w-full rounded-xl bg-muted" />
-        <div className="h-11 w-full rounded-xl bg-primary/70" />
+        <div className="h-11 w-full rounded-full bg-muted" />
+        <div className="h-11 w-full rounded-full bg-primary/70" />
       </div>
       <p className="sr-only">Redirecting…</p>
     </div>
@@ -304,7 +304,10 @@ export function AuthField({
           aria-describedby={messageId}
           onChange={(event) => onValueChange(event.target.value)}
           onBlur={onBlur}
-          className={cn("rounded-xl pr-10", error && "border-destructive focus-visible:border-destructive")}
+          className={cn(
+            "rounded-full pl-5 pr-12",
+            error && "border-destructive focus-visible:border-destructive",
+          )}
         />
         {withReveal && (
           <button
@@ -312,7 +315,7 @@ export function AuthField({
             onClick={() => setRevealed((current) => !current)}
             aria-label={revealed ? "Hide password" : "Show password"}
             aria-pressed={revealed}
-            className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center text-muted-foreground transition-colors hover:text-foreground sm:h-9 sm:w-9"
+            className="absolute right-1.5 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             {revealed ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
           </button>
@@ -378,7 +381,7 @@ function OAuthRow({
           variant="outline"
           disabled={disabled}
           onClick={() => onProvider("google")}
-          className="h-11 w-full gap-2 rounded-xl text-sm font-medium sm:h-9"
+          className="h-11 w-full gap-2 text-sm font-medium sm:h-10"
         >
           <GoogleMark />
           Google
@@ -388,7 +391,7 @@ function OAuthRow({
           variant="outline"
           disabled={disabled}
           onClick={() => onProvider("github")}
-          className="h-11 w-full gap-2 rounded-xl text-sm font-medium sm:h-9"
+          className="h-11 w-full gap-2 text-sm font-medium sm:h-10"
         >
           <svg viewBox="0 0 24 24" className="size-4" aria-hidden focusable="false" fill="currentColor">
             <path d="M12 1.5A10.5 10.5 0 0 0 8.68 22c.53.1.72-.23.72-.5v-1.76c-2.92.63-3.54-1.4-3.54-1.4-.48-1.22-1.17-1.55-1.17-1.55-.96-.65.07-.64.07-.64 1.06.08 1.62 1.09 1.62 1.09.94 1.6 2.47 1.14 3.07.87.1-.68.37-1.14.67-1.4-2.33-.27-4.78-1.17-4.78-5.2 0-1.15.41-2.09 1.09-2.83-.11-.27-.47-1.34.1-2.8 0 0 .88-.28 2.9 1.08a10 10 0 0 1 5.28 0c2.01-1.36 2.9-1.08 2.9-1.08.57 1.46.21 2.53.1 2.8.68.74 1.09 1.68 1.09 2.83 0 4.04-2.46 4.93-4.8 5.19.38.33.72.97.72 1.96v2.9c0 .28.19.61.73.5A10.5 10.5 0 0 0 12 1.5Z" />
@@ -426,42 +429,42 @@ export function AuthSplitLayout({
 
   return (
     <div className="min-h-screen bg-background text-foreground lg:flex">
-      {/* Mobile: the brand panel collapses to a logo-only header. */}
-      <header className="flex h-[120px] shrink-0 items-center border-b border-border/70 bg-surface px-5 lg:hidden">
-        <img src={logo} alt={brand.name} className="h-11 w-11 rounded-2xl" width={44} height={44} />
+      {/* Mobile: the brand panel collapses to a centred mascot lockup. */}
+      <header className="landing-hero relative flex shrink-0 flex-col items-center gap-2.5 overflow-hidden border-b border-border/70 px-5 pb-6 pt-7 lg:hidden">
+        <div aria-hidden className="landing-grid pointer-events-none absolute inset-0 opacity-60" />
+        <CloudieMascot className="relative w-20" />
+        <span className="relative font-display text-base font-bold tracking-tight text-foreground">
+          {brand.name}
+        </span>
       </header>
 
       {/* Desktop: brand panel, 45%. */}
-      <aside className="relative hidden w-[45%] shrink-0 flex-col justify-between overflow-hidden border-r border-border/60 bg-surface p-10 lg:flex">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/15 via-primary/[0.03] to-transparent"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 text-border/40 opacity-50 [background-image:repeating-linear-gradient(90deg,currentColor_0_1px,transparent_1px_72px),repeating-linear-gradient(0deg,currentColor_0_1px,transparent_1px_72px)]"
-        />
+      <aside className="landing-hero relative hidden w-[45%] shrink-0 flex-col justify-between overflow-hidden border-r border-border/60 p-10 lg:flex">
+        <div aria-hidden className="landing-grid pointer-events-none absolute inset-0 opacity-60" />
 
         <div className="relative flex items-center gap-2.5">
-          <img src={logo} alt="" aria-hidden className="h-9 w-9 rounded-xl" width={36} height={36} />
+          <img src={logo} alt="" aria-hidden className="h-9 w-9 rounded-2xl" width={36} height={36} />
           <span className="font-display text-base font-bold tracking-tight text-foreground">{brand.name}</span>
         </div>
 
-        <Reveal className="relative">
-          <p className="max-w-sm font-display text-[2rem] font-bold leading-[1.1] tracking-tight text-foreground">
+        {/* Same order as the landing hero: the character, then the promise. */}
+        <Reveal className="relative flex flex-col items-center text-center">
+          <CloudieMascot className="w-32 xl:w-40" />
+          <p className="mt-7 max-w-sm font-display text-[2rem] font-bold leading-[1.1] tracking-tight text-foreground">
             One balance for every service you sell.
           </p>
           <p className="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">{brand.tagline}</p>
           <ProductPreview />
         </Reveal>
 
-        <StaggerGroup className="relative space-y-3">
+        <StaggerGroup className="relative flex flex-wrap justify-center gap-2">
           {PROOFS.map((proof) => (
-            <StaggerItem key={proof.text} className="flex items-center gap-3">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-                <proof.icon className="size-4" aria-hidden />
-              </span>
-              <span className="text-sm font-medium text-foreground">{proof.text}</span>
+            <StaggerItem
+              key={proof.text}
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 px-3.5 py-2 text-xs font-medium text-muted-foreground backdrop-blur"
+            >
+              <proof.icon className="size-3.5 text-primary" aria-hidden />
+              {proof.text}
             </StaggerItem>
           ))}
         </StaggerGroup>
@@ -470,7 +473,7 @@ export function AuthSplitLayout({
       {/* Right: form card, 55%, vertically centred, 400px max. */}
       <main className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8 lg:w-[55%]">
         <div className="w-full max-w-[400px]">
-          <div className="rounded-2xl border border-border/70 bg-card/70 p-6 shadow-lg shadow-black/20 sm:p-7">
+          <div className="rounded-3xl border border-border/70 bg-card/70 p-6 shadow-lg shadow-black/20 backdrop-blur-sm sm:p-8">
             <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">{title}</h1>
             <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{description}</p>
 

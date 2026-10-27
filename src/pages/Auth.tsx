@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import logo from "@/assets/logo.svg";
+import { CloudieMascot } from "@/components/CloudieMascot";
 import {
   ArrowLeft,
   Eye,
@@ -154,25 +154,25 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="landing-hero min-h-screen bg-background">
       <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
-        <img
-          src={logo}
-          alt="Crestline Express"
-          width={56}
-          height={56}
-          className="mb-6 cursor-pointer rounded-xl"
+        <button
+          type="button"
           onClick={() => navigate("/")}
-        />
-        <Card className="w-full max-w-md rounded-2xl border-slate-200 shadow-md dark:border-slate-700">
+          aria-label={`Back to ${brand.name} home`}
+          className="mb-6 rounded-full transition-transform duration-200 hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          <CloudieMascot className="w-24" />
+        </button>
+        <Card className="w-full max-w-md rounded-3xl border-border bg-card/80 shadow-lg shadow-black/20 backdrop-blur-sm">
           {mode === "forgot" ? (
             <>
               <CardHeader className="text-center">
-                <CardTitle className="flex items-center justify-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
-                  <KeyRound className="h-5 w-5 text-blue-600" />
+                <CardTitle className="flex items-center justify-center gap-2 font-display text-2xl font-bold tracking-tight text-foreground">
+                  <KeyRound className="h-5 w-5 text-primary" />
                   Reset your password
                 </CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400">
+                <CardDescription className="text-muted-foreground">
                   Email-based password recovery is not available yet. Contact support to recover your account.
                 </CardDescription>
               </CardHeader>
@@ -182,7 +182,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <div className="space-y-2">
                       <Label htmlFor="forgot-email">Email</Label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <Mail className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="forgot-email"
                           type="email"
@@ -190,7 +190,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                           value={forgotEmail}
                           onChange={(e) => setForgotEmail(e.target.value)}
                           placeholder="name@example.com"
-                          className="pl-9"
+                          className="rounded-full pl-11"
                           disabled={isLoading}
                           required
                         />
@@ -229,8 +229,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         maxLength={6}
                         value={forgotCode}
                         onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ""))}
-                        placeholder="000000"
-                        className="text-center font-mono text-lg tracking-[0.4em]"
+                        placeholder="000000"                          className="rounded-full text-center font-mono text-lg tracking-[0.4em]"
                         disabled={isLoading}
                         required
                       />
@@ -239,7 +238,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <div className="space-y-2">
                       <Label htmlFor="forgot-password">New password</Label>
                       <div className="relative">
-                        <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <Lock className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="forgot-password"
                           type={showPassword ? "text" : "password"}
@@ -247,7 +246,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                           value={forgotPassword}
                           onChange={(e) => setForgotPassword(e.target.value)}
                           placeholder="At least 8 characters"
-                          className="pl-9 pr-10"
+                          className="rounded-full pl-11 pr-12"
                           disabled={isLoading}
                           minLength={8}
                           required
@@ -256,7 +255,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                           type="button"
                           aria-label={showPassword ? "Hide password" : "Show password"}
                           onClick={() => setShowPassword((v) => !v)}
-                          className="absolute right-3 top-3 text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+                          className="absolute right-2 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                         >
                           {showPassword ? (
                             <EyeOff className="h-4 w-4" />
@@ -297,7 +296,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         setForgotStage("request");
                         setError(null);
                       }}
-                      className="w-full text-center text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                      className="w-full text-center text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     >
                       Didn&apos;t get it? Send a new code
                     </button>
@@ -307,7 +306,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <button
                   type="button"
                   onClick={() => switchMode("signIn")}
-                  className="mt-6 flex w-full items-center justify-center gap-1.5 text-center text-sm font-medium text-slate-500 transition-colors hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  className="mt-6 flex w-full items-center justify-center gap-1.5 text-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to sign in
@@ -317,7 +316,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           ) : (
             <>
               <CardHeader className="text-center">
-                <CardTitle className="text-2xl font-bold text-foreground">
+                <CardTitle className="font-display text-2xl font-bold tracking-tight text-foreground">
                   {mode === "signIn" ? "Welcome back" : "Create your account"}
                 </CardTitle>
                 <CardDescription className="text-muted-foreground">
@@ -331,14 +330,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <div
                   role="tablist"
                   aria-label="Authentication mode"
-                  className="mb-6 grid grid-cols-2 rounded-2xl border border-border bg-muted/60 p-1"
+                  className="mb-6 grid grid-cols-2 rounded-full border border-border bg-muted/60 p-1"
                 >
                   <button
                     type="button"
                     role="tab"
                     aria-selected={mode === "signIn"}
                     onClick={() => switchMode("signIn")}
-                    className={`min-h-10 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 ${
+                    className={`min-h-10 rounded-full px-3 py-2 text-sm font-semibold transition-all duration-150 ${
                       mode === "signIn"
                         ? "bg-card text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
@@ -351,7 +350,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     role="tab"
                     aria-selected={mode === "signUp"}
                     onClick={() => switchMode("signUp")}
-                    className={`min-h-10 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-150 ${
+                    className={`min-h-10 rounded-full px-3 py-2 text-sm font-semibold transition-all duration-150 ${
                       mode === "signUp"
                         ? "bg-card text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
@@ -366,14 +365,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     <div className="space-y-2">
                       <Label htmlFor="name">Full name</Label>
                       <div className="relative">
-                        <User className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                        <User className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="name"
                           name="name"
                           type="text"
                           autoComplete="name"
                           placeholder="Jane Doe"
-                          className="pl-9"
+                          className="rounded-full pl-11"
                           disabled={isLoading}
                           required
                         />
@@ -412,14 +411,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       )}
                     </div>
                     <div className="relative">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                      <Lock className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         id="password"
                         name="password"
                         type={showPassword ? "text" : "password"}
                         autoComplete={mode === "signUp" ? "new-password" : "current-password"}
                         placeholder={mode === "signUp" ? "At least 8 characters" : "Your password"}
-                        className="h-11 sm:h-12 rounded-xl pl-9 pr-10"
+                        className="rounded-full pl-11 pr-12"
                         disabled={isLoading}
                         minLength={mode === "signUp" ? 8 : undefined}
                         required
@@ -448,7 +447,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   <Button
                     type="submit"
                     disabled={isLoading}
-                    className="h-11 sm:h-12 w-full gap-2 rounded-2xl font-semibold active:scale-95"
+                    className="h-11 w-full gap-2 font-semibold active:scale-95 sm:h-12"
                   >
                     {isLoading ? (
                       <>
@@ -461,14 +460,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   </Button>
                 </form>
 
-                <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-6 text-center text-sm text-muted-foreground">
                   {mode === "signIn" ? (
                     <>
                       Don&apos;t have an account?{" "}
                       <button
                         type="button"
                         onClick={() => switchMode("signUp")}
-                        className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        className="font-semibold text-primary hover:underline"
                       >
                         Sign up
                       </button>
@@ -479,7 +478,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       <button
                         type="button"
                         onClick={() => switchMode("signIn")}
-                        className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        className="font-semibold text-primary hover:underline"
                       >
                         Sign in
                       </button>
@@ -487,8 +486,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                   )}
                 </p>
               </CardContent>
-              <CardFooter className="justify-center border-t border-slate-100 py-4 dark:border-slate-700">
-                <p className="text-xs text-slate-400">
+              <CardFooter className="justify-center border-t border-border py-4">
+                <p className="text-xs text-muted-foreground">
                   Secured with encrypted password authentication
                 </p>
               </CardFooter>

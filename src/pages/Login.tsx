@@ -135,7 +135,7 @@ export default function LoginPage({ redirectAfterAuth = "/dashboard" }: { redire
         <Button
           type="submit"
           disabled={status === "loading"}
-          className="h-11 w-full rounded-xl text-sm font-semibold sm:h-10"
+          className="h-12 w-full gap-2 text-[15px] font-bold"
         >
           {status === "loading" ? (
             <>

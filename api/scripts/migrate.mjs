@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Ordered, repeatable PostgreSQL migration runner for Cloudie Operations Platform.
+ * Ordered, repeatable PostgreSQL migration runner for Cloudie.
  *
  * Guarantees:
  * - Applies SQL migrations in lexical order from ../migrations/*.sql

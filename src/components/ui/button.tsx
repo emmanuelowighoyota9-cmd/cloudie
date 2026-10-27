@@ -4,8 +4,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// Buttons are pills. The stadium shape is the product's one recurring control
+// silhouette — a rounded-rectangle button next to a pill badge is the fastest
+// way to make a black UI look like it came from two different design systems.
 const buttonVariants = cva(
-  "inline-flex min-h-11 min-w-11 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold select-none transition-[transform,box-shadow,background-color,border-color,color,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive sm:min-h-0 sm:min-w-0",
+  "inline-flex min-h-11 min-w-11 items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold select-none transition-[transform,box-shadow,background-color,border-color,color,opacity] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive sm:min-h-0 sm:min-w-0",
   {
     variants: {
       variant: {
@@ -13,7 +16,7 @@ const buttonVariants = cva(
         // token layer (`--primary-hover`) rather than fading opacity, so the
         // label keeps full contrast on every surface.
         default:
-          "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-md active:shadow-sm",
+          "bg-primary text-primary-foreground shadow-sm hover:bg-primary-hover hover:shadow-[0_0_28px_-6px_var(--primary)] active:shadow-sm",
         destructive:
           "bg-destructive text-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md focus-visible:ring-destructive/30",
         outline:
@@ -23,16 +26,15 @@ const buttonVariants = cva(
         ghost:
           "text-muted-foreground hover:bg-accent hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        // The VTU shop's own call to action. It runs on the VTU tokens so the
-        // customer's shop keeps its plum-and-cream identity, while the rest of
-        // the product stays on `primary`.
+        // The VTU shop's own call to action. It is the same emerald as every
+        // other primary action — the customer's shop is not a second brand.
         vtu:
-          "bg-vtu-band text-vtu-band-fg shadow-sm hover:bg-vtu-band/90 hover:shadow-md active:shadow-sm focus-visible:ring-vtu-accent/60",
+          "bg-vtu-accent text-vtu-accent-ink shadow-sm hover:bg-primary-hover hover:shadow-[0_0_28px_-6px_var(--primary)] active:shadow-sm focus-visible:ring-vtu-accent/60",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-lg px-6 has-[>svg]:px-4",
+        sm: "h-8 gap-1.5 px-3 has-[>svg]:px-2.5",
+        lg: "h-10 px-6 has-[>svg]:px-4",
         icon: "size-9",
         "icon-sm": "size-8",
         "icon-lg": "size-10",

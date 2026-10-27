@@ -468,7 +468,7 @@ export default function VtuBills({
               asChild
               variant="default"
               size="sm"
-              className="mt-2 min-h-9 gap-1.5 rounded-xl px-3 text-xs font-semibold"
+              className="mt-2 min-h-9 gap-1.5 px-3 text-xs font-semibold"
             >
               <Link to="/buy-points">
                 <Plus className="h-3.5 w-3.5" />
@@ -503,7 +503,7 @@ export default function VtuBills({
             <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">
               Check back shortly or explore our airtime and other live services.
             </p>
-            <Button asChild className="mt-4 rounded-xl">
+            <Button asChild className="mt-4">
               <Link to="/vtu/airtime">Browse airtime recharge</Link>
             </Button>
           </div>
@@ -634,7 +634,7 @@ export default function VtuBills({
                 <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                   The provider service is currently unavailable. Nothing has been debited.
                 </p>
-                <Button variant="default" className="mt-4 rounded-xl" onClick={reset}>
+                <Button variant="default" className="mt-4" onClick={reset}>
                   Back to services
                 </Button>
               </div>

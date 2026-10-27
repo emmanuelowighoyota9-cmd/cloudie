@@ -1,4 +1,4 @@
-# Neon migration readiness — Cloudie Operations Platform
+# Neon migration readiness — Cloudie
 
 ## Current architecture (verified from the repository)
 

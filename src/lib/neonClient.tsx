@@ -603,7 +603,7 @@ export function useQuery(queryRef: unknown, args?: unknown): any {
           const res = await neonApi.publicConfig().catch(() => null);
           if (!cancelled) {
             setState(res ?? {
-              brand: { name: "Cloudie", tagline: "Unified operations platform", accentColor: "#2563eb", footerNote: "Cloudie Operations Platform" },
+              brand: { name: "Cloudie", tagline: "Unified operations platform", accentColor: "#10b981", footerNote: "One account. Five workspaces. One balance." },
               support: { email: "support@cloudie.app", phone: "", hours: "Mon–Fri, 9am–6pm WAT", widgetEnabled: true, widgetTitle: "Need a hand?", widgetMessage: "Reach the Cloudie support team.", faqs: [] },
               quickActions: [],
               hasCustomBrand: false,

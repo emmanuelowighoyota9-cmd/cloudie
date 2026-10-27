@@ -16,6 +16,7 @@ import {
   Plus,
   QrCode,
   TrendingDown,
+  TriangleAlert,
   UserPlus,
   Users,
   ChevronRight,
@@ -28,7 +29,8 @@ import { notifyNeonQueries } from "@/lib/neonClient";
 import { formatNgn, usePricing } from "@/lib/pricing";
 import { LedgerRow, workspaceFromLedgerType } from "@/components/LedgerRow";
 import { AlertStrip } from "@/components/AuthSplitLayout";
-import { StaggerGroup, StaggerItem } from "@/components/motion";
+import { CloudieMascot } from "@/components/CloudieMascot";
+import { EASE_OUT_QUINT, StaggerGroup, StaggerItem } from "@/components/motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -596,37 +598,127 @@ export default function Dashboard() {
     !Array.isArray(referrals) ||
     !Array.isArray(documents);
 
+  /* One line under the headline, carrying the number that matters first:
+     what this account can spend. Everything else moves into the chips below,
+     where a missing figure cannot be mistaken for a zero. */
   const subtitle = (
     <span>
       {points !== undefined ? (
-        <span className="font-medium text-foreground">{points.toLocaleString()} points</span>
+        <span className="font-semibold text-foreground">{points.toLocaleString()} points</span>
       ) : (
         <Skeleton className="inline-block h-4 w-16 align-middle" />
       )}
-      <span className="text-muted-foreground">
-        {" "}· {stats.openJobs} active shipment{stats.openJobs === 1 ? "" : "s"} ·{" "}
-        {stats.pendingDocs} pending document{stats.pendingDocs === 1 ? "" : "s"}
-      </span>
+      {walletNgn !== undefined && (
+        <span className="text-muted-foreground">{" "}· {formatNgn(walletNgn)} wallet</span>
+      )}
+      <span className="text-muted-foreground"> ready across every workspace.</span>
     </span>
   );
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <p className="section-label text-primary">Personal workspace</p>
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">
-            Welcome back, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+      {/* Hero — the landing page's centred, mascot-led composition at working
+          scale: one bloom behind the character, the greeting as the headline,
+          pill calls to action, then status chips. */}
+      <section className="landing-hero surface-lift relative isolate overflow-hidden rounded-3xl border border-border">
+        <div className="landing-grid pointer-events-none absolute inset-0 -z-10 opacity-70" />
+
+        <div className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-10 pt-9 text-center sm:pb-12 sm:pt-12">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: EASE_OUT_QUINT }}
+          >
+            <CloudieMascot className="w-28 sm:w-36 lg:w-40" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.08, ease: EASE_OUT_QUINT }}
+            className="flex w-full flex-col items-center"
+          >
+            <div className="mt-6 inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              Personal workspace
+            </div>
+
+            <h1 className="mt-4 font-display text-3xl font-extrabold leading-[1.05] tracking-tight text-foreground sm:text-4xl lg:text-5xl">
+              Welcome back, <span className="text-primary">{firstName}</span>
+            </h1>
+
+            <p className="mt-4 text-sm text-muted-foreground sm:text-base">{subtitle}</p>
+
+            <div className="mt-7 flex w-full flex-col items-center gap-3 sm:w-auto sm:flex-row sm:justify-center">
+              <Button asChild size="lg" className="h-12 w-full gap-2 px-7 text-[15px] font-bold sm:w-auto">
+                <Link to="/buy-points">
+                  <Plus className="size-4" /> Add points
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="h-12 w-full gap-2 px-6 font-semibold sm:w-auto"
+              >
+                <Link to="/shipments/new">
+                  <Package className="size-4" /> New shipment
+                </Link>
+              </Button>
+            </div>
+
+            {/* The one nudge worth interrupting for, in the same pill shape as
+                the banner on the landing page. */}
+            {lowBalance && (
+              <div className="mt-5 flex max-w-xl flex-col items-start gap-2 rounded-3xl border border-warning/25 bg-warning/[0.07] px-4 py-2.5 text-left text-xs leading-relaxed text-muted-foreground sm:flex-row sm:items-center sm:rounded-full">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning sm:mt-0" aria-hidden />
+                <span>
+                  <strong className="text-foreground">Balance is running low.</strong>{" "}
+                  Under {LOW_BALANCE_POINTS} points left — top up so renders and shipments keep
+                  going.
+                </span>
+              </div>
+            )}
+
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+              {loading ? (
+                <>
+                  <Skeleton className="h-9 w-40 rounded-full" />
+                  <Skeleton className="h-9 w-44 rounded-full" />
+                  <Skeleton className="h-9 w-28 rounded-full" />
+                </>
+              ) : (
+                <>
+                  {[
+                    {
+                      icon: Briefcase,
+                      text: `${stats.openJobs} active shipment${stats.openJobs === 1 ? "" : "s"}`,
+                    },
+                    {
+                      icon: FileStack,
+                      text: `${stats.pendingDocs} pending document${stats.pendingDocs === 1 ? "" : "s"}`,
+                    },
+                  ].map((chip) => (
+                    <span
+                      key={chip.text}
+                      className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 px-4 py-2 text-xs font-medium text-muted-foreground backdrop-blur transition-colors duration-200 hover:border-primary/30 hover:text-foreground"
+                    >
+                      <chip.icon className="size-3.5 text-primary" aria-hidden />
+                      {chip.text}
+                    </span>
+                  ))}
+                  <Link
+                    to="/transactions"
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-surface/70 px-4 py-2 text-xs font-medium text-muted-foreground backdrop-blur transition-colors duration-200 hover:border-primary/30 hover:text-foreground"
+                  >
+                    <Coins className="size-3.5 text-primary" aria-hidden />
+                    View ledger
+                  </Link>
+                </>
+              )}
+            </div>
+          </motion.div>
         </div>
-        <Button asChild size="lg" className="shrink-0 gap-2">
-          <Link to="/buy-points">
-            <Plus className="size-4" /> Add points
-          </Link>
-        </Button>
-      </div>
+      </section>
 
       {/* Row 1 — stat cards */}
       <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -756,15 +848,9 @@ export default function Dashboard() {
             <p className="mt-1 text-xs text-muted-foreground">Jump straight back in.</p>
           </CardHeader>
           <CardContent className="space-y-2 pt-0">
-            {lowBalance && (
-              <QuickActionRow
-                to="/buy-points"
-                icon={Plus}
-                label="Add points"
-                hint={`Balance is under ${LOW_BALANCE_POINTS} pts`}
-                pulse
-              />
-            )}
+            {/* The hero banner already explains why; this is only the shortcut
+                that acts on it. */}
+            {lowBalance && <QuickActionRow to="/buy-points" icon={Plus} label="Add points" pulse />}
             <QuickActionRow to="/shipments/new" icon={Package} label="New shipment" />
             <QuickActionRow to="/documents/own/new" icon={FileStack} label="Generate document" />
             <QuickActionRow to="/services/email/new" icon={Megaphone} label="Send campaign" hint="Compose in the drag-and-drop editor" />

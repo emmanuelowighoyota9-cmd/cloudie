@@ -623,7 +623,7 @@ export default function AdminVtuProviders() {
                   className="min-h-11 font-mono"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Sent on every purchase. AidaPay requires it, and Crestline
+                  Sent on every purchase. AidaPay requires it, and Cloudie
                   refuses to dispatch without one.
                 </p>
               </div>

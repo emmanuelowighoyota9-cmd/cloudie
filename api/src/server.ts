@@ -461,7 +461,7 @@ app.get("/api/auth/csrf", (c) => {
 
 app.get("/api/public-config", async (c) => {
   const defaultBrand = {
-    name: "Cloudie Operations",
+    name: "Cloudie",
     tagline: "Unified operations platform",
     accentColor: "#10b981",
     footerNote: "Shipments, tracking, documents, and payments drawn on one balance."
@@ -474,7 +474,7 @@ app.get("/api/public-config", async (c) => {
     widgetTitle: "Need help?",
     widgetMessage: "Our support desk replies within one business day.",
     faqs: [
-      { question: "What is Cloudie Operations?", answer: "A unified platform connecting shipments, tracking, documents, and business tools." },
+      { question: "What is Cloudie?", answer: "A unified platform connecting shipments, tracking, documents, and business tools." },
       { question: "How does tracking work?", answer: "Enter any active tracking number on the public tracking page for live milestones." }
     ]
   };

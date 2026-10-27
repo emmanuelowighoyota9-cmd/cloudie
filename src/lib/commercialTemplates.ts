@@ -1,5 +1,5 @@
 /**
- * Crestline commercial paperwork templates (part two).
+ * Cloudie commercial paperwork templates (part two).
  *
  * Quotation, delivery note, statement of account and expense claim. Kept in
  * their own module so the base starter set stays readable; both are merged into
@@ -185,7 +185,7 @@ export const deliveryNote: StarterTemplate = {
       { id: "contents3", type: "text", label: "Item 3", default: "Fixings & sealant", maxLength: 42 },
       { id: "contentsQty3", type: "number", label: "Delivered qty 3", default: "12", min: 0 },
       { id: "notes", type: "textarea", label: "Delivery notes", default: "Delivered to the site office between 09:00 and 12:00.\nTwo pallets require a forklift to unload.", maxLength: 200 },
-      { id: "qrValue", type: "text", label: "QR payload", default: "crestline.example/delivery/DN-2026-2291", maxLength: 120 },
+      { id: "qrValue", type: "text", label: "QR payload", default: "cloudie.example/delivery/DN-2026-2291", maxLength: 120 },
     ],
   },
   configuration: {

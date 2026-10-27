@@ -1,5 +1,5 @@
 /**
- * Crestline starter templates.
+ * Cloudie starter templates.
  *
  * Plain data: each entry is a complete, validated template definition
  * (schema + layout configuration) that the platform seeds so the document
@@ -353,7 +353,7 @@ const trackingCard: StarterTemplate = {
   supportedFormats: ["png", "pdf"],
   schema: {
     fields: [
-      { id: "carrier", type: "text", label: "Carrier", default: "Crestline Express", required: true, maxLength: 34 },
+      { id: "carrier", type: "text", label: "Carrier", default: "Cloudie", required: true, maxLength: 34 },
       { id: "trackingNumber", type: "reference", label: "Tracking number", default: "CRL-88213-7Q", required: true },
       { id: "shipmentStatus", type: "status", label: "Status", default: "in_transit", options: [
         { label: "Created", value: "draft" },
@@ -376,7 +376,7 @@ const trackingCard: StarterTemplate = {
       { id: "recipientName", type: "text", label: "Recipient", default: "Riverside Hardware", maxLength: 34 },
       { id: "progress", type: "number", label: "Progress (%)", default: "68", min: 0, max: 100 },
       { id: "barcodeValue", type: "reference", label: "Barcode value", default: "CRL-88213-7Q", required: true },
-      { id: "qrValue", type: "text", label: "QR payload", default: "crestline.example/track/CRL-88213-7Q", maxLength: 120 },
+      { id: "qrValue", type: "text", label: "QR payload", default: "cloudie.example/track/CRL-88213-7Q", maxLength: 120 },
     ],
   },
   configuration: {
@@ -967,7 +967,7 @@ const packingList: StarterTemplate = {
       { id: "handling", type: "textarea", label: "Handling instructions", default: "Keep flat. Do not stack more than two high.\nProtect from moisture in transit.", maxLength: 220 },
       { id: "notes", type: "textarea", label: "Notes", default: "Dock access is booked for the morning slot. Quote the consignment reference at the gate.", maxLength: 180 },
       { id: "barcodeValue", type: "reference", label: "Barcode value", default: "CRL-88213-7Q", required: true },
-      { id: "qrValue", type: "text", label: "QR payload", default: "crestline.example/packing/CRL-88213-7Q", maxLength: 120 },
+      { id: "qrValue", type: "text", label: "QR payload", default: "cloudie.example/packing/CRL-88213-7Q", maxLength: 120 },
     ],
   },
   configuration: {

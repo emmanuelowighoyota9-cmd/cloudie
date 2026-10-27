@@ -1,5 +1,5 @@
 /**
- * Crestline document brief parser.
+ * Cloudie document brief parser.
  *
  * Turns a plain-language brief into a validated field set for one of the
  * platform's legitimate business document templates. It is intentionally
@@ -433,7 +433,7 @@ interface RefusedCategory {
 
 /**
  * Anything whose value depends on a third party believing it is genuine.
- * Crestline does not manufacture these, and the parser refuses them before any
+ * Cloudie does not manufacture these, and the parser refuses them before any
  * template matching happens.
  */
 const REFUSED: RefusedCategory[] = [
@@ -809,7 +809,7 @@ export function parseDocumentBrief(input: string, intentKey?: string): BriefResu
     return {
       status: "blocked",
       matched: refused.term,
-      reason: `Crestline does not generate ${refused.label}. Identity documents, government credentials, payment confirmations, bank instruments and credential certificates are declined. Supported instead: ${SUPPORTED_SUMMARY}.`,
+      reason: `Cloudie does not generate ${refused.label}. Identity documents, government credentials, payment confirmations, bank instruments and credential certificates are declined. Supported instead: ${SUPPORTED_SUMMARY}.`,
     };
   }
 
@@ -848,7 +848,7 @@ export function parseDocumentBrief(input: string, intentKey?: string): BriefResu
     );
     return {
       status: "ambiguous",
-      reason: "This brief could be more than one document. Pick the one you want and Crestline will extract its fields.",
+      reason: "This brief could be more than one document. Pick the one you want and Cloudie will extract its fields.",
       candidates: runnersUp.slice(0, 3),
       values: collected.values,
     };
@@ -875,7 +875,7 @@ export interface BriefStructuredOutput {
 }
 
 /**
- * Structured output in the shape the Crestline document engine consumes:
+ * Structured output in the shape the Cloudie document engine consumes:
  * canonical field ids plus the extracted values, ready to drop into the builder.
  */
 export function buildStructuredOutput(

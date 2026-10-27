@@ -32,12 +32,18 @@ const SEMANTICS = [
   { name: "info", hsl: "220 85% 58%", lightFg: "#0a182b", usedFor: "Neutral information, links, system notices and in-progress hints." },
 ] as const;
 
+/* Workspace accents. Cloudie is black, emerald and white, so the six workspaces
+   are separated inside that one family — a green-to-teal ramp plus one neutral
+   — rather than by six unrelated hues. Administration keeps the single warm
+   accent so it can never be mistaken for a workspace. */
 const ACCENTS = [
-  { name: "accent-1", hsl: "160 70% 52%", usedFor: "Panels and surfaces that need one step of emerald lift above the card." },
-  { name: "accent-2", hsl: "220 85% 58%", usedFor: "Information highlights, badges and secondary interactive ink." },
-  { name: "accent-3", hsl: "36 93% 52%", usedFor: "Cautions, pending states and amber callouts inside surfaces." },
-  { name: "accent-4", hsl: "0 84% 60%", usedFor: "Destructive or irreversible emphasis when it must read against dark chrome." },
-  { name: "accent-5", hsl: "142 72% 48%", usedFor: "Earned, completed and positive-confirmation tones inside panels." },
+  { name: "ws-shipments", hsl: "160 84% 39%", usedFor: "Emerald. The brand accent, and the shipments workspace." },
+  { name: "ws-personal", hsl: "160 64% 52%", usedFor: "Mint lift. Panels that need one step of brightness above the card." },
+  { name: "ws-ticketing", hsl: "173 80% 50%", usedFor: "Teal. Ticketing, and the cool end of the ramp." },
+  { name: "ws-business", hsl: "160 84% 30%", usedFor: "Jade, the deep end. Reserved surfaces and pressed states." },
+  { name: "ws-services", hsl: "166 75% 64%", usedFor: "Pale teal. The lightest tint, for services and chart series three." },
+  { name: "ws-marketplace", hsl: "240 5% 90%", usedFor: "Neutral. The marketplace is deliberately the odd one out." },
+  { name: "ws-admin", hsl: "0 91% 71%", usedFor: "The one warm accent. Administration only — never a workspace." },
 ] as const;
 
 function hslToCss(hsl: string, alpha?: number): string {
@@ -50,16 +56,18 @@ function hslToCss(hsl: string, alpha?: number): string {
   return `hsl(${h} ${s} ${l})`;
 }
 
+/* One geometric family across the whole product. Headings are the same
+   typeface as body text, separated by weight and by tight (-3.5%) tracking. */
 const TYPOGRAPHY = [
-  { label: "display", family: "Space Grotesk", css: "48px / 1.05 600", sample: "The fastest way to move money across a platform that already has your trust." },
-  { label: "h1", family: "Space Grotesk", css: "clamp(1.75rem, 2.2vw, 2.25rem) / 1.1 700", sample: "Your personal workspace, ready in one tap." },
-  { label: "h2", family: "Space Grotesk", css: "clamp(1.25rem, 1.6vw, 1.5rem) / 1.15 600", sample: "Pay and manage the services you use most." },
-  { label: "h3", family: "Space Grotesk", css: "1.125rem / 1.25 600", sample: "Recent activity" },
-  { label: "body-lg", family: "DM Sans", css: "1rem / 1.5 400", sample: "Your personal workspace connects points activity, orders, notifications and tools." },
-  { label: "body", family: "DM Sans", css: "0.875rem / 1.5 400", sample: "Ready for instant Cloudie services across airtime, data, electricity and more." },
-  { label: "sm", family: "DM Sans", css: "0.8125rem / 1.45 400", sample: "No wallet transactions yet. Fund your wallet to start using Cloudie." },
-  { label: "xs", family: "DM Sans", css: "0.6875rem / 1.4 400", sample: "AVAILABLE BALANCE · NGN" },
-  { label: "mono", family: "DM Mono", css: "0.8125rem / 1.5 400", sample: "NGN 5,240.00  ·  pts 1,840" },
+  { label: "display", family: "Plus Jakarta Sans", css: "48px / 1.03 800", sample: "The fastest way to move money across a platform that already has your trust." },
+  { label: "h1", family: "Plus Jakarta Sans", css: "clamp(1.75rem, 2.2vw, 2.25rem) / 1.1 700", sample: "Your personal workspace, ready in one tap." },
+  { label: "h2", family: "Plus Jakarta Sans", css: "clamp(1.25rem, 1.6vw, 1.5rem) / 1.15 700", sample: "Pay and manage the services you use most." },
+  { label: "h3", family: "Plus Jakarta Sans", css: "1.125rem / 1.25 600", sample: "Recent activity" },
+  { label: "body-lg", family: "Plus Jakarta Sans", css: "1rem / 1.5 400", sample: "Your personal workspace connects points activity, orders, notifications and tools." },
+  { label: "body", family: "Plus Jakarta Sans", css: "0.875rem / 1.5 400", sample: "Ready for instant Cloudie services across airtime, data, electricity and more." },
+  { label: "sm", family: "Plus Jakarta Sans", css: "0.8125rem / 1.45 400", sample: "No wallet transactions yet. Fund your wallet to start using Cloudie." },
+  { label: "xs", family: "Plus Jakarta Sans", css: "0.6875rem / 1.4 400", sample: "AVAILABLE BALANCE · NGN" },
+  { label: "mono", family: "System mono", css: "0.8125rem / 1.5 400", sample: "NGN 5,240.00  ·  pts 1,840" },
 ] as const;
 
 const SPACING = [
@@ -532,8 +540,9 @@ export default function DesignSystem() {
       <section className="mt-6">
         <SectionLabel label="Colour tokens" />
         <p className="mt-1.5 text-xs text-muted-foreground">
-          Neutral scale, semantic status tokens and five workspace accents. Each swatch shows its HSL value, light-mode
-          foreground, and a plain-language “used for” note so the rule behind the colour is as visible as the colour itself.
+          Neutral scale, semantic status tokens and the workspace accents. Each swatch shows its HSL value, the
+          foreground it is paired with, and a plain-language “used for” note so the rule behind the colour is as visible
+          as the colour itself.
         </p>
         <div className="mt-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -568,10 +577,10 @@ export default function DesignSystem() {
 
           <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground">Workspace accents</p>
           <p className="text-xs text-muted-foreground">
-            Five accents beyond the brand primary. They are not brand colours — they are the reusable highlight ramp the
-            rest of the system can draw on without inventing new hues.
+            Six accents, all inside the emerald family plus one neutral, and the admin red. These identify a workspace in
+            navigation — they are never used to encode status, and no feedback state depends on hue alone.
           </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {ACCENTS.map((t) => (
               <TokenSwatch key={t.name} name={t.name} hsl={t.hsl} fg={hslToCss("#ffffff", 1)} bg={hslToCss(t.hsl, 0.16)} lightLabel="dark" usedFor={t.usedFor} />
             ))}
@@ -582,8 +591,9 @@ export default function DesignSystem() {
       <section className="mt-10">
         <SectionLabel label="Typography scale" />
         <p className="mt-1.5 text-xs text-muted-foreground">
-          Display and heading scale in Space Grotesk, body in DM Sans, code/mono in DM Mono. Every row lists the font
-          family, the responsive size / line-height / weight, and an example sentence that matches the real product voice.
+          Headers and body share one geometric family — Plus Jakarta Sans — separated by weight and by tight tracking
+          (-3.5%) rather than by typeface. Every row lists the family, the responsive size / line-height / weight, and an
+          example sentence that matches the real product voice.
         </p>
         <div className="mt-4 space-y-3">
           {TYPOGRAPHY.map((t) => <TypographyRow key={t.label} {...t} />)}

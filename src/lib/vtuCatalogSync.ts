@@ -1,5 +1,5 @@
 /**
- * Turning AidaPay's published catalog into Crestline catalog rows.
+ * Turning AidaPay's published catalog into Cloudie catalog rows.
  *
  * PURE FUNCTIONS ONLY — no fetch, no Convex, no database. The network call
  * lives in `vtuCatalogSync.ts` (backend) and does nothing but hand these the
