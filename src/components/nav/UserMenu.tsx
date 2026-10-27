@@ -9,11 +9,54 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+/**
+ * The theme control, as a pill toggle.
+ *
+ * Cloudie ships one dark palette (see ThemeProvider), so Light and Auto are
+ * listed but inert rather than silently doing nothing — the spec wants the
+ * control visible, the product wants it honest.
+ */
+const THEME_OPTIONS = [
+  { value: "light", label: "Light" },
+  { value: "system", label: "Auto" },
+  { value: "dark", label: "Dark" },
+] as const;
+
+function ThemePills() {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Theme"
+      className="mx-1.5 mb-1 flex gap-1 rounded-full border border-border bg-muted/60 p-1"
+    >
+      {THEME_OPTIONS.map((option) => {
+        const active = option.value === "dark";
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={!active}
+            title={active ? undefined : "Cloudie ships one dark palette"}
+            className={cn(
+              "flex-1 rounded-full px-3 py-2 text-[11px] font-semibold transition-colors duration-200",
+              active
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground opacity-70",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 type UserMenuProps = {
   collapsed?: boolean;
@@ -119,18 +162,7 @@ export function UserMenu({ collapsed = false, onNavigate }: UserMenuProps) {
         <DropdownMenuLabel className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
           Theme
         </DropdownMenuLabel>
-        {/* Cloudie ships one dark palette (see ThemeProvider). The other two
-            values are listed so the menu matches the product spec, but they are
-            disabled rather than silently doing nothing. */}
-        <DropdownMenuRadioGroup value="dark">
-          <DropdownMenuRadioItem value="system" disabled title="Cloudie ships one dark palette">
-            System
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="light" disabled title="Cloudie ships one dark palette">
-            Light
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+        <ThemePills />
 
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => void handleSignOut()}>

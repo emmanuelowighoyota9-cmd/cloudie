@@ -278,10 +278,13 @@ function CatalogOrderPage({ mode, balance }: CatalogOrderPageProps) {
   return (
     <div className="cloudie-marketplace min-w-0 max-w-full overflow-x-hidden pb-24">
       <div className="mb-5">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+        <Badge
+          variant={mode === "numbers" ? "outline" : "social"}
+          className="uppercase tracking-[0.14em]"
+        >
           {mode === "numbers" ? "Live numbers catalog" : "Live social boost catalog"}
-        </div>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">
+        </Badge>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight">
           {mode === "numbers" ? "Buy Number" : "Boost Socials"}
         </h1>
         <p className="mt-1 max-w-xl text-sm text-muted-foreground">

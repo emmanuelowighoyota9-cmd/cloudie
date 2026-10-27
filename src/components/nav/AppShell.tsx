@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router";
-import { Menu } from "lucide-react";
+import { Coins, Menu } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { AppSearch } from "@/components/AppSearch";
+import { formatNgn } from "@/lib/pricing";
 import { useSession } from "@/hooks/useSession";
 import { useActiveWorkspace } from "@/hooks/useActiveWorkspace";
 import { DesktopSidebar } from "./DesktopSidebar";
@@ -53,6 +58,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const active = useActiveWorkspace();
   const narrow = useNarrowViewport(1279);
+  const walletNgn = useQuery(api.wallet.getBalance);
 
   const [collapsed, setCollapsed] = useState<boolean>(readCollapsedPreference);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -94,22 +100,25 @@ export function AppShell() {
       <DesktopSidebar collapsed={railCollapsed} onToggle={toggleRail} autoCollapsed={narrow} />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Phone-only top strip: the drawer's trigger and the current workspace. */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-2 lg:hidden">
+        {/* Fixed, minimalist top bar at every width: the drawer trigger and
+            brand on phones, global search and the wallet pill once there is
+            room. Support stays in the floating launcher and the account in the
+            rail, so nothing here is duplicated. */}
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-sidebar px-2 lg:px-3">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation"
             aria-haspopup="dialog"
             aria-expanded={drawerOpen}
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar lg:hidden"
           >
             <Menu className="size-5" aria-hidden />
           </button>
 
           <Link
             to="/app"
-            className="flex min-w-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar"
+            className="flex min-w-0 shrink items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar lg:hidden"
             aria-label="Cloudie home"
           >
             <span className="text-sm font-bold tracking-tight text-foreground">Cloudie</span>
@@ -120,6 +129,30 @@ export function AppShell() {
             <span className="truncate text-xs font-medium text-muted-foreground">
               {active.label}
             </span>
+          </Link>
+
+          <div className="hidden min-w-0 flex-1 md:block">
+            <AppSearch />
+          </div>
+
+          {/* Wallet: the one number worth permanent space, and the fastest
+              route to topping it up. */}
+          <Link
+            to="/buy-points"
+            className="ml-auto shrink-0 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:ml-0"
+            aria-label={
+              walletNgn === undefined
+                ? "Points wallet"
+                : `${formatNgn(walletNgn)} in your wallet — top up`
+            }
+          >
+            <Badge
+              variant="outline"
+              className="gap-1.5 rounded-full border-primary/25 bg-primary/10 px-2.5 py-1.5 text-xs font-semibold text-primary"
+            >
+              <Coins className="size-3.5" aria-hidden />
+              {walletNgn === undefined ? "—" : formatNgn(walletNgn)}
+            </Badge>
           </Link>
         </header>
 

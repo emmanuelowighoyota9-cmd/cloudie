@@ -23,6 +23,9 @@ const badgeVariants = cva(
         success: "border-success/30 bg-success/15 text-success [a&]:hover:bg-success/25",
         warning: "border-warning/30 bg-warning/15 text-warning [a&]:hover:bg-warning/25",
         info: "border-info/30 bg-info/15 text-info [a&]:hover:bg-info/25",
+        // Secondary accent. Social callouts only — a channel or community
+        // invitation. Never a CTA and never a status.
+        social: "border-social/30 bg-social/10 text-social [a&]:hover:bg-social/20",
         danger: "border-error/30 bg-error/15 text-error [a&]:hover:bg-error/25",
         // Alias kept for the many call sites that already pass `error`.
         error: "border-error/30 bg-error/15 text-error [a&]:hover:bg-error/25",

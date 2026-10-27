@@ -51,6 +51,10 @@
   --color-warning: var(--warning);
   --color-error: var(--error);
   --color-info: var(--info);
+  /* Spec: labels are their own ink (uppercase, expanded tracking), and the
+     secondary accent exists only for social callout pills. */
+  --color-label: var(--label);
+  --color-social: var(--social);
   /* VTU: the customer's airtime & bills surface, themed separately. */
   --color-vtu-canvas: var(--vtu-canvas);
   --color-vtu-card: var(--vtu-card);
@@ -106,14 +110,18 @@
   --background: #000000; /* primary background */
   --surface: #080808; /* secondary background */
   --sidebar: #0a0a0a; /* sidebar background */
-  --card: #111111; /* card background */
+  --card: #0d0d0d; /* card background — dark charcoal (spec: #0D0D0D) */
   --surface-2: #181818; /* elevated surface */
   --elevated: #181818;
-  --popover: #111111;
+  --popover: #0d0d0d;
 
-  /* Ink */
-  --foreground: #ffffff; /* primary text */
-  --muted-foreground: #a1a1aa; /* secondary text */
+  /* Ink. Headings are pure white; body copy sits one step down at the spec's
+     light grey so it stays readable on black. */
+  --foreground: #ffffff; /* headings / primary text */
+  --muted-foreground: #d1d5db; /* body text (spec: #D1D5DB) */
+  /* Subheads & labels: muted grey (spec: #9CA3AF), always uppercase with
+     expanded tracking — see the label rule below. */
+  --label: #9ca3af;
   --card-foreground: #ffffff;
   --popover-foreground: #ffffff;
 
@@ -126,6 +134,9 @@
   --primary-hover: #059669;
   --primary-foreground: #04120c;
   --ring: #10b981;
+  /* Secondary accent — social callout pills only ("Join channel" style). It
+     is never a CTA, never a status, and never a large fill. */
+  --social: #22d3ee;
 
   /* Interaction fills. `accent` is the hover/selected surface, not a brand
      colour — that is what `primary` is for. */
@@ -207,6 +218,33 @@
   --nb-rule: var(--border);
 }
 
+
+/* ════════════════════════════════════════════════════════════════════
+   LABEL INK — the type spec splits two roles that `text-muted-foreground`
+   carries everywhere else: body copy is light grey (#D1D5DB), labels are the
+   muted grey (#9CA3AF). Any element that uppercases its text *and* asks for
+   muted ink is a label, so it takes label ink and, when it has no tracking of
+   its own, expanded tracking.
+
+   Deliberately unlayered: that is what lets it override the utility. It
+   requires both classes, so intent-coloured labels (`text-primary uppercase`,
+   `text-success uppercase`) are untouched, as is anything that already sets
+   its own tracking.
+   ════════════════════════════════════════════════════════════════════ */
+[class~="uppercase"][class~="text-muted-foreground"] {
+  color: var(--label);
+}
+
+[class~="uppercase"][class~="text-muted-foreground"]:not([class*="tracking"]) {
+  letter-spacing: 0.14em;
+}
+
+/* Placeholders are hints, not values: they stay one step dimmer than body
+   text so an empty field never reads as filled. */
+::placeholder {
+  color: var(--label);
+  opacity: 1;
+}
 
 @layer base {
   * {
@@ -602,11 +640,11 @@
   }
 
   .section-label {
-    color: var(--muted-foreground);
+    color: var(--label);
     font-size: 0.68rem;
     line-height: 1;
     font-weight: 700;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
   }
 

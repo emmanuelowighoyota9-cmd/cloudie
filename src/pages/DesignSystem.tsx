@@ -16,9 +16,10 @@ const SPRING_EASING_INTERNAL = SPRING_EASING;
 const NEUTRALS = [
   { name: "background", hsl: "0 0% 0%", usedFor: "Primary canvas — the page itself." },
   { name: "surface", hsl: "0 0% 3.1%", usedFor: "Secondary surfaces beside the page." },
-  { name: "card", hsl: "0 0% 6.7%", usedFor: "Raised panels, inputs and content blocks." },
-  { name: "foreground", hsl: "0 0% 100%", usedFor: "Primary ink — headings and body text." },
-  { name: "muted-foreground", hsl: "0 0% 63.1%", usedFor: "Secondary ink, captions and labels." },
+  { name: "card", hsl: "0 0% 5.1%", usedFor: "Raised panels, inputs and content blocks — dark charcoal, separated from the page by its border." },
+  { name: "foreground", hsl: "0 0% 100%", usedFor: "Headings — pure white, bold, tight tracking." },
+  { name: "muted-foreground", hsl: "0 0% 82%", usedFor: "Body copy — light grey for readability on black." },
+  { name: "label", hsl: "0 0% 61%", usedFor: "Subheads and labels — always uppercase with expanded tracking." },
   { name: "border", hsl: "0 0% 15.3%", usedFor: "Dividers, input outlines and hairlines." },
   { name: "input", hsl: "0 0% 15.3%", usedFor: "Field backgrounds and tappable surfaces." },
   { name: "ring", hsl: "160 84% 54%", usedFor: "Keyboard focus rings and interactive emphasis." },
@@ -30,6 +31,7 @@ const SEMANTICS = [
   { name: "warning", hsl: "36 93% 52%", lightFg: "#211802", usedFor: "Pending work, cautions and states that need attention but are not broken." },
   { name: "destructive", hsl: "0 84% 60%", lightFg: "#3b0a0a", usedFor: "Errors, irreversible actions, refunds and failed states." },
   { name: "info", hsl: "220 85% 58%", lightFg: "#0a182b", usedFor: "Neutral information, links, system notices and in-progress hints." },
+  { name: "social", hsl: "188 86% 53%", lightFg: "#04212a", usedFor: "Secondary accent — social callout pills only. Never a primary CTA and never a status." },
 ] as const;
 
 /* Workspace accents. Cloudie is black, emerald and white, so the six workspaces
