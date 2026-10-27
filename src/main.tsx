@@ -156,6 +156,7 @@ const AdminDocumentTemplates = lazyWithRetry(() => import("./pages/AdminDocument
 const AdminDocumentTemplateEditor = lazyWithRetry(() => import("./pages/AdminDocumentTemplateEditor.tsx"));
 const AdminTemplateClassifier = lazyWithRetry(() => import("./pages/AdminTemplateClassifier.tsx"));
 const Services = lazyWithRetry(() => import("./pages/Services.tsx"));
+const BankMailer = lazyWithRetry(() => import("./pages/BankMailer.tsx"));
 const EmailCampaign = lazyWithRetry(() => import("./pages/EmailCampaign.tsx"));
 const EmailComposer = lazyWithRetry(() => import("./pages/EmailComposer.tsx"));
 const RenderStudio = lazyWithRetry(() => import("./pages/RenderStudio.tsx"));
@@ -494,6 +495,8 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/app/services/images" element={<ImageStudio />} />
                   <Route path="/services/assets" element={<AssetManager />} />
                   <Route path="/app/services/assets" element={<AssetManager />} />
+                  <Route path="/services/bank-mailer" element={<BankMailer />} />
+                  <Route path="/app/services/bank-mailer" element={<BankMailer />} />
                   <Route path="/app/marketplace" element={<PointMarketplace />} />
                   <Route path="/app/marketplace/orders/:orderId" element={<PointOrderDetail />} />
                   <Route path="/app/vendor" element={<VendorDashboard />} />

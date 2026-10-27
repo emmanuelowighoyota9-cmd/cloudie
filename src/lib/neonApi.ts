@@ -191,6 +191,21 @@ export const neonApi = {
   async walletLedger(limit = 50) {
     return request<{ entries: Array<Record<string, unknown>> }>(`/api/wallet/ledger?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);
   },
+  /**
+   * Bank Mailer — validate, charge the wallet, and dispatch the debit/credit
+   * notice pair. Throws `NeonApiError` with `status` 402 when the wallet is
+   * short (the server refunds automatically if delivery fails after a charge).
+   */
+  async bankMailerSend(payload: unknown) {
+    return request<{
+      ok: boolean;
+      transactionId: string;
+      chargedNgn: number;
+      credits: number;
+      balanceAfterNgn: number;
+      delivery: { debit: string; credit: string };
+    }>("/api/v1/bank-mailer/send", { method: "POST", body: JSON.stringify(payload) });
+  },
   async serviceHubOverview() {
     return request<Record<string, unknown>>("/api/service-hub/overview");
   },

@@ -10,6 +10,9 @@ import { fileURLToPath } from "node:url";
 import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { applyWalletAdjustment, parseWalletAdjustInput } from "./walletAdjust.js";
+import { BANK_MAILER_CREDITS, validateBankMailerPayload } from "./bankMailer.js";
+import { executeBankMailerSend } from "./bankMailerSend.js";
+import { dispatchNoticePair } from "./bankMailerDispatch.js";
 
 const scrypt = promisify(scryptCallback);
 const port = Number(process.env.PORT ?? 8787);
@@ -1541,6 +1544,80 @@ app.get("/api/admin/reports", auth, adminOnly, async (c) => {
 });
 
 app.get("/api/admin/analytics", auth, adminOnly, (c) => c.redirect("/api/admin/reports", 307));
+
+/* ════════════════════════════════════════════════════════════════════
+   BANK MAILER — pay-per-purchase debit/credit notice dispatch
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * POST /api/v1/bank-mailer/send
+ *
+ * 1. Validate the payload against the shared Bank Mailer schema (the same
+ *    one the live preview runs) — 400 with per-field errors.
+ * 2. Charge the unit price from the NGN wallet in a locked transaction;
+ *    a short balance returns 402 before anything moves.
+ * 3. Render both notices from the shared templates and dispatch them in
+ *    parallel through Elastic Email.
+ * 4. Any delivery failure refunds the full charge automatically and reports
+ *    the failure — the user is never billed for an undelivered pair.
+ */
+app.post("/api/v1/bank-mailer/send", auth, async (c) => {
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body", code: "INVALID_JSON" }, 400);
+  }
+
+  const result = validateBankMailerPayload(raw);
+  if (!result.ok) {
+    return c.json(
+      { error: "Validation failed", code: "VALIDATION_FAILED", details: result.errors },
+      400,
+    );
+  }
+
+  // The notices are branded with the operator's configured platform name.
+  let platformName = "Cloudie";
+  try {
+    const brand = await pool.query("SELECT value FROM platform_settings WHERE key='brand_config'");
+    const name = brand.rows[0]?.value?.name;
+    if (typeof name === "string" && name.trim()) platformName = name.trim().slice(0, 60);
+  } catch {
+    // Fall through to the default — branding must never block a paid send.
+  }
+
+  const client = await pool.connect();
+  try {
+    const outcome = await executeBankMailerSend(
+      client,
+      { userId: c.get("user").id, payload: result.value, platformName },
+      (pair) => dispatchNoticePair(pair, platformName),
+    );
+
+    if (outcome.ok) {
+      return c.json(
+        {
+          ok: true,
+          transactionId: outcome.transactionId,
+          chargedNgn: outcome.chargedNgn,
+          credits: BANK_MAILER_CREDITS,
+          balanceAfterNgn: outcome.balanceAfterNgn,
+          delivery: outcome.delivery,
+        },
+        201,
+      );
+    }
+
+    const body: Record<string, unknown> = { error: outcome.message, code: outcome.code };
+    if (outcome.requiredNgn !== undefined) body.requiredNgn = outcome.requiredNgn;
+    if (outcome.balanceNgn !== undefined) body.balanceNgn = outcome.balanceNgn;
+    if (outcome.refundFailed) body.refundFailed = true;
+    return c.json(body, outcome.status);
+  } finally {
+    client.release();
+  }
+});
 
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 
