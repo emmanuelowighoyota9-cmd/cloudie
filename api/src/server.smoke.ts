@@ -640,6 +640,18 @@ test("rejects an incorrect first-admin bootstrap token without database access",
   }
 });
 
+test("the transaction mail studio requires a session on read and write", async () => {
+  const overview = await app.request("/api/v1/transaction-mailer/overview");
+  const send = await app.request("/api/v1/transaction-mailer/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+
+  assert.equal(overview.status, 401);
+  assert.equal(send.status, 401);
+});
+
 test("validates points marketplace filters before database access", async () => {
   const response = await app.request("/api/marketplace/packages?minPrice=-1");
   assert.equal(response.status, 400);

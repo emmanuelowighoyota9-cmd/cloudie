@@ -206,6 +206,52 @@ export const neonApi = {
       delivery: { debit: string; credit: string };
     }>("/api/v1/bank-mailer/send", { method: "POST", body: JSON.stringify(payload) });
   },
+  /**
+   * Crypto Mails (Transaction Mail Studio) — brand, price, balance and the
+   * recent delivery log in one read. The recipient is always the signed-in
+   * account's own address; it is never sent as part of a payload.
+   */
+  async transactionMailerOverview() {
+    return request<{
+      ok: boolean;
+      brand: { name: string; accent: string; logo?: string };
+      platformName: string;
+      recipientEmail: string;
+      pricing: { credits: number; priceNgn: number };
+      balanceNgn: number | null;
+      historyAvailable: boolean;
+      logs: Array<{
+        id: string;
+        templateKey: string;
+        noticeType: string;
+        recipientEmail: string;
+        amount: string;
+        currency: string;
+        txHash: string;
+        status: "PENDING" | "SENT" | "FAILED";
+        error: string | null;
+        chargedNgn: number;
+        sentAt: string;
+      }>;
+    }>("/api/v1/transaction-mailer/overview");
+  },
+  /**
+   * Charge the wallet and deliver one rendered preview to the account owner.
+   * Throws `NeonApiError` with status 402 when the wallet is short (the server
+   * refunds automatically if delivery fails after a charge).
+   */
+  async transactionMailerSend(payload: unknown) {
+    return request<{
+      ok: boolean;
+      logId: string;
+      transactionId: string;
+      chargedNgn: number;
+      credits: number;
+      balanceAfterNgn: number;
+      status: "SENT";
+      brand: { name: string; accent: string; logo?: string };
+    }>("/api/v1/transaction-mailer/send", { method: "POST", body: JSON.stringify(payload) });
+  },
   async serviceHubOverview() {
     return request<Record<string, unknown>>("/api/service-hub/overview");
   },

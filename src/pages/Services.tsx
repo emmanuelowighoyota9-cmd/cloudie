@@ -1,10 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Mail, Image, FolderOpen, Landmark, ArrowUpRight } from "lucide-react";
+import { Mail, Image, FolderOpen, Landmark, Coins, ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
 
 const services = [
   { label: "Email Campaigns", description: "Compose and send email campaigns with WYSIWYG editor", icon: Mail, to: "/services/email", color: "bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400" },
   { label: "Bank Mailer", description: "Dispatch debit & credit transfer notices, charged per send", icon: Landmark, to: "/services/bank-mailer", color: "bg-teal-50 text-teal-700 dark:bg-teal-950/50 dark:text-teal-400" },
+  { label: "Crypto Mails", description: "Preview branded deposit & transaction emails in your own inbox", icon: Coins, to: "/services/crypto-mails", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" },
   { label: "Image Studio", description: "Pick a template, shape the copy, render a PNG", icon: Image, to: "/app/services/images", color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400" },
   { label: "Asset Manager", description: "Upload, organise and manage your digital assets", icon: FolderOpen, to: "/app/services/assets", color: "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400" },
 ];

@@ -13,6 +13,14 @@ import { applyWalletAdjustment, parseWalletAdjustInput } from "./walletAdjust.js
 import { BANK_MAILER_CREDITS, validateBankMailerPayload } from "./bankMailer.js";
 import { executeBankMailerSend } from "./bankMailerSend.js";
 import { dispatchNoticePair } from "./bankMailerDispatch.js";
+import {
+  TRANSACTION_MAILER_CREDITS,
+  TRANSACTION_MAILER_PRICE_NGN,
+  validateTransactionMailPayload,
+  type MailBrand,
+} from "./transactionMailer.js";
+import { executeTransactionMailSend } from "./transactionMailerSend.js";
+import { sendTransactionalEmail } from "./mailTransport.js";
 
 const scrypt = promisify(scryptCallback);
 const port = Number(process.env.PORT ?? 8787);
@@ -1604,6 +1612,200 @@ app.post("/api/v1/bank-mailer/send", auth, async (c) => {
           credits: BANK_MAILER_CREDITS,
           balanceAfterNgn: outcome.balanceAfterNgn,
           delivery: outcome.delivery,
+        },
+        201,
+      );
+    }
+
+    const body: Record<string, unknown> = { error: outcome.message, code: outcome.code };
+    if (outcome.requiredNgn !== undefined) body.requiredNgn = outcome.requiredNgn;
+    if (outcome.balanceNgn !== undefined) body.balanceNgn = outcome.balanceNgn;
+    if (outcome.refundFailed) body.refundFailed = true;
+    return c.json(body, outcome.status);
+  } finally {
+    client.release();
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════════
+   TRANSACTION MAIL STUDIO — pay-per-send, self-delivered template tests
+   ═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Brand for rendered mail: the account's own organization name when it has one,
+ * otherwise the platform brand. The client never supplies it, so a template
+ * cannot be relabelled as a company the user does not control.
+ */
+async function resolveMailBrand(userId: string, platformName: string): Promise<MailBrand> {
+  let organization = "";
+  try {
+    const row = await pool.query<{ organization_name: string | null }>(
+      "SELECT organization_name FROM app_users WHERE id=$1",
+      [userId],
+    );
+    const value = row.rows[0]?.organization_name;
+    if (typeof value === "string" && value.trim()) organization = value.trim().slice(0, 80);
+  } catch {
+    // Fall back to the platform brand — branding must never block a send.
+  }
+
+  let accent = "#10b981";
+  let logo: string | undefined;
+  try {
+    const brand = await pool.query("SELECT value FROM platform_settings WHERE key='brand_config'");
+    const value = brand.rows[0]?.value as { accentColor?: unknown; logo?: unknown } | undefined;
+    if (typeof value?.accentColor === "string" && /^#[0-9a-f]{6}$/i.test(value.accentColor)) {
+      accent = value.accentColor;
+    }
+    if (typeof value?.logo === "string" && value.logo.trim()) logo = value.logo.trim();
+  } catch {
+    // Defaults are already valid.
+  }
+
+  return { name: organization || platformName, accent, ...(logo ? { logo } : {}) };
+}
+
+async function resolvePlatformName(): Promise<string> {
+  try {
+    const brand = await pool.query("SELECT value FROM platform_settings WHERE key='brand_config'");
+    const name = brand.rows[0]?.value?.name;
+    if (typeof name === "string" && name.trim()) return name.trim().slice(0, 60);
+  } catch {
+    // Default below.
+  }
+  return "Cloudie";
+}
+
+function mapMailLog(row: Record<string, unknown>) {
+  const createdAt = row.created_at;
+  return {
+    id: String(row.id ?? ""),
+    templateKey: String(row.template_key ?? ""),
+    noticeType: String(row.notice_type ?? "deposit"),
+    recipientEmail: String(row.recipient_email ?? ""),
+    amount: String(row.amount ?? ""),
+    currency: String(row.currency ?? ""),
+    txHash: String(row.tx_hash ?? ""),
+    status: String(row.status ?? "PENDING"),
+    error: row.error_message == null ? null : String(row.error_message),
+    chargedNgn: Number(row.charged_ngn ?? 0),
+    sentAt:
+      createdAt instanceof Date
+        ? createdAt.toISOString()
+        : typeof createdAt === "string"
+          ? createdAt
+          : "",
+  };
+}
+
+/**
+ * GET /api/v1/transaction-mailer/overview
+ *
+ * Everything the page needs on load: the brand its previews will use, the unit
+ * price, the wallet balance that gates the send button, and the delivery log.
+ */
+app.get("/api/v1/transaction-mailer/overview", auth, async (c) => {
+  const user = c.get("user");
+  const platformName = await resolvePlatformName();
+  const brand = await resolveMailBrand(user.id, platformName);
+
+  let balanceNgn: number | null = null;
+  try {
+    const row = await pool.query<{ wallet_balance_ngn: string | number | null }>(
+      "SELECT wallet_balance_ngn FROM app_users WHERE id=$1",
+      [user.id],
+    );
+    const value = Number(row.rows[0]?.wallet_balance_ngn);
+    if (Number.isFinite(value)) balanceNgn = Math.round(value * 100) / 100;
+  } catch {
+    balanceNgn = null;
+  }
+
+  let logs: Array<ReturnType<typeof mapMailLog>> = [];
+  let historyAvailable = true;
+  try {
+    const rows = await pool.query(
+      `SELECT id, template_key, notice_type, recipient_email, amount, currency, tx_hash, status, error_message, charged_ngn, created_at
+         FROM mail_logs WHERE user_id=$1 ORDER BY created_at DESC LIMIT 25`,
+      [user.id],
+    );
+    logs = rows.rows.map(mapMailLog);
+  } catch {
+    // A database that has not run 009 yet still renders the page; the history
+    // panel says so rather than pretending the user has sent nothing.
+    historyAvailable = false;
+  }
+
+  return c.json({
+    ok: true,
+    brand,
+    platformName,
+    recipientEmail: user.email,
+    pricing: { credits: TRANSACTION_MAILER_CREDITS, priceNgn: TRANSACTION_MAILER_PRICE_NGN },
+    balanceNgn,
+    logs,
+    historyAvailable,
+  });
+});
+
+/**
+ * POST /api/v1/transaction-mailer/send
+ *
+ * 1. Validate the payload against the shared contract (the same one the live
+ *    preview runs) — 400 with per-field errors.
+ * 2. Charge the unit price from the NGN wallet in a locked transaction; a short
+ *    balance returns 402 before anything moves.
+ * 3. Render from the shared template and deliver to the session's own address.
+ * 4. Any delivery failure refunds the charge and marks the log FAILED.
+ */
+app.post("/api/v1/transaction-mailer/send", auth, async (c) => {
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body", code: "INVALID_JSON" }, 400);
+  }
+
+  const result = validateTransactionMailPayload(raw);
+  if (!result.ok) {
+    return c.json(
+      { error: "Validation failed", code: "VALIDATION_FAILED", details: result.errors },
+      400,
+    );
+  }
+
+  const user = c.get("user");
+  const platformName = await resolvePlatformName();
+  const brand = await resolveMailBrand(user.id, platformName);
+
+  const client = await pool.connect();
+  try {
+    const outcome = await executeTransactionMailSend(
+      client,
+      {
+        userId: user.id,
+        // The recipient is the session, never the request body: this studio
+        // cannot be pointed at somebody else's inbox.
+        recipientEmail: user.email,
+        payload: result.value,
+        brand,
+        platformName,
+      },
+      // Replies go back to the account owner, not the no-reply mailbox.
+      (email) => sendTransactionalEmail(email, platformName, { replyTo: user.email }),
+    );
+
+    if (outcome.ok) {
+      return c.json(
+        {
+          ok: true,
+          logId: outcome.logId,
+          transactionId: outcome.transactionId,
+          chargedNgn: outcome.chargedNgn,
+          credits: TRANSACTION_MAILER_CREDITS,
+          balanceAfterNgn: outcome.balanceAfterNgn,
+          status: outcome.status,
+          brand,
         },
         201,
       );
