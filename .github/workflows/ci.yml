@@ -42,8 +42,13 @@ jobs:
       - name: Unit & integration tests
         run: bun test
 
+      # Check each tsconfig project with plain --noEmit runs. `tsc -b` treats
+      # these noEmit projects as permanently out of date (it looks for emitted
+      # outputs that never exist), so it rebuilds everything on every run and
+      # can stall; the per-project check is deterministic and covers the same
+      # files: app sources, vite.config.ts, and the bun:test suites.
       - name: TypeScript validation
-        run: npx tsc -b --pretty false
+        run: npm run typecheck
 
       - name: ESLint (feature surface)
         run: npx eslint src/pages/MyServices.tsx src/pages/Billing.tsx src/convex/serviceHub.ts src/convex/auth/emailOtp.ts src/convex/auth.config.ts

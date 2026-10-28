@@ -23,10 +23,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "noPropertyAccessFromIndexSignature": false,
-    // Pin the ambient types: @types/bun is only needed by the bun:test files,
-    // which live in tsconfig.test.json. Pulling it into the app program makes
-    // `tsc -b` take minutes instead of seconds.
-    "types": ["node", "vite/client"],
+    // The app program types the browser bundle. The only ambient type it needs
+    // is vite/client. Node/bun type libs and their declaration folders are
+    // used by other tsconfig projects (node config, test config) and must not
+    // leak into the app program — including in CI's clean install.
+    "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

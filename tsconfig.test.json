@@ -16,9 +16,10 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
 
-    // Only the colocated bun:test suites need bun's ambient types and DOM
-    // registrator. Keeping them in their own project keeps the app typecheck
-    // fast while still verifying the tests.
+    // Only the bun:test suites need bun's ambient types and the DOM
+    // registrator, so they live in their own project: the app program stays a
+    // pure browser program. @types/bun and @types/node are declared in
+    // devDependencies so a clean CI install can typecheck this project.
     "types": ["bun", "node", "vite/client"],
     "baseUrl": ".",
     "paths": {

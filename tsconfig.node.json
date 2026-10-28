@@ -19,7 +19,10 @@
     "noUnusedParameters": false,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    // vite.config.ts is the only file here and it runs in Node: it needs
+    // `path` and `__dirname`. Keep the bun app/test type libs out of it.
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }
