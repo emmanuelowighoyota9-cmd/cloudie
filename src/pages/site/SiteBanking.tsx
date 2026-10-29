@@ -8,7 +8,7 @@ import { classifyTenantParam } from "@/lib/tenantParam";
 import { bankTheme, bankTone, type BankTheme, type BankTone } from "@/lib/tenantBankTheme";
 import {
   ShieldCheck, Landmark, CreditCard, ArrowLeftRight, ArrowDownLeft, ArrowUpRight,
-  Wallet, Plus, Users, FileText, Bell, ChevronRight, Check,
+  Wallet, Plus, Users, FileText, Bell, ChevronRight, Check, FlaskConical,
 } from "lucide-react";
 
 function Money({ minor, currency = "USD" }: { minor: number; currency?: string }) {
@@ -75,6 +75,11 @@ export default function SiteBanking() {
   const history = useQuery(api.bankingCustomer.bankingHistory, id ? { tenantId: id, limit: 50 } : "skip");
   const bens = useQuery(api.bankingCustomer.listBeneficiaries, id ? { tenantId: id } : "skip");
   const onboard = useQuery(api.bankingCustomer.onboardingMe, id ? { tenantId: id } : "skip");
+  // Tenant owners (and Cloudie super admins) get a link into the console that
+  // matches what the server will actually let them read: owners land on the
+  // tenant console, super admins on the oversight view.
+  const viewer = useQuery(api.bankingAdmin.myTenantPermissions, id ? { tenantId: id } : "skip");
+  const consolePath = viewer?.isSuperAdmin ? `/admin/tenants/${id}/banking` : viewer?.role === "owner" ? `/site/${id}/admin` : null;
   const [tab, setTab] = useState<Tab>("overview");
   const [busy, setBusy] = useState(false);
 
@@ -157,6 +162,9 @@ export default function SiteBanking() {
   const lifecycle = (publicT as any).status ?? "active";
   const bankingUp = lifecycle === "active";
   const brandName = (publicT as any).displayName ?? publicT.siteName;
+  // Sandbox tenants keep a real double-entry ledger but contact no provider, so
+  // every movement is labelled rather than presented as settled funds.
+  const bankingMode: "sandbox" | "live" = (publicT as any).bankingMode === "live" ? "live" : "sandbox";
 
   // ── Join screen (not yet a member of this tenant) ──
   if (!member) {
@@ -253,7 +261,7 @@ export default function SiteBanking() {
   const doWth = async () => {
     const minor = Math.round(Number(wth.amount) * 100);
     setBusy(true);
-    try { await createWithdrawal({ tenantId: id, accountId: wth.accountId as Id<"tenantAccounts">, amountMinor: minor, destination: wth.destination || undefined }); toast.success("Withdrawal completed"); setWth({ accountId: "", amount: "", destination: "" }); }
+    try { await createWithdrawal({ tenantId: id, accountId: wth.accountId as Id<"tenantAccounts">, amountMinor: minor, destination: wth.destination || undefined }); toast.success(bankingMode === "sandbox" ? "Withdrawal recorded (sandbox — simulated)" : "Withdrawal completed"); setWth({ accountId: "", amount: "", destination: "" }); }
     catch (e) { toast.error(e instanceof Error ? e.message : String(e)); } finally { setBusy(false); }
   };
   const doTx = async () => {
@@ -310,6 +318,17 @@ export default function SiteBanking() {
               <span className="hidden rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium capitalize text-white/80 md:inline">
                 {lifecycle}
               </span>
+              <span
+                className={`hidden rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize sm:inline ${bankingMode === "live" ? "bg-emerald-400/20 text-emerald-100" : "bg-amber-300/20 text-amber-100"}`}
+                title={bankingMode === "live" ? "Settlements require a verified provider" : "Simulated ledger — no real funds move"}
+              >
+                {bankingMode}
+              </span>
+              {consolePath && (
+                <Link to={consolePath} className="rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/25">
+                  Console
+                </Link>
+              )}
               <Link to={`/site/${id}/dashboard`} className="rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/25">
                 Classic view
               </Link>
@@ -330,6 +349,11 @@ export default function SiteBanking() {
               <p className="mt-1 text-xs text-white/60">
                 {activeAccounts.length} active account{activeAccounts.length === 1 ? "" : "s"} · ledger-backed
               </p>
+              {bankingMode === "sandbox" && (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/20 px-2.5 py-1 text-[11px] font-medium text-amber-100">
+                  <FlaskConical className="h-3 w-3" /> Sandbox — deposits, transfers and withdrawals are simulated
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               {[

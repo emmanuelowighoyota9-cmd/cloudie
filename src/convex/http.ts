@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { auth } from "./auth";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { BANKING_WEBHOOK_PATH, bankingWebhookHandler } from "./bankingWebhook";
 
 const http = httpRouter();
 
@@ -395,6 +396,11 @@ const adminFeesHandler = httpAction(async (ctx, req) => {
 http.route({ path: "/api/banking/tenants/admin/fees", method: "POST", handler: adminFeesHandler });
 http.route({ path: "/api/banking/admin/fees", method: "POST", handler: adminFeesHandler });
 
+// POST /api/banking/webhook — HMAC-verified settlement callback. The tenant is
+// derived from the deposit reference, never from the payload, and each provider
+// event id is processed once.
+http.route({ path: BANKING_WEBHOOK_PATH, method: "POST", handler: bankingWebhookHandler });
+
 // ─── Route inventory for docs ──────────────────────────────────────
 const apiDocsHandler = httpAction(async () => {
   return json({
@@ -413,6 +419,7 @@ const apiDocsHandler = httpAction(async () => {
       "POST /api/banking/tenants/:tenantId/admin/transfer-override { transferId, action, reason }",
       "POST /api/banking/tenants/:tenantId/admin/deposit-override  { depositId, action, reason }",
       "POST /api/banking/tenants/:tenantId/admin/fees { transferFeeMinor?, withdrawalFeeMinor?, ... }",
+      "POST /api/banking/webhook  (HMAC-SHA256 x-cloudie-signature; { provider, eventId, reference, amountMinor, currency, outcome })",
     ],
     auth: "Convex session cookie + Authorization bearer (JWT/OAuth2-compatible); server enforces tenant_id guards on every route.",
   });

@@ -29,6 +29,12 @@ import {
   renderBankNotice,
   type BankMailerPayload,
 } from "./bankMailer.js";
+import {
+  bankTemplateVariables,
+  renderEmailTemplate,
+  templateSurchargeNgn,
+  type EmailTemplateProduct,
+} from "./emailTemplates.js";
 
 /* ── Structural types ────────────────────────────────────────────────────── */
 
@@ -56,6 +62,8 @@ export type SendParams = {
   userId: string;
   payload: BankMailerPayload;
   platformName: string;
+  /** Active catalog layout chosen by the customer, if any. */
+  template?: Pick<EmailTemplateProduct, "id" | "htmlContent" | "priceCredits"> | null;
 };
 
 export type SendSuccess = {
@@ -84,6 +92,12 @@ export type SendOutcome = SendSuccess | SendFailure;
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+/** Base pair price plus any pay-per-use template surcharge. */
+function unitPrice(params: SendParams): number {
+  const surcharge = params.template ? templateSurchargeNgn(params.template.priceCredits) : 0;
+  return round2(BANK_MAILER_PRICE_NGN + surcharge);
 }
 
 async function rollback(client: ClientLike): Promise<void> {
@@ -116,7 +130,7 @@ type ChargeOutcome =
  */
 async function chargeWallet(client: ClientLike, params: SendParams): Promise<ChargeOutcome> {
   const { userId, payload } = params;
-  const amount = BANK_MAILER_PRICE_NGN;
+  const amount = unitPrice(params);
   const chargeKey = `bank_mailer:${payload.transactionId}:${randomUUID()}`;
 
   try {
@@ -176,6 +190,7 @@ async function chargeWallet(client: ClientLike, params: SendParams): Promise<Cha
           credits: BANK_MAILER_CREDITS,
           sender_email: payload.sender.email,
           receiver_email: payload.receiver.email,
+          ...(params.template ? { template_id: params.template.id } : {}),
         }),
       ],
     );
@@ -202,7 +217,7 @@ async function refundWallet(
   reason: string,
 ): Promise<RefundOutcome> {
   const { userId, payload } = params;
-  const amount = BANK_MAILER_PRICE_NGN;
+  const amount = unitPrice(params);
   const refundKey = `bank_mailer_refund:${payload.transactionId}:${randomUUID()}`;
 
   try {
@@ -276,11 +291,25 @@ export async function executeBankMailerSend(
 
   let report: DispatchReport;
   try {
-    const debit = renderBankNotice({ kind: "debit", payload, platformName });
-    const credit = renderBankNotice({ kind: "credit", payload, platformName });
+    const debitBase = renderBankNotice({ kind: "debit", payload, platformName });
+    const creditBase = renderBankNotice({ kind: "credit", payload, platformName });
+    // A catalog layout replaces the body; subjects, recipients and the plain-text
+    // fallback stay with the built-in notice so the pair always arrives.
+    const debitHtml = params.template
+      ? renderEmailTemplate(
+          params.template.htmlContent,
+          bankTemplateVariables({ platformName, kind: "debit", payload }),
+        )
+      : debitBase.html;
+    const creditHtml = params.template
+      ? renderEmailTemplate(
+          params.template.htmlContent,
+          bankTemplateVariables({ platformName, kind: "credit", payload }),
+        )
+      : creditBase.html;
     report = await dispatch({
-      debit: { to: payload.sender.email, ...debit },
-      credit: { to: payload.receiver.email, ...credit },
+      debit: { to: payload.sender.email, ...debitBase, html: debitHtml },
+      credit: { to: payload.receiver.email, ...creditBase, html: creditHtml },
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
@@ -308,14 +337,14 @@ export async function executeBankMailerSend(
     return failure(
       502,
       "DISPATCH_FAILED",
-      `Email delivery failed (${reason}) — ${BANK_MAILER_PRICE_NGN} NGN was refunded to your wallet.`,
+      `Email delivery failed (${reason}) — ${unitPrice(params)} NGN was refunded to your wallet.`,
     );
   }
 
   return {
     ok: true,
     transactionId: payload.transactionId,
-    chargedNgn: BANK_MAILER_PRICE_NGN,
+    chargedNgn: unitPrice(params),
     balanceAfterNgn: charge.balanceAfterNgn,
     delivery: {
       debit: report.debit.ok ? report.debit.messageId ?? "sent" : "sent",

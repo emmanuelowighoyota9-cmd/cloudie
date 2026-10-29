@@ -155,6 +155,7 @@ const PublicDocument = lazyWithRetry(() => import("./pages/PublicDocument.tsx"))
 const AdminDocumentTemplates = lazyWithRetry(() => import("./pages/AdminDocumentTemplates.tsx"));
 const AdminDocumentTemplateEditor = lazyWithRetry(() => import("./pages/AdminDocumentTemplateEditor.tsx"));
 const AdminTemplateClassifier = lazyWithRetry(() => import("./pages/AdminTemplateClassifier.tsx"));
+const AdminEmailTemplates = lazyWithRetry(() => import("./pages/AdminEmailTemplates.tsx"));
 const Services = lazyWithRetry(() => import("./pages/Services.tsx"));
 const BankMailer = lazyWithRetry(() => import("./pages/BankMailer.tsx"));
 const CryptoMails = lazyWithRetry(() => import("./pages/CryptoMails.tsx"));
@@ -545,6 +546,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="document-templates/:templateId/edit" element={<AdminDocumentTemplateEditor />} />
                   <Route path="document-templates/classify" element={<AdminTemplateClassifier />} />
                   <Route path="template-classifier" element={<AdminTemplateClassifier />} />
+                  <Route path="templates" element={<AdminEmailTemplates />} />
                   <Route path="tenants" element={<AdminTenants />} />
                   <Route path="tenants/new" element={<AdminBankingCreateTenant />} />
                   <Route path="tenants/banking" element={<AdminBankingTenants />} />

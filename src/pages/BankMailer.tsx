@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router";
 import { useQuery } from "convex/react";
@@ -7,7 +7,9 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowRight,
+  Check,
   Landmark,
+  LayoutTemplate,
   Loader2,
   Plus,
   Receipt,
@@ -42,6 +44,12 @@ import {
   type NoticeLanguage,
   type NoticeStatus,
 } from "../../api/src/bankMailer";
+import {
+  bankTemplateVariables,
+  renderEmailTemplate,
+  templateSurchargeNgn,
+  type EmailTemplateProduct,
+} from "../../api/src/emailTemplates";
 
 /* ── Form state ──────────────────────────────────────────────────────────── */
 
@@ -284,6 +292,66 @@ function LogoField({
   );
 }
 
+function LayoutOption({
+  selected,
+  title,
+  description,
+  price,
+  thumbnail,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  description: string;
+  price: string;
+  thumbnail?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={cn(
+        "flex min-h-11 items-center gap-3 rounded-xl border p-2.5 text-left transition-colors duration-200",
+        selected
+          ? "border-primary/50 bg-primary/[0.06]"
+          : "border-border bg-card hover:border-primary/30 hover:bg-surface",
+      )}
+    >
+      {thumbnail ? (
+        <img
+          src={thumbnail}
+          alt=""
+          loading="lazy"
+          className="size-10 shrink-0 rounded-lg border border-border object-cover"
+        />
+      ) : (
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-lg",
+            selected ? "bg-primary/15 text-primary" : "bg-surface-2 text-muted-foreground",
+          )}
+        >
+          <LayoutTemplate className="size-4" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5">
+          <span className="truncate text-xs font-semibold text-foreground">{title}</span>
+          {selected ? <Check className="size-3 shrink-0 text-primary" /> : null}
+        </span>
+        <span className="mt-0.5 line-clamp-1 block text-[11px] text-muted-foreground">
+          {description}
+        </span>
+        <span className="mt-0.5 block text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--label)]">
+          {price}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default function BankMailer() {
@@ -292,19 +360,49 @@ export default function BankMailer() {
   const [previewKind, setPreviewKind] = useState<NoticeKind>("debit");
   const [sending, setSending] = useState(false);
   const [showTopup, setShowTopup] = useState(false);
+  const [templates, setTemplates] = useState<EmailTemplateProduct[]>([]);
+  const [templateId, setTemplateId] = useState("");
 
   const balance = useQuery(api.wallet.getBalance);
   const config = useQuery(api.platform.getPublicConfig);
   const platformName: string = config?.brand?.name ?? "Cloudie";
 
+  // Catalog layouts for this module. A missing catalog must not block the form:
+  // the built-in notice pair is always available as the default.
+  useEffect(() => {
+    let cancelled = false;
+    neonApi
+      .emailTemplates("billing")
+      .then((result) => {
+        if (!cancelled) setTemplates(result.templates);
+      })
+      .catch(() => {
+        if (!cancelled) setTemplates([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const selectedTemplate = templates.find((template) => template.id === templateId) ?? null;
+  const surchargeNgn = selectedTemplate ? templateSurchargeNgn(selectedTemplate.priceCredits) : 0;
+  const totalPriceNgn = BANK_MAILER_PRICE_NGN + surchargeNgn;
+
   const balanceNgn = typeof balance === "number" && Number.isFinite(balance) ? balance : null;
-  const insufficient = balanceNgn !== null && balanceNgn < BANK_MAILER_PRICE_NGN;
+  const insufficient = balanceNgn !== null && balanceNgn < totalPriceNgn;
 
   const payload = useMemo(() => toPreviewPayload(form), [form]);
-  const notice = useMemo(
-    () => renderBankNotice({ kind: previewKind, payload, platformName }),
-    [previewKind, payload, platformName],
-  );
+  const notice = useMemo(() => {
+    const base = renderBankNotice({ kind: previewKind, payload, platformName });
+    if (!selectedTemplate) return base;
+    return {
+      ...base,
+      html: renderEmailTemplate(
+        selectedTemplate.htmlContent,
+        bankTemplateVariables({ platformName, kind: previewKind, payload }),
+      ),
+    };
+  }, [previewKind, payload, platformName, selectedTemplate]);
   const pristine = !form.amount && !form.sender.fullName && !form.receiver.fullName;
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -356,7 +454,10 @@ export default function BankMailer() {
     setSending(true);
 
     try {
-      const sent = await neonApi.bankMailerSend(result.value);
+      const sent = await neonApi.bankMailerSend({
+        ...result.value,
+        ...(selectedTemplate ? { templateId: selectedTemplate.id } : {}),
+      });
       toast.success(
         `Notices sent — debit to ${result.value.sender.email}, credit to ${result.value.receiver.email}`,
         { description: `Transaction ${sent.transactionId} · ${formatNgn(sent.chargedNgn)} charged` },
@@ -405,6 +506,47 @@ export default function BankMailer() {
       <div className="grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_460px]">
         {/* ── Compose ─────────────────────────────────────────────────── */}
         <form onSubmit={handleSubmit} noValidate className="space-y-6">
+          <SectionCard
+            title="Email layout"
+            hint="The built-in notice pair, or a published catalog layout."
+            icon={<LayoutTemplate className="size-4" />}
+          >
+            <div className="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+              <LayoutOption
+                selected={!selectedTemplate}
+                title="Default notice pair"
+                description="Cloudie's built-in debit + credit layout"
+                price="Included"
+                onClick={() => setTemplateId("")}
+              />
+              {templates.map((template) => (
+                <LayoutOption
+                  key={template.id}
+                  selected={templateId === template.id}
+                  title={template.title}
+                  description={template.description || "Catalog layout"}
+                  thumbnail={template.thumbnailUrl}
+                  price={
+                    template.priceCredits > 0
+                      ? `+${template.priceCredits} credits`
+                      : "Free layout"
+                  }
+                  onClick={() => setTemplateId(template.id)}
+                />
+              ))}
+            </div>
+            {templates.length === 0 ? (
+              <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
+                No catalog layouts are published for billing yet — the default notice pair is used.
+              </p>
+            ) : (
+              <p className="text-xs leading-relaxed text-muted-foreground sm:col-span-2">
+                A catalog layout replaces the email body; recipients, subjects and the automatic
+                refund guarantee stay the same.
+              </p>
+            )}
+          </SectionCard>
+
           <SectionCard
             title="Transaction details"
             hint="What the notice says happened."
@@ -683,14 +825,21 @@ export default function BankMailer() {
                 <p className="text-sm">
                   <span className="text-muted-foreground">Cost: </span>
                   <span className="font-semibold text-foreground">
-                    {BANK_MAILER_CREDITS} credits / {formatNgn(BANK_MAILER_PRICE_NGN)} per email pair
+                    {BANK_MAILER_CREDITS + (selectedTemplate?.priceCredits ?? 0)} credits /{" "}
+                    {formatNgn(totalPriceNgn)} per email pair
                   </span>
                 </p>
+                {selectedTemplate ? (
+                  <p className="text-xs text-muted-foreground">
+                    Includes {selectedTemplate.title}
+                    {surchargeNgn > 0 ? ` (+${formatNgn(surchargeNgn)} layout)` : " (free layout)"}
+                  </p>
+                ) : null}
                 <p className={cn("text-xs", insufficient ? "font-medium text-destructive" : "text-muted-foreground")}>
                   {balanceNgn === null
                     ? "Checking wallet balance…"
                     : insufficient
-                      ? `Insufficient balance — ${formatNgn(BANK_MAILER_PRICE_NGN - balanceNgn)} short`
+                      ? `Insufficient balance — ${formatNgn(totalPriceNgn - balanceNgn)} short`
                       : `Wallet balance: ${formatNgn(balanceNgn)}`}
                 </p>
               </div>
@@ -757,8 +906,9 @@ export default function BankMailer() {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            The delivered email is byte-identical to this preview — including the masked account line on the debit
-            notice.
+            {selectedTemplate
+              ? `Rendered from “${selectedTemplate.title}” with your form values — the delivered body matches this preview.`
+              : "The delivered email is byte-identical to this preview — including the masked account line on the debit notice."}
           </p>
         </aside>
       </div>
@@ -772,7 +922,7 @@ export default function BankMailer() {
               Insufficient Balance
             </DialogTitle>
             <DialogDescription>
-              Insufficient Balance — you need {formatNgn(BANK_MAILER_PRICE_NGN)} to send this notice.{" "}
+              Insufficient Balance — you need {formatNgn(totalPriceNgn)} to send this notice.{" "}
               {balanceNgn !== null ? `Your wallet balance is ${formatNgn(balanceNgn)}.` : null}
             </DialogDescription>
           </DialogHeader>

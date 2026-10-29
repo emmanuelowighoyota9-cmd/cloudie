@@ -827,6 +827,62 @@ export const getBankingFeeConfig = query({
   },
 });
 
+/** Subscription view for the tenant detail screen (renewal date, expiry). */
+export const getTenantSubscription = query({
+  args: { tenantId: v.id("tenantSites") },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant) throw new Error("TENANT_NOT_FOUND");
+    const renewalDate = (tenant as any).renewalDate as number | undefined;
+    const now = Date.now();
+    return {
+      tenantId: args.tenantId,
+      plan: (tenant as any).plan ?? null,
+      renewalDate: renewalDate ?? null,
+      expired: !!renewalDate && renewalDate < now,
+      daysRemaining: renewalDate ? Math.ceil((renewalDate - now) / (24 * 3600 * 1000)) : null,
+      lifecycleStatus: (tenant as any).lifecycleStatus ?? ((tenant as any).isActive ? "active" : "disabled"),
+    };
+  },
+});
+
+/**
+ * Super Admin: renew a tenant subscription.
+ *
+ * Extension is additive from the later of now and the current renewal date, so
+ * renewing early never shortens a paid period. It deliberately does not flip the
+ * lifecycle status: restoration stays a separate, audited action.
+ */
+export const renewTenantSubscription = mutation({
+  args: { tenantId: v.id("tenantSites"), months: v.number(), reason: v.string() },
+  handler: async (ctx, args) => {
+    const { adminId, admin } = await requireAdmin(ctx);
+    const tenant = await ctx.db.get(args.tenantId);
+    if (!tenant || tenant.siteType !== "bank") throw new Error("TENANT_NOT_FOUND");
+    const months = Math.trunc(args.months);
+    if (!Number.isFinite(months) || months < 1 || months > 36) throw new Error("INVALID_MONTHS: 1-36");
+    if (args.reason.trim().length < 5) throw new Error("REASON_REQUIRED");
+    const now = Date.now();
+    const current = ((tenant as any).renewalDate as number | undefined) ?? now;
+    const base = Math.max(current, now);
+    const next = base + months * 30 * 24 * 3600 * 1000;
+    await ctx.db.patch(args.tenantId, { renewalDate: next } as any);
+    await toAudit(
+      ctx as MutationCtx,
+      adminId,
+      admin.email,
+      "BANKING_SUBSCRIPTION_RENEWED",
+      "tenantSite",
+      args.tenantId,
+      { renewalDate: current },
+      { renewalDate: next, months },
+      args.reason.trim(),
+    );
+    return { renewalDate: next, months };
+  },
+});
+
 export const health = query({
   args: { tenantId: v.id("tenantSites") },
   handler: async (ctx, args) => {

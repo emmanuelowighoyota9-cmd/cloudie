@@ -10,6 +10,7 @@ import {
   Check,
   CreditCard,
   Landmark,
+  LayoutTemplate,
   Loader2,
   Plus,
   Send,
@@ -67,6 +68,12 @@ import {
   type TransactionMailPayload,
   type TransactionMailTemplate,
 } from "../../api/src/transactionMailer";
+import {
+  renderEmailTemplate,
+  templateSurchargeNgn,
+  transactionTemplateVariables,
+  type EmailTemplateProduct,
+} from "../../api/src/emailTemplates";
 
 /* ── Pages of the studio ─────────────────────────────────────────────────── */
 
@@ -182,6 +189,7 @@ function Composer({
   recipientEmail,
   priceNgn,
   balanceNgn,
+  templates,
   onClose,
   onSent,
 }: {
@@ -191,6 +199,7 @@ function Composer({
   recipientEmail: string;
   priceNgn: number;
   balanceNgn: number | null;
+  templates: EmailTemplateProduct[];
   onClose: () => void;
   onSent: () => void;
 }) {
@@ -206,9 +215,13 @@ function Composer({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [sending, setSending] = useState(false);
   const [topup, setTopup] = useState(false);
+  const [templateId, setTemplateId] = useState("default");
 
   const Icon = TEMPLATE_ICONS[template.key] ?? Wallet;
-  const insufficient = balanceNgn !== null && balanceNgn < priceNgn;
+  const catalogTemplate = templates.find((entry) => entry.id === templateId) ?? null;
+  const layoutSurcharge = catalogTemplate ? templateSurchargeNgn(catalogTemplate.priceCredits) : 0;
+  const totalPriceNgn = priceNgn + layoutSurcharge;
+  const insufficient = balanceNgn !== null && balanceNgn < totalPriceNgn;
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -231,10 +244,28 @@ function Composer({
     };
   }, [form, template.key]);
 
-  const mail = useMemo(
-    () => renderTransactionMail({ payload: preview, brand, platformName }),
-    [preview, brand, platformName],
-  );
+  const mail = useMemo(() => {
+    const base = renderTransactionMail({ payload: preview, brand, platformName });
+    if (!catalogTemplate) return base;
+    return {
+      ...base,
+      html: renderEmailTemplate(
+        catalogTemplate.htmlContent,
+        transactionTemplateVariables({
+          platformName,
+          brandName: brand.name,
+          recipientEmail,
+          noticeType: preview.noticeType,
+          amount: preview.amount,
+          currency: preview.currency,
+          transactionId: preview.txHash,
+          status: "SENT",
+          message: preview.note ?? "",
+          occurredAt: preview.occurredAt,
+        }),
+      ),
+    };
+  }, [preview, brand, platformName, catalogTemplate, recipientEmail]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -265,7 +296,10 @@ function Composer({
     setErrors({});
     setSending(true);
     try {
-      const sent = await neonApi.transactionMailerSend(result.value);
+      const sent = await neonApi.transactionMailerSend({
+        ...result.value,
+        ...(catalogTemplate ? { templateId: catalogTemplate.id } : {}),
+      });
       toast.success("Mail delivered to your inbox", {
         description: `${template.name} · ${formatNgn(sent.chargedNgn)} charged · ${shortHash(
           sent.transactionId,
@@ -309,6 +343,56 @@ function Composer({
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
+            <Field
+              label="Email layout"
+              hint={
+                catalogTemplate
+                  ? catalogTemplate.priceCredits > 0
+                    ? `+${catalogTemplate.priceCredits} credits`
+                    : "free layout"
+                  : "studio default"
+              }
+            >
+              <Select value={templateId} onValueChange={setTemplateId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Studio default</SelectItem>
+                  {templates.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.id}>
+                      {entry.title}
+                      {entry.priceCredits > 0 ? ` · +${entry.priceCredits} credits` : " · Free"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            {catalogTemplate ? (
+              <div className="flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/[0.05] p-2.5">
+                {catalogTemplate.thumbnailUrl ? (
+                  <img
+                    src={catalogTemplate.thumbnailUrl}
+                    alt=""
+                    className="size-10 shrink-0 rounded-lg border border-border object-cover"
+                  />
+                ) : (
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                    <LayoutTemplate className="size-4" />
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold text-foreground">
+                    {catalogTemplate.title}
+                  </p>
+                  <p className="mt-0.5 line-clamp-1 text-[11px] text-muted-foreground">
+                    {catalogTemplate.description || "Catalog layout"}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Transaction type" error={errors.noticeType}>
                 <Select
@@ -417,9 +501,14 @@ function Composer({
               <div>
                 <p className="text-sm">
                   <span className="text-muted-foreground">Cost: </span>
-                  <span className="font-semibold text-foreground">{formatNgn(priceNgn)}</span>
+                  <span className="font-semibold text-foreground">{formatNgn(totalPriceNgn)}</span>
                   <span className="text-muted-foreground"> per mail</span>
                 </p>
+                {catalogTemplate && layoutSurcharge > 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Includes +{formatNgn(layoutSurcharge)} for {catalogTemplate.title}
+                  </p>
+                ) : null}
                 <p
                   className={cn(
                     "mt-0.5 text-xs",
@@ -429,9 +518,9 @@ function Composer({
                   {balanceNgn === null
                     ? "Wallet balance unavailable"
                     : insufficient
-                      ? `Insufficient balance — ${formatNgn(priceNgn - balanceNgn)} short`
+                      ? `Insufficient balance — ${formatNgn(totalPriceNgn - balanceNgn)} short`
                       : `Balance ${formatNgn(balanceNgn)} after send ${formatNgn(
-                          Math.max(0, balanceNgn - priceNgn),
+                          Math.max(0, balanceNgn - totalPriceNgn),
                         )}`}
                 </p>
               </div>
@@ -487,7 +576,7 @@ function Composer({
               Insufficient balance
             </DialogTitle>
             <DialogDescription>
-              You need {formatNgn(priceNgn)} to send this mail.
+              You need {formatNgn(totalPriceNgn)} to send this mail.
               {balanceNgn !== null ? ` Your wallet balance is ${formatNgn(balanceNgn)}.` : null}
             </DialogDescription>
           </DialogHeader>
@@ -519,6 +608,7 @@ export default function CryptoMails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<TransactionMailTemplate | null>(null);
+  const [templates, setTemplates] = useState<EmailTemplateProduct[]>([]);
   const [bannerOpen, setBannerOpen] = useState(() => {
     try {
       return localStorage.getItem(BANNER_KEY) !== "1";
@@ -544,6 +634,23 @@ export default function CryptoMails() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Published notification layouts. A catalog outage must not block the studio:
+  // the built-in template set is always available.
+  useEffect(() => {
+    let cancelled = false;
+    neonApi
+      .emailTemplates("notifications")
+      .then((result) => {
+        if (!cancelled) setTemplates(result.templates);
+      })
+      .catch(() => {
+        if (!cancelled) setTemplates([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function dismissBanner() {
     setBannerOpen(false);
@@ -806,6 +913,7 @@ export default function CryptoMails() {
           recipientEmail={overview.recipientEmail}
           priceNgn={overview.pricing.priceNgn}
           balanceNgn={overview.balanceNgn}
+          templates={templates}
           onClose={() => setActive(null)}
           onSent={() => void load()}
         />

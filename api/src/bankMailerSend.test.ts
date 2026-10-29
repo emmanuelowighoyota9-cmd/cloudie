@@ -179,6 +179,61 @@ const REJECTED: DispatchReport = {
 
 /* ── Cases ───────────────────────────────────────────────────────────────── */
 
+test("a catalog layout adds its credit price and renders the delivered body", async () => {
+  const db = new FakeDb();
+  db.seed({ id: "user_1", wallet_balance_ngn: 1000 });
+  const { dispatch, state } = recordingDispatch(DELIVERED);
+
+  const outcome = await executeBankMailerSend(
+    db.client(),
+    {
+      userId: "user_1",
+      payload: buildPayload(),
+      platformName: "Cloudie",
+      template: {
+        id: "tpl_1",
+        htmlContent: "<p>Hello {{party_name}} — {{amount}} {{currency}} · {{notice_type}}</p>",
+        priceCredits: 2,
+      },
+    },
+    dispatch,
+  );
+
+  assert.equal(outcome.ok, true);
+  if (!outcome.ok) return;
+
+  const total = BANK_MAILER_PRICE_NGN + 30; // 2 credits × ₦15
+  assert.equal(outcome.chargedNgn, total);
+  assert.equal(db.users.get("user_1")!.wallet_balance_ngn, 1000 - total);
+  assert.equal(db.ledger[0].amount_ngn, -total);
+  assert.match(state.pairs[0].debit.html, /Hello Ada Obi/);
+  assert.match(state.pairs[0].credit.html, /Hello Bayo Cole/);
+  assert.match(state.pairs[0].debit.html, /2,500\.50 USD · Debit notice/);
+  assert.match(state.pairs[0].credit.html, /Credit notice/);
+});
+
+test("a failed dispatch refunds the base price plus the layout surcharge", async () => {
+  const db = new FakeDb();
+  db.seed({ id: "user_1", wallet_balance_ngn: 1000 });
+  const { dispatch } = recordingDispatch(REJECTED);
+
+  const outcome = await executeBankMailerSend(
+    db.client(),
+    {
+      userId: "user_1",
+      payload: buildPayload(),
+      platformName: "Cloudie",
+      template: { id: "tpl_1", htmlContent: "<p>{{amount}}</p>", priceCredits: 2 },
+    },
+    dispatch,
+  );
+
+  assert.equal(outcome.ok, false);
+  if (outcome.ok) return;
+  assert.equal(outcome.code, "DISPATCH_FAILED");
+  assert.equal(db.users.get("user_1")!.wallet_balance_ngn, 1000);
+});
+
 test("charges once, atomically, and dispatches both notices in parallel", async () => {
   const db = new FakeDb();
   db.seed({ id: "user_1", wallet_balance_ngn: 1000 });

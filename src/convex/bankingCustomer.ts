@@ -24,6 +24,19 @@ async function assertTenantActive(tenant: any) {
     throw new Error(`TENANT_UNAVAILABLE: tenant is ${status}`);
 }
 
+/**
+ * Settlement mode for a tenant.
+ *
+ * "sandbox" is the default: money movement is recorded in the double-entry
+ * ledger but no provider is contacted, so every surface must label it as
+ * simulated. "live" is only meaningful when an authorized settlement
+ * integration is configured; without one, external movements are refused rather
+ * than silently marked successful.
+ */
+export function settlementModeOf(tenant: any): "sandbox" | "live" {
+  return (tenant?.bankingMode === "live" ? "live" : "sandbox");
+}
+
 /** Indexed membership check — the owner always counts as a member. */
 async function isMemberOf(ctx: MutationCtx | QueryCtx, tenant: any, userId: Id<"users">) {
   if (tenant.ownerId === userId) return true;
@@ -121,7 +134,7 @@ export const memberTenant = query({
     const m = await softMember(ctx as QueryCtx, args.tenantId);
     if (!m) return null;
     const t = m.tenant as any;
-    return { tenant: { _id: t._id, siteName: t.siteName, displayName: t.displayName, subdomain: t.subdomain, currency: t.currency ?? "USD", lifecycleStatus: t.lifecycleStatus, isActive: t.isActive, branding: t.branding }, isOwner: m.isOwner };
+    return { tenant: { _id: t._id, siteName: t.siteName, displayName: t.displayName, subdomain: t.subdomain, currency: t.currency ?? "USD", lifecycleStatus: t.lifecycleStatus, isActive: t.isActive, branding: t.branding, bankingMode: settlementModeOf(t) }, isOwner: m.isOwner };
   },
 });
 
@@ -168,7 +181,7 @@ export const publicTenant = query({
     if (!t || t.siteType !== "bank") return null;
     const status = (t as any).lifecycleStatus ?? (t.isActive ? "active" : "disabled");
     const isAvailable = t.isActive && status === "active";
-    return { _id: t._id, siteName: t.siteName, displayName: (t as any).displayName, subdomain: t.subdomain, currency: (t as any).currency ?? "USD", status, isAvailable, branding: (t as any).branding };
+    return { _id: t._id, siteName: t.siteName, displayName: (t as any).displayName, subdomain: t.subdomain, currency: (t as any).currency ?? "USD", status, isAvailable, branding: (t as any).branding, bankingMode: settlementModeOf(t) };
   },
 });
 
@@ -458,6 +471,7 @@ export const createDeposit = mutation({
       method: args.method,
       description: args.description?.trim(),
       idempotencyKey: key,
+      settlementMode: settlementModeOf(tenant),
       createdAt: now,
     } as any);
     await audit(ctx as MutationCtx, userId, "DEPOSIT_CREATED", "bankingDeposit", id, null, { reference, amountMinor, currency });
@@ -534,6 +548,13 @@ export const createWithdrawal = mutation({
     const feeMinor = feeConfig?.withdrawalFeeMinor ?? 0;
     const amountMinor = toMinorSafe(args.amountMinor);
     if (amountMinor <= 0) throw new Error("INVALID_AMOUNT");
+    // A live tenant must settle payouts through its authorized provider. No
+    // provider is configured in this deployment, so a live payout is refused
+    // rather than silently marked completed.
+    const settlementMode = settlementModeOf(tenant);
+    if (settlementMode === "live") {
+      throw new Error("SETTLEMENT_PROVIDER_NOT_CONFIGURED: withdrawals require a verified payout integration");
+    }
     const minTx = feeConfig?.minTransactionMinor ?? 0;
     const perTx = feeConfig?.perTransactionLimitMinor ?? Number.MAX_SAFE_INTEGER;
     if (amountMinor < minTx) throw new Error(`MINIMUM_TRANSACTION_${minTx}`);
@@ -577,6 +598,7 @@ export const createWithdrawal = mutation({
       description: args.description?.trim(),
       idempotencyKey: key,
       ledgerGroupId: groupId,
+      settlementMode,
       createdAt: now,
     } as any);
 
@@ -592,8 +614,8 @@ export const createWithdrawal = mutation({
     await ctx.db.patch(id, { status: "completed", completedAt: now } as any);
     if (key) await recordIdem(ctx as MutationCtx, key, "withdrawal", args.tenantId, userId, "bankingWithdrawals", id);
     await audit(ctx as MutationCtx, userId, "WITHDRAWAL_COMPLETED", "bankingWithdrawal", id, null, { reference, amountMinor, feeMinor, currency } as any);
-    await ctx.db.insert("notifications", { userId, title: "Withdrawal processed", message: `Withdrawal ${reference} of ${fmtMoney(amountMinor, currency)}${feeMinor ? ` (fee ${fmtMoney(feeMinor, currency)})` : ""} completed.`, type: "banking.withdrawal_completed", isRead: false, link: `/site/${args.tenantId}/banking`, createdAt: now, metadata: { tenantId: args.tenantId, accountId: args.accountId, withdrawalId: id } as any });
-    return { id, reference, status: "completed" as const };
+    await ctx.db.insert("notifications", { userId, title: "Withdrawal processed", message: `Withdrawal ${reference} of ${fmtMoney(amountMinor, currency)}${feeMinor ? ` (fee ${fmtMoney(feeMinor, currency)})` : ""} completed${settlementMode === "sandbox" ? " (sandbox — simulated, no funds left the tenant)" : ""}.`, type: "banking.withdrawal_completed", isRead: false, link: `/site/${args.tenantId}/banking`, createdAt: now, metadata: { tenantId: args.tenantId, accountId: args.accountId, withdrawalId: id } as any });
+    return { id, reference, status: "completed" as const, settlementMode };
   },
 });
 
@@ -650,6 +672,12 @@ export const createTransfer = mutation({
       if (already + amountMinor + feeMinor > (feeConfig.dailyTransferLimitMinor || Number.MAX_SAFE_INTEGER)) throw new Error("DAILY_LIMIT_EXCEEDED");
     }
     const currency = (args.currency ?? (src as any).currency ?? (tenant as any).currency ?? "USD").toUpperCase();
+    // External and beneficiary transfers need an authorized settlement provider.
+    // Sandbox tenants keep the simulated behaviour, clearly labelled.
+    const settlementMode = settlementModeOf(tenant);
+    if (settlementMode === "live" && args.destType !== "internal_account") {
+      throw new Error("SETTLEMENT_PROVIDER_NOT_CONFIGURED: external transfers require a verified payout integration");
+    }
     const totalDebit = amountMinor + feeMinor;
     const available = (src as any).balanceMinor ?? Math.round(((src as any).balance ?? 0) * 100);
     if (available < totalDebit) throw new Error("INSUFFICIENT_FUNDS");
@@ -695,6 +723,7 @@ export const createTransfer = mutation({
       description: args.description?.trim(),
       idempotencyKey: key,
       ledgerGroupId: groupId,
+      settlementMode,
       createdAt: now,
     } as any);
 
@@ -717,9 +746,9 @@ export const createTransfer = mutation({
 
     if (key) await recordIdem(ctx as MutationCtx, key, "transfer", args.tenantId, userId, "bankingTransfers", transferId);
     await audit(ctx as MutationCtx, userId, "TRANSFER_COMPLETED", "bankingTransfer", transferId, null, { reference, amountMinor, feeMinor, currency, destType: args.destType });
-    await ctx.db.insert("notifications", { userId, title: "Transfer completed", message: `Transfer ${reference} of ${fmtMoney(amountMinor, currency)}${feeMinor ? ` (fee ${fmtMoney(feeMinor, currency)})` : ""} completed.`, type: "banking.transfer_completed", isRead: false, link: `/site/${args.tenantId}/banking`, createdAt: now } as any);
+    await ctx.db.insert("notifications", { userId, title: "Transfer completed", message: `Transfer ${reference} of ${fmtMoney(amountMinor, currency)}${feeMinor ? ` (fee ${fmtMoney(feeMinor, currency)})` : ""} completed${settlementMode === "sandbox" ? " (sandbox — simulated)" : ""}.`, type: "banking.transfer_completed", isRead: false, link: `/site/${args.tenantId}/banking`, createdAt: now } as any);
 
-    return { id: transferId, reference, status: "completed" as const, feeMinor };
+    return { id: transferId, reference, status: "completed" as const, feeMinor, settlementMode };
   },
 });
 

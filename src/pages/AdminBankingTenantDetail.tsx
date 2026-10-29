@@ -4,7 +4,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ShieldCheck, Activity, Users, CreditCard, Lock, Unlock, Pause, FileText, DollarSign, Landmark, Paintbrush, Palette, Check, MonitorSmartphone, LayoutDashboard, Sun, Moon, ExternalLink } from "lucide-react";
+import { ShieldCheck, Activity, Users, CreditCard, Lock, Unlock, Pause, FileText, DollarSign, Landmark, Paintbrush, Palette, Check, MonitorSmartphone, LayoutDashboard, Sun, Moon, ExternalLink, UserCog, BadgeCheck, ScrollText, CircleSlash, FlaskConical, Radio } from "lucide-react";
+import { ConfirmDialog } from "@/components/admin/shared";
 
 function Money({ minor, currency = "USD" }: { minor: number; currency?: string }) {
   const sym = currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency + " ";
@@ -47,7 +48,9 @@ export default function AdminBankingTenantDetail() {
   const fee = useQuery(api.bankingTenant.getBankingFeeConfig, { tenantId: id });
   const [history, setHistory] = useState<any>(null);
   const hist = useQuery(api.bankingCustomer.adminTenantHistory, tenantId ? { tenantId: id, limit: 50 } : "skip") as any;
-  const [tab, setTab] = useState<"overview" | "customers" | "transfers" | "design" | "settings">("overview");
+  const [tab, setTab] = useState<"overview" | "customers" | "transfers" | "team" | "approvals" | "audit" | "design" | "settings">("overview");
+  const viewer = useQuery(api.bankingAdmin.myTenantPermissions, tenantId ? { tenantId: id } : "skip");
+  const can = (p: string) => !!viewer?.permissions?.includes(p as never);
   const [busy, setBusy] = useState(false);
   const setLifecycle = useMutation(api.bankingTenant.setTenantLifecycle);
   const update = useMutation(api.bankingTenant.updateBankingTenant);
@@ -148,6 +151,15 @@ export default function AdminBankingTenantDetail() {
         <TenantNavItem active={tab === "overview"} onClick={() => setTab("overview")} label="Overview" icon={Activity} />
         <TenantNavItem active={tab === "customers"} onClick={() => setTab("customers")} label="Customers & accounts" icon={Users} />
         <TenantNavItem active={tab === "transfers"} onClick={() => setTab("transfers")} label="Transactions" icon={CreditCard} />
+        {can("staff.manage") && (
+          <TenantNavItem active={tab === "team"} onClick={() => setTab("team")} label="Team & permissions" icon={UserCog} />
+        )}
+        {can("ledger.view") && (
+          <TenantNavItem active={tab === "approvals"} onClick={() => setTab("approvals")} label="Approvals" icon={BadgeCheck} />
+        )}
+        {can("audit.view") && (
+          <TenantNavItem active={tab === "audit"} onClick={() => setTab("audit")} label="Audit log" icon={ScrollText} />
+        )}
         <TenantNavItem active={tab === "design"} onClick={() => setTab("design")} label="Design kit" icon={Palette} />
         <TenantNavItem active={tab === "settings"} onClick={() => setTab("settings")} label="Settings & fees" icon={Paintbrush} />
       </div>
@@ -184,6 +196,8 @@ export default function AdminBankingTenantDetail() {
             </div>
             <div className="text-xs text-slate-500">Next: {lc.next} — {lc.hint}</div>
           </div>
+
+          <TenantSubscription tenantId={id} />
         </div>
       )}
 
@@ -237,6 +251,18 @@ export default function AdminBankingTenantDetail() {
             </div>
           </div>}
         </div>
+      )}
+
+      {tab === "team" && (
+        <TenantTeam tenantId={id} />
+      )}
+
+      {tab === "approvals" && (
+        <TenantApprovals tenantId={id} />
+      )}
+
+      {tab === "audit" && (
+        <TenantAudit tenantId={id} />
       )}
 
       {tab === "design" && (
@@ -332,6 +358,7 @@ export default function AdminBankingTenantDetail() {
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
             <div className="text-sm font-semibold"><DollarSign className="h-4 w-4 inline" /> Fees, limits & branding</div>
+            <SettlementMode tenantId={id} mode={((tenant as any).bankingMode === "live" ? "live" : "sandbox")} />
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="space-y-1.5 text-sm"><span className="font-medium">Transfer fee (cents/minor)</span><input type="number" value={feeForm.transferFeeMinor} onChange={e => setFeeForm({ ...feeForm, transferFeeMinor: e.target.value })} placeholder={fee ? String(fee.transferFeeMinor) : "0"} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
               <label className="space-y-1.5 text-sm"><span className="font-medium">Withdrawal fee (minor)</span><input type="number" value={feeForm.withdrawalFeeMinor} onChange={e => setFeeForm({ ...feeForm, withdrawalFeeMinor: e.target.value })} placeholder={fee ? String(fee.withdrawalFeeMinor) : "0"} className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm dark:bg-slate-800 dark:border-slate-700" /></label>
@@ -369,4 +396,352 @@ function TenantKyc({ tenantId }: { tenantId: Id<"tenantSites"> }) {
       <li key={r._id} className="py-2 flex items-center gap-3 text-sm"><span className="font-medium">{r.fullName}</span><span className={`text-xs rounded-full px-2 py-0.5 ${r.status === "approved" ? "bg-emerald-50 text-emerald-700" : r.status === "rejected" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>{r.status}</span><span className="ml-auto text-xs text-slate-500">{fmtDate(r.createdAt)}</span></li>
     ))}
   </ul>;
+}
+
+/**
+ * Sandbox / live settlement mode.
+ *
+ * A sandbox tenant's ledger is real but no provider is contacted, so its
+ * surfaces must say so. Live mode is only meaningful once a settlement
+ * integration exists — the API refuses payouts it cannot settle.
+ */
+function SettlementMode({ tenantId, mode }: { tenantId: Id<"tenantSites">; mode: "sandbox" | "live" }) {
+  const viewer = useQuery(api.bankingAdmin.myTenantPermissions, { tenantId });
+  const setMode = useMutation(api.bankingAdmin.setBankingSettlementMode);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const isOwner = viewer?.role === "owner";
+
+  const change = async (next: "sandbox" | "live") => {
+    if (reason.trim().length < 5) { toast.error("Provide a reason (5+ characters) — it is written to the audit log"); return; }
+    setBusy(true);
+    try {
+      await setMode({ tenantId, mode: next, reason: reason.trim() });
+      toast.success(next === "live" ? "Tenant switched to live settlement" : "Tenant switched to sandbox");
+      setReason("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        {mode === "sandbox" ? <FlaskConical className="h-4 w-4 text-amber-600" /> : <Radio className="h-4 w-4 text-emerald-600" />}
+        <span className="font-medium">Settlement mode</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold border ${mode === "sandbox" ? "border-amber-300 bg-amber-50 text-amber-700" : "border-emerald-300 bg-emerald-50 text-emerald-700"}`}>{mode}</span>
+        <span className="text-xs text-slate-500">{mode === "sandbox" ? "Simulated — no provider is contacted, every receipt is labelled sandbox." : "External payouts require a verified settlement integration."}</span>
+      </div>
+      {isOwner ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (audited)" className="flex-1 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
+          <button disabled={busy || mode === "sandbox"} onClick={() => void change("sandbox")} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold disabled:opacity-40 dark:border-slate-700">Use sandbox</button>
+          <button disabled={busy || mode === "live"} onClick={() => void change("live")} className="rounded-xl bg-slate-900 text-white px-3 py-2 text-xs font-semibold disabled:opacity-40 dark:bg-white dark:text-slate-900">Require live settlement</button>
+        </div>
+      ) : (
+        <div className="text-xs text-slate-400">Only the tenant owner or a Cloudie super admin can change settlement mode.</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Staff roster with role-based permissions. Revoking a membership removes
+ * console access only — accounts, ledger history and audit rows stay with the
+ * tenant, because they are financial records, not the person's profile.
+ */
+function TenantTeam({ tenantId }: { tenantId: Id<"tenantSites"> }) {
+  const roster = useQuery(api.bankingAdmin.listTenantStaff, { tenantId });
+  const addStaff = useMutation(api.bankingAdmin.addTenantStaff);
+  const setStaffRole = useMutation(api.bankingAdmin.setTenantStaffRole);
+  const removeStaff = useMutation(api.bankingAdmin.removeTenantStaff);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("support");
+  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<{ membershipId: Id<"tenantUsers">; label: string } | null>(null);
+
+  const grant = async () => {
+    if (!email.trim()) { toast.error("Enter the staff member's account email"); return; }
+    setBusy(true);
+    try {
+      const r = await addStaff({ tenantId, email: email.trim(), role });
+      toast.success(r.updated ? "Role updated" : "Staff access granted");
+      setEmail("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const changeRole = async (membershipId: Id<"tenantUsers">, next: string) => {
+    try {
+      await setStaffRole({ tenantId, membershipId, role: next });
+      toast.success("Role updated — audit record written");
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+  };
+
+  if (roster === undefined) return <div className="rounded-2xl border border-slate-200 p-6 text-sm text-slate-400 animate-pulse dark:border-slate-800">Loading roster…</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+        <div>
+          <div className="text-sm font-semibold flex items-center gap-2"><UserCog className="h-4 w-4 text-sky-600" /> Tenant staff</div>
+          <p className="text-xs text-slate-500 mt-1">Least privilege by role. A role can only grant what the granter already holds, so nobody can hand out more access than they have.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="staff@their-bank.com" className="flex-1 min-w-[200px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
+          <select value={role} onChange={(e) => setRole(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700">
+            {roster.assignableRoles.map((r: any) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+          <button disabled={busy} onClick={() => void grant()} className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 dark:bg-white dark:text-slate-900">Grant access</button>
+        </div>
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {roster.owner && (
+            <li className="py-3 flex flex-wrap items-center gap-3 text-sm">
+              <span className="font-medium">{roster.owner.name ?? roster.owner.email}</span>
+              <span className="text-slate-500">{roster.owner.email}</span>
+              <span className="ml-auto rounded-full bg-slate-900 text-white px-2.5 py-0.5 text-xs font-semibold">Tenant owner</span>
+            </li>
+          )}
+          {roster.staff.length === 0 && <li className="py-4 text-sm text-slate-400">No staff yet — the owner is the only console user.</li>}
+          {roster.staff.map((m: any) => (
+            <li key={m.membershipId} className="py-3 flex flex-wrap items-center gap-3 text-sm">
+              <span className="font-medium">{m.name ?? m.email ?? String(m.userId).slice(0, 8)}</span>
+              <span className="text-slate-500">{m.email}</span>
+              <select
+                value={m.role}
+                onChange={(e) => void changeRole(m.membershipId, e.target.value)}
+                className="ml-auto rounded-xl border border-slate-200 bg-white px-2 py-1 text-xs dark:bg-slate-800 dark:border-slate-700"
+              >
+                {roster.assignableRoles.filter((r: any) => r.value !== "customer").map((r: any) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
+              <button onClick={() => setRemoving({ membershipId: m.membershipId, label: m.email ?? "this staff member" })} className="text-xs text-red-600 underline">Revoke</button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <ConfirmDialog
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        onConfirm={async (reason) => {
+          if (!removing) return;
+          try {
+            await removeStaff({ tenantId, membershipId: removing.membershipId, reason });
+            toast.success("Console access revoked — financial records preserved");
+          } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+        }}
+        title="Revoke console access"
+        description="This removes the staff member's access to the banking console. Accounts, ledger entries, transactions and audit history are kept."
+        resource={removing?.label}
+        actionLabel="Revoke access"
+      />
+    </div>
+  );
+}
+
+/**
+ * Dual-approval queue for ledger corrections.
+ *
+ * There is no "set balance" control anywhere in the console. A correction is a
+ * request plus a second officer's decision, and approval posts a balanced
+ * journal group so the ledger still explains every unit.
+ */
+function TenantApprovals({ tenantId }: { tenantId: Id<"tenantSites"> }) {
+  const viewer = useQuery(api.bankingAdmin.myTenantPermissions, { tenantId });
+  const rows = useQuery(api.bankingAdmin.listLedgerAdjustments, { tenantId, limit: 50 });
+  const accounts = useQuery(api.bankingAdmin.adminListBalances, { tenantId, limit: 100 });
+  const request = useMutation(api.bankingAdmin.requestLedgerAdjustment);
+  const decide = useMutation(api.bankingAdmin.decideLedgerAdjustment);
+  const [accountId, setAccountId] = useState("");
+  const [direction, setDirection] = useState<"credit" | "debit">("credit");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [rejecting, setRejecting] = useState<Id<"bankingApprovals"> | null>(null);
+
+  const canRequest = !!viewer?.permissions?.includes("ledger.adjust.request" as never);
+  const canApprove = !!viewer?.permissions?.includes("ledger.adjust.approve" as never);
+  const pending = (rows ?? []).filter((r: any) => r.status === "pending");
+
+  const submit = async () => {
+    const minor = Math.round(Number(amount) * 100);
+    if (!accountId) { toast.error("Choose the account to correct"); return; }
+    if (!Number.isFinite(minor) || minor <= 0) { toast.error("Enter a positive amount"); return; }
+    if (reason.trim().length < 10) { toast.error("Explain the correction (10+ characters)"); return; }
+    setBusy(true);
+    try {
+      const r = await request({ tenantId, accountId: accountId as Id<"tenantAccounts">, direction, amountMinor: minor, reason: reason.trim() });
+      toast.success(`${r.reference} submitted — a second officer must approve it`);
+      setAmount(""); setReason("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  const approve = async (approvalId: Id<"bankingApprovals">) => {
+    setBusy(true);
+    try {
+      const r = await decide({ tenantId, approvalId, approve: true, reason: "Approved in the tenant console" });
+      toast.success(`Correction approved — journal group ${r.ledgerGroupId}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      {canRequest && (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+          <div className="text-sm font-semibold flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-sky-600" /> Request a ledger correction</div>
+          <p className="text-xs text-slate-500">Requests never touch a balance directly. A different officer with approval rights must decide, and both actions are audited.</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="space-y-1 text-sm sm:col-span-2"><span className="font-medium text-xs">Account</span>
+              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700">
+                <option value="">Select an account…</option>
+                {(accounts ?? []).map((a: any) => (
+                  <option key={a._id} value={a._id}>{a.name} · {a.accountNumber} · {a.userEmail ?? "customer"}</option>
+                ))}
+              </select>
+            </label>
+            <label className="space-y-1 text-sm"><span className="font-medium text-xs">Direction</span>
+              <select value={direction} onChange={(e) => setDirection(e.target.value === "debit" ? "debit" : "credit")} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700">
+                <option value="credit">Credit (add funds)</option>
+                <option value="debit">Debit (remove funds)</option>
+              </select>
+            </label>
+            <label className="space-y-1 text-sm"><span className="font-medium text-xs">Amount (major units)</span>
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="125.00" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
+            </label>
+            <label className="space-y-1 text-sm sm:col-span-2"><span className="font-medium text-xs">Reason (recorded in the audit log)</span>
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reversal of duplicate settlement fee" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
+            </label>
+          </div>
+          <button disabled={busy} onClick={() => void submit()} className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 dark:bg-white dark:text-slate-900">Submit for approval</button>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+        <div className="text-sm font-semibold flex items-center gap-2"><ScrollText className="h-4 w-4" /> Correction queue</div>
+        {rows === undefined ? (
+          <div className="text-sm text-slate-400 animate-pulse">Loading…</div>
+        ) : rows.length === 0 ? (
+          <div className="text-sm text-slate-400">No corrections requested.</div>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map((r: any) => (
+              <li key={r._id} className="py-3 space-y-1 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5">{r.reference}</span>
+                  <span className={`text-xs rounded-full px-2 py-0.5 border ${r.status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : r.status === "rejected" ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{r.status}</span>
+                  <span className="font-semibold">{r.direction === "credit" ? "+" : "−"}<Money minor={r.amountMinor} currency={r.currency} /></span>
+                  <span className="text-slate-500">{r.accountName ?? "account"} · {r.accountNumber}</span>
+                  <span className="ml-auto text-xs text-slate-400">{fmtDate(r.createdAt)}</span>
+                </div>
+                <div className="text-xs text-slate-500">Requested by {r.requestedByEmail ?? "—"}: {r.reason}</div>
+                {r.status === "pending" && canApprove && r.requestedBy !== viewer?.userId && (
+                  <div className="flex gap-2 pt-1">
+                    <button disabled={busy} onClick={() => void approve(r._id)} className="rounded-lg bg-emerald-600 text-white px-3 py-1.5 text-xs font-semibold disabled:opacity-50">Approve</button>
+                    <button disabled={busy} onClick={() => setRejecting(r._id)} className="rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs font-semibold">Reject</button>
+                  </div>
+                )}
+                {r.status === "pending" && r.requestedBy === viewer?.userId && (
+                  <div className="text-xs text-slate-400">Awaiting a second officer — you cannot approve your own request.</div>
+                )}
+                {r.status !== "pending" && r.decidedByEmail && (
+                  <div className="text-xs text-slate-400">Decided by {r.decidedByEmail} {r.decisionReason ? `— ${r.decisionReason}` : ""}</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {pending.length > 0 && <div className="text-xs text-slate-400">{pending.length} awaiting a decision.</div>}
+      </div>
+
+      <ConfirmDialog
+        open={!!rejecting}
+        onClose={() => setRejecting(null)}
+        onConfirm={async (reason) => {
+          if (!rejecting) return;
+          try {
+            await decide({ tenantId, approvalId: rejecting, approve: false, reason });
+            toast.success("Correction rejected");
+          } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+        }}
+        title="Reject correction"
+        description="The requester and the audit log both record your decision and reason."
+        actionLabel="Reject correction"
+      />
+    </div>
+  );
+}
+
+function TenantSubscription({ tenantId }: { tenantId: Id<"tenantSites"> }) {
+  const sub = useQuery(api.bankingTenant.getTenantSubscription, { tenantId });
+  const renew = useMutation(api.bankingTenant.renewTenantSubscription);
+  const [months, setMonths] = useState("12");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const doRenew = async () => {
+    if (reason.trim().length < 5) { toast.error("Provide a reason for the renewal (audited)"); return; }
+    setBusy(true);
+    try {
+      const r = await renew({ tenantId, months: Number(months), reason: reason.trim() });
+      toast.success(`Subscription extended to ${new Date(r.renewalDate).toLocaleDateString()}`);
+      setReason("");
+    } catch (e) { toast.error(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+      <div className="text-sm font-semibold flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-sky-600" /> Subscription</div>
+      {sub === undefined ? <div className="text-sm text-slate-400 animate-pulse">Loading…</div> : (
+        <div className="grid gap-3 sm:grid-cols-3 text-sm">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+            <div className="text-xs text-slate-500">Plan</div>
+            <div className="font-semibold capitalize">{sub.plan ?? "—"}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+            <div className="text-xs text-slate-500">Renews</div>
+            <div className="font-semibold">{sub.renewalDate ? new Date(sub.renewalDate).toLocaleDateString() : "—"}</div>
+            <div className={`text-xs ${sub.expired ? "text-red-600" : "text-slate-500"}`}>
+              {sub.expired ? "Expired — new operations refused" : sub.daysRemaining !== null ? `${sub.daysRemaining} days remaining` : ""}
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+            <div className="text-xs text-slate-500">Lifecycle</div>
+            <div className="font-semibold capitalize">{sub.lifecycleStatus}</div>
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <select value={months} onChange={(e) => setMonths(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700">
+          {[1, 3, 6, 12, 24].map((m) => <option key={m} value={m}>{m} month{m === 1 ? "" : "s"}</option>)}
+        </select>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Renewal reason (audited)" className="flex-1 min-w-[180px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:bg-slate-800 dark:border-slate-700" />
+        <button disabled={busy} onClick={() => void doRenew()} className="rounded-xl bg-slate-900 text-white px-4 py-2 text-sm font-semibold disabled:opacity-50 dark:bg-white dark:text-slate-900">Renew</button>
+      </div>
+      <div className="text-xs text-slate-400">Renewing extends from the later of today and the current renewal date. It never deletes history and never replays old transactions.</div>
+    </div>
+  );
+}
+
+function TenantAudit({ tenantId }: { tenantId: Id<"tenantSites"> }) {
+  const logs = useQuery(api.bankingAdmin.adminAuditLog, { tenantId, limit: 100 });
+  if (logs === undefined) return <div className="rounded-2xl border border-slate-200 p-6 text-sm text-slate-400 animate-pulse dark:border-slate-800">Loading audit trail…</div>;
+  return (
+    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+      <div className="text-sm font-semibold flex items-center gap-2"><ScrollText className="h-4 w-4" /> Tenant audit trail (latest 100)</div>
+      {logs.length === 0 ? <div className="text-sm text-slate-400">No audit entries yet.</div> : (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {logs.map((l: any) => (
+            <li key={l._id} className="py-2 flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-mono text-[11px] rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5">{l.action}</span>
+              <span className="text-slate-500 text-xs">{l.resource}{l.resourceId ? ` · ${String(l.resourceId).slice(0, 10)}` : ""}</span>
+              {l.reason && <span className="text-xs text-slate-400">{l.reason}</span>}
+              <span className="ml-auto text-xs text-slate-400">{l.actorEmail ?? "system"} · {fmtDate(l.createdAt)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }

@@ -7,7 +7,7 @@ import { Pool, type PoolClient, type QueryResultRow } from "pg";
 import { promisify } from "node:util";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { applyWalletAdjustment, parseWalletAdjustInput } from "./walletAdjust.js";
 import { BANK_MAILER_CREDITS, validateBankMailerPayload } from "./bankMailer.js";
@@ -21,6 +21,13 @@ import {
 } from "./transactionMailer.js";
 import { executeTransactionMailSend } from "./transactionMailerSend.js";
 import { sendTransactionalEmail } from "./mailTransport.js";
+import {
+  TEMPLATE_SERVICE_TYPES,
+  isTemplateServiceType,
+  validateEmailTemplate,
+  type EmailTemplateProduct,
+  type TemplateServiceType,
+} from "./emailTemplates.js";
 
 const scrypt = promisify(scryptCallback);
 const port = Number(process.env.PORT ?? 8787);
@@ -1553,6 +1560,188 @@ app.get("/api/admin/reports", auth, adminOnly, async (c) => {
 
 app.get("/api/admin/analytics", auth, adminOnly, (c) => c.redirect("/api/admin/reports", 307));
 
+/* EMAIL TEMPLATE CATALOG — admin-managed, priced email layouts */
+
+const TEMPLATE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function mapEmailTemplateRow(row: Record<string, unknown>): EmailTemplateProduct {
+  const serviceType = String(row.service_type ?? "billing");
+  const stamp = (value: unknown): string =>
+    value instanceof Date ? value.toISOString() : typeof value === "string" ? value : "";
+  return {
+    id: String(row.id ?? ""),
+    title: String(row.title ?? ""),
+    serviceType: isTemplateServiceType(serviceType) ? serviceType : "billing",
+    description: String(row.description ?? ""),
+    thumbnailUrl: String(row.thumbnail_url ?? ""),
+    htmlContent: String(row.html_content ?? ""),
+    priceCredits: Number(row.price_credits ?? 0),
+    isActive: row.is_active === true,
+    createdAt: stamp(row.created_at),
+    updatedAt: stamp(row.updated_at),
+  };
+}
+
+/** Active product for a module, or `null` when the id is unknown/inactive. */
+async function findActiveEmailTemplate(
+  templateId: string,
+  serviceType: TemplateServiceType,
+): Promise<EmailTemplateProduct | null> {
+  if (!TEMPLATE_UUID_RE.test(templateId)) return null;
+  const result = await pool.query(
+    "SELECT * FROM email_template_products WHERE id=$1 AND service_type=$2 AND is_active=TRUE",
+    [templateId, serviceType],
+  );
+  const row = result.rows[0];
+  return row ? mapEmailTemplateRow(row) : null;
+}
+
+/** Admin: every product, newest first (inactive ones included). */
+app.get("/api/admin/email-templates", auth, adminOnly, async (c) => {
+  const result = await pool.query(
+    "SELECT * FROM email_template_products ORDER BY created_at DESC LIMIT 200",
+  );
+  return c.json({ templates: result.rows.map(mapEmailTemplateRow) });
+});
+
+/** Admin: create a product. HTML is sanitised before it is stored. */
+app.post("/api/admin/email-templates", auth, adminOnly, async (c) => {
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body", code: "INVALID_JSON" }, 400);
+  }
+
+  const validated = validateEmailTemplate(raw);
+  if (!validated.ok) {
+    return c.json(
+      { error: "Validation failed", code: "VALIDATION_FAILED", details: validated.errors },
+      400,
+    );
+  }
+
+  const value = validated.value;
+  const result = await pool.query(
+    `INSERT INTO email_template_products
+       (id, title, service_type, description, thumbnail_url, html_content, price_credits, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [
+      randomUUID(),
+      value.title,
+      value.serviceType,
+      value.description,
+      value.thumbnailUrl,
+      value.htmlContent,
+      value.priceCredits,
+      value.isActive,
+    ],
+  );
+
+  return c.json(
+    {
+      template: mapEmailTemplateRow(result.rows[0]),
+      sanitization: { removed: value.removed },
+    },
+    201,
+  );
+});
+
+/** Admin: edit any field; the merged row is re-sanitised and re-validated. */
+app.patch("/api/admin/email-templates/:id", auth, adminOnly, async (c) => {
+  const id = c.req.param("id");
+  if (!TEMPLATE_UUID_RE.test(id)) return fail(c, 404, "Template not found");
+
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body", code: "INVALID_JSON" }, 400);
+  }
+
+  const current = await pool.query("SELECT * FROM email_template_products WHERE id=$1", [id]);
+  const row = current.rows[0];
+  if (!row) return fail(c, 404, "Template not found");
+
+  const input = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const validated = validateEmailTemplate({
+    title: input.title ?? row.title,
+    serviceType: input.serviceType ?? row.service_type,
+    description: input.description ?? row.description,
+    thumbnailUrl: input.thumbnailUrl ?? row.thumbnail_url,
+    htmlContent: input.htmlContent ?? row.html_content,
+    priceCredits: input.priceCredits ?? Number(row.price_credits),
+    isActive: typeof input.isActive === "boolean" ? input.isActive : row.is_active,
+  });
+  if (!validated.ok) {
+    return c.json(
+      { error: "Validation failed", code: "VALIDATION_FAILED", details: validated.errors },
+      400,
+    );
+  }
+
+  const value = validated.value;
+  const updated = await pool.query(
+    `UPDATE email_template_products
+        SET title=$1, service_type=$2, description=$3, thumbnail_url=$4,
+            html_content=$5, price_credits=$6, is_active=$7, updated_at=NOW()
+      WHERE id=$8 RETURNING *`,
+    [
+      value.title,
+      value.serviceType,
+      value.description,
+      value.thumbnailUrl,
+      value.htmlContent,
+      value.priceCredits,
+      value.isActive,
+      id,
+    ],
+  );
+
+  return c.json({
+    template: mapEmailTemplateRow(updated.rows[0]),
+    sanitization: { removed: value.removed },
+  });
+});
+
+/** Admin: remove a product. Past sends keep their rendered copy in the log. */
+app.delete("/api/admin/email-templates/:id", auth, adminOnly, async (c) => {
+  const id = c.req.param("id");
+  if (!TEMPLATE_UUID_RE.test(id)) return fail(c, 404, "Template not found");
+  const result = await pool.query("DELETE FROM email_template_products WHERE id=$1 RETURNING id", [id]);
+  if (result.rowCount !== 1) return fail(c, 404, "Template not found");
+  return c.json({ ok: true });
+});
+
+/**
+ * GET /api/v1/templates?service_type={service}
+ *
+ * The customer-facing catalogue: active products only, cheapest first. The
+ * module passes its own service type, so a billing layout can never be offered
+ * to a notification composer.
+ */
+app.get("/api/v1/templates", auth, async (c) => {
+  const serviceType = c.req.query("service_type");
+  if (!isTemplateServiceType(serviceType)) {
+    return c.json(
+      {
+        error: "service_type must be one of: " + TEMPLATE_SERVICE_TYPES.map((type) => type.id).join(", "),
+        code: "VALIDATION_FAILED",
+      },
+      400,
+    );
+  }
+
+  const result = await pool.query(
+    `SELECT * FROM email_template_products
+      WHERE service_type=$1 AND is_active=TRUE
+      ORDER BY price_credits ASC, created_at DESC
+      LIMIT 60`,
+    [serviceType],
+  );
+  return c.json({ serviceType, templates: result.rows.map(mapEmailTemplateRow) });
+});
+
 /* ════════════════════════════════════════════════════════════════════
    BANK MAILER — pay-per-purchase debit/credit notice dispatch
    ═══════════════════════════════════════════════════════════════════ */
@@ -1585,6 +1774,28 @@ app.post("/api/v1/bank-mailer/send", auth, async (c) => {
     );
   }
 
+  // Optional catalog layout. Only an active billing product is accepted, and
+  // its credit price is added to the pair price before the wallet is charged.
+  const requestedTemplate = (raw as Record<string, unknown>).templateId ?? (raw as Record<string, unknown>).template_id;
+  const templateId = typeof requestedTemplate === "string" ? requestedTemplate.trim() : "";
+  let template: EmailTemplateProduct | null = null;
+  if (templateId) {
+    try {
+      template = await findActiveEmailTemplate(templateId, "billing");
+    } catch {
+      return c.json(
+        { error: "The template catalog is unavailable. Please try again.", code: "TEMPLATE_CATALOG_UNAVAILABLE" },
+        503,
+      );
+    }
+    if (!template) {
+      return c.json(
+        { error: "That template is no longer available. Pick another layout.", code: "TEMPLATE_UNAVAILABLE" },
+        400,
+      );
+    }
+  }
+
   // The notices are branded with the operator's configured platform name.
   let platformName = "Cloudie";
   try {
@@ -1599,7 +1810,7 @@ app.post("/api/v1/bank-mailer/send", auth, async (c) => {
   try {
     const outcome = await executeBankMailerSend(
       client,
-      { userId: c.get("user").id, payload: result.value, platformName },
+      { userId: c.get("user").id, payload: result.value, platformName, template },
       (pair) => dispatchNoticePair(pair, platformName),
     );
 
@@ -1609,9 +1820,11 @@ app.post("/api/v1/bank-mailer/send", auth, async (c) => {
           ok: true,
           transactionId: outcome.transactionId,
           chargedNgn: outcome.chargedNgn,
-          credits: BANK_MAILER_CREDITS,
+          credits: BANK_MAILER_CREDITS + (template?.priceCredits ?? 0),
           balanceAfterNgn: outcome.balanceAfterNgn,
           delivery: outcome.delivery,
+          templateId: template?.id ?? null,
+          templateCredits: template?.priceCredits ?? 0,
         },
         201,
       );
@@ -1774,6 +1987,27 @@ app.post("/api/v1/transaction-mailer/send", auth, async (c) => {
     );
   }
 
+  // Optional catalog layout for this notification module.
+  const requestedTemplate = (raw as Record<string, unknown>).templateId ?? (raw as Record<string, unknown>).template_id;
+  const templateId = typeof requestedTemplate === "string" ? requestedTemplate.trim() : "";
+  let template: EmailTemplateProduct | null = null;
+  if (templateId) {
+    try {
+      template = await findActiveEmailTemplate(templateId, "notifications");
+    } catch {
+      return c.json(
+        { error: "The template catalog is unavailable. Please try again.", code: "TEMPLATE_CATALOG_UNAVAILABLE" },
+        503,
+      );
+    }
+    if (!template) {
+      return c.json(
+        { error: "That template is no longer available. Pick another layout.", code: "TEMPLATE_UNAVAILABLE" },
+        400,
+      );
+    }
+  }
+
   const user = c.get("user");
   const platformName = await resolvePlatformName();
   const brand = await resolveMailBrand(user.id, platformName);
@@ -1790,6 +2024,7 @@ app.post("/api/v1/transaction-mailer/send", auth, async (c) => {
         payload: result.value,
         brand,
         platformName,
+        template,
       },
       // Replies go back to the account owner, not the no-reply mailbox.
       (email) => sendTransactionalEmail(email, platformName, { replyTo: user.email }),
@@ -1802,10 +2037,12 @@ app.post("/api/v1/transaction-mailer/send", auth, async (c) => {
           logId: outcome.logId,
           transactionId: outcome.transactionId,
           chargedNgn: outcome.chargedNgn,
-          credits: TRANSACTION_MAILER_CREDITS,
+          credits: TRANSACTION_MAILER_CREDITS + (template?.priceCredits ?? 0),
           balanceAfterNgn: outcome.balanceAfterNgn,
           status: outcome.status,
           brand,
+          templateId: template?.id ?? null,
+          templateCredits: template?.priceCredits ?? 0,
         },
         201,
       );

@@ -1,3 +1,5 @@
+import type { EmailTemplateProduct, TemplateServiceType } from "../../api/src/emailTemplates";
+
 // Production API. The staging service is opt-in via VITE_NEON_API_URL, never a
 // silent default: a build without configuration must still reach production.
 const DEFAULT_API_URL = "https://cloudie-glaa.onrender.com";
@@ -24,6 +26,16 @@ export type NeonUser = {
 };
 
 export type NeonSession = { user: NeonUser; token?: string };
+
+export type EmailTemplateDraft = {
+  title: string;
+  serviceType: TemplateServiceType;
+  description?: string;
+  thumbnailUrl?: string;
+  htmlContent: string;
+  priceCredits?: number;
+  isActive?: boolean;
+};
 
 type ApiErrorBody = { error?: string; message?: string; details?: unknown };
 
@@ -314,6 +326,32 @@ export const neonApi = {
   },
   async closeSupportTicket(id: string) {
     return request<{ ok: boolean }>(`/api/support/tickets/${encodeURIComponent(id)}/close`, { method: "POST", body: "{}" });
+  },
+  /** Active catalog layouts for one mailing module (customer-facing). */
+  async emailTemplates(serviceType: TemplateServiceType) {
+    return request<{ serviceType: string; templates: EmailTemplateProduct[] }>(
+      `/api/v1/templates?service_type=${encodeURIComponent(serviceType)}`,
+    );
+  },
+  async adminEmailTemplates() {
+    return request<{ templates: EmailTemplateProduct[] }>("/api/admin/email-templates");
+  },
+  async createEmailTemplate(input: EmailTemplateDraft) {
+    return request<{ template: EmailTemplateProduct; sanitization: { removed: string[] } }>(
+      "/api/admin/email-templates",
+      { method: "POST", body: JSON.stringify(input) },
+    );
+  },
+  async updateEmailTemplate(id: string, input: Partial<EmailTemplateDraft>) {
+    return request<{ template: EmailTemplateProduct; sanitization: { removed: string[] } }>(
+      `/api/admin/email-templates/${encodeURIComponent(id)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
+    );
+  },
+  async deleteEmailTemplate(id: string) {
+    return request<{ ok: boolean }>(`/api/admin/email-templates/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
   async adminUsers(limit = 50) {
     return request<{ users: Array<Record<string, unknown>> }>(`/api/admin/users?limit=${Math.min(100, Math.max(1, Math.floor(limit)))}`);

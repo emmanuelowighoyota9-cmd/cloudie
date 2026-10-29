@@ -77,6 +77,16 @@ export const tenantStatusCheck = internalMutation({
           reason: "Automated status check: renewalDate expired + 7d grace",
           createdAt: now,
         } as any);
+        // Tell the tenant owner. Suspension preserves every record; only new
+        // financial operations are refused until the subscription is renewed.
+        await ctx.db.insert("notifications", {
+          userId: (t as any).ownerId,
+          title: "Banking tenant suspended",
+          message: `${t.siteName} was suspended because its subscription expired. Accounts, transactions and ledger history are preserved — renew the subscription and restore the tenant to resume operations.`,
+          type: "banking.tenant_suspended",
+          isRead: false,
+          createdAt: now,
+        } as any);
         suspended++;
       }
     }

@@ -360,6 +360,13 @@ const schema = defineSchema(
       lifecycleStatus: v.optional(v.string()),
       // banking feature toggles (inherit from tenantSite config)
       bankingEnabled: v.optional(v.boolean()),
+      /**
+       * "sandbox" (default) | "live". A sandbox tenant's deposits, withdrawals
+       * and external transfers are recorded in the ledger but no provider is
+       * contacted, and every surface labels them as simulated. Flipping to
+       * "live" requires an authorized settlement integration.
+       */
+      bankingMode: v.optional(v.string()),
       isActive: v.boolean(),
       renewalDate: v.optional(v.number()),
       /** Display font chosen in the Theme tab; validated against a client allowlist. */
@@ -416,13 +423,18 @@ const schema = defineSchema(
     tenantUsers: defineTable({
       tenantId: v.id("tenantSites"),
       userId: v.id("users"),
+      /** owner | admin | compliance | finance | support | customer (see bankingAccess.ts) */
       role: v.string(),
       /** active | suspended — suspending blocks customer-portal sign-in without deleting history. */
       status: v.optional(v.string()),
+      /** Staff rows record who granted them; customer self-signup rows do not. */
+      addedBy: v.optional(v.id("users")),
+      updatedAt: v.optional(v.number()),
       createdAt: v.number(),
     })
       .index("by_tenant", ["tenantId"])
-      .index("by_tenant_and_user", ["tenantId", "userId"]),
+      .index("by_tenant_and_user", ["tenantId", "userId"])
+      .index("by_tenant_and_role", ["tenantId", "role"]),
 
     tenantLedger: defineTable({
       tenantId: v.id("tenantSites"),
@@ -488,6 +500,8 @@ const schema = defineSchema(
       description: v.optional(v.string()),
       idempotencyKey: v.optional(v.string()),
       reconciledLedgerGroupId: v.optional(v.string()),
+      /** "sandbox" | "live" — how this receipt was settled. */
+      settlementMode: v.optional(v.string()),
       createdAt: v.number(),
       completedAt: v.optional(v.number()),
     })
@@ -518,6 +532,8 @@ const schema = defineSchema(
       description: v.optional(v.string()),
       idempotencyKey: v.optional(v.string()),
       ledgerGroupId: v.optional(v.string()),
+      /** "sandbox" | "live" — how this payout was settled. */
+      settlementMode: v.optional(v.string()),
       createdAt: v.number(),
       completedAt: v.optional(v.number()),
     })
@@ -556,6 +572,8 @@ const schema = defineSchema(
       description: v.optional(v.string()),
       idempotencyKey: v.optional(v.string()),
       ledgerGroupId: v.optional(v.string()),
+      /** "sandbox" | "live" — how this transfer was settled. */
+      settlementMode: v.optional(v.string()),
       createdAt: v.number(),
       completedAt: v.optional(v.number()),
     })
@@ -1543,6 +1561,58 @@ const schema = defineSchema(
     })
       .index("by_key", ["key"])
       .index("by_tenant_and_kind", ["tenantId", "kind", "createdAt"]),
+
+    /**
+     * Dual-approval queue for exceptional ledger corrections. A correction is
+     * never a balance edit: approval posts a balanced journal group (customer
+     * account + contra) and the requester may not also approve it.
+     */
+    bankingApprovals: defineTable({
+      tenantId: v.id("tenantSites"),
+      kind: v.string(), // ledger_adjustment
+      status: v.union(
+        v.literal("pending"),
+        v.literal("approved"),
+        v.literal("rejected"),
+        v.literal("cancelled"),
+      ),
+      accountId: v.id("tenantAccounts"),
+      direction: v.union(v.literal("credit"), v.literal("debit")),
+      amountMinor: v.number(),
+      currency: v.string(),
+      reason: v.string(),
+      reference: v.string(),
+      requestedBy: v.id("users"),
+      requestedByEmail: v.optional(v.string()),
+      decidedBy: v.optional(v.id("users")),
+      decidedByEmail: v.optional(v.string()),
+      decisionReason: v.optional(v.string()),
+      decidedAt: v.optional(v.number()),
+      ledgerGroupId: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_tenant", ["tenantId", "createdAt"])
+      .index("by_status", ["status", "createdAt"]),
+
+    /**
+     * Verified settlement webhooks. The (provider, eventId) pair is the replay
+     * guard: a provider retrying an event finds the recorded row and does
+     * nothing, so a duplicate webhook can never credit a deposit twice.
+     */
+    bankingWebhookEvents: defineTable({
+      provider: v.string(),
+      eventId: v.string(),
+      tenantId: v.optional(v.id("tenantSites")),
+      reference: v.optional(v.string()),
+      status: v.string(), // applied | duplicate | ignored | rejected
+      signatureValid: v.boolean(),
+      reason: v.optional(v.string()),
+      amountMinor: v.optional(v.number()),
+      currency: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_provider_event", ["provider", "eventId"])
+      .index("by_tenant", ["tenantId", "createdAt"]),
 
     // ─── VTU / bill payments ────────────────────────────────────────────
     // Defined in three modules under `vtuSchema/` and spread in here rather

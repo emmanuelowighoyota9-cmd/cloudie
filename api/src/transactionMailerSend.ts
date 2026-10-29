@@ -29,6 +29,12 @@ import {
   type TransactionMailPayload,
 } from "./transactionMailer.js";
 import type { MailAttempt, OutboundEmail } from "./mailTransport.js";
+import {
+  renderEmailTemplate,
+  templateSurchargeNgn,
+  transactionTemplateVariables,
+  type EmailTemplateProduct,
+} from "./emailTemplates.js";
 
 /* ── Structural types ────────────────────────────────────────────────────── */
 
@@ -50,6 +56,8 @@ export type SendParams = {
   payload: TransactionMailPayload;
   brand: MailBrand;
   platformName: string;
+  /** Active catalog layout chosen by the customer, if any. */
+  template?: Pick<EmailTemplateProduct, "id" | "htmlContent" | "priceCredits"> | null;
 };
 
 export type SendSuccess = {
@@ -82,6 +90,12 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** Base price plus any pay-per-use template surcharge. */
+function unitPrice(params: SendParams): number {
+  const surcharge = params.template ? templateSurchargeNgn(params.template.priceCredits) : 0;
+  return round2(TRANSACTION_MAILER_PRICE_NGN + surcharge);
+}
+
 async function rollback(client: ClientLike): Promise<void> {
   try {
     await client.query("ROLLBACK");
@@ -105,7 +119,7 @@ type ChargeOutcome = { ok: true; balanceAfterNgn: number } | SendFailure;
 
 async function chargeWallet(client: ClientLike, params: SendParams): Promise<ChargeOutcome> {
   const { userId, payload } = params;
-  const amount = TRANSACTION_MAILER_PRICE_NGN;
+  const amount = unitPrice(params);
   const chargeKey = `transaction_mailer:${payload.txHash}:${randomUUID()}`;
 
   try {
@@ -165,6 +179,7 @@ async function chargeWallet(client: ClientLike, params: SendParams): Promise<Cha
           tx_hash: payload.txHash,
           credits: TRANSACTION_MAILER_CREDITS,
           recipient_email: params.recipientEmail,
+          ...(params.template ? { template_id: params.template.id } : {}),
         }),
       ],
     );
@@ -187,7 +202,7 @@ async function refundWallet(
   reason: string,
 ): Promise<RefundOutcome> {
   const { userId, payload } = params;
-  const amount = TRANSACTION_MAILER_PRICE_NGN;
+  const amount = unitPrice(params);
   const refundKey = `transaction_mailer_refund:${payload.txHash}:${randomUUID()}`;
 
   try {
@@ -258,7 +273,7 @@ async function insertLog(client: ClientLike, logId: string, params: SendParams):
       payload.amount,
       payload.currency,
       payload.txHash,
-      TRANSACTION_MAILER_PRICE_NGN,
+      unitPrice(params),
     ],
   );
 }
@@ -311,7 +326,24 @@ export async function executeTransactionMailSend(
       brand: params.brand,
       platformName: params.platformName,
     });
-    attempt = await send({ to: params.recipientEmail, ...mail });
+    const html = params.template
+      ? renderEmailTemplate(
+          params.template.htmlContent,
+          transactionTemplateVariables({
+            platformName: params.platformName,
+            brandName: params.brand.name,
+            recipientEmail: params.recipientEmail,
+            noticeType: params.payload.noticeType,
+            amount: params.payload.amount,
+            currency: params.payload.currency,
+            transactionId: params.payload.txHash,
+            status: "SENT",
+            message: params.payload.note ?? "",
+            occurredAt: params.payload.occurredAt,
+          }),
+        )
+      : mail.html;
+    attempt = await send({ to: params.recipientEmail, ...mail, html });
   } catch (error) {
     attempt = {
       ok: false,
@@ -336,7 +368,7 @@ export async function executeTransactionMailSend(
     return failure(
       502,
       "DISPATCH_FAILED",
-      `Email delivery failed (${reason}) — ₦${TRANSACTION_MAILER_PRICE_NGN.toLocaleString(
+      `Email delivery failed (${reason}) — ₦${unitPrice(params).toLocaleString(
         "en-NG",
       )} was refunded to your wallet.`,
     );
@@ -357,7 +389,7 @@ export async function executeTransactionMailSend(
     ok: true,
     logId,
     transactionId: params.payload.txHash,
-    chargedNgn: TRANSACTION_MAILER_PRICE_NGN,
+    chargedNgn: unitPrice(params),
     balanceAfterNgn: charge.balanceAfterNgn,
     status: "SENT",
     messageId: attempt.messageId,

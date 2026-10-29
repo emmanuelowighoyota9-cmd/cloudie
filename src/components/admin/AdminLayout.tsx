@@ -89,6 +89,7 @@ const ADMIN_GROUPS: AdminGroup[] = [
   ]},
   { label: "Communications", items: [
     { to: "/admin/notifications", label: "Notifications", icon: Bell },
+    { to: "/admin/templates", label: "Email Templates", icon: Mail },
     { to: "/admin/settings/email", label: "Email Settings", icon: Mail },
   ]},
   { label: "Configuration", items: [
